@@ -11,7 +11,7 @@ import GoalPhaseNativeValidation as N
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {
@@ -119,7 +119,7 @@ private[smworkflow] object GoalPhaseStepAssessment {
   def assessPurposeC(policy: Policy, candidate: O.Snapshot, reference: String,
     structural: RepositorySyncNativeMergeValidation.Receipt,
     selected: Vector[GoalPhaseNativeValidation.Check],
-    receipts: Vector[RepositorySyncNativeMergeValidation.Receipt]): Consequence[Result] = for {
+    receipts: Vector[RepositorySyncNativeMergeValidation.Receipt], ordinaryFull: Boolean = false): Consequence[Result] = for {
     _ <- if (policyShape(policy) && text(reference) && structural != null &&
         structural.termination == "exited" && structural.exitCode.contains(0) &&
         org.goldenport.cncf.processexecution.GitIndexCheck.parseStoredC(0, structural.stdout, structural.stderr).isSuccess)
@@ -134,7 +134,9 @@ private[smworkflow] object GoalPhaseStepAssessment {
         val lint = policy.scalaLint != "required" || selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)
         if (complete && ordinary && lint) Consequence.unit
         else invalid("Purpose code admission requires actual compiled ordinary discovery and nonempty successful test batches")
-      } else WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
+      } else if (policy.kind == "code" && ordinaryFull)
+        WorkflowRepairAssessment.purposeFullChecksC(policy.scalaLint, selected, receipts)
+      else WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
     immediate = policy.observations.exists(_.timing == "immediate")
     branch = if (policy.detailedReview == "required" || immediate) "detailed-review" else "admit"
   } yield Result(policy, candidate, reference, selected.map(_.identity), branch,

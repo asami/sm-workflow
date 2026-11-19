@@ -72,7 +72,7 @@ private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with
     When("a separate normal Start selects that finite Goal and a normal Advance requests implementation")
     val started = _call_("startGoalPhase", Vector("--input", scenario.input.noSpaces)).business[V.GoalPhaseStartResult]
     scenario.retain(task, started)
-    val request = _call_("advanceGoalPhase", Vector("--sessionId", scenario.retrieve(task))).business[V.GoalPhaseAdvanceResult]
+    val request = scenario.readGoalPhaseResult(_call_("advanceGoalPhase", Vector("--sessionId", scenario.retrieve(task))))
     Then("the task retains actual implementation work for exactly the selected source without a product check")
     scenario.host.goal.input.phaseIdentity shouldBe "1"
     scenario.host.goal.input.repositoryIdentity shouldBe "smwf-p61-cli-source-history"
@@ -115,7 +115,7 @@ private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with
   }
 
   def assertReview(fixture: Implemented, result: F.Result): V.GoalPhaseAdvanceResult = {
-    val review = result.business[V.GoalPhaseAdvanceResult]
+    val review = fixture.scenario.readGoalPhaseResult(result)
     val work = review.work.get
     val context = work.review.get
     val check = context.checks.head
@@ -193,7 +193,7 @@ final class NativeGoalSourceHistoryCliSpec extends AnyWordSpec with NativeGoalSo
 
       Given("the actual independent ReviewStep is pending and no review result or commit has been supplied")
       When("another separate normal Advance rereads the pending work")
-      val repeated = advance(fixture).business[V.GoalPhaseAdvanceResult]
+      val repeated = fixture.scenario.readGoalPhaseResult(advance(fixture))
       Then("the identical public work and issued context retain the same bytes and single product-check PID")
       repeated shouldBe review
       repeated.issuedWorkContext shouldBe review.issuedWorkContext

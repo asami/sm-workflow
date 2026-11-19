@@ -25,6 +25,10 @@ build:
 cml:
   source: "src/main/cozy/sm-workflow.cml"
 
+validation:
+  fixCheck: true
+  sharedScalaLint: true
+
 publication:
   source_manifest:
     enabled: false

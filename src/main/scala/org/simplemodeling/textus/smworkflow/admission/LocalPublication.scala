@@ -12,8 +12,7 @@ import org.goldenport.record.io.RecordDecoder
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {
@@ -216,23 +215,46 @@ private[smworkflow] object LocalPublication {
     value.as[A].fold(e => Consequence.stateConflict("Invalid retained publication fact: " + e.message), Consequence.success)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Local publication: " + reason)
 
+  private def _same_history_scope(left: Target, right: Target): Boolean =
+    left.identity == right.identity && left.workspace == right.workspace && left.dependency == right.dependency
+
   private[admission] def sameHistoricalTarget(left: Target, right: Target): Boolean =
-    left.identity == right.identity && left.component == right.component &&
-      left.workspace == right.workspace && left.dependency == right.dependency
+    _same_history_scope(left, right) && left.component == right.component
+
+  private def _history_component(target: Target): Option[String] =
+    Option.unless(target.identity == "repository" && target.workspace == "sm-workflow-repository" &&
+      target.dependency.isEmpty && target.component == "repository")(target.component)
 
   /** Target-scoped actual attempt order. Immutable records preserve interrupted
     * and superseded publications; an old source receipt is never a current-artifact index.
-    * Scheduling flags select prerequisites, not the historical effect identity.
+    * The standard repository label leaves the concrete component unspecified.
     */
-  private def _latest_attempt_c(target: Target, port: Port, ordinal: Long = 1L,
-    previous: Option[PublicationAttempt] = None): Consequence[(Long, Option[PublicationAttempt])] =
-    port.loadC(_attempt_key(target, ordinal)).flatMap {
-      case Some(value) => _decode_c[PublicationAttempt](value).flatMap(attempt =>
-        if (sameHistoricalTarget(attempt.request.target, target) && ordinal < Long.MaxValue)
-          _latest_attempt_c(target, port, ordinal + 1L, Some(attempt))
-        else _invalid("publication history belongs to a different target or exhausted its sequence"))
-      case None => Consequence.success(ordinal -> previous)
-    }
+  private def _latest_attempt_c(target: Target, port: Port): Consequence[(Long, Option[PublicationAttempt])] = {
+    def _scan_(ordinal: Long, previous: Option[PublicationAttempt],
+      component: Option[String]): Consequence[(Long, Option[PublicationAttempt])] =
+      port.loadC(_attempt_key(target, ordinal)).flatMap {
+        case Some(value) => _decode_c[PublicationAttempt](value).flatMap { attempt =>
+          val saved = attempt.request.target
+          val selected = _history_component(saved)
+          if (_same_history_scope(saved, target) && component.forall(name => selected.forall(_ == name)) &&
+              ordinal < Long.MaxValue)
+            _scan_(ordinal + 1L, Some(attempt), component.orElse(selected))
+          else _invalid("publication history belongs to a different target or exhausted its sequence")
+        }
+        case None => Consequence.success(ordinal -> previous)
+      }
+    _scan_(1L, None, _history_component(target))
+  }
+
+  private def _published_source(result: Result, target: Target, source: Source): Boolean =
+    result.status == "published" && result.request.source.clean && result.request.source.head == source.head &&
+      (result.request.target.component == target.component || result.request.source == source)
+
+  private def _declared_applicability_c(latest: Option[Result], target: Target, source: Source,
+    port: Port): Consequence[Option[LocalPublicationSourceApplicability.Fact]] =
+    latest.filter(_.request.target.component == target.component)
+      .fold(Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(
+        sourceApplicabilityC(_, source, port))
 
   private def _latest_c(target: Target, port: Port): Consequence[(Long, Option[Result])] =
     _latest_attempt_c(target, port).flatMap { (ordinal, previous) => previous match {
@@ -584,11 +606,9 @@ private[smworkflow] object LocalPublication {
         source <- port.sourceC(target)
         latest <- _latest_c(target, port)
         applicability <- if (input.explicit) Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact])
-          else latest._2.filter(r => r.request.participant == participant &&
-            r.request.input.ownerSessionId == input.ownerSessionId).fold(
-            Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(sourceApplicabilityC(_, source, port))
-        published = latest._2.exists(r => r.status == "published" && r.request.source.clean &&
-          r.request.source.head == source.head)
+          else _declared_applicability_c(latest._2.filter(r => r.request.participant == participant &&
+            r.request.input.ownerSessionId == input.ownerSessionId), target, source, port)
+        published = latest._2.exists(_published_source(_, target, source))
         decision = if (applicability.nonEmpty) Necessity.Unnecessary("The latest actual publication applies to this clean declared non-input descendant")
           else necessity(source, published, input.explicit)
         reason = decision match {
@@ -629,12 +649,11 @@ private[smworkflow] object LocalPublication {
       latest <- _latest_c(target, port)
       source <- port.sourceC(target)
       applicable <- retained.flatMap(_.applicability).fold(Consequence.success(false)) { fact =>
-        latest._2.fold(Consequence.success(false))(actual => sourceApplicabilityC(actual, source, port).map(_.contains(fact)))
+        _declared_applicability_c(latest._2, target, source, port).map(_.contains(fact))
       }
       selected = prior._2 match {
         case Some(request) if !(retryFailed && retained.exists(_confirmed_failed) && source == request.source) && (retained.forall(!_.ready) || (source == request.source && (applicable || latest._2.exists(r =>
-            r.request == request || (r.status == "published" && r.request.source.clean &&
-              r.request.source.head == request.source.head))))) => request.input.copy(answer = input.answer)
+            r.request == request || _published_source(r, target, request.source))))) => request.input.copy(answer = input.answer)
         case _ => input.copy(requestIdentity = input.requestIdentity + ":prerequisite:" + prior._1)
       }
       result <- ensureC(selected, target, participant, port)
@@ -697,8 +716,7 @@ private[smworkflow] object LocalPublication {
           case Some(fact) => for {
             source <- port.sourceC(request.target)
             latest <- _latest_c(request.target, port)
-            current <- latest._2.fold(Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(
-              sourceApplicabilityC(_, source, port))
+            current <- _declared_applicability_c(latest._2, request.target, source, port)
             _ <- if (current.contains(fact) && source == request.source) Consequence.unit
               else _invalid("retained nonexecuting decision no longer has current native applicability")
           } yield r
@@ -730,14 +748,11 @@ private[smworkflow] object LocalPublication {
       if (latest._2.exists(_.status == "uncertain")) {
         val result = Result("uncertain", "The target changed while semantic work was pending; latest effects remain unresolved", request)
         port.createC(key + ":result", result.asJson).map(_ => result)
-      } else if (latest._2.exists(r => r.status == "published" && r.request.source.clean &&
-          r.request.source.head == request.source.head)) {
+      } else if (latest._2.exists(_published_source(_, request.target, request.source))) {
         val result = Result("unnecessary", answer.rationale, request)
         port.createC(key + ":result", result.asJson).map(_ => result)
-      } else latest._2.filter(r => r.request.participant == request.participant &&
-          r.request.input.ownerSessionId == request.input.ownerSessionId).fold(
-          Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(
-          sourceApplicabilityC(_, request.source, port)).flatMap {
+      } else _declared_applicability_c(latest._2.filter(r => r.request.participant == request.participant &&
+          r.request.input.ownerSessionId == request.input.ownerSessionId), request.target, request.source, port).flatMap {
         case Some(fact) =>
           val result = Result("unnecessary", answer.rationale, request, applicability = Some(fact))
           port.createC(key + ":result", result.asJson).map(_ => result)

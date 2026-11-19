@@ -559,3 +559,39 @@ applicable convention violations. Reuse retained history-check evidence where
 appropriate rather than adding a duplicate history-normalization pass. Profiles
 control acceptance, not automatic identifier rewriting; original history dates
 and records remain intact. See the [Phase 8.1 ledger](../phase/phase-8.1-checklist.md).
+
+
+## SLP-4 authored native/build binding
+
+The bounded CNCF SLP-EXEC producer capability is delivered at `bf1de998`. Its
+fixed FixCheck opt-in `lintInput: true` admits an already resolved
+`SbtLintInput(identity, revision, configJson)` and retains actual admitted input.
+The consumer build decodes `cncf.sbt.lint.input` and applies effective JSON
+without ambient fallback. `validation.sharedScalaLint: true` advertises the
+source build contract; it requires an existing trusted input-enabled host
+capability and creates no grant. Absence of that capability is setup failure,
+not proof of activation. Legacy captured work/results retain their meaning.
+
+The authored input captures profile/configuration provenance plus finite ranges
+from existing typed native `PendingDiff` at the unchanged Step or cumulative
+Phase base. Only changed handwritten Compile/Test files enter check-only
+Scalafix; generated source stays excluded. The pinned public reporter parses
+full source context and conservatively expands changes to enclosing declarations
+or types. Header/parameter/type/field changes expand to the enclosing type;
+imports expand to the source. Typed-body edits wholly below the header expand to
+the method. Mixed header/body lines use the conservative type/source range.
+This bounded policy does not infer arbitrary cross-file semantic impact.
+
+Affected errors block ordinary admission/FIX. Outside-scope diagnostics are
+reported separately with age UNKNOWN; out-of-diff never proves old debt. Only
+the engine's typed LinterError can be classified this way; unavailable analysis,
+parser/configuration errors and other failures remain failures. Reports omit
+source snippets and retain redacted rule/path/range/disposition information.
+Explicit file includes use normal Resource authorization; URL/classpath includes,
+quoted Git paths, binary deltas and changed Scala paths without textual hunks
+are explicit unsupported cases. No empty/clean fallback is supplied.
+
+These changes and paired connected fixtures are authored **NOT RUN**. They do
+not close A09/A10/A15, install a runtime or admit a requester result. Current
+source/producer/derived-delivery limits are recorded in the existing
+[bounded integration notes](../notes/phase8.1-producer-deliveries.md).

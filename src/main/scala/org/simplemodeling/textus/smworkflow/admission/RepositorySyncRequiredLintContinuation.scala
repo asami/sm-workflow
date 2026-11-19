@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * Original receipts keep their own native provenance; they are never rerun or
   * written as executions in the fresh candidate namespace.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncRequiredLintContinuation {
@@ -409,16 +409,25 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       original <- _load_c(store, direction.target.namespace, "merge-validated")
     } yield original.payload.validation.get.receipts
   }
-  def preflightC(store: N.Store, pending: N.Stage, checks: Vector[C.Check]): Consequence[Unit] = for {
+  def preflightC(store: N.Store, pending: N.Stage, assessment: Option[RepositorySyncMergeAssessment.Policy],
+    inputs: Option[RepositorySyncDocumentInputs.Assessment], checks: Vector[C.Check]): Consequence[Unit] = assessment match {
+    case Some(policy) if policy.scalaLint != "not-applicable" && !checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck) =>
+      val paths = inputs.map(_.changedPaths).orElse(Option.when(policy.requiresLint(Vector.empty))(Vector.empty[String]))
+      paths.fold(_pending_paths_c(store, pending))(Consequence.success).flatMap { changed =>
+        if (!policy.requiresLint(changed)) Consequence.unit
+        else N.invalid("pending merge policy requires a selected FixCheck before any SBT execution")
+      }
+    case _ => Consequence.unit
+  }
+
+  private def _pending_paths_c(store: N.Store, pending: N.Stage): Consequence[Vector[String]] = for {
     _ <- C.preconditionsC(store, pending)
     local <- GitObjectId.parseC(pending.payload.before.head)
     remote <- pending.payload.mergeHead.map(GitObjectId.parseC).getOrElse(N.invalid("required-lint preflight requires actual merge parents"))
     localpaths <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.PendingPaths(local)).flatMap(_.valueC)
     remotepaths <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.PendingPaths(remote)).flatMap(_.valueC)
-    _ <- if (!(localpaths ++ remotepaths).exists(_.value.endsWith(".scala")) || checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
-      Consequence.unit else N.invalid("new Scala merge candidate requires an actual selected fixed FixCheck before any SBT execution")
     _ <- C.preconditionsC(store, pending)
-  } yield ()
+  } yield (localpaths ++ remotepaths).map(_.value)
   def advanceC(store: N.Store, current: InstanceRecord, validation: C.Policy,
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],

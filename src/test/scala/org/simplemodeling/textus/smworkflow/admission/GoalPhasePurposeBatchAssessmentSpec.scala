@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 19, 2026
+ * @version Nov. 19, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.Path
@@ -56,6 +60,41 @@ final class GoalPhasePurposeBatchAssessmentSpec extends AnyWordSpec with Matcher
     structural, selected, Vector(P.groupReceipt(selected.head.identity, value)))
 
   "Purpose ordinary batch assessment" should {
+    "accept a nonempty reported static FULL Test only for ordinary Purpose selection" in {
+      Given("an ordinary static Compile and Test batch with a complete ScalaTest report")
+      val target = SbtTarget(take(WorkspaceId.parseC(workspace)))
+      val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, S.Kind.Compile),
+        GoalPhaseNativeValidation.Check("test", 2, S.Kind.Test))
+      val compile = take(V.sbtReceiptC("compile", S.Kind.Compile,
+        SbtExecutionResult(target, SbtOperation.Compile, process(""))))
+      val report = """[info] ProductCheckSpec:
+        |[info] Total number of tests run: 1
+        |[info] Suites: completed 1, aborted 0
+        |[info] Tests: succeeded 1, failed 0, canceled 0, ignored 0, pending 0
+        |[info] All tests passed.
+        |""".stripMargin
+      def _test_receipt_(observation: ProcessExecutionResult): V.Receipt =
+        take(V.sbtReceiptC("test", S.Kind.Test, SbtExecutionResult(target, SbtOperation.Test, observation)))
+      def _assess_(receipt: V.Receipt, ordinary: Boolean, lint: String = "off") =
+        GoalPhaseStepAssessment.assessPurposeC(policy.copy(scalaLint = lint), snapshot, "ordinary-full",
+          structural, checks, Vector(compile, receipt), ordinaryFull = ordinary)
+
+      When("the same batch is evaluated in the ordinary FULL, focused and lint-required contexts")
+      val passed = _test_receipt_(process(report))
+      Then("only actual matching evidence satisfies ordinary FULL code assessment")
+      take(_assess_(passed, true)).branch shouldBe "admit"
+      _assess_(passed, false).isSuccess shouldBe false
+      _assess_(passed, true, "required").isSuccess shouldBe false
+      _assess_(passed.copy(processObservation = None), true).isSuccess shouldBe false
+
+      When("zero-exit Test results lack a successful, nonempty, complete report")
+      val unsupported = Vector("", report.replace("tests run: 1", "tests run: 0").replace("succeeded 1", "succeeded 0"),
+        report.replace("aborted 0", "aborted 1"), report.replace("failed 0", "failed 1"),
+        report.replace("canceled 0", "canceled 1"), report.replace("succeeded 1", "succeeded 2"))
+      Then("none can satisfy Purpose assessment")
+      unsupported.foreach(stdout => _assess_(_test_receipt_(process(stdout)), true).isSuccess shouldBe false)
+    }
+
     "admit the successful compiled discovery batch without legacy suite counters" in {
       Given("a complete native discovery build and one exact successful mode/provider batch")
       val actual = group()

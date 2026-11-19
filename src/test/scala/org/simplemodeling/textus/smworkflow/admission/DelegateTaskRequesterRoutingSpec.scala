@@ -61,7 +61,7 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
 /** Cheap pure admission and managed public operations; no destination program
   * or SBT program is installed or executed by this specification.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -179,7 +179,8 @@ final class DelegateTaskRequesterRoutingSpec extends AnyWordSpec with GivenWhenT
           Files.writeString(inputfile, take(value.toRecord().toJsonStringC))
           val response = take(_invoke_("NativeWorkflowPreparationService", "prepareDelegateTaskStart",
             List(Property("input", V.WorkflowDelegateTaskStartPreparationInput(inputfile.toUri.toASCIIString,
-              selection, "participant", "ExplicitHuman", "requester-key", "entity:smworkflow.cli.goal_selection"), None))))
+              selection, "participant", "ExplicitHuman", "requester-key", "entity:smworkflow.cli.goal_selection"), None),
+              Property("preparationFormat", "legacy-full", None))))
           val prepared = response match {
             case OperationResponse.Json(value) => take(new RecordDecoder().json(value.noSpaces))
             case other => fail("Expected passive preparation import: " + other)

@@ -21,7 +21,7 @@ import GoalPhaseDocumentPlan as P
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -65,6 +65,55 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
     val accepted = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "fixture-check", "fixture-independent-review", O.ReviewOutcome.Accept)))
     val pending = _take(accepted.acceptC(O.ClosureIntentSaved(snapshot, "fixture-intent")))
     _take(pending.acceptC(O.StepCommitObserved("fixture-intent", O.Commit("c" * 40, _base.head, snapshot.tree))))
+  }
+
+  "Explicit current-Step ownership narrowing" should {
+    "keep accepted work saved acceptance and repair accounting while excluding future documents only after explicit adoption" in {
+      Given("a reviewed first Step and a current second-Step decision with two future documents in its owned paths")
+      val paths = Vector("src/two.scala", "docs/phase/README.md", "docs/strategy/development.md")
+      val raw = _raw.copy(steps = _raw.steps.updated(1, _raw.steps(1).copy(ownedPaths = paths)))
+      val second = _close_first(_take(O.startC(_take(A.captureC(Some(_project), raw)), _base)))
+      val ready = _take(second.acceptC(O.SemanticCompleted(_key(second), "Second implementation")))
+      val candidate = O.Snapshot(second.tipSnapshot.head, "e" * 40)
+      val inspected = _take(ready.acceptC(O.CandidateObserved(candidate)))
+      val repaired = _take(inspected.acceptC(O.RepairableChecksObserved(candidate, Vector("original-2"), "failed-second-check",
+        O.RepairDirective("Correct observed failure", Vector("Observed failure")))))
+      val paused = _decision(repaired)
+      val narrowed = raw.copy(revision = "narrowed-2", steps = raw.steps.updated(1,
+        raw.steps(1).copy(ownedPaths = Vector(paths.head))))
+      val later = A.Project(Vector(A.Condition("later-default", "step", true, "Unselected later policy")))
+      When("semantic capture retains the saved boundary and the ordinary explicit adoption consumes its evidence reference")
+      val captured = _take(captureSemanticProposalC(paused, _proposal(narrowed), Some(later)))
+      val adopted = _take(adoptedC(paused, captured, "spec-independent-narrowing-human"))
+      Then("only ownership and the semantic generation change, without automatic inventory authority")
+      captured.revisionScope shouldBe None
+      captured.plan.effectiveAcceptance shouldBe paused.plan.effectiveAcceptance
+      adopted.plan.steps(1).ownedPaths shouldBe Vector(paths.head)
+      adopted.plan.steps.head shouldBe paused.plan.steps.head
+      adopted.plan.acceptance shouldBe paused.plan.acceptance
+      adopted.plan.effectiveAcceptance shouldBe paused.plan.effectiveAcceptance
+      adopted.completed shouldBe paused.completed
+      adopted.base shouldBe paused.base
+      adopted.tipSnapshot shouldBe paused.tipSnapshot
+      adopted.repairs shouldBe paused.repairs
+      adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      adopted.generation shouldBe paused.generation + 1
+      paused.adoptCurrentInventoryRevisionC(captured.plan, "no-automatic-narrowing").isSuccess shouldBe false
+
+      Given("proposals mixing path removal with a different Step policy, reordered paths, or accepted-work changes")
+      val invalid = Vector(
+        narrowed.copy(steps = narrowed.steps.updated(1, narrowed.steps(1).copy(ownedPaths = Vector.empty))),
+        narrowed.copy(steps = narrowed.steps.updated(1, narrowed.steps(1).copy(ownedPaths = Vector(paths(2), paths.head)))),
+        narrowed.copy(steps = narrowed.steps.updated(1, narrowed.steps(1).copy(ownedPaths = Vector("foreign.scala")))),
+        narrowed.copy(steps = narrowed.steps.updated(1, narrowed.steps(1).copy(checks = Vector("different-check")))),
+        narrowed.copy(steps = narrowed.steps.updated(1, narrowed.steps(1).copy(dependencies = Vector.empty))),
+        narrowed.copy(steps = narrowed.steps.updated(0, narrowed.steps.head.copy(purpose = "Rewrite accepted work"))),
+        narrowed.copy(acceptance = Some(_adoption.copy(usage = "Different usage"))))
+      When("the same semantic capture receives each mixed proposal")
+      val outcomes = invalid.map(plan => captureSemanticProposalC(paused, _proposal(plan), Some(_project)))
+      Then("none becomes an adoption or an automatic append")
+      outcomes.foreach(_.isSuccess shouldBe false)
+    }
   }
 
   "Lossless public ordered Plan representation" should {

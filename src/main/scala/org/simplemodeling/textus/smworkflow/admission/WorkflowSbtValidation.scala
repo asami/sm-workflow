@@ -11,7 +11,7 @@ import org.goldenport.cncf.processexecution.*
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -34,6 +34,15 @@ private[smworkflow] object WorkflowSbtValidation {
   given Decoder[ValidationExecutionModeV1.Observation] = deriveDecoder
   given Encoder[SbtValidationMode.CaseResult] = deriveEncoder
   given Decoder[SbtValidationMode.CaseResult] = deriveDecoder
+  given Encoder[SbtLintInput] = deriveEncoder
+  given Decoder[SbtLintInput] = deriveDecoder
+  private val lintParser = new io.circe.jawn.JawnParser(maxValueSize = None, allowDuplicateKeys = false)
+  private def lintValid(input: SbtLintInput): Boolean = input != null &&
+    input.identity != null && input.identity.matches("[A-Za-z0-9_.-]{1,128}") &&
+    input.revision != null && input.revision.matches("[A-Za-z0-9_.-]{1,128}") &&
+    input.configJson != null && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(input.configJson) &&
+    input.configJson.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536 &&
+    lintParser.parse(input.configJson).toOption.exists(_.isObject)
 
   enum Kind(val wire: String) {
     case Compile extends Kind("compile")
@@ -106,14 +115,16 @@ private[smworkflow] object WorkflowSbtValidation {
   final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
     estimate: Option[SbtValidationEstimate] = None,
     mode: Option[Mode] = None, batch: Option[Vector[SbtValidationMode.CaseResult]] = None,
-    private val estimateFieldPresent: Boolean = false) {
+    private val estimateFieldPresent: Boolean = false,
+    lintInput: Option[SbtLintInput] = None) {
     override def equals(other: Any): Boolean = other match {
       case that: Facts => kind == that.kind && outcome == that.outcome && selection == that.selection &&
-        reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch
+        reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch && lintInput == that.lintInput
       case _ => false
     }
-    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch).hashCode
+    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch, lintInput).hashCode
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
+      lintInput != null && lintInput.forall(input => kind == Kind.FixCheck && lintValid(input)) &&
       estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
       batch != null && batch.forall(values => kind == Kind.TestOnly && values.nonEmpty && values.size <= 64 &&
         values.forall(value => value != null && value.selected != null && value.selected.validateC.isSuccess &&
@@ -142,7 +153,8 @@ private[smworkflow] object WorkflowSbtValidation {
       val estimated = if (value.estimate.nonEmpty || value.estimateFieldPresent)
         legacy.mapObject(_.add("estimate", value.estimate.asJson)) else legacy
       val mode = value.mode.fold(estimated)(mode => estimated.mapObject(_.add("mode", mode.asJson)))
-      value.batch.fold(mode)(batch => mode.mapObject(_.add("batch", batch.asJson)))
+      val batch = value.batch.fold(mode)(batch => mode.mapObject(_.add("batch", batch.asJson)))
+      value.lintInput.fold(batch)(input => batch.mapObject(_.add("lintInput", input.asJson)))
     }
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
@@ -152,8 +164,9 @@ private[smworkflow] object WorkflowSbtValidation {
       estimate <- cursor.get[Option[SbtValidationEstimate]]("estimate")
       mode <- GoalPhaseNativeMetadata.optional[Mode](cursor, "mode")
       batch <- GoalPhaseNativeMetadata.optional[Vector[SbtValidationMode.CaseResult]](cursor, "batch")
+      lint <- GoalPhaseNativeMetadata.optional[SbtLintInput](cursor, "lintInput")
       value = Facts(kind, outcome, selection, reason, estimate, mode, batch,
-        cursor.keys.exists(_.exists(_ == "estimate")))
+        cursor.keys.exists(_.exists(_ == "estimate")), lint)
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
@@ -164,7 +177,9 @@ private[smworkflow] object WorkflowSbtValidation {
 
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.target != null && result.target.validationMode != null &&
-        result.validationMode != null && result.processResult != null &&
+        result.validationMode != null && result.processResult != null && result.lintInput != null &&
+        result.target.lintInput != null && result.lintInput == result.target.lintInput &&
+        result.lintInput.forall(input => kind == Kind.FixCheck && lintValid(input)) &&
         result.processResult.termination != null && result.testSelection != null &&
         ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
           (kind == Kind.TestCompile && result.operation == SbtOperation.TestCompile) ||
@@ -194,7 +209,7 @@ private[smworkflow] object WorkflowSbtValidation {
       case Some(SbtValidationMode.Result.Unverified(reason)) => Mode(requested, None, None, Some(reason))
       case None => Mode(requested, None, None, Some("child observation unavailable"))
     } }
-    retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch)
+    retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch, lintInput = result.lintInput)
     _ <- retained.validateC
   } yield retained
 }

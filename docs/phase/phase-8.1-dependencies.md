@@ -6,6 +6,14 @@ Stage Status:
 - Update rule: Record actual accepted handoffs and affected consumer evidence.
 - Closure basis: Existing [Phase 8.1 checklist](phase-8.1-checklist.md), not an additional gate.
 
+SLP-4 read-only integration observations and authored current-key native fixtures:
+[bounded integration observations](../notes/phase8.1-producer-deliveries.md).
+The bounded SLP-EXEC typed lint-input/provenance capability is delivered at CNCF
+`bf1de998`; its actual producer checks/publication are reused. Consumer Action,
+affected-scope reporting and delivery-projection integration are authored, NOT RUN.
+Formal requester receipt/adoption and runtime installation remain unperformed;
+no new consumer acceptance is claimed.
+
 Planned: 2026-11-09
 Execution: not started by this plan.
 Parent: [Phase 8.1](phase-8.1.md)
@@ -16,12 +24,12 @@ contains the initial rules, versioned profiles and compiler-input specifications
 The selected host is Scala 2.13.14 / Scalafix 0.12.1; analyzed input is Scala
 3.3.8 with compiler-produced SemanticDB. SLP-1/SLP-2 were locally accepted at
 `0c300ad9658045406fbba1c73e961749baa24947` through native checks and independent
-review. This is not an accepted full SLP-RULES handoff. SLP-3's breaking history
-key migration (no aliases), ordered additions/removals, immutable effective
-snapshot and public Scalafix scoped-exception/project-difference assertions are
-authored, pending native qualification. These supply A02/A06/A08 data foundations;
-per-call typed invocation, full A08/A15 native Action retention and actual settings
-adoption remain SLP-4. All B/C acceptance remains owed. Root whole-source lint keeps its existing project configuration selection;
+review. This is not an accepted full SLP-RULES handoff. SLP-3 was locally accepted at `3e999f4800eba80f02d6b863a67bce800b5fa86f`
+with the breaking history-key migration (no aliases), ordered additions/removals,
+immutable effective snapshot and public scoped-exception/project differences. These supply A02/A06/A08 data foundations;
+SLP-4 authors the per-call typed invocation, full-context affected-scope reporter
+and actual-input retention; A08/A15 runtime/settings adoption awaits native
+qualification and genuine consumer installation/adoption. All B/C acceptance remains owed. Root whole-source lint keeps its existing project configuration selection;
 shared defaults are not activated there by this candidate. Full A01 normal-route
 adoption remains owed until actual native qualification. No producer delivery or
 checklist item is completed by source authorship or partial fixture proof.

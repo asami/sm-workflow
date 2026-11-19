@@ -22,7 +22,7 @@ import GoalPhaseDependencyValidation.given
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -47,6 +47,36 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val path = scenario.root.resolve(name + ".json")
     Files.writeString(path, value, StandardOpenOption.CREATE_NEW)
     path.toUri.toASCIIString
+  }
+  private def _advance_resource(result: F.Result): String =
+    result.business[V.GoalPhaseAdvanceResult].retainedWork.map(_.resource)
+      .getOrElse(result.invocation.stdout.toUri.toASCIIString)
+
+  private def _advance_detail(scenario: F.Scenario, result: F.Result): V.GoalPhaseAdvanceResult = {
+    val control = result.business[V.GoalPhaseAdvanceResult]
+    control.retainedWork match {
+      case None => control
+      case Some(reference) =>
+        val retained = scenario.readRetainedWork(reference).business[V.WorkflowRetainedWorkReadResult]
+        retained.availability shouldBe "available"
+        retained.reference shouldBe reference
+        reference.sessionId shouldBe control.submitSessionId.getOrElse(control.sessionId)
+        val detail = SplitPhaseExplicitPartitionFixture.take(V.GoalPhaseAdvanceResult.createC(retained.response))
+        detail.sessionId shouldBe control.sessionId
+        detail.kind shouldBe control.kind
+        detail.submitOperation shouldBe control.submitOperation
+        detail.submitSessionId shouldBe control.submitSessionId
+        detail.resultType shouldBe control.resultType
+        detail.issuedWorkContext shouldBe control.issuedWorkContext
+        detail.repairProgress shouldBe control.repairProgress
+        detail.issuedWorkContext.foreach { context =>
+          context.runId shouldBe reference.sessionId
+          context.continuationId shouldBe reference.identity
+          context.expectedRevision shouldBe reference.revision
+          context.completionOperation.getString("operation") shouldBe Some(reference.completionOperation)
+        }
+        detail
+    }
   }
   private def _executions(root: Path): Vector[String] = {
     val path = root.resolve("sbt-executions.txt")
@@ -130,7 +160,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     bindingtransform: D.Binding => D.Binding = value => value, legacysuccessor: Boolean = false,
     assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourcerevisionfixture: Boolean = false,
     dependencychecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None,
-    beforestart: F.Scenario => Unit = _ => ()): Selected = {
+    beforestart: F.Scenario => Unit = _ => (),
+    acceptancereport: Option[V.GoalPhaseAcceptanceReport] = None): Selected = {
     val scenario = F.freshDependency(name, denial, bindingtransform, dependencyChecks = dependencychecks)
     // Both ordinary launchers select this fresh host's existing assembly. The
     // installed entry changes cwd only; host configuration owns its descriptor.
@@ -188,7 +219,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val task = scenario.ownTask("dependency-validation")
     val started = scenario.start().business[V.GoalPhaseStartResult]
     scenario.retain(task, started)
-    val original = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+    val original = _advance_detail(scenario, scenario.advance(task))
     val configured = parse(Files.readString(hostconfig)).toOption.get
     val actualhost = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       parse(configured.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
@@ -199,17 +230,18 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       Vector(ContextReference(binding.step, "1")), Vector.empty)
     val result = Json.obj("outcome" -> Json.fromString("decision-needed"),
       "summary" -> Json.fromString("SPECIFICATION-OWNED dependency direction request"), "findings" -> Json.arr(),
-      "dependencyProposal" -> proposal.asJson)
+      "dependencyProposal" -> proposal.asJson).mapObject(fields => acceptancereport.fold(fields)(report =>
+        fields.add("acceptance", json(report.toRecord()))))
     _submit(scenario, original, result, V.WorkflowArtifactReference("specification-dependency-proposal", "1"))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val output = scenario.advance(task)
-    val question = output.business[V.GoalPhaseAdvanceResult]
+    val question = _advance_detail(scenario, output)
     question.kind shouldBe "Human"
     val answer = V.GoalPhaseOrderedDecisionAnswer("ApproveDependencyScope", "SPECIFICATION-OWNED exact linked unit")
     val reference = V.WorkflowArtifactReference("specification-dependency-approval", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-owned-human-answer"), None, None)
     val input = V.WorkflowEvidencePreparationInput("GoalPhase", "human",
-      _save(scenario, "actual-dependency-question", Files.readString(output.invocation.stdout)),
+      _advance_resource(output),
       _save(scenario, "dependency-answer", json(answer.toRecord()).noSpaces),
       _save(scenario, "dependency-reference", json(reference.toRecord()).noSpaces),
       _save(scenario, "dependency-execution", json(execution.toRecord()).noSpaces),
@@ -223,7 +255,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         "--resultReference", json(reference.toRecord()).noSpaces,
         "--executionEvidence", json(execution.toRecord()).noSpaces))
       .business[V.GoalPhaseOrderedDecisionSubmissionResult].accepted shouldBe true
-    val resumed = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+    val resumed = _advance_detail(scenario, scenario.advance(task))
     resumed.sessionId shouldBe original.sessionId
     resumed.work.get.originalBase shouldBe original.work.get.originalBase
     resumed.work.get.selectedPlan shouldBe original.work.get.selectedPlan
@@ -324,7 +356,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     artifact: String = "linked", issuereport: Option[V.GoalPhaseIssueReport] = None,
     acceptancereport: Option[V.GoalPhaseAcceptanceReport] = None): F.Result = {
     val scenario = selected.scenario
-    val request = output.business[V.GoalPhaseAdvanceResult]
+    val request = _advance_detail(scenario, output)
     Set("ReviewStep", "ReviewPhase") should contain(request.work.get.kind)
     val result = Json.obj("outcome" -> Json.fromString(if (findings.isEmpty) "accept" else "repair"),
       "summary" -> Json.fromString("SPECIFICATION-OWNED review of both actual candidates"),
@@ -334,7 +366,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val reference = V.WorkflowArtifactReference("specification-" + artifact + "-review", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)
     val input = V.WorkflowEvidencePreparationInput("GoalPhase", "review",
-      _save(scenario, "actual-" + artifact + "-review", Files.readString(output.invocation.stdout)),
+      _advance_resource(output),
       _save(scenario, artifact + "-review-result", result.noSpaces),
       _save(scenario, artifact + "-review-reference", json(reference.toRecord()).noSpaces),
       _save(scenario, artifact + "-review-execution", json(execution.toRecord()).noSpaces),
@@ -734,6 +766,160 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
 
   /** One small ordinary current-source case. All Human/review evidence belongs
     * to this disposable specification, never to a consumer's authority. */
+  /** One fixture-owned installed episode: saved business acceptance can span
+    * actual documents while current source still owes fresh checks and review. */
+  def qualifyRetainedPlanReconstruction(reporter: GivenWhenThen): Path = {
+    import GoalPhaseDevelopmentReconstruction as C
+    import GoalPhaseAcceptanceBoundary as A
+    require(sys.props.contains("smworkflow.spec.installedCommand") && sys.props.contains("smworkflow.spec.componentFile"),
+      "Select the actual normally published component and installed executable")
+    val conditions = Vector(A.Condition("original", "step", true, "Retain the original product behavior"),
+      A.Condition("remaining", "step", true, "Retain the current development obligations"))
+    val pendingreport = V.GoalPhaseAcceptanceReport(conditions.map(condition =>
+      V.GoalPhaseAcceptanceObservation(condition.identity, "not-evaluated", "SPECIFICATION-OWNED pending implementation")), Vector.empty)
+    val passedreport = V.GoalPhaseAcceptanceReport(conditions.map(condition =>
+      V.GoalPhaseAcceptanceObservation(condition.identity, "satisfied", "SPECIFICATION-OWNED current input and requirements inspected")), Vector.empty)
+    var rawplan = Option.empty[GoalPhaseOrderedProgression.Plan]
+    def _prepare_plan_(scenario: F.Scenario): Unit = {
+      val path = scenario.root.resolve("goal-plan.json")
+      val raw = parse(Files.readString(path)).flatMap(_.as[GoalPhaseOrderedProgression.Plan])
+        .fold(error => fail(error.getMessage), identity).copy(acceptance = Some(A.Adoption("Fixture unchanged accepted usage", conditions)))
+      rawplan = Some(raw)
+      Files.writeString(path, raw.asJson.noSpaces)
+      val primary = Path.of(scenario.host.target.root)
+      Files.writeString(primary.resolve("docs/phase.md"), "# Fixture current Phase\n- [x] original: Retain the original product behavior\n")
+      Files.writeString(primary.resolve("docs/retained-checklist.md"), "- [ ] remaining: Retain the current development obligations\n")
+      SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(Vector("-C", primary.toString,
+        "-c", "core.hooksPath=/dev/null", "add", "--", "docs/phase.md", "docs/retained-checklist.md")))
+      SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(Vector("-C", primary.toString,
+        "-c", "core.hooksPath=/dev/null", "-c", "user.name=Retained Plan Specification",
+        "-c", "user.email=retained-plan@example.invalid", "commit", "--no-verify", "--no-gpg-sign",
+        "-m", "Specification-owned retained Plan document baseline")))
+      val prepared = SplitPhaseExplicitPartitionFixture.take(
+        org.simplemodeling.textus.smworkflow.preparation.NativeGoalStartInput.prepareC(Map(
+          "input" -> scenario.root.resolve("goal-input.json").toUri.toASCIIString,
+          "plan" -> path.toUri.toASCIIString, "selection-id" -> "native-goal-selection", "participant" -> "participant",
+          "origin" -> "ExplicitHuman", "idempotency-key" -> "native-specification-input",
+          "selection-collection" -> "entity:smworkflow.cli.goal_selection", "plan-collection" -> "entity:smworkflow.cli.goal_plans"),
+          reference => Consequence(Files.readString(Path.of(java.net.URI.create(reference))))))
+      Files.writeString(scenario.root.resolve("selected-input.json"), SplitPhaseExplicitPartitionFixture.take(prepared.toJsonStringC))
+    }
+    reporter.Given("one tiny installed fixture with the exact accepted Plan and its conditions split across actual documents")
+    val selected = _selected("common-retained-plan-reconstruction", beforestart = _prepare_plan_, acceptancereport = Some(pendingreport))
+    val scenario = selected.scenario
+    val primary = Path.of(scenario.host.target.root)
+    Files.writeString(primary.resolve("value.txt"), "expected\n")
+    Files.writeString(scenario.root.resolve("dependency/repository/value.txt"), "expected\n")
+    val completed = Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-OWNED current implementation".asJson,
+      "findings" -> Json.arr(), "dependencyValidation" -> selected.selection.asJson, "acceptance" -> json(passedreport.toRecord()))
+    _submit(scenario, selected.resumed, completed, V.WorkflowArtifactReference("retained-plan-implementation", "1"))
+      .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    val oldreview = scenario.advance(selected.task)
+    val oldwork = _advance_detail(scenario, oldreview)
+    oldwork.work.get.kind shouldBe "ReviewStep"
+    _review(selected, oldreview, artifact = "retained-plan-old", acceptancereport = Some(passedreport))
+      .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    val oldclosing = scenario.advance(selected.task)
+    oldclosing.business[V.GoalPhaseAdvanceResult].authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+    val head = scenario.candidateHead
+    val oldrows = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap
+    val oldruns = _executions(scenario.root)
+    val olddependencyruns = _executions(scenario.root.resolve("dependency"))
+    val reference = V.WorkflowArtifactReference("fixture-same-actual-direction", "1")
+    val referenceresource = _save(scenario, "retained-plan-authority-reference", json(reference.toRecord()).noSpaces)
+    val occurredat = Instant.now().minusSeconds(60).toString
+    def _prepare_authority_(closing: F.Result): Json = {
+      val start = scenario.invocations.size
+      val input = V.WorkflowAuthorityPreparationInput(closing.invocation.stdout.toUri.toASCIIString, referenceresource,
+        "participant", "normal-development-host", occurredat, "entity:smworkflow.cli.host_evidence")
+      scenario.prepareHostInput("prepareAuthority", input.toRecord()).exitCode shouldBe 0
+      val preparation = scenario.invocations.drop(start).find(_.argv.exists(_.endsWith(".prepareAuthority"))).get
+      val output = parse(Files.readString(preparation.stdout)).fold(error => fail(error.message), identity)
+      output.hcursor.get[String]("status").toOption shouldBe Some("prepared")
+      output.hcursor.downField("retainedImport").focus.get
+    }
+    reporter.When("the actual missing-authority target is passively prepared and current owned source then changes after review")
+    val oldauthority = _prepare_authority_(oldclosing)
+    _prepare_authority_(oldclosing) shouldBe oldauthority
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap shouldBe oldrows
+    Files.writeString(primary.resolve("docs/phase.md"), "\nCurrent source clarifies the same accepted usage.\n", StandardOpenOption.APPEND)
+    val proposal = GoalPhasePlanRevision.Proposal("retained-plan-current-source", "1", "Keep exact accepted requirements", rawplan.get)
+    val input = V.GoalPhaseDevelopmentReconstructionInput(selected.original.sessionId, "docs/phase.md", "docs/retained-checklist.md",
+      GoalPhaseNativeMetadata.record(proposal.asJson), "SPECIFICATION-OWNED normal reconstruction of current source")
+    def _reconstruct_(value: V.GoalPhaseDevelopmentReconstructionInput = input): F.Result = scenario.call("command", C.operation,
+      Vector("--inputResource", _save(scenario, "retained-plan-input-" + scenario.invocations.size, json(value.toRecord()).noSpaces)))
+    val reconstructed = _advance_detail(scenario, _reconstruct_())
+    val reconstructedrows = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap
+    val repeated = _advance_detail(scenario, _reconstruct_())
+    reporter.Then("the same Session retains Plan history and counters at one unstarted fresh capture without qualifying current source by old receipts")
+    reconstructed.kind shouldBe "Wait"
+    repeated.sessionId shouldBe selected.original.sessionId
+    repeated.repairProgress shouldBe selected.resumed.repairProgress
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap shouldBe reconstructedrows
+    oldrows.filterNot(_._1 == "instance").foreach { (key, bytes) => reconstructedrows.get(key) shouldBe Some(bytes) }
+    _executions(scenario.root) shouldBe oldruns
+    _executions(scenario.root.resolve("dependency")) shouldBe olddependencyruns
+    scenario.candidateHead shouldBe head
+
+    reporter.Given("a separate fully documented proposal that crosses the actual saved Plan identity")
+    Files.writeString(primary.resolve("docs/full-checklist.md"), conditions.map(condition =>
+      "- [ ] " + condition.identity + ": " + condition.description).mkString("\n") + "\n")
+    val crossed = input.copy(checklistPath = "docs/full-checklist.md", proposal = GoalPhaseNativeMetadata.record(
+      proposal.copy(plan = rawplan.get.copy(identity = "foreign-plan")).asJson))
+    reporter.When("the public reconstruction operation encounters that hard contradiction")
+    val refused = _reconstruct_(crossed)
+    reporter.Then("an explanatory error appends no Decision or reconstruction and grants no effects")
+    _refused(refused, "Plan identity changed")
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap shouldBe reconstructedrows
+    _executions(scenario.root) shouldBe oldruns
+    scenario.candidateHead shouldBe head
+
+    reporter.When("ordinary Advance captures the changed source and executes its selected checks before a new independent review")
+    val freshreview = scenario.advance(selected.task)
+    val fresh = _advance_detail(scenario, freshreview)
+    val freshruns = _executions(scenario.root)
+    val freshdependencyruns = _executions(scenario.root.resolve("dependency"))
+    val freshrows = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap
+    val recollected = _advance_detail(scenario, _reconstruct_())
+    reporter.Then("fresh current evidence belongs to a later generation while old successes remain literal history")
+    fresh.work.get.kind shouldBe "ReviewStep"
+    _capture(fresh).generation should be > _capture(oldwork).generation
+    fresh.work.get.selectedPlan shouldBe selected.resumed.work.get.selectedPlan
+    fresh.work.get.originalBase shouldBe selected.resumed.work.get.originalBase
+    fresh.work.get.completed shouldBe selected.resumed.work.get.completed
+    fresh.repairProgress shouldBe selected.resumed.repairProgress
+    freshruns.size should be > oldruns.size
+    freshdependencyruns.size should be >= olddependencyruns.size
+    recollected.issuedWorkContext shouldBe fresh.issuedWorkContext
+    _executions(scenario.root) shouldBe freshruns
+    _executions(scenario.root.resolve("dependency")) shouldBe freshdependencyruns
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap shouldBe freshrows
+    oldrows.filterNot(_._1 == "instance").foreach { (key, bytes) => freshrows.get(key) shouldBe Some(bytes) }
+    _review(selected, freshreview, artifact = "retained-plan-fresh", acceptancereport = Some(passedreport))
+      .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    val freshclosing = scenario.advance(selected.task)
+    val closing = freshclosing.business[V.GoalPhaseAdvanceResult]
+    reporter.When("the later actual Closing target passively prepares the same genuine direction")
+    val freshauthority = _prepare_authority_(freshclosing)
+    _prepare_authority_(freshclosing) shouldBe freshauthority
+    val closingrows = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap
+    val stillmissing = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+    reporter.Then("different real targets have distinct retained preparations and missing real authority remains its actual boundary")
+    freshauthority should not be oldauthority
+    stillmissing.kind shouldBe "Wait"
+    stillmissing.authorityContext shouldBe closing.authorityContext
+    stillmissing.sessionId shouldBe selected.original.sessionId
+    scenario.candidateHead shouldBe head
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap shouldBe closingrows
+    _executions(scenario.root) shouldBe freshruns
+    val receipt = scenario.root.resolve("common-retained-plan-result.json")
+    Files.writeString(receipt, Json.obj("sessionId" -> fresh.sessionId.asJson,
+      "retainedPlan" -> fresh.work.get.selectedPlan.revision.asJson,
+      "oldGeneration" -> _capture(oldwork).generation.asJson, "freshGeneration" -> _capture(fresh).generation.asJson,
+      "authorityPending" -> stillmissing.authorityContext.nonEmpty.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+    receipt
+  }
+
   def qualifyKeepCurrentRequirements(reporter: GivenWhenThen): Path = {
     import GoalPhaseDevelopmentReconstruction as C
     require(sys.props.contains("smworkflow.spec.installedCommand") && sys.props.contains("smworkflow.spec.componentFile"),
@@ -5013,8 +5199,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
 }
 
 /** One normal installed initial-source scenario, with fixture-owned evidence.
-  * @since   Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * Fixture introduced Nov. 5, 2026; updated Nov. 8, 2026.
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover

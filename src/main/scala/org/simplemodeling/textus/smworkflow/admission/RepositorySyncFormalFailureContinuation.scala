@@ -23,23 +23,30 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
 /** A genuine new validation attempt after explicit host-correction direction.
   * Formal failure and unknown old-worker effects retain separate provenance.
   * @since   Nov.  3, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncFormalFailureContinuation {
   val policy = "sm-workflow.repository-sync-formal-failure-continuation.v1"
   val selectionPolicy = "sm-workflow.repository-sync-formal-failure-continuation.v2"
+  val reconstructionPolicy = "sm-workflow.repository-sync-formal-failure-continuation.v3"
   val choices = Vector("AuthorizeNewValidationAfterHostCorrection", "Defer")
   val selectionChoices = Vector("AuthorizeNewValidationAfterSelectionCorrection", "Defer")
-  def availableChoices(target: Target): Vector[String] =
-    if (target.continuationPolicy == selectionPolicy) selectionChoices else choices
+  val reconstructionChoices = Vector("AuthorizeValidationReconstruction", "Defer")
+  def availableChoices(target: Target): Vector[String] = target.continuationPolicy match {
+    case `selectionPolicy` => selectionChoices
+    case `reconstructionPolicy` => reconstructionChoices
+    case _ => choices
+  }
   val cause = "native-formal-failure-adopted:"
   val message = "The original product check formally failed. Authorize a genuine new attempt on the same candidate " +
     "under the described current resolved host configuration. No historical host configuration difference is asserted. " +
     "Successful checks are retained; the failed receipt remains immutable. Any old semantic worker must independently " +
     "have ended and its UNKNOWN effects must be accepted. Adoption stores direction; separate ordinary Advance executes."
-  def targetMessage(target: Target): String = message + (if (target.continuationPolicy == selectionPolicy)
-    " The described selection correction appends the exact registered TestOnly checks; separate Advance must obtain actual nonempty selected-test evidence and normal independent review."
-    else "")
+  def targetMessage(target: Target): String = message + (target.continuationPolicy match {
+    case `selectionPolicy` => " The described selection correction appends the exact registered TestOnly checks; separate Advance must obtain actual nonempty selected-test evidence and normal independent review."
+    case `reconstructionPolicy` => " Reconstruct the saved Purpose validation slot using the current project policy. The unavailable optional fixCheck is absent from the new selection."
+    case _ => ""
+  })
   final case class Pending(identity: String, expectedRevision: String, entityRevision: String,
     status: String, claim: Option[String], input: Json)
   final case class Target(componentInstance: String, sessionId: String, context: F.StartContext,
@@ -240,20 +247,49 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       checks.forall(validation.checks.contains) && validation.checks.filter(checks.contains) == checks &&
       checks.forall(slot.get.checks.contains) && additions.map(_.identity).distinct.size == additions.size)(checks ++ additions)
   }
+  private def _unavailable_fix_check(receipt: C.Receipt, check: C.Check): Boolean =
+    check.kind == WorkflowSbtValidation.Kind.FixCheck && receipt.processObservation.nonEmpty && completeFailure(receipt, check) && {
+      val lines = (receipt.stdout + "\n" + receipt.stderr).linesIterator.map(_.trim).toSet
+      lines("[error] Not a valid command: fixCheck") && lines("[error] Not a valid key: fixCheck")
+    }
+
+  private def _reconstruction_checks(progress: P.Progress, check: C.Check, receipt: C.Receipt,
+    validation: C.Policy, slot: P.Slot): Option[Vector[C.Check]] = for {
+    workspace <- progress.sessionWorkspace if workspace.materialCandidate == progress.candidate && workspace.root.nonEmpty
+    selection <- progress.selection if selection.depth == "FULL" && selection.checks == workspace.slot.checks
+    if workspace.slot.actionPolicy.scalaLint == "off" && _unavailable_fix_check(receipt, check)
+    if selection.reused.isEmpty && progress.reusable.isEmpty
+    remaining = selection.checks.filterNot(_ == check)
+    current = validation.checks
+    productprefix = progress.receipts.size - 2
+    if remaining.size == selection.checks.size - 1 && current.size == remaining.size &&
+      current.exists(_.kind == WorkflowSbtValidation.Kind.Test) && current.take(productprefix) == remaining.take(productprefix)
+    if remaining.drop(productprefix).zip(current.drop(productprefix)).forall((old, check) => old == check ||
+      (old.kind == WorkflowSbtValidation.Kind.Test && old.workspace.isEmpty && old.copy(ordinal = check.ordinal) == check))
+    if slot == workspace.slot.copy(checks = current) && validation.impact.exists(_.fullChecks == current)
+  } yield current
+
   private def _valid_selection(t: Target): Boolean = t.proposedChecks != null && (t.continuationPolicy match {
     case `policy` => t.proposedChecks.isEmpty
     case `selectionPolicy` => t.purpose.nonEmpty && t.proposedChecks.nonEmpty &&
       t.proposedChecks == proposedChecks(t.selectedChecks, t.validationPolicy, t.purposeSlot)
+    case `reconstructionPolicy` => t.actual.mergeHead.isEmpty && t.proposedChecks.nonEmpty && t.purpose.zip(t.purposeSlot).exists((progress, slot) =>
+      t.proposedChecks == _reconstruction_checks(progress, t.check, t.failed, t.validationPolicy, slot))
     case _ => false
   })
   def attemptChecks(target: Target): Vector[C.Check] = target.proposedChecks.getOrElse(target.selectedChecks)
   def attemptSelection(target: Target): Option[RepositorySyncProgramImpact.Selection] =
     target.purpose.flatMap(_.selection).map(_.copy(checks = attemptChecks(target)))
+  private def _purpose_workspace(target: Target, progress: P.Progress): Option[P.SessionWorkspace] =
+    if (target.continuationPolicy == reconstructionPolicy)
+      progress.sessionWorkspace.map(workspace => workspace.copy(slot = target.purposeSlot.get))
+    else progress.sessionWorkspace
   /** Only this exact direction may transform the historical selection. */
   private[admission] def validPurposeAttempt(progress: P.Progress, direction: Direction): Boolean =
     direction.target.purpose.exists(original => progress == original.copy(
       receipts = progress.receipts, assessment = progress.assessment, review = progress.review,
-      selection = attemptSelection(direction.target), hostContinuation = Some(direction), ordinaryGroups = progress.ordinaryGroups) &&
+      selection = attemptSelection(direction.target), hostContinuation = Some(direction), ordinaryGroups = progress.ordinaryGroups,
+      sessionWorkspace = _purpose_workspace(direction.target, original)) &&
       _ordinary_attempt_valid(original, progress, direction.target.check) &&
       progress.receipts.take(direction.target.successfulPrefix.size) == direction.target.successfulPrefix)
   private def _ordinary_attempt_valid(original: P.Progress, current: P.Progress, check: C.Check): Boolean =
@@ -438,9 +474,13 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       else N.invalid("formal failure continuation requires its current failed Purpose or pending-merge frontier")
     store <- N.bindC(session, d, core, acknowledge)
     source <- _discover_c(store, current, validation)
-    _ <- if (source.checks.forall(validation.checks.contains) &&
+    retained = source.checks.forall(validation.checks.contains) &&
         validation.checks.filter(source.checks.contains) == source.checks &&
-        source.slot.forall(slot => source.checks.forall(slot.checks.contains))) Consequence.unit
+        source.slot.forall(slot => source.checks.forall(slot.checks.contains))
+    reconstructed <- if (retained) Consequence.success(Option.empty[P.Slot])
+      else source.failed.payload.purposes.fold(Consequence.success(Option.empty[P.Slot]))(progress =>
+        _reconstructed_slot_c(store, progress, source.check, source.receipt, validation))
+    _ <- if (retained || reconstructed.nonEmpty) Consequence.unit
       else N.invalid("formal failure selected checks differ from the current fixed product and workspace policy")
     inspected <- current.suspension match {
       case None => Consequence.success(None)
@@ -467,9 +507,10 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     actual <- G.inspectC(core)
     _ <- store.scopeC(actual.observed)
     tree <- G.indexTreeC(core)
-    _ <- _live_source_c(source)
-    plan <- _host_c(core)
-    proposed = Option.when(source.failed.payload.purposes.nonEmpty)(proposedChecks(source.checks, validation, source.slot)).flatten
+    plan <- if (reconstructed.nonEmpty) RepositorySyncPurposeMaterializationContinuation.hostPlanC(core) else _host_c(core)
+    proposed = reconstructed.map(_.checks).orElse(Option.when(source.failed.payload.purposes.nonEmpty)(
+      proposedChecks(source.checks, validation, source.slot)).flatten)
+    version = if (reconstructed.nonEmpty) reconstructionPolicy else if (proposed.nonEmpty) selectionPolicy else policy
     target = Target(core.component.get.core.instanceId.canonicalKey, identity, session.context,
       store.original.repositoryRoot, d.target.endpoint, current.revision.value.toString, current.causation.value,
       source.namespace, _key(source.candidate, identity), source.candidate.record.revision.value.toString,
@@ -477,18 +518,49 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       _key(source.intent, identity), source.intent.record.revision.value.toString,
       _reference(identity, _key(source.candidate, identity)), _reference(identity, _key(source.failed, identity)),
       _reference(identity, _key(source.intent, identity)), source.index, source.check, source.checks, source.prefix,
-      source.receipt, validation, source.failed.payload.validation, source.failed.payload.purposes, source.slot,
-      actual, tree, plan, inspected.map(_._1), if (proposed.nonEmpty) selectionPolicy else policy, proposed)
+      source.receipt, validation, source.failed.payload.validation, source.failed.payload.purposes, reconstructed.orElse(source.slot),
+      actual, tree, plan, inspected.map(_._1), version, proposed)
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("formal failure target is incomplete or crossed")
+    _ <- _live_source_c(source, target)
   } yield Observation(session, source, target, inspected.map(_._2))
-  private def _live_source_c(source: Source): Consequence[Unit] = source.failed.payload.purposes match {
-    case Some(progress) => for {
-      _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(source.store, source.slot.get, progress.candidate.get, progress.sessionWorkspace)
+  private def _reconstructed_slot_c(store: N.Store, progress: P.Progress, check: C.Check, receipt: C.Receipt,
+    validation: C.Policy): Consequence[Option[P.Slot]] =
+    progress.sessionWorkspace.flatMap { old =>
+      val slot = old.slot.copy(checks = validation.checks)
+      _reconstruction_checks(progress, check, receipt, validation, slot).map(_ => (old, slot))
+    } match {
+      case None => Consequence.success(None)
+      case Some((old, slot)) => RepositorySyncSessionWorkspace.resolveC(store, progress,
+        store.declaration.purposeValidation).map(selected => Option.when(selected.slot == slot &&
+          RepositorySyncSessionWorkspace.record(selected) == RepositorySyncSessionWorkspace.record(old))(slot))
+    }
+
+  def reconstructionWaitC(store: N.Store, current: InstanceRecord,
+    validation: C.Policy): Consequence[Option[V.RepositorySyncAdvanceResult]] = for {
+    stage <- store.currentPurposeC(current)
+    failed = for {
+      progress <- stage.filter(_.payload.stage == "PurposeRepairRequired").flatMap(_.payload.purposes)
+      receipt <- progress.receipts.lastOption
+      selection <- progress.selection
+      check <- selection.checks.lift(progress.receipts.size - 2)
+    } yield (progress, check, receipt)
+    slot <- failed.fold(Consequence.success(Option.empty[P.Slot]))((progress, check, receipt) =>
+      _reconstructed_slot_c(store, progress, check, receipt, validation))
+  } yield slot.map(_ => NativeWorkflowOperationOutput.repositoryWait(store.identity,
+    "The retained Purpose used an unavailable optional fixCheck. Describe the current validation reconstruction with " +
+      "describeRepositorySyncValidationContinuation before continuing this Session.", "ValidationReconstructionRequired"))
+
+  private def _live_source_c(source: Source, target: Target): Consequence[Unit] = source.failed.payload.purposes match {
+    case Some(original) => for {
+      slot <- target.purposeSlot.map(Consequence.success).getOrElse(N.invalid("formal Purpose slot is absent"))
+      progress = original.copy(sessionWorkspace = _purpose_workspace(target, original))
+      _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(source.store, slot, progress.candidate.get, progress.sessionWorkspace)
       scoped <- RepositorySyncPurposeRuntime.candidateCoreC(source.store, progress)
-      _ <- source.checks.foldLeft(Consequence.unit)((prior, check) => prior.flatMap(_ =>
-        source.slot.get.checkWorkspaces.get(check.identity).fold(Consequence.unit)(workspace => for {
+      checks = if (target.continuationPolicy == reconstructionPolicy) attemptChecks(target) else source.checks
+      _ <- checks.foldLeft(Consequence.unit)((prior, check) => prior.flatMap(_ =>
+        slot.checkWorkspaces.get(check.identity).fold(Consequence.unit)(workspace => for {
           actual <- WorkflowManagedProcessExecution.executeGitC(scoped, org.goldenport.cncf.processexecution.GitOperation.Root, workspace).flatMap(_.valueC)
-          expected <- WorkflowManagedProcessExecution.executeGitC(scoped, org.goldenport.cncf.processexecution.GitOperation.Root, source.slot.get.workspace).flatMap(_.valueC)
+          expected <- WorkflowManagedProcessExecution.executeGitC(scoped, org.goldenport.cncf.processexecution.GitOperation.Root, slot.workspace).flatMap(_.valueC)
           _ <- if (actual == expected) Consequence.unit else N.invalid("formal check workspace no longer consumes its candidate")
         } yield ())))
     } yield ()
@@ -615,14 +687,20 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
   } yield V.RepositorySyncValidationContinuationAdoptionResult(input.sessionId, outcome != "deferred", outcome, message)
 
   def requireCurrentContextC(store: N.Store, target: Target, validation: C.Policy): Consequence[Unit] = for {
-    host <- _host_c(store.core)
+    host <- if (target.continuationPolicy == reconstructionPolicy)
+      RepositorySyncPurposeMaterializationContinuation.hostPlanC(store.core) else _host_c(store.core)
     actual <- G.inspectC(store.core)
     tree <- G.indexTreeC(store.core)
     _ <- store.scopeC(actual.observed)
     _ <- if (host == target.processPlan && validation == target.validationPolicy && actual == target.actual && tree == target.indexTree &&
-        store.core.component.get.core.instanceId.canonicalKey == target.componentInstance &&
-        target.purposeSlot == target.purpose.flatMap(p => RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, p)))
+        store.core.component.get.core.instanceId.canonicalKey == target.componentInstance)
       Consequence.unit else N.invalid("formal host, candidate, index or selected policy changed after description")
+    _ <- if (target.continuationPolicy == reconstructionPolicy) {
+      val progress = target.purpose.get
+      RepositorySyncSessionWorkspace.requireCurrentBindingC(store, progress.copy(sessionWorkspace = _purpose_workspace(target, progress))).map(_ => ())
+    } else if (target.purposeSlot == target.purpose.flatMap(p =>
+        RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, p))) Consequence.unit
+    else N.invalid("formal Purpose slot changed after description")
   } yield ()
   def authenticateCandidateC(store: N.Store, current: InstanceRecord, candidate: N.Stage, selected: String): Consequence[Unit] = for {
     direction <- candidate.payload.formalFailure.map(Consequence.success).getOrElse(N.invalid("formal candidate has no direction"))
@@ -679,12 +757,13 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       else N.invalid("formal failure admission has already advanced or changed")
     source <- _authenticate_target_c(store, current, target)
     _ <- requireCurrentContextC(store, target, validation)
-    _ <- _live_source_c(source)
+    _ <- _live_source_c(source, target)
     next <- target.purpose match {
       case Some(progress) => store.saveC(namespace(target) + "-purpose", "native-formal-failure-purpose-prepared", current,
         source.failed.payload.copy(stage = "PurposeMaterialized", formalFailure = Some(direction),
           purposes = Some(progress.copy(receipts = target.successfulPrefix, assessment = None, review = None,
             selection = attemptSelection(target), hostContinuation = Some(direction),
+            sessionWorkspace = _purpose_workspace(target, progress),
             ordinaryGroups = progress.ordinaryGroups.get(target.check.identity).fold(progress.ordinaryGroups)(group =>
               progress.ordinaryGroups.updated(target.check.identity, group.copy(batches = group.batches.dropRight(1))))))))
       case None => store.saveC(N.candidateKey(namespace(target), "pending-merge"), "native-formal-failure-merge-prepared", current,

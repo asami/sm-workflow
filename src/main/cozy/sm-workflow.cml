@@ -2112,6 +2112,7 @@ OperationResult
 | outcome | string | 1 |
 | selection | WorkflowSbtTestSelection | ? |
 | reason | string | ? |
+| lintInput | org.goldenport.record.Record | ? |
 
 ## GoalPhaseNativeValidationCheck
 
@@ -9704,7 +9705,7 @@ Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-
 
 Explicit policy sm-workflow.repository-sync-review-input-continuation.v3 describes only the active unsuspended ReviewDecisionRequired frontier with its actual paired detailed decision-needed result. The corrected normal host document-inputs declaration is a new proposal, never an edit of old validation or review. Bind the Component and Session, pending namespace, original validated and review references/revisions, unchanged parents/tree/index/current observation, old assessment, proposed mapping and complete freshly captured assessment, current fixed selected checks and explicit applicability issues. Return AdoptInputClassificationAndContinueReview and Defer only when old unknown paths are now fully classified with unchanged check applicability. Ineligible descriptions offer Defer only. Previously known consumed/document classifications cannot be demoted or changed. Program-inputs coverage takes consumed precedence even for scripts or skills ending in .md. Binary, unavailable/new unknown, uncovered consumed inputs and real selected execution/input drift remain issues. No successful check or semantic result is invented or replayed. Unknown or malformed v3 refuses without older-decoder fallback.
 
-For a genuinely new Scala pending merge candidate, actual typed parent/index PendingPaths and current impact-selected fixed checks must establish an applicable FixCheck before the first SBT effect. Missing lint selection refuses before Compile/Test; neither document-path classification nor an unselected extra host check waives it. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
+For a genuinely new pending merge candidate, current impact-selected checks must include FixCheck before the first SBT effect when merge policy requires lint. An ordinary project declaration applies that requirement to actual Scala paths in the pending merge. Missing required lint refuses before Compile/Test. Document-path classification and unselected host checks leave the requirement in force. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
 
 ##### TYPE
 
@@ -12363,7 +12364,7 @@ WorkflowRetainedWorkReadResult
 
 ##### DESCRIPTION
 
-Explicitly read the selected immutable native snapshot material. Resolve only the exact owner, Session, receipt and instance revision through native storage and original-participant admission. Return concrete failures without substituting latest, re-observing historical source or repeating any business effect. Recovery and preparation consume retainedSnapshot descriptors internally before the unchanged complete target codec and live admission checks.
+Explicitly read the selected immutable native snapshot material. Resolve only the exact owner, Session, receipt and instance revision through native storage and original-participant admission. Return concrete failures without substituting latest, re-observing historical source or repeating any business effect. Recovery and preparation consume retainedSnapshot descriptors internally before the unchanged complete target codec and live admission checks. DelegateTask materialKind bounded-derived-delivery is a distinct read-only view of an exact bounded-state source: authenticate its original same-owner scope supersessions and derive only genuinely omitted correction source references. Preserve the original snapshot and all validation, commit, publication, failure, UNKNOWN, counts and lifecycle facts. The derived view supplies no requester result acceptance or adoption authority; existing result-received and independently evidenced adoption still own those decisions.
 
 ##### TYPE
 
@@ -15452,6 +15453,60 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 |------+------|--------------|
 | sessionId | string | 1 |
 
+## DelegateTaskRequestReconstructionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskRequestReconstructionDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| issues | string | * |
+
+## DelegateTaskIntakeObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| destinationIdentity | string | 1 |
+| notificationStatus | string | 1 |
+| intakeStatus | string | 1 |
+| handlerStatus | string | 1 |
+| destinationSessionId | string | ? |
+| sourceReferences | WorkflowArtifactReference | + |
+
+## DelegateTaskRequestReconstructionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| checks | string | + |
+| scalaLint | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| observation | DelegateTaskIntakeObservation | 1 |
+
 ## DelegateTaskWorkRequest
 
 - input-kind :: COMMAND
@@ -15511,6 +15566,7 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | retainedWork | WorkflowRetainedWorkReference | ? |
 | controlSummary | record | ? |
 | retainedMaterials | WorkflowRetainedFieldReference | * |
+| dispatchInput | DelegateTaskInput | ? |
 
 # WORKFLOW
 
@@ -15655,6 +15711,14 @@ operation = DelegateTaskService.resumeDelegateTaskSemanticContinuation
 
 operation = DelegateTaskService.describeDelegateTaskReviewContinuation
 
+#### describeDelegateTaskRequestReconstruction
+
+operation = DelegateTaskService.describeDelegateTaskRequestReconstruction
+
+#### reconstructDelegateTaskRequest
+
+operation = DelegateTaskService.reconstructDelegateTaskRequest
+
 #### resumeDelegateTaskReviewContinuation
 
 operation = DelegateTaskService.resumeDelegateTaskReviewContinuation
@@ -15719,6 +15783,63 @@ on = task-accepted
 Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
 
 ### OPERATION
+
+#### describeDelegateTaskRequestReconstruction
+
+##### DESCRIPTION
+
+Describe the same native requester Session and its retained derived validation policy. The opaque target contains typed owner, revision, participant, request identity and policy only. This read performs no dispatch or destination execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionResult
+
+#### reconstructDelegateTaskRequest
+
+##### DESCRIPTION
+
+Adopt an independently admitted genuine Human correction of derived checks and Scala lint policy for the current unstarted requester. Supply exactly one input or inputResource. Preserve all other request data, native history, results and repair counters. Observation references and the ended pre-Start recipient handler must be covered by actual Human evidence. Defer writes nothing. Ordinary Advance returns the corrected destination input and owns later dispatch.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskRequestReconstructionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionResult
 
 #### describeDelegateTaskSemanticContinuation
 

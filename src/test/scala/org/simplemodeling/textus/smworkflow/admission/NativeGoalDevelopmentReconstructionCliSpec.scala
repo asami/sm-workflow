@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** One tiny installed Keep scenario. All fixture Human and
   * independent review evidence is specification-owned, never consumer authority.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 19, 2026
   */
 @org.scalatest.DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -21,6 +21,24 @@ final class NativeGoalDevelopmentReconstructionCliSpec extends AnyWordSpec with 
       When("the genuine Keep answer is followed by common selection history replay and ordinary current capture")
       val receipt = support.qualifyKeepCurrentRequirements(this)
       Then("the same Session original requirements and pending current work have a retained qualification receipt")
+      Files.isRegularFile(receipt) shouldBe true
+    }
+  }
+}
+
+/** One bounded installed current-source episode with fixture-owned authority
+  * preparation and reviews, using the actual published command and CAR. */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeGoalRetainedPlanReconstructionCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Installed retained-Plan reconstruction" should {
+    "capture changed source with split-document acceptance and preserve the actual missing-authority boundary" in {
+      Given("the normally published component and installed command with a tiny fixture-owned accepted Plan")
+      val support = new NativeGoalDependencyValidationCliSpec
+      When("current source changes after reviewed work and the public reconstruction route retains accepted requirements")
+      val receipt = support.qualifyRetainedPlanReconstruction(this)
+      Then("the same Session has current selected checks and independent review with a retained result")
       Files.isRegularFile(receipt) shouldBe true
     }
   }

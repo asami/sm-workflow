@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -37,6 +37,16 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       version = Some("0.1.0"), schemaVersion = Some(3), componentId = Some(component), config = Map(limitKey.name -> "31"))))
 
   "Native three-workflow launcher composition" should {
+    "expose existing candidate recovery commands to the ordinary launcher" in {
+      Given("the normal generated service declarations used before native host binding")
+      val services = ThreeWorkflowLauncherAssembly.deferredDeclarations
+      When("the GoalPhase command surface is selected")
+      val operations = services.find(_.name == "GoalPhaseService").get.operations.operations.toVector.map(_.name)
+      Then("both existing candidate recovery operations are available without a custom assembly")
+      operations should contain allElementsOf Vector(GoalPhaseCandidateRecovery.describeOperation,
+        GoalPhaseCandidateRecovery.recoveryOperation)
+    }
+
     for (route <- Vector("launcher", "runtime-parameters")) {
       s"admit the full explicit legacy inventory through the real $route factory without granting purpose completion" in
           new ThreeWorkflowManagedRepositoryFixture {

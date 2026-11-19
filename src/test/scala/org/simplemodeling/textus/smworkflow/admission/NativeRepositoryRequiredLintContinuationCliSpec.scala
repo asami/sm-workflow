@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * checks in four tiny repositories. Proposals, lifecycle answers and independent
   * review are specification-owned data, never live provider acceptance.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -213,6 +213,10 @@ final class NativeRepositoryRequiredLintContinuationCliSpec extends AnyWordSpec 
       .replace("__INVOCATIONS__", root.resolve("sbt-invocations.txt").toString.asJson.noSpaces)
       .replace("__COMMANDS__", root.resolve("sbt-command-lines.txt").toString.asJson.noSpaces), StandardOpenOption.APPEND)
     git(root, "-C", repository.toString, "add", "--", "src", "project/plugins.sbt", ".scalafix.conf", "build.sbt")
+    if (variant == "fresh-preflight") {
+      Files.writeString(repository.resolve("project.yaml"), "validation:\n  fixCheck: true\n")
+      git(root, "-C", repository.toString, "add", "--", "project.yaml")
+    }
     git(root, "-C", repository.toString, "commit", "-m", "Tiny ordinary Compile Test and real scalafix inputs")
     git(root, "-C", repository.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
     val peer = root.resolve("peer")
@@ -523,13 +527,15 @@ final class NativeRepositoryRequiredLintContinuationCliSpec extends AnyWordSpec 
     }
 
     "continue REQUIRED-LINT fresh candidate preflight before any SBT invocation" in {
-      Given("a fresh new tiny Scala merge under the newly published normal CAR with Compile Test but no selected lint")
+      Given("a fresh tiny Scala merge with a project-declared fixCheck and managed Compile and Test only")
       val live = _resolved_session(_scenario("fresh-preflight"))
       When("ordinary Advance would otherwise start product validation")
       val refused = live.advance()
       Then("required lint selection refuses before any SBT process and before a successful product result exists")
-      refused.exitCode should not be 0
-      refused.invocation.logs.toLowerCase should include("lint")
+      refused.exitCode shouldBe 0
+      val waiting = refused.business[V.RepositorySyncAdvanceResult]
+      waiting.condition shouldBe Some("ValidationSetupRequired")
+      waiting.message should include("requires a selected FixCheck")
       _lines(live.root, "sbt-invocations.txt") shouldBe empty
       _lines(live.root, "lint-entered.txt") shouldBe empty
       _formal(live) shouldBe empty

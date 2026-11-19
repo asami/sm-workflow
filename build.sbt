@@ -36,11 +36,13 @@ lazy val scalaLintRules: Project = project.in(file("scala-lint-rules"))
     scalaVersion := "2.13.14",
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "scalafix-core" % "0.12.1" % Provided,
+      "ch.epfl.scala" % "scalafix-interfaces" % "0.12.1" % Provided,
       "ch.epfl.scala" % "scalafix-cli_2.13.14" % "0.12.1" % Test,
       "com.typesafe" % "config" % "1.4.3",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test
     ),
-    Compile / unmanagedSources += baseDirectory.value.getParentFile / "project" / "ScalaLintProfiles.scala",
+    Compile / unmanagedSources ++= Seq("ScalaLintProfiles.scala", "ScalaLintInput.scala", "ScalaLintDelta.scala", "ScalaLintAdmission.scala").map(
+      name => baseDirectory.value.getParentFile / "project" / name),
     scalafixTestkitInputClasspath := (scalaLintInput / Compile / fullClasspath).value,
     scalafixTestkitInputSourceDirectories := (scalaLintInput / Compile / unmanagedSourceDirectories).value,
     scalafixTestkitInputScalacOptions := (scalaLintInput / Compile / scalacOptions).value,
@@ -63,6 +65,19 @@ lazy val scalaLintRules: Project = project.in(file("scala-lint-rules"))
   )
 
 lazy val projectIdentityEvidence = settingKey[CozyProjectIdentityEvidence]("Admitted project.yaml component identity evidence")
+lazy val sharedScalaLintReporter = settingKey[Option[org.simplemodeling.scalalint.ScalaLintAdmission.Reporter]]("Selected native lint attribution reporter")
+lazy val sharedScalaLintMain = taskKey[Unit]("Pinned check-only Scalafix over captured handwritten Compile delta")
+lazy val sharedScalaLintTest = taskKey[Unit]("Pinned check-only Scalafix over captured handwritten Test delta")
+lazy val sharedScalaLintCheck = taskKey[Unit]("Report all selected diagnostics and block affected declarations")
+def requireOnlyLintFindings(result: Result[Unit]): Unit = result match {
+  case Value(_) => ()
+  case Inc(failure) =>
+    val exceptions = Incomplete.allExceptions(failure)
+    if (exceptions.isEmpty || !exceptions.forall {
+      case error: _root_.scalafix.sbt.ScalafixFailed => error.errors.nonEmpty && error.errors.forall(_ == _root_.scalafix.interfaces.ScalafixError.LinterError)
+      case _ => false
+    }) throw failure
+}
 lazy val skillSourceFiles = taskKey[Seq[(File, String)]]("Exact component-owned semantic skill sources")
 lazy val skillBundle = taskKey[File]("Package the semantic skill sources as a standalone ZIP")
 lazy val checkSkillBundleReproducibility = taskKey[File]("Verify skill ZIP bytes despite source timestamp and ordering changes")
@@ -129,7 +144,8 @@ lazy val root: Project = project
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
     libraryDependencies += "com.typesafe" % "config" % "1.4.3",
     // Share configuration data/code, without adding the rule engine to the CAR.
-    Compile / unmanagedSources += baseDirectory.value / "project" / "ScalaLintProfiles.scala",
+    Compile / unmanagedSources ++= Seq("ScalaLintProfiles.scala", "ScalaLintInput.scala", "ScalaLintDelta.scala").map(
+      name => baseDirectory.value / "project" / name),
     Compile / resourceGenerators += Def.task {
       val source = baseDirectory.value / "scala-lint-rules" / "src" / "main" / "resources" / "scala-lint"
       val destination = (Compile / resourceManaged).value / "scala-lint"
@@ -138,14 +154,56 @@ lazy val root: Project = project
     }.taskValue,
 
     scalafixScalaBinaryVersion := "2.13",
+    semanticdbEnabled := true,
+    sharedScalaLintReporter := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map(input =>
+      new org.simplemodeling.scalalint.ScalaLintAdmission.Reporter(baseDirectory.value.toPath, input, text => System.out.println(text))),
+    // sbt-scalafix 0.12.1 reads its callback at ThisBuild, including both scopes.
+    ThisBuild / scalafixCallback := (LocalRootProject / sharedScalaLintReporter).value
+      .getOrElse((ThisBuild / scalafixCallback).value),
+    sharedScalaLintMain := Def.taskDyn {
+      val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      if (!(Compile / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      else Def.task { requireOnlyLintFindings((Compile / scalafix).toTask(" --check").result.value) }
+    }.value,
+    sharedScalaLintTest := Def.taskDyn {
+      val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      if (!(Test / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      else Def.task { requireOnlyLintFindings((Test / scalafix).toTask(" --check").result.value) }
+    }.value,
+    sharedScalaLintCheck := {
+      sharedScalaLintMain.value
+      sharedScalaLintTest.value
+      sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent")).finish()
+    },
+    // A present typed input is authoritative. Legacy fixed tasks keep their
+    // original project configuration when the host did not select this input.
+    scalafixConfig := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map { selected =>
+      val destination = target.value / "scala-lint" / "effective-input.conf"
+      IO.write(destination, selected.json, java.nio.charset.StandardCharsets.UTF_8)
+      destination
+    }.orElse(Some(baseDirectory.value / ".scalafix.conf")),
     // The local rule module uses ScalafixConfig, never the CAR runtime classpath.
     // Lint handwritten Compile and Test; generated sources stay with their owner.
-    Compile / scalafix / unmanagedSources := (Compile / unmanagedSources).value,
+    Compile / scalafix / unmanagedSources := {
+      val sources = (Compile / unmanagedSources).value
+      sharedScalaLintReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+    },
     Compile / scalafix / managedSources := Nil,
     Compile / scalafix / aggregate := false,
-    Test / scalafix / unmanagedSources := (Test / unmanagedSources).value,
+    Test / scalafix / unmanagedSources := {
+      val sources = (Test / unmanagedSources).value
+      sharedScalaLintReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+    },
     Test / scalafix / managedSources := Nil,
     Test / scalafix / aggregate := false,
+    Test / resourceGenerators += Def.task {
+      val archive = (scalaLintRules / Compile / packageBin).value.getCanonicalFile
+      val properties = new java.util.Properties()
+      properties.setProperty("ruleArtifact", archive.toURI.toASCIIString)
+      val destination = (Test / resourceManaged).value / "phase81-scala-lint.properties"
+      IO.write(properties, "Actual normally packaged independent rule artifact for connected native fixtures", destination)
+      Seq(destination)
+    }.taskValue,
     prepareTestArtifacts := {
       (Compile / packageBin).value
       checkSkillBundleReproducibility.value
@@ -333,4 +391,5 @@ lazy val root: Project = project
   )
   .settings(cncfSourceSettings)
 // Semantic rules use the normal compiler/SemanticDB prerequisite in each scope.
-addCommandAlias("fixCheck", ";Compile / scalafix --check;Test / scalafix --check")
+addCommandAlias("fixCheck", if (org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).nonEmpty)
+  "sharedScalaLintCheck" else ";Compile / scalafix --check;Test / scalafix --check")

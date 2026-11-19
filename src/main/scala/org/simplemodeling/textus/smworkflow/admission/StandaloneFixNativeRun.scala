@@ -53,7 +53,8 @@ private[smworkflow] object BoundedWorkRuntime {
     validationContinuation: Option[GoalTaskValidationContinuation.Direction] = None,
     validationRecovery: Option[DelegateTaskValidationRecovery.Direction] = None,
     validationCaptureReservation: Option[ValidationCaptureReservation] = None,
-    managedDependency: Option[GoalPhaseDependencyValidation.ManagedCapture] = None)
+    managedDependency: Option[GoalPhaseDependencyValidation.ManagedCapture] = None,
+    requestReconstruction: Option[DelegateTaskRequestReconstruction.Checkpoint] = None)
   private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
   private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
   private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
@@ -61,7 +62,7 @@ private[smworkflow] object BoundedWorkRuntime {
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "delegateSemanticContinuation" | "delegateReviewContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation" | "managedDependency", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "delegateSemanticContinuation" | "delegateReviewContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation" | "managedDependency" | "requestReconstruction", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -71,7 +72,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -772,7 +773,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- probeRecoveryFileC(core, name)
         _ <- freshC(payload, core)
         savedIntent <- saveC(h, store, record, executing, core)
-        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind)
+        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, lintBase = Some(payload.baseHead))
         response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
       } yield response
       case "Inspect" => for {
@@ -856,7 +857,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           intent <- S.intentC(s)
           executing = payload.copy(state = intent)
           savedIntent <- saveC(h, store, record, executing, core)
-          actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate))
+          actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate), lintBase = Some(payload.baseHead))
           response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
         } yield response
       } yield response

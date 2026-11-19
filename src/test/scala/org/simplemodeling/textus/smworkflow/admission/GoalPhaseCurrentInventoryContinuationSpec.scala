@@ -10,8 +10,8 @@ import GoalPhaseNativeWork as W
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
-  * @since   Nov. 3, 2026
-  * @version Nov. 16, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -47,6 +47,35 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
 
   "AUTO-FILE-GP current inventory" should afterWord(
     "in spec:goal-phase-current-inventory-continuation, example:E1, rules:R1,R2,R3, phase:AUTO-FILE-GP-01") {
+    "project a Human-adopted finite inventory only for the same Component and complete ordered prefixes" in {
+      Given("R4: authenticated Human metadata retains every candidate ordinal, including an unused capability")
+      val adoption = GoalPhaseRemainingPlanAdoption
+      val prefix = Vector("src/Product.scala", "docs/product.md")
+      val recorded = prefix ++ Vector("src/Unused.scala", "src/Needed.scala")
+      val target = adoption.CurrentInventoryTarget("actual-component", "S1", Vector("src/Needed.scala"), recorded)
+      When("standard binding projects compatible shorter, equal and longer complete candidate vectors")
+      val cases = Vector(Vector.empty[String] -> recorded, prefix -> recorded, recorded -> recorded,
+        (recorded :+ "docs/later.md") -> (recorded :+ "docs/later.md"))
+      Then("the longer vector survives intact without compacting unused capabilities or changing their ordinals")
+      cases.foreach { case (current, expected) =>
+        take(adoption.currentInventoryPathsC(target, current, "actual-component")) shouldBe expected
+      }
+      Given("foreign Component identity, reordered or unrelated paths, and malformed finite metadata")
+      val invalidpaths = Vector(prefix.reverse, Vector("src/Foreign.scala"), prefix :+ "src/Foreign.scala",
+        Vector("src/Product.scala", "src/Product.scala"), Vector("../escape"), Vector("src/*.scala"),
+        null)
+      val invalidtargets = Vector(target.copy(componentInstance = "other-component"),
+        target.copy(stepIdentity = ""), target.copy(appendedPaths = Vector("src/Absent.scala")),
+        target.copy(candidatePaths = recorded :+ "../escape"), target.copy(candidatePaths = recorded.reverse),
+        target.copy(candidatePaths = recorded :+ recorded.head), target.copy(candidatePaths = Vector.empty),
+        target.copy(candidatePaths = null), null)
+      When("pure projection checks their exact boundary without granting adoption authority")
+      Then("every incompatible or malformed input refuses")
+      adoption.currentInventoryPathsC(target, prefix, "other-component").isSuccess shouldBe false
+      invalidpaths.foreach(paths => adoption.currentInventoryPathsC(target, paths, "actual-component").isSuccess shouldBe false)
+      invalidtargets.foreach(value => adoption.currentInventoryPathsC(value, prefix, "actual-component").isSuccess shouldBe false)
+    }
+
     "retain configured unsatisfied observations and findings without accepting them or suppressing typed concerns" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R2,R3: required behavior and validation remain unmet while concrete files are needed")
       val boundary = GoalPhaseAcceptanceBoundary
@@ -81,6 +110,10 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
         Vector("selected-product"), false, false, "The existing product is progressing", false, false),
         GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "No requirement or contract change"))
       C.pureProposal(source, _request(source, "RepairStep"), result.copy(fixAssessment = Some(progressing))) shouldBe true
+      val review = Some(GoalPhaseNativeReview.Context(Vector("src/Product.scala"), "Retained review context", Vector.empty))
+      C.pureProposal(source, _request(source, "RepairStep").copy(review = review), result) shouldBe true
+      C.pureProposal(source, request.copy(review = review), result) shouldBe false
+      C.pureProposal(source, _request(source, "RepairStep").copy(review = Some(null)), result) shouldBe false
       val issue = GoalPhaseFixIssues.Issue("existing-check", plan.repository, source.step.identity, "TEST", Some("test:selected"),
         "Existing selected check remains unresolved", "actual-check", "OPEN", None)
       val repairRequest = _request(source, "RepairStep").copy(issues = Some(GoalPhaseFixIssues.State(Vector(issue), Vector.empty, None)))
@@ -133,6 +166,14 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
       Then("the revision collision alone is eligible while mixed effects and unsafe paths remain concerns")
       C.pureProposal(source, _request(source), result) shouldBe true
       result.planRevision shouldBe Some(proposal)
+      Given("the same inventory decision from a Repair retaining its original review context")
+      val review = GoalPhaseNativeReview.Context(Vector("src/Product.scala"), "The selected product needs correction", Vector.empty)
+      val repair = _request(source, "RepairStep").copy(review = Some(review))
+      When("the selector distinguishes retained Repair evidence from a new returned review judgment")
+      Then("the existing review does not block technical revision correction or become accepted review evidence")
+      C.pureProposal(source, repair, result) shouldBe true
+      repair.review shouldBe Some(review)
+      C.pureProposal(source, _request(source).copy(review = Some(review)), result) shouldBe false
       val mixed = proposal.copy(plan = proposal.plan.copy(repository = "other-component"))
       C.pureProposal(source, _request(source), result.copy(planRevision = Some(mixed))) shouldBe false
       val unsafe = proposal.copy(plan = proposal.plan.copy(steps = proposal.plan.steps.updated(source.cursor,

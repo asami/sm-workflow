@@ -1,8 +1,15 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
+import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
+import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
+import org.simplemodeling.textus.smworkflow.value as V
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,7 +19,7 @@ import GoalPhaseDevelopmentReconstruction as R
 /** Pure reconstruction examples describe controller and business-data contracts;
   * only the native CLI specification supplies actual effects and Human evidence.
   * @since   Nov.  5, 2026
-  * @version Nov.  7, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
@@ -58,7 +65,121 @@ final class GoalPhaseDevelopmentReconstructionSpec extends AnyWordSpec with Matc
       _plan.phaseOwnedPaths)
   }
 
+  private def _document_declaration(root: Path): GoalPhaseNativeRun.Declaration = {
+    val store = WorkflowStoreIdentity("reconstruction-documents")
+    val configuration = Configuration(NamedWorkflowStore("workflow", store), MigrationPolicy("v1"),
+      RetentionPolicy("v1"), LeasePolicy("v1"), DeliveryConfiguration.SameStore(store))
+    def _collection_(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("spec", "reconstruction", name))
+    GoalPhaseNativeRun.Declaration(configuration, _collection_("instances"), _collection_("continuations"),
+      V.GoalPhaseStartInput(_plan.phase, _plan.repository),
+      RepositoryGitRuntimePrograms.Target(root, "main", "origin", "main", root.resolve("remote.git").toString),
+      projectAcceptance = Some(GoalPhaseAcceptanceBoundary.Project(Vector(
+        GoalPhaseAcceptanceBoundary.Condition("project", "phase", true, "Retain whole-Phase obligations")))))
+  }
+
   "Common development reconstruction" should {
+    "authenticated retained requirements" which {
+      "capture the exact effective Plan with acceptance conditions retained across actual documents" in {
+        Given("a saved Plan whose accepted conditions reside in the actual Phase and checklist rather than one aggregate checklist")
+        val root = WorkflowFileRuntimeFixture.fresh()
+        Files.createDirectories(root.resolve("docs"))
+        val phase = "# Current Phase\n- [x] original: Keep the original business requirement\n"
+        val checklist = "- [ ] remaining: Keep the remaining business requirement\n"
+        Files.writeString(root.resolve("docs/phase.md"), phase)
+        Files.writeString(root.resolve("docs/checklist.md"), checklist)
+        val raw = _plan.copy(acceptance = Some(GoalPhaseAcceptanceBoundary.Adoption("Fixture saved usage", Vector(
+          GoalPhaseAcceptanceBoundary.Condition("original", "step", true, "Keep the original business requirement"),
+          GoalPhaseAcceptanceBoundary.Condition("remaining", "step", true, "Keep the remaining business requirement")))))
+        val declaration = _document_declaration(root)
+        val retained = _take(GoalPhaseAcceptanceBoundary.captureC(declaration.projectAcceptance, raw))
+        val proposal = GoalPhasePlanRevision.Proposal("retained-projection", "1", "Select current saved requirements", raw)
+        val input = V.GoalPhaseDevelopmentReconstructionInput("same-session", "docs/phase.md", "docs/checklist.md",
+          GoalPhaseNativeMetadata.record(proposal.asJson), "Continue current source")
+        WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository") { core =>
+          When("the authenticated owner supplies its exact current Plan after project acceptance capture")
+          val documents = _take(R.documentsC(input, declaration, core, Some(retained)))
+          Then("the complete accepted Plan and literal documents are retained without duplicating or dropping a condition")
+          documents.captured.plan shouldBe retained
+          documents.phaseText shouldBe phase
+          documents.checklistText shouldBe checklist
+          documents.captured.plan.effectiveAcceptance.get.conditions.map(_.identity) shouldBe Vector("project", "original", "remaining")
+
+          When("the caller lacks the retained Plan or changes any Plan or effective project condition")
+          val changed = proposal.copy(plan = raw.copy(revision = "changed"))
+          val changedinput = input.copy(proposal = GoalPhaseNativeMetadata.record(changed.asJson))
+          val changedproject = declaration.copy(projectAcceptance = Some(GoalPhaseAcceptanceBoundary.Project(Vector(
+            GoalPhaseAcceptanceBoundary.Condition("project", "phase", true, "A different project obligation")))))
+          val refused = Vector(R.documentsC(input, declaration, core),
+            R.documentsC(changedinput, declaration, core, Some(retained)),
+            R.documentsC(input, changedproject, core, Some(retained)))
+          Then("only complete exact retained-Plan equality permits the exception; changed proposals remain strict")
+          refused.foreach(_.isSuccess shouldBe false)
+
+          Given("a real supplied embedded Plan that contradicts the unchanged retained proposal")
+          val embedded = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.phase-plan.v1"),
+            "plan" -> changed.plan.asJson, "bindings" -> Json.arr(
+              Json.obj("step" -> Json.fromString("first"), "items" -> Json.arr(Json.fromString("current"))),
+              Json.obj("step" -> Json.fromString("second"), "items" -> Json.arr(Json.fromString("remaining")))))
+          Files.writeString(root.resolve("docs/phase.md"), "```sm-workflow-plan\n" + embedded.noSpaces + "\n```\n")
+          Files.writeString(root.resolve("docs/checklist.md"), "- [ ] current: Current work\n" + checklist)
+          When("the same owner-retained Plan is selected against that contradictory actual block")
+          val conflict = R.documentsC(input, declaration, core, Some(retained))
+          Then("the retained-Plan exception does not ignore the explicit embedded contradiction")
+          conflict.isSuccess shouldBe false
+        }
+      }
+
+      "restart changed current source with the same accepted prefix base and repair accounting" in {
+        Given("an accepted first Step and reviewed remaining work with real saved check and review references")
+        val checked = _checked(_first_closed, 'e')
+        val state = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), checked.candidate.get,
+          "actual-check", "retained-second-review", O.ReviewOutcome.Accept)))
+        val observed = _observation(state, _oid('f'), Vector(
+          GoalPhaseCandidateObservationContinuation.Dirty("M", "M", "src/second.scala", None)))
+        When("the unchanged accepted Plan is reconstructed against legitimate changed source")
+        val assessment = _assessment(state, state.plan, observed)
+        _take(R.requireReconstructibleC(assessment))
+        val selected = _take(R.selectedStateC(state, _payload(state, state.plan, assessment).copy(observation = observed)))
+        Then("ordinary fresh capture owes current checks and review while all retained business and accounting facts survive")
+        selected.stage shouldBe O.Stage.InspectCandidate
+        selected.plan shouldBe state.plan
+        selected.completed shouldBe state.completed
+        selected.base shouldBe state.base
+        selected.generation shouldBe state.generation + 1
+        selected.repairs shouldBe state.repairs
+        selected.ordinaryRepairs shouldBe state.ordinaryRepairs
+        selected.repairControl shouldBe state.repairControl
+        selected.repairObservations shouldBe state.repairObservations
+        selected.candidate shouldBe None
+        selected.checksReceipt shouldBe None
+        selected.reviewEvidence shouldBe None
+        state.checksReceipt shouldBe Some("actual-check")
+        state.reviewEvidence shouldBe Some("retained-second-review")
+      }
+
+      "return explained errors for incompatible facts and UNKNOWN effects before a new native selection" in {
+        Given("a retained controller and separate hard contradiction unresolved effect and genuine semantic question")
+        val state = _ready(_first_closed)
+        val incompatible = R.Assessment(Vector("accepted completed Step diverged"), Vector.empty, Vector.empty, true, false)
+        val unknown = incompatible.copy(incompatible = Vector.empty,
+          uncertainEffects = Vector("original commit outcome is UNKNOWN; collect through its existing owner"))
+        val question = incompatible.copy(incompatible = Vector.empty, questions = Vector("Usage Contract changed"))
+        val historical = _payload(state, state.plan, unknown)
+        When("the native pre-save consequence boundary receives those assessments")
+        val conflicts = Vector(incompatible, unknown).map(R.requireReconstructibleC)
+        val semantic = R.requireReconstructibleC(question)
+        Then("hard failures retain explanatory facts and only actual requirements questions remain eligible for Human choice")
+        conflicts.foreach(_.isSuccess shouldBe false)
+        conflicts.head.toString should include("accepted completed Step diverged")
+        conflicts(1).toString should include("UNKNOWN")
+        semantic.isSuccess shouldBe true
+        R.choicesFor(_payload(state, state.plan, question)) shouldBe R.choices
+        R.codec.decode(R.codec.encode(historical)) shouldBe Right(historical)
+        state.completed.map(_.step) shouldBe Vector("first")
+        state.closureIntent shouldBe None
+      }
+    }
+
     "apply an adopted remaining insertion with no repair reservation and retain the accepted prefix" in {
       Given("an accepted first Step and an ordinary unclosed second Step")
       val state = _first_closed
@@ -834,9 +955,9 @@ final class GoalPhaseCurrentHistoryRecoverySubjectSpec extends AnyWordSpec with 
       val path = "src/test/scala/org/simplemodeling/textus/smworkflow/admission/NativeGoalDevelopmentReconstructionCliSpec.scala"
       val text = java.nio.file.Files.readString(java.nio.file.Path.of(path), java.nio.charset.StandardCharsets.UTF_8)
       val selected = SplitPhaseExplicitPartitionFixture.take(WorkflowSourceHistoryRule.decodeC(enabledSettings(ruleKey)))
-      When("the existing goldenport rule interprets the whole current file for its Nov6 source date")
+      When("the existing goldenport rule interprets the whole current file for its Nov19 source date")
       val interpreted = SplitPhaseExplicitPartitionFixture.take(WorkflowSourceHistoryRule.applyC(selected,
-        WorkflowSourceHistoryRule.Input(path, text, java.time.LocalDate.of(2026, 11, 6), None, None, true)))
+        WorkflowSourceHistoryRule.Input(path, text, java.time.LocalDate.of(2026, 11, 19), None, None, true)))
       Then("the real parser accepts one managed header and preserves the additional class descriptions and dates")
       interpreted.outcome shouldBe "unchanged"
       interpreted.text shouldBe text

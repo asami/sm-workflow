@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -287,7 +287,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.sbt.map(_sbt_facts), value.processObservation.map(p => GoalPhaseNativeMetadata.record(WorkflowSbtCapture.projection(p))))
   private def _sbt_facts(value: WorkflowSbtValidation.Facts): V.WorkflowSbtValidationFacts =
     V.WorkflowSbtValidationFacts(value.kind.wire, value.outcome.wire,
-      value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason)
+      value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason,
+      value.lintInput.map(input => { import WorkflowSbtValidation.given; GoalPhaseNativeMetadata.record(input.asJson) }))
   private[admission] def goalClosedStep(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
     V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree),
       value.review, value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)), value.partialCompletion.map(c =>

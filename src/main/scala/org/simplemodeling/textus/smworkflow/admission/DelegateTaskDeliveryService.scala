@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 19, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -27,6 +27,22 @@ import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 private[smworkflow] object DelegateTaskDeliveryService {
   private val N = DelegateTaskNativeRun
   private val declared = SmWorkflowComponent.DelegateTaskDeliveryServiceService
+  /** Standard composition and the final operation use the same ordinary
+    * authorized Resource frontdoor; session discovery is not an inline-only
+    * parser and supplies no observation acceptance or execution authority.
+    */
+  private[admission] def inputForCallC(incoming: Request, call: ActionCall.Core): Consequence[V.DelegateTaskObservationInput] = {
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readC: Consequence[V.DelegateTaskObservationInput] = for {
+        source <- NativeWorkflowResourceInput.selectC[V.DelegateTaskObservationInput](incoming)
+        value <- NativeWorkflowResourceInput.readC(source, reference =>
+          read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8)))
+      } yield value
+      def execute(): Consequence[OperationResponse] = N.invalid("Delivery input reader is not an Operation")
+    }
+    new Reader().readC
+  }
   val captureReadDeclaration: ComponentParameterKey[ConfigurationValue] = ComponentParameterKey.optional(
     "sm-workflow.delegate-task.returned-capture-read-bindings", ComponentParameterDecoder(value => Consequence.success(value)))
   private final case class CaptureBinding(sourceComponentInstance: String, sourceSessionId: String,
@@ -141,8 +157,8 @@ private[smworkflow] object DelegateTaskDeliveryService {
         private def jsonC(record: org.goldenport.record.Record): Consequence[Json] =
           record.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).fold(e => N.invalid(e.message), Consequence.success))
         def execute(): Consequence[OperationResponse] = for {
-          value <- input.fold(Consequence.success(Option.empty[V.DelegateTaskObservationInput]))(source =>
-            NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
+          value <- if (describe) Consequence.success(Option.empty[V.DelegateTaskObservationInput])
+            else inputForCallC(incoming, core).map(Some(_))
           session <- value.map(v => Consequence.success(v.sessionId)).orElse(describedSession.map(Consequence.success))
             .getOrElse(N.invalid("No delivery Session was supplied"))
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))

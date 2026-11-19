@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -89,11 +89,14 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     * No executable or command vector can be supplied by a semantic result.
     */
   def repositoryValidationC(core: ActionCall.Core, ordinal: Int,
-    kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Consequence[SbtExecutionResult] = for {
+    kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
+    lintBase: Option[String] = None): Consequence[SbtExecutionResult] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
-    target = SbtTarget(workspace)
+    lint <- if (kind == WorkflowSbtValidation.Kind.FixCheck) WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase)
+      else Consequence.success(Option.empty[SbtLintInput])
+    target = SbtTarget(workspace).copy(lintInput = lint)
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
@@ -143,11 +146,14 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   def repositoryValidationAttemptC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     workspaceIdentity: Option[String] = None,
-    estimate: Option[SbtValidationEstimate] = None): Consequence[SbtExecutionAttempt] = for {
+    estimate: Option[SbtValidationEstimate] = None,
+    lintBase: Option[String] = None): Consequence[SbtExecutionAttempt] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
-    target = SbtTarget(workspace, validationEstimate = estimate)
+    baseTarget = SbtTarget(workspace, validationEstimate = estimate)
+    lint = if (kind == WorkflowSbtValidation.Kind.FixCheck) WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase)
+      else Consequence.success(Option.empty[SbtLintInput])
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
@@ -155,9 +161,18 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
       case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
     }
-    execution = new Execution(core)
-    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))
-    _ <- _attempt_target_c(result, target, operation)
+    result <- lint match {
+      case Consequence.Failure(reason) =>
+        // Preparation failed before any SBT dispatch. Retain the existing
+        // admission-rejection alternative, never a process receipt or UNKNOWN
+        // SBT effect inferred from a configuration/parser failure.
+        Consequence.success(SbtExecutionAttempt.AdmissionRejected(baseTarget, operation, reason))
+      case Consequence.Success(input) =>
+        val target = baseTarget.copy(lintInput = input)
+        val execution = new Execution(core)
+        execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind)).flatMap(result =>
+          _attempt_target_c(result, target, operation).map(_ => result))
+    }
   } yield result
 
   def validationOperationAttemptC(core: ActionCall.Core, bound: B.BoundOperation): Consequence[SbtExecutionAttempt] = for {

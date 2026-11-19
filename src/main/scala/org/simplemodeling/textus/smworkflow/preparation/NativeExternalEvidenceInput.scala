@@ -17,14 +17,16 @@ import org.simplemodeling.textus.smworkflow.value as V
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
-    if (supplied.get("family").contains("LocalPublication") && supplied.get("kind").contains("standalone-recovery"))
+    if (supplied.get("family").contains("DelegateTask") && supplied.get("kind").contains("request-reconstruction"))
+      NativeDelegateTaskRequestReconstructionPreparation.prepareSuppliedC(supplied, readText)
+    else if (supplied.get("family").contains("LocalPublication") && supplied.get("kind").contains("standalone-recovery"))
       _standalone_publication_c(supplied, readText)
     else if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
       _repair_scope_c(supplied, readText)

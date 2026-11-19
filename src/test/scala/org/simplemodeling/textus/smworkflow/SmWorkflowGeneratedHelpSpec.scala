@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -92,6 +92,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "describeGoalTaskUnverifiedValidationContinuation", "adoptGoalTaskUnverifiedValidationContinuation"),
     SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",
       "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation",
+      "describeDelegateTaskRequestReconstruction", "reconstructDelegateTaskRequest",
       "describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
       "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation",
       "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation",

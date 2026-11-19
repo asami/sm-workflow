@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -364,7 +364,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       assessment <- GoalPhaseStepAssessment.assessPurposeC(slot.actionPolicy,
         GoalPhaseOrderedProgression.Snapshot(progress.candidate.get.parent, progress.candidate.get.tree),
         store.reference(prefix + "-assessment").identity, progress.receipts.head,
-        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind)), progress.receipts.drop(1))
+        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind)), progress.receipts.drop(1),
+        ordinaryFull = progress.sessionWorkspace.nonEmpty && progress.selection.exists(_.depth == "FULL"))
       priorReview <- if (assessment.branch == "admit") Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference])
         else policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reusableReviewC(store, progress.candidate.get.tree, p))
           .getOrElse(Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference]))

@@ -20,8 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Step acceptance establishes test inputs, never production AI/reviewer proof.
   * Failed/unknown observations and original review references remain distinct.
   * @since   Oct. 28, 2026
-  *  version Oct. 28, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -32,6 +31,9 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
   private val focused = C.Check("focused-test", 2, WorkflowSbtValidation.Kind.Test)
   private val full = C.Check("full-test", 3, WorkflowSbtValidation.Kind.Test)
   private val broad = Vector("build.sbt", "project", "dependencies", "generator", "runtime")
+  private val _submodule_path = "external/tooling"
+  private val _submodule_before = "a" * 40
+  private val _submodule_after = "b" * 40
   private def policy(prior: Vector[P.Prior] = Vector.empty, reason: String = "Build/dependency/generator/runtime changes may affect every product behavior",
     compileOnly: Boolean = false): P.Policy = {
     val paths = Vector("src", "value.txt") ++ broad
@@ -64,26 +66,38 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
       case "Failure" => "value.txt"
       case _ => "src/main/java/Bounded.java"
     }
+    val initial = Vector("-C", repository.toString, "add", "--", "docs/base.md") ++
+      Option.when(scenario == "Gitlink")(".gitmodules")
+    val change = if (scenario == "Gitlink") Vector("-C", repository.toString, "update-index", "--cacheinfo",
+      s"160000,$_submodule_after,$_submodule_path") else Vector("-C", repository.toString, "add", "--", path)
     Vector(Vector("init", "--bare", "--initial-branch=main", remote.toString),
       Vector("init", "--initial-branch=main", repository.toString),
-      Vector("-C", repository.toString, "add", "--", "docs/base.md"), commit(repository, "initial product"),
+      initial, commit(repository, "initial product"),
       Vector("-C", repository.toString, "push", remote.toString, "HEAD:refs/heads/main"),
       Vector("clone", "--no-local", remote.toString, peer.toString),
       Vector("-C", peer.toString, "add", "--", "docs/remote.md"), commit(peer, "remote documentation"),
       Vector("-C", peer.toString, "push", remote.toString, "HEAD:refs/heads/main"),
-      Vector("-C", repository.toString, "add", "--", path), commit(repository, "local bounded product change"))
+      change, commit(repository, "local bounded product change"))
   }
   override protected def _setup_files_(root: Path, scenario: String, index: Int): Unit = {
     if (scenario == "Goal") { super._setup_files_(root, scenario, index); return }
     if (index == 2) {
       Files.createDirectories(root.resolve("repository/docs"))
       Files.writeString(root.resolve("repository/docs/base.md"), "Product requirements\n")
+      if (scenario == "Gitlink") {
+        val repository = root.resolve("repository")
+        Files.createDirectories(repository.resolve(_submodule_path))
+        Files.writeString(repository.resolve(".gitmodules"), s"[submodule \"$_submodule_path\"]\n\tpath = $_submodule_path\n\turl = ../directives.git\n")
+        take(_run_setup_command_(Vector("-C", repository.toString, "update-index", "--add", "--cacheinfo",
+          s"160000,$_submodule_before,$_submodule_path")))
+      }
     }
     if (index == 6) Files.writeString(root.resolve("peer/docs/remote.md"), "Documentation metadata successor\n")
     if (index == 9) scenario match {
       case "Build" => Files.writeString(root.resolve("repository/build.sbt"), Files.readString(root.resolve("repository/build.sbt")) +
         "\n// Changed build input; broad coverage is explicit, not inferred from UPDATED\n")
       case "Failure" => Files.writeString(root.resolve("repository/value.txt"), "actual failing input\n")
+      case "Gitlink" => ()
       case other =>
         val path = other match {
           case "Dependency" => "dependencies/version.conf"
@@ -136,6 +150,44 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
         operation = "startRepositorySync", properties = List(Property("input", Record.data("repositoryIdentity" -> "sm-workflow", "syncMode" -> "FULL_STATE"), None))), actor))).sessionId
 
   "Phase 6.9 program impact through normal Operations" should {
+    "retain a known submodule pointer update for detailed review after actual product checks" in {
+      Given("a versioned submodule pointer outside all configured input scopes and an independent documentation change")
+      val scenario = "Gitlink"
+      val directory = root("gitlink")
+      val parameters = Map("textus.resource.url.file.roots" -> directory.toString)
+      _with_runtime_(directory, scenario, hostParameters = parameters) { (owner, component, actor, prepare) =>
+        prepare(call => call.setupC(_setup_commands_(directory, scenario).size, scenario = scenario))
+        val session = start(owner, component, actor)
+        When("ordinary Advance observes both parents and validates the actual merge")
+        val result = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(Request.of(
+          component = component.name, service = "RepositorySyncService", operation = "advanceRepositorySync",
+          properties = List(Property("sessionId", session, None))), actor)))
+        Then("the managed review requests the target reference without treating its commit ID as an unknown file")
+        result.kind shouldBe "Request"
+        val review = result.review.get
+        review.uncertainties should contain(s"Submodule reference changed at $_submodule_path. Review its commit and configuration changes.")
+        review.uncertainties should not contain (s"Unexamined unknown input: $_submodule_path")
+        review.uncertainties should contain("Unexamined unknown input: docs/remote.md")
+        review.remoteDiff should include(_submodule_after)
+        val identity = InstanceIdentity(session)
+        prepare(call => for {
+          work <- call.repositoryWorkC(identity, RepositorySyncNativeMergeReviewContinuation.completionOperation,
+            RepositorySyncNativeMergeReview.inputCodec)
+          request <- NativeWorkflowOperationOutput.workInputC(work)
+          state <- call.validationC(ThreeWorkflowNormalHostFixture.definition(directory).repository.input,
+            identity, directory, "merge-validated")
+        } yield {
+          request.judgmentMode shouldBe "detailed-review"
+          state.inputs.get.gitlinkPaths shouldBe Vector(_submodule_path)
+          state.inputs.get.consumedPaths shouldBe Vector(_submodule_path)
+          state.inputs.get.unknownPaths shouldBe Vector("docs/remote.md")
+          state.selected.map(_.kind) shouldBe Vector(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Kind.Test)
+          C.successful(state.receipts, selected = state.selected) shouldBe true
+          ()
+        })
+      }
+    }
+
     "select actual focused compile and bounded product coverage without FULL or AI" in {
       val directory = root("focused")
       _with_runtime_(directory, "Focused", hostParameters = parameters()) { (owner, component, actor, prepare) =>

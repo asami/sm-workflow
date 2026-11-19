@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,6 +32,29 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "retain admitted immutable lint input and reject echoed, missing or crossed provenance" in {
+      Given("a selected typed FixCheck result and its actual producer-admitted input")
+      val input = SbtLintInput("shared-scala-lint", "1", "{\"rules\":[\"NoOptionGet\"]}")
+      val raw = _result(SbtOperation.FixCheck)
+      val actual = raw.copy(target = raw.target.copy(lintInput = Some(input)), lintInput = Some(input))
+      val receipt = take(V.sbtReceiptC("lint", Kind.FixCheck, actual))
+      receipt.sbt.get.lintInput shouldBe Some(input)
+      val retained = receipt.asJson.as[V.Receipt].toOption.get
+      retained shouldBe receipt
+      retained.sbt.get.lintInput shouldBe Some(input)
+      When("only a target echo is supplied, or actual provenance crosses the requested input")
+      factsC(Kind.FixCheck, actual.copy(lintInput = None)).isSuccess shouldBe false
+      factsC(Kind.FixCheck, actual.copy(lintInput = Some(input.copy(revision = "2")))).isSuccess shouldBe false
+      factsC(Kind.FixCheck, raw.copy(lintInput = Some(input))).isSuccess shouldBe false
+      factsC(Kind.Compile, actual.copy(operation = SbtOperation.Compile)).isSuccess shouldBe false
+      Facts(Kind.FixCheck, Outcome.Succeeded, None, None, lintInput = Some(input.copy(configJson = "[]"))).valid shouldBe false
+      Facts(Kind.FixCheck, Outcome.Succeeded, None, None, lintInput = Some(input.copy(configJson = "{\"rules\":[],\"rules\":[]}"))).valid shouldBe false
+      Then("old receipts remain unchanged and gain no invented input")
+      val old = Facts(Kind.FixCheck, Outcome.Succeeded, None, None)
+      old.asJson.hcursor.downField("lintInput").succeeded shouldBe false
+      old.asJson.as[Facts].toOption.get shouldBe old
+      retained.sbt.get.lintInput shouldBe Some(input)
+    }
     "retain TestCompile DiscoveryUnavailable as unverified zero exit without broadening other preparatory facts" in {
       Given("a typed discovery request with an actual-shaped zero-exit unavailable observation, used only as a negative fixture")
       val original = _result(SbtOperation.TestCompile)

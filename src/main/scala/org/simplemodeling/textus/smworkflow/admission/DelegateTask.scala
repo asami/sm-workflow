@@ -1,9 +1,10 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 19, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
+import cats.data.NonEmptyVector
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -115,6 +116,21 @@ private[smworkflow] object DelegateTask {
 
   def requester(input: S.Input): Boolean = input != null && input.delegation != null &&
     input.delegation.exists(c => valid(c) && c.role == "requester")
+
+  /** Current canonical request with exactly the execution role exchanged. */
+  def destinationInputC(input: S.Input): Consequence[V.DelegateTaskInput] = for {
+    _ <- requesterInputC(input)
+    c = input.delegation.get.copy(role = "destination")
+    task = input.task.get
+  } yield V.DelegateTaskInput(input.repositoryIdentity, input.requestIdentity, input.objective,
+    NonEmptyVector.fromVectorUnsafe(input.ownedPaths), NonEmptyVector.fromVectorUnsafe(input.checks),
+    NonEmptyVector.fromVectorUnsafe(input.conditions),
+    NonEmptyVector.fromVectorUnsafe(input.sourceReferences.map(r => V.WorkflowArtifactReference(r.identity, r.revision))),
+    input.reviewRequired, input.kind, input.scalaLint, input.repairLimit, task.sourceKind, task.dependencies,
+    V.DelegateTaskContract(c.requesterIdentity, c.destinationIdentity, c.returnDestination, c.componentIdentity,
+      c.role, c.validationScope, NonEmptyVector.fromVectorUnsafe(c.permittedOperations), c.exclusions,
+      NonEmptyVector.fromVectorUnsafe(c.authorizationReferences.map(r => V.WorkflowArtifactReference(r.identity, r.revision))),
+      c.publicationTarget, c.artifactCoordinates, c.consumerInstructions), input.submissionConditions.getOrElse(Vector.empty))
 
   /** Passive request policy remains applicable without destination check bindings. */
   def requesterInputC(input: S.Input): Consequence[Unit] = for {

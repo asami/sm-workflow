@@ -32,7 +32,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -43,6 +43,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private val _candidates = "docs/candidates.md"
   private val _paths = Vector("step-1.txt", "step-2.txt", _hygiene, _candidates)
   private val _inventory_path = "src/main/car/abi-manifest.json"
+  private val _first_inventory_path = "src/main/car/review-inventory.json"
   private val _document_path = "docs/spec/guide.md"
   private val _document_sibling = "docs/spec/unrelated.md"
   private val _document_original = "# Selected guide\n\nPreserve the accepted documentation bytes.\n\n\n"
@@ -96,6 +97,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     val selections = goal.closure.programs.map(program => (if (program.step == "step-1" && goal.candidatePaths.contains("docs/spec")) Vector(_document_path)
       else if (program.step == GoalPhaseNativeReleaseClosure.programIdentity) Vector(_hygiene, _candidates) else Vector(program.step + ".txt", _hygiene, _candidates)) ++
       Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path) ++
+      Option.when(program.step == "step-1" && goal.candidatePaths.contains(_first_inventory_path))(_first_inventory_path) ++
       Option.when(goal.candidatePaths.contains("model.cml"))("model.cml"))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
       goalSelections = selections, completionReadPaths = Vector(_candidates))
@@ -126,7 +128,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
-    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false,
+    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false, firstinventory: Boolean = false,
     hygiene: Boolean = false, hygieneMode: Option[String] = None, completionRecords: Option[CompletionRecords.Policy] = None, releaseRecords: Boolean = false,
     completionPolicy: Option[String] = None, documentHygiene: Boolean = false,
     retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)(task: Episode => Unit): Unit = {
@@ -144,8 +146,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       programs = basehost.goal.closure.programs :+ GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3)))) else basehost
     val host = if (hygiene) initialhost.copy(goal = initialhost.goal.copy(candidatePaths = initialhost.goal.candidatePaths :+ "model.cml")) else initialhost
     val inventoryhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
-    val selectedhost = if (documentHygiene) inventoryhost.copy(goal = inventoryhost.goal.copy(
-      candidatePaths = inventoryhost.goal.candidatePaths :+ "docs/spec")) else inventoryhost
+    val firsthost = if (firstinventory) inventoryhost.copy(goal = inventoryhost.goal.copy(
+      candidatePaths = inventoryhost.goal.candidatePaths :+ _first_inventory_path)) else inventoryhost
+    val selectedhost = if (documentHygiene) firsthost.copy(goal = firsthost.goal.copy(
+      candidatePaths = firsthost.goal.candidatePaths :+ "docs/spec")) else firsthost
     _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
       if (initialize) prepare(call => call.setupC(_setup_commands_(directory, "FindingRecording").size).flatMap(_ => _install(call, selected)))
@@ -990,7 +994,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val reports = assigned.issues.filter(_ => assigned.kind != "ImplementStep").map { state =>
         val relevant = state.issues.filter(GoalPhaseFixIssues.relevant(assigned, _))
         GoalPhaseFixIssues.Report(if (assigned.kind == "RepairStep") relevant.filter(GoalPhaseFixIssues.unresolved).map(i =>
-          GoalPhaseFixIssues.Disposition(i.identity, "FIXED", "SPECIFICATION-OWNED correction of this exact issue", None))
+          GoalPhaseFixIssues.Disposition(i.identity, if (outcome == "decision-needed") "BLOCKED" else "FIXED",
+            "SPECIFICATION-OWNED disposition of this exact issue", None))
         else relevant.filter(_.source == "REVIEW").map(i => GoalPhaseFixIssues.Disposition(i.identity,
           if (outcome == "accept") "RESOLVED" else "NOT_REVIEWED", "SPECIFICATION-OWNED independent coverage", None)))
       }
@@ -1389,6 +1394,98 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   }
 
   "Native recording through normal public Operations" should {
+    "retain the original review observation across current inventory adoption and reopening" in {
+      Given("an isolated two-Step Session with a real blocking review and nonblocking observation")
+      val directory = _root()
+      val plan = _plan(two = true)
+      val journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))
+      var id = ""
+      var original = Option.empty[ContextReference]
+      var progress = Option.empty[GoalPhaseRepairProgress.Snapshot]
+      _episode(directory, initialize = true, selected = plan, firstinventory = true, journal = journal) { e =>
+        id = e.start()
+        e.advance(id)
+        val implementation = e.work(id)
+        Files.writeString(directory.resolve("repository/step-1.txt"), "Required source with a defect.\n")
+        e.submit(implementation)
+        val display = e.advance(id)
+        val review = e.submit(e.work(id), Some(display), "repair", Some(R.Observations(Vector(_observation))),
+          Vector("Correct required behavior"))
+        original = Some(review.resultReference)
+        e.advance(id)
+        val repair = e.work(id)
+        val assigned = _business(repair)
+        assigned.kind shouldBe "RepairStep"
+        assigned.review should not be empty
+        progress = assigned.repairProgress
+        val revised = plan.copy(revision = "inventory-review-2", steps = plan.steps.updated(0,
+          plan.steps.head.copy(ownedPaths = plan.steps.head.ownedPaths :+ _first_inventory_path)))
+        val proposal = GoalPhasePlanRevision.Proposal("review-inventory", "1", "The existing repair needs its concrete file", revised)
+        When("the authentic repair requests only the additional current-Step inventory")
+        e.submit(repair, outcome = "decision-needed", planRevision = Some(proposal))
+        val continued = e.advance(id)
+        Then("the same Step resumes implementation with its observation still pending")
+        _business(e.work(id)).kind shouldBe "ImplementStep"
+        continued.findingRecording.get.pending.map(p => p.sourceReference.identity -> p.sourceReference.revision) shouldBe
+          Vector(review.resultReference.identity -> review.resultReference.revision)
+        continued.findingRecording.get.request shouldBe None
+        val state = take(O.startC(plan, assigned.originalBase, Some(GoalPhaseRuntimeRepairControl.version)))
+        val pending = N.Pending(review.resultReference, "ReviewStep", Some("step-1"), _observation)
+        val current = e.current(id)
+        val frontier = take(GoalPhaseNativeHistory.prefixC(current, InstanceRevision(current.revision.value - 1)))
+        val source = N.Source(null, frontier, state, N.State(pending = Vector(pending)), None)
+        N.awaitsCurrentStepAcceptance(source) shouldBe true
+        Vector(pending.copy(stepIdentity = Some("step-2")), pending.copy(stepIdentity = None),
+          pending.copy(sourceKind = "ReviewPhase", stepIdentity = None)).foreach { foreign =>
+          N.awaitsCurrentStepAcceptance(source.copy(findings = N.State(pending = Vector(foreign)))) shouldBe false
+          N.awaitsCurrentStepAcceptance(source.copy(findings = N.State(pending = Vector(pending, foreign)))) shouldBe false
+        }
+      }
+      _episode(directory, selected = plan, firstinventory = true, journal = journal) { e =>
+        When("a separate host reopens the same Session")
+        val continued = e.advance(id)
+        val implementation = _business(e.work(id))
+        Then("the actual source and repair accounting remain attached to the unfinished Step")
+        implementation.kind shouldBe "ImplementStep"
+        implementation.repairProgress shouldBe progress
+        continued.findingRecording.get.pending.map(p => p.sourceReference.identity -> p.sourceReference.revision) shouldBe
+          original.toVector.map(p => p.identity -> p.revision)
+        continued.findingRecording.get.request shouldBe None
+        val key = DevelopmentJournalFinding.identity(original.get, _observation.identity)
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+        Files.createDirectories(directory.resolve("repository").resolve(_first_inventory_path).getParent)
+        Files.writeString(directory.resolve("repository").resolve(_first_inventory_path), "{}\n")
+        Files.writeString(directory.resolve("repository/step-1.txt"), "Corrected required source.\n")
+        e.submit(e.work(id))
+        val display = e.advance(id)
+        val accepted = e.submit(e.work(id), Some(display), "accept")
+        val waiting = e.advance(id)
+        waiting.findingRecording.get.pending.map(_.observation.identity) shouldBe Vector(_observation.identity)
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+        e.authority(id, waiting)
+        val next = e.advance(id)
+        val committed = _business(e.work(id)).completed.last
+        committed.step shouldBe "step-1"
+        committed.review shouldBe Some(accepted.resultReference.identity)
+        next.findingRecording.get.pending shouldBe empty
+        next.findingRecording.get.journaled.flatMap(_.items).map(_.status) shouldBe Vector("recorded")
+        val entry = e.readJournal(V.JournalReadInput(key, None)).entry.get
+        entry.sourceReference shouldBe V.WorkflowArtifactReference(original.get.identity, original.get.revision)
+        entry.finding.get.completed.last.commit.identity shouldBe committed.commit.identity
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-intent") shouldBe 1
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-result") shouldBe 1
+      }
+      _episode(directory, selected = plan, firstinventory = true, journal = journal) { e =>
+        val key = DevelopmentJournalFinding.identity(original.get, _observation.identity)
+        val repeated = e.advance(id)
+        repeated.findingRecording.get.pending shouldBe empty
+        e.readJournal(V.JournalReadInput(key, None)).entry.get.sourceReference shouldBe
+          V.WorkflowArtifactReference(original.get.identity, original.get.revision)
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-intent") shouldBe 1
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-result") shouldBe 1
+      }
+    }
+
     "retain mixed repair observations until the real Step commit then issue one immutable finite batch" in {
       Given("a fresh isolated V7 two-Step Session, exact tracked destinations, and a required blocker with a separate nonblocking observation")
       val directory = _root()

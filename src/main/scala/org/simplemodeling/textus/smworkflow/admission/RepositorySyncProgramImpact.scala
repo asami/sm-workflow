@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -270,7 +270,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
   } yield result
 
   /** Reuse the existing ordinary runtime declaration, not another sync-only test catalogue. */
-  def ordinaryPolicyC(parameters: ComponentInitializationParameters, root: String, plan: Json = Json.Null): Consequence[Option[Policy]] = {
+  def ordinaryPolicyC(parameters: ComponentInitializationParameters, root: String, plan: Json,
+    providesFixCheck: Boolean, sharedScalaLint: Boolean = false): Consequence[Option[Policy]] = {
     val workspaces = plan.hcursor.get[Vector[Json]]("workspaces").toOption.getOrElse(Vector.empty)
       .filter(_.hcursor.get[String]("root").contains(root)).flatMap(_.hcursor.get[String]("identity").toOption).toSet
     val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.getOrElse(Vector.empty)
@@ -284,8 +285,9 @@ private[smworkflow] object RepositorySyncProgramImpact {
         val full = V.Check("ordinary-project-full", 1, WorkflowSbtValidation.Kind.TestOnly,
           workspace = Some(workspace), ordinaryDiscovery = true)
         val lint = programs.filter(program => program.hcursor.get[String]("target").contains(workspace) &&
-          program.hcursor.get[String]("operation").contains("fix-check"))
-        val checks = Vector(full) ++ Option.when(lint.size == 1)(V.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck,
+          program.hcursor.get[String]("operation").contains("fix-check") &&
+          (!sharedScalaLint || program.hcursor.get[Boolean]("lintInput").contains(true)))
+        val checks = Vector(full) ++ Option.when(providesFixCheck && lint.size == 1)(V.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck,
           workspace = Some(workspace))).toVector
         val policy = Policy(Vector.empty, checks, Vector.empty,
           "FULL: ordinary managed TestCompile products/classpath select all applicable non-Slow discovered tests and required modes", Vector.empty)

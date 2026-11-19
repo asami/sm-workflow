@@ -19,7 +19,7 @@ import CommonEvidence as E
   * admission below executes in the actual controlled call; installed process,
   * import consumption and byte measurements belong to the CLI qualification.
   * @since   Nov.  9, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -46,11 +46,11 @@ final class WorkflowPreparedImportSpec extends AnyWordSpec with Matchers with Gi
         "continuationId" -> Json.fromString("work-17"), "handle" -> Json.obj("workflowIdentity" -> Json.fromString("DelegateTaskWorkflow"))))),
     businessReference))
 
-  private final class Memory(unknown: Boolean = false) extends E.Storage {
+  private final class Memory(unknown: Boolean = false, uniquenames: Boolean = false) extends E.Storage {
     var rows = Map.empty[String, String]
     var files = Map.empty[String, Vector[Byte]]
     var writes = 0
-    def allocateNameC() = Consequence.success("spec-file")
+    def allocateNameC() = Consequence.success(if (uniquenames) "spec-file-" + rows.size else "spec-file")
     def loadC(key: String) = Consequence.success(rows.get(key))
     def createC(key: String, value: String): Consequence[Unit] =
       if (rows.contains(key)) Consequence.stateConflict("SPECIFICATION-OWNED duplicate metadata")
@@ -67,6 +67,21 @@ final class WorkflowPreparedImportSpec extends AnyWordSpec with Matchers with Gi
     }
     override def readBytesC(workspace: String, path: String, representation: FileRepresentation) = Consequence.success(files.get(path))
     override def createLifecycleC(key: String, row: Record) = Consequence.unit
+  }
+
+  private def _authority_request(revision: String, snake: Boolean = false): Json = {
+    val scope = Json.obj("instance" -> Json.fromString("fixture-closing-session"),
+      (if (snake) "source_revision" else "sourceRevision") -> Json.fromString(revision),
+      "review" -> Json.fromString("fixture-review-" + revision),
+      (if (snake) "child_invocation" else "childInvocation") -> Json.fromString("fixture-child-" + revision),
+      "plan" -> Json.obj("identity" -> Json.fromString("fixture-plan"), "revision" -> Json.fromString("1"),
+        "phase" -> Json.fromString("fixture-phase"), "repository" -> Json.fromString("fixture-repository")),
+      "base" -> Json.obj("head" -> Json.fromString("a" * 40), "tree" -> Json.fromString("b" * 40)),
+      "candidate" -> Json.obj("head" -> Json.fromString("c" * 40), "tree" -> Json.fromString("d" * 40)),
+      "completed" -> Json.arr())
+    Json.obj((if (snake) "authority_context" else "authorityContext") -> Json.obj(
+      "purpose" -> Json.fromString(NativeExternalEvidence.Purpose.PhaseClosure.identity),
+      (if (snake) "component_instance" else "componentInstance") -> Json.fromString("spec-component"), "scope" -> scope))
   }
 
   // Same metadata seam as the storage-failure cases; directory preparation and
@@ -89,6 +104,71 @@ final class WorkflowPreparedImportSpec extends AnyWordSpec with Matchers with Gi
   }
 
   "Prepared import business association" should {
+    "canonical authority targets" which {
+      "retain one actual direction separately for two Closing targets and recollect each exact target" in {
+        Given("two specification-owned Closing targets in the same native Session sharing one real direction")
+        val firstrequest = _authority_request("18")
+        val secondrequest = _authority_request("23")
+        def _source_(value: Json) = take(WorkflowPreparedImport.associationC("spec-component", "participant",
+          "prepareAuthority", input(), Some(value), businessReference))
+        val first = _source_(firstrequest)
+        val second = _source_(secondrequest)
+        val store = new Memory(uniquenames = true)
+        When("both actual targets are retained and the first is recollected through normal wire spelling")
+        val storedfirst = take(WorkflowPreparedImport.retainWithStorageC(store, policy, first, "first target bytes", clock))
+        val storedsecond = take(WorkflowPreparedImport.retainWithStorageC(store, policy, second, "second target bytes", clock))
+        val wire = _source_(_authority_request("18", snake = true))
+        val context = firstrequest.hcursor.downField("authorityContext").focus.get
+        val equalscope = context.hcursor.downField("scope").focus.get.mapObject(_.add("source_revision", Json.fromString("18")))
+        val equalaliases = firstrequest.mapObject(_.add("authorityContext", context.mapObject(
+          _.add("component_instance", Json.fromString("spec-component")).add("scope", equalscope))))
+        val repeated = take(WorkflowPreparedImport.retainWithStorageC(store, policy, wire, "first target bytes", clock))
+        val conflict = take(WorkflowPreparedImport.retainWithStorageC(store, policy, wire, "contradictory bytes", clock))
+        Then("target identity separates prepared rows while the same target remains idempotent and refuses contradictory bytes")
+        first.session shouldBe "fixture-closing-session"
+        second.session shouldBe first.session
+        first.reference should not be second.reference
+        wire shouldBe first
+        _source_(equalaliases) shouldBe first
+        storedfirst.getString("status") shouldBe Some("prepared")
+        storedsecond.getString("status") shouldBe Some("prepared")
+        storedfirst.getAny("retainedImport") should not be storedsecond.getAny("retainedImport")
+        repeated shouldBe storedfirst
+        conflict.getString("status") shouldBe Some("conflict")
+        store.writes shouldBe 2
+        take(E.payloadC(store, take(E.loadedC(store, E.identity(first))).get._1)) shouldBe Some("first target bytes")
+        take(E.payloadC(store, take(E.loadedC(store, E.identity(second))).get._1)) shouldBe Some("second target bytes")
+
+        Given("an UNKNOWN File observation for that exact authority target")
+        val unknown = new Memory(unknown = true)
+        When("the same target is passively recollected")
+        val uncertain = take(WorkflowPreparedImport.retainWithStorageC(unknown, policy, first, "authority bytes", clock))
+        val collected = take(WorkflowPreparedImport.retainWithStorageC(unknown, policy, wire, "authority bytes", clock))
+        Then("the original uncertainty is retained without replay")
+        uncertain.getString("status") shouldBe Some("indeterminate")
+        collected shouldBe uncertain
+        unknown.writes shouldBe 1
+      }
+
+      "refuse contradictory aliases and malformed owners or selected scopes" in {
+        Given("a genuine-shaped fixture target with conflicting owner, scope or context spellings")
+        val request = _authority_request("18")
+        val context = request.hcursor.downField("authorityContext").focus.get
+        val scope = context.hcursor.downField("scope").focus.get
+        val crossedowner = context.mapObject(_.add("component_instance", Json.fromString("foreign")))
+        val crossedscope = context.mapObject(_.add("scope", scope.mapObject(_.add("source_revision", Json.fromString("99")))))
+        val malformed = context.mapObject(_.add("scope", scope.mapObject(_.add("sourceRevision", Json.fromInt(18)))))
+        val absentowner = context.mapObject(_.remove("componentInstance"))
+        val requests = Vector(crossedowner, crossedscope, malformed, absentowner).map(value =>
+          Json.obj("authorityContext" -> value)) :+ request.mapObject(_.add("authority_context", crossedowner))
+        When("retention selects the canonical purpose owner and actual target")
+        val results = requests.map(value => WorkflowPreparedImport.associationC("spec-component", "participant",
+          "prepareAuthority", input(), Some(value), businessReference))
+        Then("no ambiguous or malformed target obtains a derived association")
+        results.foreach(_.isSuccess shouldBe false)
+      }
+    }
+
     "retain literal native Session identifiers through managed File UoW without decoding or collisions" in {
       val root = WorkflowFileRuntimeFixture.fresh()
       val metadata = new Memory
