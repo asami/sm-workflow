@@ -15451,6 +15451,60 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 |------+------|--------------|
 | sessionId | string | 1 |
 
+## DelegateTaskRequestReconstructionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskRequestReconstructionDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| issues | string | * |
+
+## DelegateTaskIntakeObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| destinationIdentity | string | 1 |
+| notificationStatus | string | 1 |
+| intakeStatus | string | 1 |
+| handlerStatus | string | 1 |
+| destinationSessionId | string | ? |
+| sourceReferences | WorkflowArtifactReference | + |
+
+## DelegateTaskRequestReconstructionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| checks | string | + |
+| scalaLint | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| observation | DelegateTaskIntakeObservation | 1 |
+
 ## DelegateTaskWorkRequest
 
 - input-kind :: COMMAND
@@ -15510,6 +15564,7 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | retainedWork | WorkflowRetainedWorkReference | ? |
 | controlSummary | record | ? |
 | retainedMaterials | WorkflowRetainedFieldReference | * |
+| dispatchInput | DelegateTaskInput | ? |
 
 # WORKFLOW
 
@@ -15654,6 +15709,14 @@ operation = DelegateTaskService.resumeDelegateTaskSemanticContinuation
 
 operation = DelegateTaskService.describeDelegateTaskReviewContinuation
 
+#### describeDelegateTaskRequestReconstruction
+
+operation = DelegateTaskService.describeDelegateTaskRequestReconstruction
+
+#### reconstructDelegateTaskRequest
+
+operation = DelegateTaskService.reconstructDelegateTaskRequest
+
 #### resumeDelegateTaskReviewContinuation
 
 operation = DelegateTaskService.resumeDelegateTaskReviewContinuation
@@ -15718,6 +15781,63 @@ on = task-accepted
 Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
 
 ### OPERATION
+
+#### describeDelegateTaskRequestReconstruction
+
+##### DESCRIPTION
+
+Describe the same native requester Session and its retained derived validation policy. The opaque target contains typed owner, revision, participant, request identity and policy only. This read performs no dispatch or destination execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionResult
+
+#### reconstructDelegateTaskRequest
+
+##### DESCRIPTION
+
+Adopt an independently admitted genuine Human correction of derived checks and Scala lint policy for the current unstarted requester. Supply exactly one input or inputResource. Preserve all other request data, native history, results and repair counters. Observation references and the ended pre-Start recipient handler must be covered by actual Human evidence. Defer writes nothing. Ordinary Advance returns the corrected destination input and owns later dispatch.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskRequestReconstructionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskRequestReconstructionDescriptionResult
 
 #### describeDelegateTaskSemanticContinuation
 

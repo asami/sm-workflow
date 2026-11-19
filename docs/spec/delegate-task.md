@@ -30,6 +30,68 @@ Concrete public Operation/DTO names are declared in CML: DelegateTaskService,
 DelegateTaskDeliveryService and NativeWorkflowPreparationService.prepareDelegateTaskStart.
 Use their normal ABI/help/resources and the finite caller contract.
 
+## Reconstruction of derived requester validation policy
+
+A requester may retain an incorrect derived check or Scala lint requirement
+before the destination accepts Start. The common management reconstruction
+policy supplies assessment, genuine direction admission and logical resume
+selection for both GoalPhase and this requester route. The existing native
+bounded owner remains responsible for Session history, storage and Advance.
+
+`DelegateTaskService.describeDelegateTaskRequestReconstruction --sessionId`
+reads the active original requester at `DispatchReady`. Its opaque target carries
+only the component instance, Session, source revision, original participant,
+request identity and typed checks/Scala lint policy. The result explains any
+ineligibility and offers `AdoptDerivedValidationPolicy` or `Defer`; a description
+supplies no effect or Human authority.
+
+`DelegateTaskService.reconstructDelegateTaskRequest` accepts exactly one typed
+`input` or UTF-8 `inputResource`. The input contains the described target,
+corrected checks and `scalaLint` (`off` or `required`), choice, rationale,
+original participant, actual Human reference and attributable intake observation.
+The observation names the destination, notification status, intake status,
+handler status, optional destination Session and actual source references.
+
+An eligible delivered notification has an actual `rejected-before-start`
+intake and an `ended` handler. An eligible `not-delivered` notification has
+actual `not-submitted` intake and an `ended` handler. Both require independently
+admitted evidence covering the complete policy correction, observation and
+source references. A known destination Session, accepted or started intake,
+live handler, or unknown effect refuses with an explanation. Missing receipts
+or source absence never establish nonexecution or justify switching lint off.
+
+Use the existing `NativeWorkflowPreparationService.prepareEvidence` with
+`family=DelegateTask` and `kind=request-reconstruction` to derive an importer
+from the actual description and complete correction input. The independently
+provisioning native evidence owner authenticates purpose
+`delegate-task-request-reconstruction`, target, direction, Human reference and
+participant. Passive preparation grants no authority.
+
+An adopted direction appends one optional typed `requestReconstruction`
+checkpoint and effective input in the same native Session. Only checks and
+Scala lint policy change. Business purpose, paths, conditions, submission
+timing, source and authority references, publication requirements, operations,
+base, original input and selection, all prior records/results and actual repair
+counters remain retained. Code delivery still requires Compile and appropriate
+TestOnly declarations. The requester performs no destination preflight or
+execution; destination Start resolves its actual host and retains mandatory
+lint whenever selected.
+
+Ordinary `advanceDelegateTask` returns `Dispatch` with optional typed
+`DelegateTaskView.dispatchInput`, derived from current canonical requester
+input with only the role changed to `destination`. Submit that complete input
+to the destination's normal first Start. Repeated requester Start remains
+strict, and returned producer results must match the current corrected
+request, including checks and lint. Recollecting the identical admitted
+direction uses its original target after revision advances and appends nothing;
+conflicting directions refuse. `Defer` leaves the state unchanged.
+
+Executable evidence: `WorkflowManagementReconstructionSpec`,
+`DelegateTaskRequestReconstructionSpec`, `DelegateTaskDeferredLintSpec` and
+`DelegateTaskRequesterRoutingSpec`. The separate installed qualification covers
+an old requester reopened by the new component and the destination's real
+validation, commit, publication and strict return.
+
 ## Request and ownership
 
 The request identifies requester and destination owners, target Component and

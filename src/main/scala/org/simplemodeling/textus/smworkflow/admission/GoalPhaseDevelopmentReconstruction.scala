@@ -57,6 +57,8 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   final case class Assessment(incompatible: Vector[String], questions: Vector[String],
     uncertainEffects: Vector[String], freshCapture: Boolean, retainEvidence: Boolean) {
     def reasons: Vector[String] = incompatible ++ questions ++ uncertainEffects
+    def management: WorkflowManagementReconstruction.Assessment =
+      WorkflowManagementReconstruction.Assessment(incompatible, questions, uncertainEffects, freshCapture, retainEvidence)
   }
   final case class PrefixSelection(version: String, direction: ContextReference, failedResult: ContextReference,
     reusable: Vector[String], fresh: Vector[String], oldGeneration: Long, newGeneration: Long,
@@ -184,8 +186,7 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   /** New native selections cannot turn contradictory or unresolved facts into
     * a requirements question. Historical payload replay remains unchanged. */
   def requireReconstructibleC(assessment: Assessment): Consequence[Unit] =
-    _check(assessment.incompatible.isEmpty && assessment.uncertainEffects.isEmpty,
-      (assessment.incompatible ++ assessment.uncertainEffects).mkString("; "))
+    WorkflowManagementReconstruction.requireReconstructibleC(assessment.management)
 
   def observeC(d: F.Declaration, core: ActionCall.Core): Consequence[Observation] = for {
     root <- G.rootC(core)
@@ -270,17 +271,19 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
       controller.plan.steps.flatMap(_.checks), controller.plan.phaseChecks, payload.observation, controller.candidate,
       false,
       payload.sourceTargetGeneration, payload.assessment.uncertainEffects) else payload.assessment
-    selected = if (!keeping && assessment.incompatible.isEmpty && (assessment.questions.isEmpty || adopted))
+    selection <- WorkflowManagementReconstruction.selectedC(assessment.management, actualAnswer.map(_._2), !keeping &&
+      (assessment.questions.isEmpty || adopted))
+    selected = if (selection.adoptProposed)
       payload.documents.captured.plan else controller.plan
     _ <- _check(selected == controller.plan || _preserves_policy_obligations(controller, selected),
       "selected requirements remove or weaken required original action policy obligations")
-    reasons = assessment.incompatible ++ (if (actualAnswer.nonEmpty) Vector.empty else assessment.questions) ++ assessment.uncertainEffects
+    reasons = selection.reasons
     _ <- _check(payload.prefixSelection.forall(proof => validPrefixSelection(proof) && actualAnswer.isEmpty &&
       reasons.isEmpty && assessment.freshCapture && !assessment.retainEvidence &&
       proof.oldGeneration == controller.generation && payload.humanAnswer.isEmpty &&
       (proof.supersededQuestion.nonEmpty == (controller.stage == O.Stage.Decision))),
       "prefix selection crosses its actual generation or technical Decision")
-    state <- controller.reconstructDevelopmentC(selected, assessment.freshCapture && reasons.isEmpty,
+    state <- controller.reconstructDevelopmentC(selected, selection.freshCapture,
       payload.sourceTargetGeneration, reasons, adoptDecision = actualAnswer.nonEmpty,
       technicalReassessment = payload.prefixSelection.nonEmpty)
     _ <- _check(payload.prefixSelection.forall(_.newGeneration == state.generation),

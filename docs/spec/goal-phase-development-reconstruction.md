@@ -17,6 +17,28 @@ or another incident-specific recovery mechanism. The qualified cases and
 eligibility limits below describe delivered coverage separately from this
 normal-behavior requirement.
 
+## Shared management reconstruction policy
+
+GoalPhase and unstarted DelegateTask requester correction use the same
+`WorkflowManagementReconstruction` assessment, admission and logical resume
+selection. Their native owners supply family-specific immutable facts and
+independently admitted actual direction references. Contradictions and unknown
+effects cannot become permission or a new executable restart through a Human
+choice. New mutations refuse those facts with an explanation.
+
+GoalPhase retains its existing serialized Assessment and reconstruction records.
+The shared projection preserves historical selection behavior, including
+unresolved reasons, retained evidence and the original fresh-capture predicate.
+The existing GoalPhase controller still chooses its native development stage
+and persists its own reconstruction. DelegateTask resumes only at its existing
+unstarted requester boundary; it adds no GoalPhase Plan or new execution owner.
+See [requester policy reconstruction](delegate-task.md#reconstruction-of-derived-requester-validation-policy)
+for the distinct intake and corrected dispatch contract.
+
+`WorkflowManagementReconstructionSpec` specifies shared ambiguity, uncertainty
+and historical resume behavior. `GoalPhaseDevelopmentReconstructionSpec` retains
+the direct native-family selection and old-wire evidence.
+
 ## Acceptance of existing committed Step work
 
 For P611-CHECKPOINT-A-01, actual existing committed Step work is accepted only

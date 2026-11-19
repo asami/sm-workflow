@@ -20,7 +20,7 @@ import StandaloneFixExecution.given
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -51,7 +51,8 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
-    recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections) ++ DelegateTaskValidationRecovery.operations(h, definition, new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskValidationRecovery)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+    recovery = if (N.delegation) (DelegateTaskRequestReconstruction.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskRequestReconstruction) ++ DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections) ++ DelegateTaskValidationRecovery.operations(h, definition, new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskValidationRecovery)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery) ++ GoalTaskScopeCorrection.operations(h, definition, selections)
     continuation = (if (N.delegation) DelegateTaskSemanticContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskSemanticContinuation) ++ DelegateTaskReviewContinuation.operations(h, definition,
@@ -109,7 +110,17 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
             } yield ())
             result <- N.startC(input, participant, key, selection, selections, h, definition, selected)
           } yield result else N.advanceC(session, h, definition, selected)
-        } yield NativeWorkflowOperationOutput.response(result)
+          response <- if (N.delegation) for {
+            dispatch <- if (result.kind == "Dispatch") N.storageC(h, definition, selected)
+              .flatMap(storage => N.retainedInputC(storage, session, selected))
+              .flatMap(DelegateTask.destinationInputC).map(Some(_))
+              else Consequence.success(Option.empty[V.DelegateTaskInput])
+          } yield NativeWorkflowOperationOutput.response(V.DelegateTaskView(result.sessionId, result.kind, result.message,
+            result.state, result.work, result.issuedWorkContext, result.submitOperation, result.submitSessionId,
+            result.resultType, result.diagnostics, result.reviewContext, result.retainedWork,
+            result.controlSummary, result.retainedMaterials, dispatch))
+            else Consequence.success(NativeWorkflowOperationOutput.response(result))
+        } yield response
       }
     })
   }

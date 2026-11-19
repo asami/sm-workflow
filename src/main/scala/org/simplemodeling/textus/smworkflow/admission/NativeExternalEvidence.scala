@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -43,6 +43,7 @@ private[smworkflow] object NativeExternalEvidence {
     case DelegateTaskRepairContinuation extends Purpose("delegate-task-repair-continuation")
     case DelegateTaskSemanticContinuation extends Purpose("delegate-task-semantic-continuation")
     case DelegateTaskReviewContinuation extends Purpose("delegate-task-review-continuation")
+    case DelegateTaskRequestReconstruction extends Purpose("delegate-task-request-reconstruction")
     case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
@@ -308,6 +309,12 @@ private[smworkflow] object NativeExternalEvidence {
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("DelegateTask semantic Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.DelegateTaskRequestReconstruction) {
+      val answer = selected.hcursor.downField("delegateTaskRequestReconstruction").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Requester reconstruction crosses its actual Human participant or reference")
     } else if (purpose == Purpose.DelegateTaskReviewContinuation) {
       val answer = selected.hcursor.downField("delegateTaskReviewContinuation").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -388,6 +395,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.DelegateTaskRepairContinuation => DelegateTaskRepairContinuation.selectBinding(value)
       case Purpose.DelegateTaskSemanticContinuation => DelegateTaskSemanticContinuation.selectBinding(value)
       case Purpose.DelegateTaskReviewContinuation => DelegateTaskReviewContinuation.selectBinding(value)
+      case Purpose.DelegateTaskRequestReconstruction => DelegateTaskRequestReconstruction.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)
       case Purpose.DelegateTaskValidationRecovery => DelegateTaskValidationRecovery.selectBinding(value)

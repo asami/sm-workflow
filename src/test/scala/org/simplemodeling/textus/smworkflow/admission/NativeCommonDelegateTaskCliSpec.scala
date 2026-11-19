@@ -19,9 +19,9 @@ import S.given
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
-private[admission] object NativeCommonDelegateTaskFixture {
+private[admission] object NativeCommonDelegateTaskFixture extends ThreeWorkflowManagedRepositoryFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
   val testPath = "src/test/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriterSpec.scala"
   val component = "org.example.CommonDelegateFixture"
@@ -49,40 +49,17 @@ private[admission] object NativeCommonDelegateTaskFixture {
           grant("capabilities").get.mapArray(_ :+ program.hcursor.get[Json]("capability").toOption.get)))))))
     }
   }
-}
-
-/** Explicit installed qualification. Human selections, transport observations
-  * and semantic judgments are SPECIFICATION-OWNED. Actual checks, commit and
-  * tiny artifact publication belong to the normal destination runtime.
-  */
-private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSpec with Matchers with GivenWhenThen
-    with ThreeWorkflowManagedRepositoryFixture {
-  protected def commonDelegateExecutable: Path
-  protected def commonDelegateInstallations: Option[Path] = None
-  protected def commonDelegateComponentFile: Option[Path] = sys.props.get("smworkflow.spec.componentFile")
-    .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE")).map(Path.of(_))
-  protected def commonDelegateCall(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
-    scenario.callInstalled(commonDelegateExecutable, service, operation, arguments, installations = commonDelegateInstallations,
-      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
-  private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
-  private def _state(view: V.DelegateTaskView): S.State = GoalPhaseNativeMetadata.normalizePublicJson(
-    parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
-  private def _work(view: V.DelegateTaskView): S.Work = GoalPhaseNativeMetadata.normalizePublicJson(
-    parser.parse(take(view.work.get.toJsonStringC)).toOption.get).toOption.get.as[S.Work].toOption.get
-  private def _call(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
-    commonDelegateCall(scenario, service, operation, arguments)
-
   /** Each selected detail is another actual installed process. Keep ordinary
     * control available separately for output and route assertions below. */
-  private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView = {
+  def view(scenario: F.Scenario, result: F.Result, call: (F.Scenario, String, String, Vector[String]) => F.Result): V.DelegateTaskView = {
     val control = result.business[V.DelegateTaskView]
     val work = control.retainedWork.map { reference =>
-      _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
-        Vector("--input", _json(reference))).business[V.WorkflowRetainedWorkReadResult].response
+      call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
+        Vector("--input", take(reference.toRecord().toJsonStringC))).business[V.WorkflowRetainedWorkReadResult].response
     }.getOrElse(control.toRecord())
     val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
-      val detail = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
-        Vector("--input", _json(field.reference))).business[V.WorkflowRetainedSnapshotReadResult]
+      val detail = call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+        Vector("--input", take(field.reference.toRecord().toJsonStringC))).business[V.WorkflowRetainedSnapshotReadResult]
       val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName)).getOrElse(org.goldenport.record.Record.empty)
       val material = org.goldenport.record.Record.createFull(detail.material.fields.filterNot(value => overlay.getAny(value.key).nonEmpty)
         .map(value => value.key -> value.value.single)) ++ overlay
@@ -92,7 +69,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
     take(V.DelegateTaskView.createC(complete))
   }
 
-  private def _fresh(): F.Scenario = {
+  def fresh(componentFile: Option[Path]): F.Scenario = {
     val scenario = F.fresh("installed-common-delegate", bootstrapSelectedInput = false,
       sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
     val root = scenario.root
@@ -131,7 +108,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
     val logical = BoundedWorkExecutionAdmissionFixture.logicalParameters.foldLeft(selected) { case (prior, (key, value)) =>
       prior.mapObject(_.add(key, value.asJson))
     }
-    val installed = commonDelegateComponentFile.fold(logical) { component =>
+    val installed = componentFile.fold(logical) { component =>
       require(component.isAbsolute && component.normalize == component && Files.isRegularFile(component),
         "Select an actual absolute Component archive")
       logical.mapObject(_.add("textus.component.file", component.toString.asJson))
@@ -140,6 +117,33 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
     scenario.enablePreparedImportRetention()
     scenario
   }
+}
+
+/** Explicit installed qualification. Human selections, transport observations
+  * and semantic judgments are SPECIFICATION-OWNED. Actual checks, commit and
+  * tiny artifact publication belong to the normal destination runtime.
+  */
+private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSpec with Matchers with GivenWhenThen
+    with ThreeWorkflowManagedRepositoryFixture {
+  protected def commonDelegateExecutable: Path
+  protected def commonDelegateInstallations: Option[Path] = None
+  protected def commonDelegateComponentFile: Option[Path] = sys.props.get("smworkflow.spec.componentFile")
+    .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE")).map(Path.of(_))
+  protected def commonDelegateCall(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
+    scenario.callInstalled(commonDelegateExecutable, service, operation, arguments, installations = commonDelegateInstallations,
+      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+  private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
+  private def _state(view: V.DelegateTaskView): S.State = GoalPhaseNativeMetadata.normalizePublicJson(
+    parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
+  private def _work(view: V.DelegateTaskView): S.Work = GoalPhaseNativeMetadata.normalizePublicJson(
+    parser.parse(take(view.work.get.toJsonStringC)).toOption.get).toOption.get.as[S.Work].toOption.get
+  private def _call(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
+    commonDelegateCall(scenario, service, operation, arguments)
+
+  private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView =
+    NativeCommonDelegateTaskFixture.view(scenario, result, commonDelegateCall)
+
+  private def _fresh(): F.Scenario = NativeCommonDelegateTaskFixture.fresh(commonDelegateComponentFile)
 
   protected def qualifyCommonDelegate(outcome: String): Unit = {
       Given("one tiny isolated normal host with no runtime.definition and SPECIFICATION-OWNED request authority")

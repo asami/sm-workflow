@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -567,7 +567,9 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
+    if (request.operation == DelegateTaskRequestReconstruction.reconstructOperation)
+      DelegateTaskRequestReconstruction.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "describeDelegateTaskValidationRecovery") DelegateTaskValidationRecovery.descriptionForCallC(request, core).map(_.sessionId)
     else if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)

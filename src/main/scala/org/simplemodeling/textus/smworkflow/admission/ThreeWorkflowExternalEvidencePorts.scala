@@ -17,7 +17,7 @@ import NativeExternalEvidence.Purpose
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -113,6 +113,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
       binding <- goalReviewBindingC(core, input, submitted)
       _ <- _admit_evidence_c(core, Purpose.GoalReview, key(submitted.resultReference.identity, submitted.resultReference.revision), binding)
     } yield ()
+  }
+  val delegateTaskRequestReconstruction: DelegateTaskRequestReconstruction.EvidencePort = new DelegateTaskRequestReconstruction.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.DelegateTaskRequestReconstruction, key(reference.identity, reference.revision), binding)
   }
   val goalHuman: GoalPhaseOrderedHumanDecision.EvidencePort = new GoalPhaseOrderedHumanDecision.EvidencePort {
     def admitC(core: ActionCall.Core, question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing],

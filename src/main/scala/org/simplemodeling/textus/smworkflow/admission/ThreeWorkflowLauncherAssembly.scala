@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -44,6 +44,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "DelegateTaskService.describeDelegateTaskScopeCorrection", "DelegateTaskService.correctDelegateTaskScope",
     "DelegateTaskService.describeDelegateTaskValidationContinuation", "DelegateTaskService.adoptDelegateTaskValidationContinuation",
     "DelegateTaskService.describeDelegateTaskReviewContinuation", "DelegateTaskService.resumeDelegateTaskReviewContinuation",
+    "DelegateTaskService.describeDelegateTaskRequestReconstruction", "DelegateTaskService.reconstructDelegateTaskRequest",
     "DelegateTaskService.describeDelegateTaskSemanticContinuation", "DelegateTaskService.resumeDelegateTaskSemanticContinuation",
     "DelegateTaskService.describeDelegateTaskRepairContinuation", "DelegateTaskService.resumeDelegateTaskRepair",
     "DelegateTaskService.describeDelegateTaskValidationRecovery", "DelegateTaskService.recoverDelegateTaskValidation",
