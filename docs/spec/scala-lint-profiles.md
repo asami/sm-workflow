@@ -1,9 +1,11 @@
 # Shared Scala lint profiles
 
-Status: approved development direction. The SLP-1 source candidate is described
-in [the shared rule module](../../scala-lint-rules/README.md); source authorship
-does not establish validation, publication or runtime adoption. Remaining rules,
-key migration and integrated acceptance remain open.
+Status: approved development direction. SLP-1's bounded rule-module delivery has
+native validation and independent review; its application runtime adoption
+remains open. SLP-2's additional authored rules and supported analysis boundaries
+are described in [the shared rule module](../../scala-lint-rules/README.md),
+pending fresh checks. Key migration, runtime integration and full A/B/C
+acceptance remain open; source authorship is not their acceptance.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
 in the [Phase 8.1 dependency plan](../phase/phase-8.1-dependencies.md).

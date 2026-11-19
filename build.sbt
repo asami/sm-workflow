@@ -1,16 +1,19 @@
 import org.goldenport.cozy.CozyPlugin.autoImport._
 import org.goldenport.cozy.CozyProjectIdentityEvidence
 import sbt.Keys.*
-lazy val scalaLintInput = project.in(file("scala-lint-rules/input"))
+lazy val scalaLintInput: Project = project.in(file("scala-lint-rules/input"))
   .settings(
     scalaVersion := "3.3.8",
     semanticdbEnabled := true,
+    // Qualification inputs use the project's actual published Goldenport APIs;
+    // these dependencies never enter the independent rules artifact.
+    libraryDependencies ++= ProjectYamlBuild.dependencies((LocalProject("root") / cozyProjectMetadata).value),
     publish / skip := true
   )
 
 // Compile the consumer's handwritten Main and Test sources with the real Scala 3
 // compiler. This project does not load the standalone fixture's nested build.
-lazy val scalaLintConsumerInput = project.in(file("scala-lint-rules/consumer-input"))
+lazy val scalaLintConsumerInput: Project = project.in(file("scala-lint-rules/consumer-input"))
   .settings(
     scalaVersion := "3.3.8",
     semanticdbEnabled := true,
@@ -23,7 +26,7 @@ lazy val scalaLintConsumerInput = project.in(file("scala-lint-rules/consumer-inp
 
 // The host runs Scala 2.13; analyzed source remains Scala 3.3.8.
 // This artifact has no dependency on the application or any CNCF runtime.
-lazy val scalaLintRules = project.in(file("scala-lint-rules"))
+lazy val scalaLintRules: Project = project.in(file("scala-lint-rules"))
   .disablePlugins(_root_.scalafix.sbt.ScalafixPlugin)
   .enablePlugins(_root_.scalafix.sbt.ScalafixTestkitPlugin)
   .settings(
@@ -103,7 +106,7 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
   }
 ) }
 
-lazy val root = project
+lazy val root: Project = project
   .in(file("."))
   .aggregate(scalaLintRules)
   .dependsOn(scalaLintRules % ScalafixConfig)

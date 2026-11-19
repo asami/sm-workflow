@@ -32,14 +32,16 @@ object ScalaLintProfiles {
   def resolve(selected: Selection, project: Option[Config], loader: ClassLoader): Effective = {
     val baseline = _resource("baseline", loader)
     val team = if (selected.source == "goldenport") _resource("goldenport", loader) else ConfigFactory.empty()
-    val layers = Vector(baseline, team) ++ project.toVector
+    val history = if (selected.history == "goldenport") _resource("history", loader) else ConfigFactory.empty()
+    val layers = Vector(baseline, team, history) ++ project.toVector
     // Rule membership is additive; ordinary leaves use HOCON fallback semantics.
     // Includes are parsed at the project/resource owner before the merge.
     val rules = layers.flatMap(c => if (c.hasPath("rules")) c.getStringList("rules").asScala else Nil).distinct
     val merged = layers.foldLeft(ConfigFactory.empty())((prior, next) => next.withFallback(prior))
       .withValue("rules", com.typesafe.config.ConfigValueFactory.fromIterable(rules.asJava)).resolve()
     Effective(selected, Vector("baseline@" + version) ++
-      (if (selected.source == "goldenport") Vector("goldenport@" + version) else Vector.empty), merged)
+      (if (selected.source == "goldenport") Vector("goldenport@" + version) else Vector.empty) ++
+      (if (selected.history == "goldenport") Vector("history@" + version) else Vector.empty), merged)
   }
 
   def project(file: File): Option[Config] =

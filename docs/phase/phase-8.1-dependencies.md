@@ -14,8 +14,9 @@ Behavior: [Scala lint profiles](../spec/scala-lint-profiles.md)
 SLP-1 source boundary: the [independent rule module](../../scala-lint-rules/README.md)
 contains the initial rules, versioned profiles and compiler-input specifications.
 The selected host is Scala 2.13.14 / Scalafix 0.12.1; analyzed input is Scala
-3.3.8 with compiler-produced SemanticDB. This is a candidate combination pending
-native checks, not an accepted SLP-RULES handoff. Per-call typed invocation and
+3.3.8 with compiler-produced SemanticDB. SLP-1 qualified this bounded combination;
+SLP-2's expanded rule/fixture candidate requires fresh native checks. This is not
+an accepted full SLP-RULES handoff. Per-call typed invocation and
 effective-configuration retention remain SLP-4; history-key migration remains
 SLP-3. Root whole-source lint keeps its existing project configuration selection;
 shared defaults are not activated there by this candidate. Full A01 normal-route

@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Resolved source/profile and history-inheritance specifications.
   * @since   Nov. 19, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -38,7 +38,10 @@ final class WorkflowScalaLintParametersSpec extends AnyWordSpec with Matchers wi
       When("the normal resolved parameter adapter selects installed shared data")
       val effective = _take(WorkflowScalaLintParameters.resolveC(_parameters(), None))
       Then("baseline safety applies independently of team selection")
-      effective.rules should contain allOf ("DisableSyntax", "NoOptionGet")
+      effective.rules.take(2) shouldBe Vector("DisableSyntax", "NoOptionGet")
+      effective.rules should contain allOf ("NoTryGet", "NoDiscardedFailureResult", "NoInferredAny",
+        "NoMutableEqualityKey", "NoEmbeddedCredentials", "NoStructuralIndentation")
+      effective.rules.distinct shouldBe effective.rules
       effective.config.getBoolean("DisableSyntax.noFinalize") shouldBe true
       effective.selection.source shouldBe "none"
       effective.selection.history shouldBe "none"
@@ -61,18 +64,28 @@ final class WorkflowScalaLintParametersSpec extends AnyWordSpec with Matchers wi
       results.foreach { (source, history, effective) =>
         effective.selection.history shouldBe history
         effective.rules.contains("GoldenportPrivateMemberNaming") shouldBe (source == "goldenport")
+        effective.rules.contains("GoldenportHistoryCommentPlacement") shouldBe (history == "goldenport")
         effective.rules should contain ("NoOptionGet")
+        effective.config.getBoolean("DisableSyntax.noFinalize") shouldBe true
       }
     }
 
     "preserve baseline union and noFinalize when a project adds a rule" in {
       Given("Goldenport naming with history disabled and an additive project rule")
       val project = ConfigFactory.parseString("rules = [RedundantSyntax, NoOptionGet]")
+      val parameters = _parameters(_source -> StringValue("goldenport"), _history -> StringValue("none"))
+      val baseline = _take(WorkflowScalaLintParameters.resolveC(_parameters(), None))
+      val inherited = _take(WorkflowScalaLintParameters.resolveC(parameters, None))
       When("project rules are merged by the shared resolver")
-      val effective = _take(WorkflowScalaLintParameters.resolveC(
-        _parameters(_source -> StringValue("goldenport"), _history -> StringValue("none")), Some(project)))
+      val effective = _take(WorkflowScalaLintParameters.resolveC(parameters, Some(project)))
       Then("inherited rules survive in order without duplication")
-      effective.rules shouldBe Vector("DisableSyntax", "NoOptionGet", "GoldenportPrivateMemberNaming", "RedundantSyntax")
+      effective.rules.take(baseline.rules.size) shouldBe baseline.rules
+      inherited.rules.drop(baseline.rules.size) shouldBe Vector("GoldenportPrivateMemberNaming",
+        "GoldenportLocalHelperNaming", "GoldenportFlatcaseNaming", "GoldenportVisibilityNaming",
+        "GoldenportNoDiscardedFailureResult")
+      effective.rules shouldBe (inherited.rules :+ "RedundantSyntax")
+      effective.rules.distinct shouldBe effective.rules
+      effective.rules should not contain "GoldenportHistoryCommentPlacement"
       effective.config.getBoolean("DisableSyntax.noFinalize") shouldBe true
     }
 

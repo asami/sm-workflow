@@ -77,6 +77,7 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
             val matchingSources = selected.filter(_.toAbsolutePath.normalize() == path)
             matchingSources.size shouldBe 1
             diagnosticInput.text().toString shouldBe new String(before(matchingSources.head).toArray, UTF_8)
+            diagnostic.message() should not include "fixture-only-dummy"
             info(s"$scope ${id.ruleName()}.${id.categoryID()} $path:${position.startLine() + 1}:${position.startColumn() + 1}: ${diagnostic.message()}")
             (id.ruleName(), id.categoryID(), path, position.startLine(), position.startColumn())
           }.toVector
@@ -86,7 +87,17 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
             _location("NoOptionGet", "", source, "def unsafe", "get"),
             _location("NoOptionGet", "", source, "def chained", "get"),
             _location("DisableSyntax", "noFinalize", source, "override def finalize", "finalize")
-          ) else Vector(_location("NoOptionGet", "", source, "def unsafe", "get"))
+          ) else Vector(
+            _location("NoOptionGet", "", source, "def unsafe", "get"),
+            _location("NoTryGet", "", source, "def failed", "get"),
+            _location("NoEitherProjectionGet", "", source, "def projected", "get"),
+            _location("NoEmptySensitiveCollectionOps", "", source, "def first", "head"),
+            _location("NoUnimplementedPlaceholder", "", source, "def unfinished", "???"),
+            _location("NoEmbeddedCredentials", "", source, "def embeddedKey", "\"fixture-only-dummy\""),
+            _location("NoDiscardedFailureResult", "", source, "def discard", "value;"),
+            _location("NoArrayValueEquality", "", source, "def same", "left =="),
+            _location("GoldenportPrivateMemberNaming", "", source, "private def _testHelper", "_testHelper")
+          )
           actual should contain theSameElementsAs expected
         }
         And("CHECK preserves all source bytes, including paired valid naming, Map and total Option accesses")
