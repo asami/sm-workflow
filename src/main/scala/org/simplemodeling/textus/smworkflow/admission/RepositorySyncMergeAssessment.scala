@@ -12,7 +12,7 @@ import RepositorySyncNativeMergeValidation as V
   * An admission is neither a semantic review verdict nor Git effect authority.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncMergeAssessment {
@@ -59,7 +59,11 @@ private[smworkflow] object RepositorySyncMergeAssessment {
       else N.invalid("merge assessment requires complete successful merge checks")
     _ <- V.preconditionsC(store, source)
     _ <- if (!store.declaration.runtimeCleanSync) Consequence.unit else for {
-      actual <- RepositorySyncDocumentInputs.captureC(store, source)
+      actual <- {
+        val hostpolicy = store.declaration.documentInputs
+        val selectedpolicy = source.payload.reviewInputs.fold(hostpolicy)(_.assessmentPolicy(hostpolicy))
+        RepositorySyncDocumentInputs.captureC(store, source, selectedpolicy)
+      }
       _ <- if (state.inputs.exists(_.applicableTo(actual)) && (actual.documentOnly || state.impact.exists(_.checks == state.selected))) Consequence.unit
         else N.invalid("merge assessment has no applicable retained input/impact observation")
     } yield ()

@@ -21,7 +21,7 @@ import RepositorySyncNativeMergeReviewContinuation as R
 /** Append-only correction of input classification, followed by fresh independent
   * review. Native references retain the old checks and decision-needed result.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncReviewInputContinuation {
   val policy = "sm-workflow.repository-sync-review-input-continuation.v3"
@@ -71,7 +71,10 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       else Left(io.circe.DecodingFailure("Review-input target requires its exact canonical native contract", cursor.history))))
   }
   final case class Direction(target: Target, choice: String, rationale: String, participant: String,
-    reference: ContextReference, priorExecutionEnded: Boolean, acceptOriginalUncertainty: Boolean)
+    reference: ContextReference, priorExecutionEnded: Boolean, acceptOriginalUncertainty: Boolean) {
+    def assessmentPolicy(hostPolicy: Option[D.Policy]): Option[D.Policy] =
+      if (reference == target.review.result) target.proposedPolicy else hostPolicy
+  }
   object Direction {
     given Encoder[Direction] = deriveEncoder
     private val _raw: Decoder[Direction] = deriveDecoder

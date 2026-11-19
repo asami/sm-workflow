@@ -65,7 +65,7 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 /** Strict v3 classification continuation, preserved historical codecs and real
   * production eligibility predicates. Native process evidence is separate.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -185,6 +185,22 @@ final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with M
         result.copy(inputClassification = Some(mapping.copy(consumedPaths = Vector("value.txt")))),
         result.copy(findings = Vector(M.Finding("ownership-risk", Vector("README.md"), "Human must resolve ownership"))))
         .foreach(value => R.semanticDirectionC(target, value, target.review.result).isSuccess shouldBe false)
+    }
+
+    "select the admitted technical mapping for merge assessment while retaining the current host mapping for a Human direction" in {
+      Given("a retained independently classified merge and its original host mapping")
+      val result = M.Result("decision-needed", "Technical mapping only", Vector.empty, Some(mapping))
+      val technical = take(R.semanticDirectionC(target, result, target.review.result))
+      val host = Some(D.Policy(Vector("docs/guide.md"), Vector("src", "value.txt"), "Original host mapping"))
+      val human = technical.copy(reference = reference)
+
+      When("merge assessment selects which mapping to recapture")
+      val technicalpolicy = technical.assessmentPolicy(host)
+      val humanpolicy = human.assessmentPolicy(host)
+
+      Then("technical review uses the admitted proposal and a Human continuation uses its current host declaration")
+      technicalpolicy shouldBe Some(mapping)
+      humanpolicy shouldBe host
     }
 
     "reject reuse when actual consumption candidate selection or evidence ceases to match" in {
