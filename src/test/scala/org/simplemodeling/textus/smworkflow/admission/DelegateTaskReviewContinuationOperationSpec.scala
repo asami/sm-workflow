@@ -62,7 +62,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
     super._setup_commands_(root, scenario).patch(2, Vector(Vector("-C", root.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", "docs/phase.md")), 0)
 
-  private[admission] def qualify(installed: Option[(Path, Path)], large: Boolean = false): Map[String, Int] = {
+  private[admission] def qualify(installed: Option[(Path, Path)], large: Boolean = false, changedSource: Boolean = true): Map[String, Int] = {
     import scala.jdk.CollectionConverters.*
     import java.util.concurrent.TimeUnit
     installed.foreach { case (executable, archive) =>
@@ -445,19 +445,23 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
         call("resumeDelegateTaskReviewContinuation", List(Property("input", invalid, None))).isSuccess shouldBe false
         unchanged()
       }
-      val sourceBeforeResume = root.resolve("repository/docs/phase.md")
-      val retainedSource = Files.readString(sourceBeforeResume)
-      Files.writeString(sourceBeforeResume, retainedSource + "changed before admission\n")
-      try {
-        call("resumeDelegateTaskReviewContinuation", List(Property("input", direction, None))).isSuccess shouldBe false
-      } finally Files.writeString(sourceBeforeResume, retainedSource)
-      unchanged()
       Vector(direction.copy(rationale = "different"),
         direction.copy(upstream = Vector(V.WorkflowArtifactReference("SPEC-other-upstream", "1"))),
         direction.copy(reference = V.WorkflowArtifactReference("SPEC-other-human", "1"))).foreach { invalid =>
         call("resumeDelegateTaskReviewContinuation", List(Property("input", invalid, None))).isSuccess shouldBe false
         unchanged()
       }
+      if (changedSource) {
+        // Given a legitimate intervening commit and a changed owned candidate.
+        val repository = root.resolve("repository")
+        Files.writeString(repository.resolve("intervening.txt"), "independent work\n")
+        val git = new ProcessBuilder("git", "-C", repository.toString, "add", "--", "intervening.txt").inheritIO().start()
+        git.waitFor() shouldBe 0
+        val commit = new ProcessBuilder("git", "-C", repository.toString, "-c", "user.name=Spec Author", "-c", "user.email=spec@example.invalid", "commit", "--only", "-m", "Independent work", "--", "intervening.txt").inheritIO().start()
+        commit.waitFor() shouldBe 0
+        Files.writeString(repository.resolve("docs/phase.md"), candidateText + "changed before admission\n")
+      }
+      // When the independently admitted Human direction enters ordinary Advance.
       if (installed.isEmpty) {
         val result = read_value[V.DelegateTaskReviewContinuationDescriptionResult](take(call("resumeDelegateTaskReviewContinuation", List(Property("input", direction, None)))))
         result.outcome shouldBe "resumed-awaiting-advance"
@@ -491,7 +495,8 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
             newHistory.size should be > oldHistory.size
             payload.root shouldBe stopped.root
             payload.branch shouldBe stopped.branch
-            payload.baseHead shouldBe stopped.baseHead
+            if (suspended && changedSource) payload.baseHead should not be stopped.baseHead
+            else payload.baseHead shouldBe stopped.baseHead
             payload.state.input shouldBe stopped.state.input
             payload.state.input.conditions shouldBe Vector("objective", "delivery")
             payload.state.selected shouldBe stopped.state.selected
@@ -521,10 +526,16 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       work.state.automaticCount shouldBe stopped.state.automaticCount
       work.state.ordinaryCount shouldBe stopped.state.ordinaryCount
       work.state.repairControl shouldBe stopped.state.repairControl
-      work.state.candidate should not be stopped.state.candidate
-      work.state.candidate.get.diff should include ("changed after admission")
-      work.state.receipts.map(_.identity) shouldBe stopped.state.receipts.map(_.identity)
-      work.state.receipts should not be stopped.state.receipts
+      if (changedSource) {
+        work.state.candidate should not be stopped.state.candidate
+        work.state.candidate.get.diff should include ("changed before admission")
+        work.state.receipts.map(_.identity) shouldBe stopped.state.receipts.map(_.identity)
+        work.state.receipts should not be stopped.state.receipts
+      } else {
+        // Then the applicable candidate and successful checks remain unchanged.
+        work.state.candidate shouldBe stopped.state.candidate
+        work.state.receipts shouldBe stopped.state.receipts
+      }
       work.state.commit shouldBe None
       work.state.commitExecution shouldBe None
       currentcandidate = work.state.candidate
@@ -573,8 +584,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
     }
     verifyCheckpoint(false)
     val executionsbefore = Files.readAllLines(root.resolve("sbt-executions.txt")).size()
-    val currentsource = candidateText + "changed after admission\n"
-    Files.writeString(root.resolve("repository/docs/phase.md"), currentsource)
+    val currentsource = candidateText + (if (changedSource) "changed before admission\n" else "")
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def call(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = "DelegateTaskService", operation = name, properties = properties), actor)
@@ -619,7 +629,8 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       duplicate.retainedWork shouldBe issued.retainedWork
     }
     val executionsafter = Files.readAllLines(root.resolve("sbt-executions.txt")).size()
-    executionsafter should be > executionsbefore
+    if (changedSource) executionsafter should be > executionsbefore
+    else executionsafter shouldBe executionsbefore
     verifyCheckpoint(true)
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, _) =>
       def call(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -720,7 +731,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
           currentJson.hcursor.get[Vector[Json]]("history").toOption.get.take(oldHistory.size) shouldBe oldHistory
           payload.root shouldBe stopped.root
           payload.branch shouldBe stopped.branch
-          payload.baseHead shouldBe stopped.baseHead
+          payload.baseHead shouldBe currentcandidate.get.head
           payload.state.input shouldBe stopped.state.input
           payload.state.candidate shouldBe currentcandidate
           payload.state.generation shouldBe stopped.state.generation
@@ -784,6 +795,9 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
     measurements.toMap
   }
   "Managed DelegateTask Review continuation" should {
+    "retain the candidate and checks and issue one successor Review when source is unchanged" in {
+      qualify(None, changedSource = false)
+    }
     "preserve the original Review stop across admission, separate Advance and reopen at both retained sizes" in {
       val small = qualify(None)
       val large = qualify(None, large = true)

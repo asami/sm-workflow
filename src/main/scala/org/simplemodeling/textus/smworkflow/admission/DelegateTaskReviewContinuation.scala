@@ -276,7 +276,6 @@ private[smworkflow] object DelegateTaskReviewContinuation {
                       _ <- if (host.root == business.root && host.branch == business.branch &&
                         host.repository == business.state.input.repositoryIdentity) Consequence.unit
                         else N.invalid("Current host crosses the original source boundary")
-                      _ <- N.freshC(business, selected)
                       next = business.copy(state = business.state.copy(stage = "Review", evidenceReferences = (business.state.evidenceReferences ++ Vector(original.resultReference, direction.reference) ++ direction.upstream).distinct), delegateReviewContinuation = Some(direction))
                       _ <- N.saveC(host, storage, current, next, selected)
                     } yield output(target, "resumed-awaiting-advance", "Separate ordinary Advance owns the successor Review")
