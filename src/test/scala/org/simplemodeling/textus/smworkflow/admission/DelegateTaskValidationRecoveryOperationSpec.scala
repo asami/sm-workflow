@@ -22,7 +22,7 @@ import DelegateTaskValidationRecovery.given
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Matchers with org.scalatest.GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
+class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Matchers with org.scalatest.GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val git = super.process_plan(root, if (Files.exists(root.resolve("SPEC-test-only-recovery"))) "Goal" else scenario, goal)
     if (Files.exists(root.resolve("SPEC-test-only-recovery"))) return DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
@@ -142,7 +142,7 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
       val initial = ThreeWorkflowNormalHostFixture.definition(root)
       val host = initial.copy(goal = initial.goal.copy(candidatePaths = Vector("value.txt"),
         stepValidation = initial.goal.stepValidation.copy(checks = checks)))
-      val parameters = BoundedWorkExecutionAdmissionFixture.parameters ++ Map("workflow.mechanical-receipt.max-bytes" -> "67108864")
+      val parameters = BoundedWorkExecutionAdmissionFixture.logicalParameters ++ Map("workflow.mechanical-receipt.max-bytes" -> "67108864")
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-recorded-TestOnly", "SPECIFICATION-OWNED bounded selected recovery",
         NonEmptyVector.one("value.txt"), NonEmptyVector.of("compile", "fix-check", "test-only"), NonEmptyVector.one("behavior"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-source", "1")), true, "code", "off", 10,
@@ -901,7 +901,7 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
           facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Outcome.Succeeded, None, None)
           prefix = RepositorySyncNativeMergeValidation.Receipt("compile", "exited", Some(0), "", "", Some(facts), Some(process))
           candidate = StandaloneFixExecution.Candidate(observed.head, observed.tree, Vector.empty, "")
-          state = payload.state.copy(stage = "ValidationIntent", candidate = Some(candidate), receipts = Vector(prefix),
+          state = payload.state.copy(stage = "ValidationIntent", selected = checks.take(2), candidate = Some(candidate), receipts = Vector(prefix),
             pendingCheck = Some("test"), automaticCount = 2, ordinaryCount = 1)
           saved <- DelegateTaskNativeRun.saveC(h, store, current, payload.copy(state = state), setup.core)
           _ = { oldRevision = saved.revision.value; oldHistory = saved.history.map(_.causation.value)
@@ -967,8 +967,11 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
         val admitted = read_value[V.DelegateTaskValidationRecoveryView](take(call("recoverDelegateTaskValidation", List(Property("input", recovery, None)))))
         admitted.outcome shouldBe "authorized-awaiting-advance"
         Files.readString(root.resolve("sbt-executions.txt")) shouldBe oldMarker
-        // A distinct public Advance saves the new intent before the one new managed Test.
-        take(call("advanceDelegateTask", List(Property("sessionId", session, None))))
+        When("a separate ordinary Advance persists the one recovered full-Test result and reaches later code acceptance")
+        val advanced = call("advanceDelegateTask", List(Property("sessionId", session, None)))
+        Then("later code acceptance refuses the missing focused execution while the successful recovered full Test remains retained")
+        advanced.isFaillure shouldBe true
+        advanced.toString should include("Code admission requires compilation and actually executed nonempty focused behavioral tests")
         val markers = Files.readString(root.resolve("sbt-executions.txt")).linesIterator.toVector
         markers.size shouldBe 2
         markers.head shouldBe oldMarker.trim
@@ -1340,5 +1343,45 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
       bounded should be > (96L * 1024 * 1024)
       bounded should be < (128L * 1024 * 1024)
     }
+  }
+}
+
+/** Explicit qualification of only the two previously failed registrations.
+  * The base specification retains its complete ordinary test selection.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class DelegateTaskTestOnlyRecoveryFailedCasesSpec extends DelegateTaskValidationRecoveryOperationSpec {
+  private val _failed_cases = Vector(
+    "The selected TestOnly stopped boundary should retain actual Compile and FixCheck across recorded Incomplete direction and one remaining attempt",
+    "The managed lost-result boundary should start one new full Test after an independently attested ended output-limited lost result")
+
+  override protected def runTests(testName: Option[String], args: org.scalatest.Args): org.scalatest.Status = {
+    require(_failed_cases.size == 2 && _failed_cases.distinct == _failed_cases && _failed_cases.forall(testNames.contains),
+      "Both exact previously failed registrations must exist before qualification")
+    val selected = testName.fold(_failed_cases)(name => _failed_cases.filter(_ == name))
+    new org.scalatest.CompositeStatus(selected.map(name => super.runTests(Some(name), args)).toSet)
+  }
+}
+
+/** Explicit qualification of the remaining legacy full-Test recovery case.
+  * The ordinary base and two-case qualification retain their selections.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class DelegateTaskFullTestRecoveryRemainingSpec extends DelegateTaskValidationRecoveryOperationSpec {
+  private val _remaining_case =
+    "The managed lost-result boundary should start one new full Test after an independently attested ended output-limited lost result"
+
+  override protected def runTests(testName: Option[String], args: org.scalatest.Args): org.scalatest.Status = {
+    require(testNames.contains(_remaining_case), "The exact remaining full-Test registration must exist before qualification")
+    if (testName.forall(_ == _remaining_case)) super.runTests(Some(_remaining_case), args)
+    else new org.scalatest.CompositeStatus(Set.empty[org.scalatest.Status])
   }
 }
