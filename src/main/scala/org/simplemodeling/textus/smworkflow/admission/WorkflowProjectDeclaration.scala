@@ -16,7 +16,7 @@ import org.goldenport.record.io.RecordDecoder
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowProjectDeclaration {
-  final case class Project(inputs: Vector[String], documents: Vector[String], reason: String)
+  final case class Project(inputs: Vector[String], documents: Vector[String], reason: String, providesFixCheck: Boolean)
   final case class ReadFailure(path: Path, cause: Conclusion) {
     def diagnostic: String =
       s"Could not read project declaration $path (${cause.show})"
@@ -38,7 +38,8 @@ private[smworkflow] object WorkflowProjectDeclaration {
           !source.exists(RepositorySyncNativeConflictInput.relative))
         if (sourceUnknown) None else Some(Project(selected, documents,
           "Existing build.sbt project; conventional source/build inputs and declared CML source; " +
-            "unmapped inputs require FULL coverage, not an inferred no-change result"))
+            "unmapped inputs require FULL coverage, not an inferred no-change result",
+          value.hcursor.downField("validation").get[Boolean]("fixCheck").contains(true)))
       })
     }
 

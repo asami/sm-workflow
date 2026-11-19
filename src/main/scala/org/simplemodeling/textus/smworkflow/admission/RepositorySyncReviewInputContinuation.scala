@@ -94,9 +94,11 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
   private def _native(value: NativeReference): Boolean = value != null && _ref(value.reference) &&
     value.reference.revision == "1" && _revision(value.nativeRevision)
   private def _assessment(value: D.Assessment): Boolean = value != null &&
-    Vector(value.changedPaths, value.consumedPaths, value.unknownPaths, value.binaryPaths).forall(paths =>
+    Vector(value.changedPaths, value.consumedPaths, value.unknownPaths, value.binaryPaths, value.gitlinkPaths).forall(paths =>
       paths != null && paths.distinct == paths && paths == paths.sorted && paths.forall(RepositorySyncNativeConflictInput.relative)) &&
     (value.consumedPaths ++ value.unknownPaths ++ value.binaryPaths).forall(value.changedPaths.contains) &&
+    value.gitlinkPaths.forall(path => value.consumedPaths.contains(path) &&
+      !value.unknownPaths.contains(path) && !value.binaryPaths.contains(path)) &&
     value.reason != null && value.reason.trim.nonEmpty
   private def _observed(value: G.Observed, historicalconflict: Boolean = false): Boolean = value != null && _text(value.branch) &&
     GitBranchName.parseC(value.branch).isSuccess &&
@@ -139,6 +141,9 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       (if (original.unknownPaths.isEmpty) Vector("Original review has no unknown input classification to correct") else Vector.empty) ++
       original.consumedPaths.filterNot(proposed.consumedPaths.contains).map("Previously consumed input was demoted: " + _) ++
       originaldocs.filterNot(proposeddocs.contains).map("Previously known document classification changed: " + _) ++
+      original.gitlinkPaths.filterNot(proposed.gitlinkPaths.contains).map("Previously observed submodule reference disappeared: " + _) ++
+      proposed.gitlinkPaths.filterNot(path => original.gitlinkPaths.contains(path) || original.unknownPaths.contains(path))
+        .map("Previously known input changed to a submodule reference: " + _) ++
       programdocs.map("Proposed document is a selected consumed program input: " + _) ++
       uncovered.map("New consumed input has no actual selected program input coverage: " + _) ++
       (if (validation.impact.isEmpty) Vector("Current fixed program impact policy is absent") else Vector.empty) ++

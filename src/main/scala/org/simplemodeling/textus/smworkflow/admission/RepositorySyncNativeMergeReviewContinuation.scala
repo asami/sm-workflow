@@ -144,7 +144,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.binaryPaths))
             .map("Unexamined binary input: " + _) ++
           source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.unknownPaths))
-            .map("Unexamined unknown input: " + _))
+            .map("Unexamined unknown input: " + _) ++
+          source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.gitlinkPaths))
+            .map(path => s"Submodule reference changed at $path. Review its commit and configuration changes."))
     }
 
     def acceptedC(identity: String, core: ActionCall.Core): Consequence[Option[N.Stage]] =

@@ -77,6 +77,30 @@ and nonempty selected-test evidence; prior reusable receipts cannot replace it.
 Normal independent review follows completed validation. Correcting PATH alone
 or omitting selected tests supplies no candidate acceptance.
 
+## Reconstructing an obsolete Purpose check selection
+
+The same operations support `sm-workflow.repository-sync-formal-failure-continuation.v3`
+for a materialized Session-owned Purpose with an ordinary FULL selection. The
+retained `FixCheck` must have a complete typed nonzero SBT result that identifies
+`fixCheck` as an unknown command and key. The old and current Purpose slots must
+both treat lint as optional. The current slot and FULL validation select the
+original ordered checks with only that failed `FixCheck` removed, retaining a
+required FULL Test. The candidate workspace identity, assessment policy and
+successful check bindings must match. An unexecuted ordinary Test that uses
+the same candidate workspace can take the current ordinal when removing lint
+compacts the ordinary slots. A required lint, ordinary lint failure, different
+check order or workspace, or any pending merge is outside this route.
+
+The target retains the historical failed selection, workspace and receipts in
+Purpose progress. Its `purposeSlot` and `proposedChecks` bind the reconstructed
+current selection. `AuthorizeValidationReconstruction` and `Defer` use the
+existing attributed evidence and pending WorkOrder supersession contract. Adoption
+records the direction. A separate Advance uses the same materialized candidate
+and copies its workspace binding with the reconstructed slot. It preserves the
+successful prefix, leaves all original records intact and runs the remaining
+checks under the current ordinary policy. Merge validation applies its own
+project-declared lint requirement to the actual pending merge.
+
 The existing adoption Operation accepts exactly one of optional `input` and
 `inputResource`. The latter is an absolute local file URI containing the entire
 normal adoption DTO, including every opaque `processPlan` string. Installed

@@ -226,6 +226,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
+      case RepositorySyncFormalFailureContinuation.reconstructionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case RepositorySyncPurposeMaterializationContinuation.policy => RepositorySyncPurposeMaterializationContinuation.decodeTarget(wire).map(PurposeMaterializationTarget(_))

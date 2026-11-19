@@ -245,7 +245,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else N.invalid("validation requires the genuine selected pending merge")
     inputs <- if (store.declaration.runtimeCleanSync) RepositorySyncDocumentInputs.captureC(store, pending).map(Some(_))
       else Consequence.success(None)
-    result <- if (inputs.exists(value => setupReason(policy, value).nonEmpty))
+    setup <- inputs.fold(Consequence.success(Option.empty[String]))(mergeSetupReasonC(store, pending, policy, _, namespace))
+    result <- if (setup.nonEmpty)
       Consequence.success(pending)
     else for {
     prepared <- if (inputs.forall(_.documentOnly)) Consequence.success(
@@ -277,6 +278,19 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         val missing = selected.checks.flatMap(_.setupRequired)
         if (missing.nonEmpty) Some(missing.mkString("; ")) else None
     })
+
+  private[admission] def mergeSetupReasonC(store: N.Store, pending: N.Stage, policy: Policy,
+    inputs: RepositorySyncDocumentInputs.Assessment, namespace: String): Consequence[Option[String]] = {
+    val setup = setupReason(policy, inputs)
+    if (setup.nonEmpty || !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
+        pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty ||
+        pending.payload.mergeCheckContinuation.nonEmpty || (!inputs.documentOnly && policy.impact.exists(impact =>
+          RepositorySyncProgramImpact.select(impact, inputs).checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))))
+      Consequence.success(setup)
+    else store.loadC(N.candidateKey(namespace, "validation-intent-0")).map(first => Option.when(first.isEmpty)(
+      "ValidationSetupRequired: the pending merge policy requires a selected FixCheck. " +
+        "Check the project's fixCheck command and its managed binding."))
+  }
 
   /** Equal, local-ahead and fast-forward integrations introduce no semantic
     * merge candidate. Check the actual clean selected index and host policy;
@@ -334,7 +348,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         // lint before its first SBT effect, even under a document-only claim.
         first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
         _ <- if (merge && first.isEmpty && pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty && !mergecheck)
-          RepositorySyncRequiredLintContinuation.preflightC(store, pending, checks) else Consequence.unit
+          RepositorySyncRequiredLintContinuation.preflightC(store, pending, policy.assessment, inputs, checks)
+          else Consequence.unit
         _ <- if (seed.isEmpty || (if (mergecheck) RepositorySyncMergeCheckContinuation.validPrefix(seed, checks)
           else if (merge && pending.payload.formalFailure.nonEmpty)
             RepositorySyncFormalFailureContinuation.validPrefix(seed, checks, merge = true)
