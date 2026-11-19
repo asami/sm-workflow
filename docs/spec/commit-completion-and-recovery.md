@@ -22,6 +22,29 @@ Acceptance: [P68 checklist](../phase/phase-6.8-checklist.md).
 
 ## Predecessor boundary and reuse
 
+### Explicit Human-approved formal release consumption
+
+An explicit Human decision may accept a FORMAL local release without additional
+validation or review through an available authorized release contract. For the
+typed local commit contract this is `Closure.human_approved_release`, retained
+in the actual `cncf.closure-commit-receipt.v1` with `state=verified`, FORMAL
+classification and validation/review `not-run-user-approved`. This disposition
+does not establish unexecuted behavior or turn a historical failure into PASS.
+
+Consumers accept that committed release as a valid predecessor. They do not
+reopen it solely for the approved NOT RUN or require the same risk approval
+again. Explicit successor carryovers remain unfinished at their assigned scope.
+If the native Workflow still retains Human/unresolved issue state, preserve and
+report it separately; reconcile it through its existing public owner when that
+work is selected. Do not edit private state, manufacture Terminal, reset counts,
+re-Start, or replay successful checks, accepted results or commits.
+
+This is consumption of an actual verified release, not an automatic fallback
+from a blocked Workflow or a general waiver for active work. The release must
+have its own attributable Human authority and supported execution contract.
+Ordinary releases retain their declared gates; a checkpoint or an unverified
+claim is not this FORMAL release.
+
 The bounded P67-T1 partial-commit repair is a predecessor delivery, not proof
 that this entire contract is implemented. Do not delay active Phase 6.7
 restoration or enlarge its acceptance. Reuse actual delivered selection checks,

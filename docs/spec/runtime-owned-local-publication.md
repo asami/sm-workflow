@@ -42,6 +42,21 @@ typed admission/configuration result, never an implicit fallback.
 
 ## Public operations
 
+For a standalone explicit request, invoke `ensureLocalPublication` from the
+selected producer checkout with ordinary `input` JSON, for example:
+
+```json
+{"requestIdentity":"<new-explicit-request>","targetIdentity":"repository","explicit":true}
+```
+
+`repository` is the shipped default target, not a replacement for an explicitly
+configured target. Omit `ownerSessionId` when no open owning Session applies;
+do not attach a completed Phase merely to fill that optional field. After a
+work-branch/local-main synchronization, use the producer checkout selected for
+publication. The process cwd selects the host and source; a stale worktree's
+configuration must not silently choose another producer. Collect an interrupted
+response with the same identifying fields rather than executing a new request.
+
 - `LocalPublicationService.ensureLocalPublication`: accepts `requestIdentity`,
   `targetIdentity`, optional `ownerSessionId`, `explicit`, and optional bounded
   `answer` (`question`, `publish`, `rationale`). A selected owner Session is
@@ -195,6 +210,11 @@ source fixtures configure sbt-cozy application activation in fresh
 coordinates and publication declarations.
 
 ## Standard SBT and synchronization completion
+
+Standalone publication may leave ordinary catalog output uncommitted. Report
+that state; publication success is not clean-tree or synchronization success.
+Do not commit or push it as an implicit part of `publishLocal`. A separately
+requested RepositorySync owns the final metadata commit and remote convergence.
 
 The shipped Component defaults include target `repository`, workspace
 `sm-workflow-repository`, a managed publication collection and a typed

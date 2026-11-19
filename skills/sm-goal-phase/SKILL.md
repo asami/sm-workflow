@@ -230,6 +230,14 @@ re-Start, replay accepted Submit or reset counts to adopt this policy.
 
 ## Existing authorization and closure registration
 
+When consuming an already committed FORMAL release with explicit Human-approved
+NOT RUN validation/review, follow the
+[formal-release consumption boundary](../../docs/spec/commit-completion-and-recovery.md#explicit-human-approved-formal-release-consumption).
+Keep its accepted release and actual verified closure receipt separate from any
+pending native Session reconciliation. Do not reopen the predecessor, demand
+the waived checks, or replay accepted work merely because that management state
+is unresolved. This grants no new release path or authority for an active Phase.
+
 Before asking for policy adoption or missing closing authority, follow the
 [authorization carry-forward contract](../../docs/spec/native-host-execution.md#existing-authorization-and-current-target-registration).
 A description's `adoption-required` is not itself a new Human question. Carry

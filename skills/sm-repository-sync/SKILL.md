@@ -192,6 +192,25 @@ or treat generated publication metadata as exempt from the final clean check.
 
 ## Directory-list entry and explicit lower-level entry
 
+For main-directed synchronization, the default `mainIntegration: "local-first"`
+route is selected working checkout -> canonical local main -> configured remote
+main. `direct` skips the canonical checkout; `confirm` uses the runtime's genuine
+route decision. `uncommittedPolicy` selects `auto-commit` (default), `confirm` or
+`error`. The matching properties are `sm-workflow.repository-sync.main-integration`
+and `sm-workflow.repository-sync.uncommitted-policy`. These input fields and
+properties select new work; they do not retarget a captured Session or authorize
+committing excluded changes. Non-main targets keep their configured destination.
+Use the product's `docs/spec/repository-sync-local-main-integration.md` and
+`docs/spec/repository-sync-policy-selection.md` for the selected route.
+
+For a separate canonical clone, normal host configuration must map the selected
+source workspace to its admitted main workspace through
+`sm-workflow.repository-sync.canonical-main-workspaces` and include the declared
+source-fetch binding. The runtime verifies actual repository history and owns
+both hops. A missing mapping is same-Session setup, not permission to bypass
+local main, start again or run caller-owned Git. A successful local hop alone
+does not establish remote convergence; report the actual completed route.
+
 For an authorized configured directory list, use the ordinary installed
 `RepositorySyncService.syncRepositoryDirectories` with
 `input={"syncMode":"FULL_STATE"}`. The normal
@@ -217,6 +236,13 @@ override such as:
 Keep other selected configuration inputs and the original runtime cwd. This
 property selects existing admitted workspace/Git bindings; it supplies no new
 destination, validation workspace or execution grant.
+
+Keep `textus.subsystem.process-execution.plan` in its normally admitted selected
+Subsystem file or CAR defaults. An invocation-time `--textus.config.file` is
+suitable for ordinary selection properties, not for manufacturing process-plan
+provenance or workspace grants. A normal host binding change must retain its
+Git-family declarations, capabilities and workspace initialization source inventory
+coherently; use the existing configuration owner rather than a per-Session recipe.
 
 `ConfigurationRequired` is setup in that same Session. Supplement the missing
 normal configuration, including an invocation-time directory override when
