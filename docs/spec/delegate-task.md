@@ -542,10 +542,11 @@ contract change or alternative test runner is implied. A changed build or test
 source uses `AdoptCurrentOwnedCandidate` so fresh Compile and affected checks
 cover the new candidate; the old zero-test result remains in its native history.
 
-### Lost full-Test result recovery
+### Selected Test/TestOnly result recovery
 
 `describeDelegateTaskValidationRecovery` describes an active destination Session's
-retained full-Test intent, successful applicable prefix, unchanged Git candidate,
+retained selected Test/TestOnly unresolved intent or genuinely recorded ended
+Incomplete result, successful applicable prefix, unchanged Git candidate,
 and current host configuration without advancing or running a check. The selected
 SBT test ceilings are conservative capture upper bounds: CNCF may admit stricter
 host limits, and the description does not assert the exact limits of a future run.
@@ -572,6 +573,39 @@ collect the real retained result without rerunning SBT. For `not-retained` or
 result and permits only a separately prepared new attempt. Neither path turns
 missing or partial data into success.
 
+A recorded confirmed-ended Incomplete Wait has optional target field
+`retainedOutcome: "incomplete"`. Its selected index is the last receipt index;
+the earlier receipts are the successful prefix. An unresolved intent uses the
+next unrecorded index and omits that field, retaining the historical full-Test
+wire. The exact native frontier binds the original receipt. TerminationUnconfirmed,
+missing native observations and unrelated Wait states do not qualify. Ordinary
+Advance exposes the stopped result and recovery need without restarting checks.
+An independently admitted exact Human direction removes only that last
+Incomplete receipt from the new active projection. Native history, input, base,
+candidate, accepted semantic results, condition reports and repair counts remain.
+Separate Advance runs the same remaining check once and reuses applicable
+retained TestCompile and estimate. Repeated collection or direction cannot
+authorize a second attempt. Defer or no recovery call runs nothing.
+
+Every ordinary new DelegateTask TestOnly attempt requires the existing
+`sm-workflow-validation-artifacts` workspace with its File Manage grant, finite
+artifact budget and `workflow.mechanical-receipt.max-bytes` configuration before
+SBT. There is no unreserved fallback. Preflight includes complete native
+transition envelopes and actual declared selection/estimate metadata, using the
+minimum of selected output ceilings and the unique fixed program's declared
+stdout/stderr ceilings as conservative upper bounds without raising host limits.
+Missing fixed ceilings retain the selected ceilings; malformed or ambiguous
+declarations refuse preflight. These bounds do not claim exact effective CNCF
+limits. The current factory default is 16 MiB; CNCF Configuration None means
+1 MiB; the existing maximum remains 64 MiB. Missing artifact configuration is a
+PRE-START failure. A sized locator is persisted before execution and actual
+canonical capture is archived before the business result save, so a failed save
+leaves a discoverable reservation. Artifact completeness does not imply complete
+stdout/stderr: OutputLimitExceeded and truncation remain Incomplete, and an OS
+progress exit 143 is not a native Exited(143). Captures preserve actual TestOnly
+selection, estimate, mode, batch and outcome; the current ordinary fixed target
+must still match. A foreign, changed or unreadable artifact is never absent.
+
 The proof records caller terminal status and caller exit code separately from the
 child Test termination and its terminal-event OS exit code. The event OS exit
 code is not converted into a native SBT process exit code for an output-limit
@@ -597,7 +631,7 @@ The description reports the retained generation, repair counts and limit, succes
 
 ## Requester reads of referenced validation captures
 
-An external full-Test receipt remains a compact reference in the returned
+An external selected Test/TestOnly receipt remains a compact reference in the returned
 result. The requester must read the complete canonical capture before it can
 accept that receipt as a successful check. The requester host may declare
 `sm-workflow.delegate-task.returned-capture-read-bindings` with schema

@@ -16,6 +16,81 @@ import SplitPhaseExplicitPartitionFixture.take
 import StandaloneFixExecution as S
 import S.given
 
+/** Purpose-owned bounded output producer; selected explicitly by the tiny sbt
+  * metadata build, never discovered in the owning repository's ordinary suite.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class DelegateTaskTestOnlyOutputFixtureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Selected recovery input" should {
+    "retain its real body invocation under a finite output policy" in {
+      Given("one isolated metadata build and its explicit specification-owned output switch")
+      val repository = Path.of("").toAbsolutePath.normalize
+      val root = repository.getParent
+      When("the actual selected body observes the fixture input")
+      Files.writeString(root.resolve("selected-body-executions.txt"), java.lang.ProcessHandle.current().pid().toString + "\n",
+        StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+      if (Files.exists(root.resolve("flood-enabled"))) {
+        System.out.print("D" * (2 * 1024 * 1024))
+        System.out.flush()
+      }
+      val actual = Files.readString(repository.resolve("value.txt"))
+      Then("the actual product input remains selected and successful when its report is complete")
+      actual shouldBe "expected\n"
+    }
+  }
+}
+
+/** Inputs for the common native pipeline, with no manufactured process receipt.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+private[admission] object DelegateTaskTestOnlyRecoveryFixture {
+  val suite = classOf[DelegateTaskTestOnlyOutputFixtureSpec].getName
+  val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
+    GoalPhaseNativeValidation.Check("fix-check", 2, WorkflowSbtValidation.Kind.FixCheck),
+    GoalPhaseNativeValidation.Check("test-only", 3, WorkflowSbtValidation.Kind.TestOnly))
+  def build(root: Path, selectedClasspath: Option[Path] = None): Unit = {
+    TypedSbtHostPlanFixture.build(root, successful = true)
+    TypedSbtHostPlanFixture.buildMetadata(root, classOf[DelegateTaskTestOnlyOutputFixtureSpec], selectedClasspath)
+    Files.writeString(root.resolve("repository/value.txt"), "initial\n")
+    Files.writeString(root.resolve("repository/build.sbt"), """
+      |lazy val fixCheck = taskKey[Unit]("Check the actual isolated product input")
+      |fixCheck := {
+      |  IO.append(baseDirectory.value.getParentFile / "fix-check-executions.txt", "executed\n")
+      |  if (IO.read(baseDirectory.value / "value.txt") != "expected\n") sys.error("SPEC actual input differs")
+      |}
+      |""".stripMargin, StandardOpenOption.APPEND)
+    Files.writeString(root.resolve("flood-enabled"), "SPECIFICATION-OWNED bounded 2 MiB output producer\n")
+    Files.createDirectories(root.resolve("capture-root"))
+  }
+  def processPlan(root: Path, git: Json): Json = {
+    def _array_(value: Json, name: String) = value.hcursor.get[Vector[Json]](name).toOption.get
+    // Reuse typed Git authority only; replace the old fixture's SBT workspaces
+    // together with its programs so each ordinal remains uniquely declared.
+    val oldtargets = _array_(git, "sbtPrograms").flatMap(_.hcursor.get[String]("target").toOption).toSet
+    val gitonly = git.mapObject(_.add("sbtPrograms", Json.arr())
+      .add("workspaces", Json.fromValues(_array_(git, "workspaces").filterNot(_.hcursor.get[String]("identity").toOption.exists(oldtargets))))
+      .add("workspaceGrants", Json.fromValues(_array_(git, "workspaceGrants").filterNot(_.hcursor.get[String]("workspaceId").toOption.exists(oldtargets)))))
+    val compile = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(gitonly), operation = SbtOperation.Compile)
+    val lint = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2), operation = SbtOperation.FixCheck)
+    val selected = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(3),
+      operation = SbtOperation.TestOnly, testClasses = Vector(suite), stdoutBytes = 786432, stderrBytes = 16384)
+    val programs = _array_(compile, "sbtPrograms") ++ _array_(lint, "sbtPrograms") ++ _array_(selected, "sbtPrograms")
+    val capabilities = (_array_(compile, "gitPrograms") ++ programs).map(_.hcursor.get[Json]("capability").toOption.get)
+    compile.mapObject(_.add("sbtPrograms", programs.asJson)
+      .add("workspaces", Json.fromValues(_array_(compile, "workspaces") ++ _array_(lint, "workspaces") ++ _array_(selected, "workspaces") :+
+        Json.obj("identity" -> "sm-workflow-validation-artifacts".asJson, "root" -> root.resolve("capture-root").toString.asJson)))
+      .add("workspaceGrants", Json.fromValues(_array_(compile, "workspaceGrants") ++ _array_(lint, "workspaceGrants") ++ _array_(selected, "workspaceGrants") :+
+        Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson, "workspaceId" -> "sm-workflow-validation-artifacts".asJson,
+          "access" -> "manage".asJson)))
+      .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson, "capabilities" -> capabilities.asJson))))
+  }
+}
+
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
@@ -408,6 +483,289 @@ final class NativeDelegateTaskValidationRecoveryReviewCliSpec extends AnyWordSpe
       val component = commonDelegateComponentFile.getOrElse(fail(
         "Select the native-published candidate CAR through SM_WORKFLOW_SPEC_COMPONENT_FILE or smworkflow.spec.componentFile"))
       new DelegateTaskValidationRecoveryOperationSpec().qualifyInstalledAvailableRecovery(commonDelegateExecutable, component)
+    }
+  }
+}
+
+/** Explicit OLD -> NEW qualification of one physical store. Fixture evidence is
+  * specification-owned admission, never an answer on any consumer Session.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
+    with ThreeWorkflowManagedRepositoryFixture {
+  private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
+  private def _read(path: Path): Json = parser.parse(Files.readString(path)).toOption.get
+  private def _state(record: org.goldenport.record.Record): S.State =
+    GoalPhaseNativeMetadata.normalizePublicJson(parser.parse(take(record.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
+  private def _installed: Path = {
+    val selected = Path.of(sys.props.get("smworkflow.spec.installedCommand").getOrElse(fail("Select smworkflow.spec.installedCommand")))
+    require(selected.isAbsolute && selected.normalize == selected && Files.isExecutable(selected))
+    selected
+  }
+  private def _component: Path = {
+    val selected = Path.of(sys.props.get("smworkflow.spec.componentFile").getOrElse(fail("Select smworkflow.spec.componentFile")))
+    require(selected.isAbsolute && selected.normalize == selected && Files.isRegularFile(selected))
+    selected
+  }
+  private def _call(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
+    scenario.callInstalled(_installed, service, operation, arguments,
+      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")),
+      wait = Some(F.InstalledCallWait(600000L, 5000L)))
+  private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView =
+    NativeCommonDelegateTaskFixture.view(scenario, result, _call)
+  private def _snapshot(scenario: F.Scenario, componentinstance: String, session: String, revision: Long): (V.WorkflowRetainedSnapshotReference, F.Result) = {
+    val definition = take(DelegateTaskRuntimeCatalog.loadC())
+    val reference = WorkflowRetainedSnapshot.publicReference(WorkflowRetainedSnapshot.Reference(WorkflowRetainedSnapshot.schema,
+      componentinstance, "DelegateTaskWorkflow", definition.workflowRevision.value, session,
+      session + ":standalone-state:" + revision, "1", revision.toString, "bounded-state", "json"))
+    reference -> _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation, Vector("--input", _json(reference)))
+  }
+  private def _select_import(scenario: F.Scenario, preparation: F.Result): Unit = scenario.selectPreparedImport(preparation)
+  private def _prepare_direction(scenario: F.Scenario, fixture: Path, description: V.DelegateTaskValidationRecoveryView,
+    proof: DelegateTaskValidationRecovery.Proof): V.DelegateTaskValidationRecoveryInput = {
+    import DelegateTaskValidationRecovery.given
+    val target = take(DelegateTaskValidationRecovery.targetC(description.target))
+    val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-TestOnly-Human-" + target.frontierRevision, "1")
+    val answer = V.DelegateTaskValidationRecoveryInput(target.sessionId, description.target, proof.asJson.noSpaces,
+      "participant", reference)
+    def _write_(name: String, value: RecordPresentable): String = {
+      val file = fixture.resolve(name + "-" + target.frontierRevision + ".json")
+      Files.writeString(file, _json(value))
+      file.toUri.toASCIIString
+    }
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None,
+      Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "participant", "ordinary")))
+    val input = V.WorkflowEvidencePreparationInput("DelegateTask", "delegate-task-validation-recovery",
+      _write_("description", description), _write_("SPECIFICATION-OWNED-Human-answer", answer),
+      _write_("reference", reference), _write_("execution", execution), "normal-development-host",
+      java.time.Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+    // The actual normal preparation and importer admission are part of this
+    // explicitly selected test fixture. No live consumer authority is claimed.
+    val prepared = _call(scenario, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input)))
+    _select_import(scenario, prepared)
+    answer
+  }
+  private def _before(fixture: Path): Unit = {
+    Given("the parent-selected OLD published CAR and a small real isolated ordinary native host")
+    val manifestfile = fixture.resolve("fixture.json")
+    require(!Files.exists(manifestfile), "BEFORE is create-only; preserve an already reached fixture and select collect")
+    val initial = F.fresh("test-only-recovery-old-new", bootstrapSelectedInput = false,
+      sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
+    val root = initial.root.toRealPath()
+    DelegateTaskTestOnlyRecoveryFixture.build(root)
+    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt", "project/build.properties", ".gitignore")))
+    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+      "commit", "-m", "Configure actual tiny TestOnly recovery build")))
+    val host = initial.host.copy(goal = initial.host.goal.copy(candidatePaths = Vector("value.txt"),
+      stepValidation = initial.host.goal.stepValidation.copy(checks = DelegateTaskTestOnlyRecoveryFixture.checks)))
+    val configfile = root.resolve(".textus/config.json")
+    val config = _read(configfile)
+    val git = parser.parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    val process = DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
+    Files.writeString(configfile, config.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
+      .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)
+      .add("workflow.mechanical-receipt.max-bytes", "1048576".asJson)
+      .add("textus.resource.url.file.roots", (root.toString + java.io.File.pathSeparator + fixture.toString).asJson)
+      .add("textus.component.file", _component.toString.asJson)).noSpaces)
+    initial.enablePreparedImportRetention()
+    val scenario = F.reopenInstalledRepository(root, host, initial.plan, 100)
+    var manifest = Json.obj("schemaVersion" -> "SPEC-TestOnly-old-new-v1".asJson, "root" -> root.toString.asJson,
+      "database" -> _read(configfile).hcursor.get[String]("textus.datastore.path").toOption.get.asJson,
+      "host" -> ThreeWorkflowRuntimeParameters.encode(host), "plan" -> initial.plan.asJson,
+      "oldComponent" -> _component.toString.asJson,
+      "fixtureAuthority" -> "SPECIFICATION-OWNED; no actual consumer Human answer".asJson)
+    def _save_(): Unit = Files.writeString(manifestfile, manifest.noSpaces)
+    _save_()
+    val input = V.DelegateTaskInput(host.goal.input.repositoryIdentity, "SPEC-TestOnly-old-new", "SPECIFICATION-OWNED same physical native recovery",
+      NonEmptyVector.one("value.txt"), NonEmptyVector.of("compile", "fix-check", "test-only"), NonEmptyVector.one("behavior"),
+      NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-source", "1")), true, "code", "off", 10, "direct-instruction", Vector.empty,
+      V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination", "localized",
+        NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
+        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request-authority", "1")), None, Vector.empty, "SPEC-only"), Vector("behavior"))
+    val inputfile = root.resolve("SPEC-start-input.json")
+    Files.writeString(inputfile, _json(input))
+    val preparation = V.WorkflowDelegateTaskStartPreparationInput(inputfile.toUri.toASCIIString,
+      "SPEC-TestOnly-selection", "participant", "ExplicitHuman", "SPEC-TestOnly-key", "entity:smworkflow.cli.goal_selection")
+    _select_import(scenario, _call(scenario, "NativeWorkflowPreparationService", "prepareDelegateTaskStart", Vector("--input", _json(preparation))))
+    val started = _view(scenario, _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(input),
+      "--selectionId", "SPEC-TestOnly-selection", "--participant", "participant", "--idempotencyKey", "SPEC-TestOnly-key")))
+    manifest = manifest.mapObject(_.add("sessionId", started.sessionId.asJson)); _save_()
+    val issuedraw = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId))
+    val control = issuedraw.business[V.DelegateTaskView]
+    val implement = _view(scenario, issuedraw)
+    val componentinstance = control.retainedWork.map(_.componentInstance)
+      .orElse(control.retainedMaterials.headOption.map(_.reference.componentInstance)).getOrElse(fail("Issued work must retain its owning Component reference"))
+    manifest = manifest.mapObject(_.add("componentInstance", componentinstance.asJson)); _save_()
+    Files.writeString(root.resolve("repository/value.txt"), "expected\n")
+    val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-implementation", "1")
+    val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("SPECIFICATION-OWNED-implementer"), None,
+      Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPECIFICATION-OWNED-implementer", "ordinary")))
+    val result = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED actual selected fixture input", Vector.empty,
+      NonEmptyVector.one(V.DelegateTaskCondition("behavior", true, "SPEC selected input")), Vector.empty, None, None)
+    val submitted = _call(scenario, "DelegateTaskService", "submitDelegateTaskWorkResult", Vector("--sessionId", started.sessionId,
+      "--issuedWorkContext", _json(implement.issuedWorkContext.get), "--result", _json(result), "--resultReference", _json(reference), "--executionEvidence", _json(evidence)))
+    manifest = manifest.mapObject(_.add("acceptedSubmitLog", submitted.invocation.stdout.toString.asJson)); _save_()
+    submitted.exitCode shouldBe 0
+    When("OLD ordinary Advance executes real Compile, FixCheck and bounded TestOnly before its inline save fails")
+    val advanced = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId))
+    manifest = manifest.mapObject(_.add("oldAdvanceStdout", advanced.invocation.stdout.toString.asJson)
+      .add("oldAdvanceStderr", advanced.invocation.stderr.toString.asJson).add("oldCallerExit", advanced.exitCode.asJson)); _save_()
+    val described = _call(scenario, "WorkflowForceClosureService", "describeWorkflowForceClosure",
+      Vector("--input", _json(V.WorkflowForceClosureDescriptionInput("DelegateTask", started.sessionId))))
+    manifest = manifest.mapObject(_.add("oldFrontierDescriptionLog", described.invocation.stdout.toString.asJson)); _save_()
+    val frontier = take(WorkflowForceClosure.targetC(described.business[V.WorkflowForceClosureView].target))
+    frontier.family shouldBe "DelegateTask"
+    frontier.sessionId shouldBe started.sessionId
+    frontier.componentInstance shouldBe componentinstance
+    val definition = take(DelegateTaskRuntimeCatalog.loadC())
+    val catalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(definition)))
+    val native = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.decodeC(frontier.frontier.noSpaces, catalog))
+    native.identity.value shouldBe started.sessionId
+    native.definition shouldBe definition
+    val (snapshot, read) = _snapshot(scenario, frontier.componentInstance, frontier.sessionId, native.revision.value)
+    val state = _state(read.business[V.WorkflowRetainedSnapshotReadResult].material)
+    state.stage shouldBe "ValidationIntent"
+    state.pendingCheck shouldBe Some("test-only")
+    manifest = manifest.mapObject(_.add("sourceReference", parser.parse(_json(snapshot)).toOption.get)
+      .add("sourceState", state.asJson).add("beforeCommands", Files.readString(root.resolve("sbt-command-lines.txt")).asJson)
+      .add("beforeBodyCount", Files.readAllLines(root.resolve("selected-body-executions.txt")).size().asJson)
+      .add("readyForAfter", Json.True)); _save_()
+    Then("the same physical Session retains actual successful prefix receipts and the old terminal/save evidence")
+    advanced.exitCode should not be 0
+    val logs = Files.readString(advanced.invocation.stdout) + Files.readString(advanced.invocation.stderr)
+    logs should include("Mechanical receipt encoding")
+    logs should include("OutputLimitExceeded")
+    state.receipts.map(_.identity) shouldBe Vector("compile", "fix-check")
+    state.receipts.zip(DelegateTaskTestOnlyRecoveryFixture.checks).foreach { (receipt, check) =>
+      receipt.processObservation should not be empty
+      RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind) shouldBe true
+    }
+    Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe 1
+  }
+  private def _after_or_collect(fixture: Path, collect: Boolean): Unit = {
+    import DelegateTaskValidationRecovery.given
+    Given("the exact retained OLD physical store and Session, reopened through the selected installed CAR")
+    val manifestfile = fixture.resolve("fixture.json")
+    var manifest = _read(manifestfile)
+    val root = Path.of(manifest.hcursor.get[String]("root").toOption.get).toRealPath()
+    val session = manifest.hcursor.get[String]("sessionId").toOption.get
+    val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(manifest.hcursor.get[Json]("host").toOption.get))
+    val plan = manifest.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption.get
+    val configfile = root.resolve(".textus/config.json")
+    val original = _read(configfile)
+    original.hcursor.get[String]("textus.datastore.path").toOption.get shouldBe manifest.hcursor.get[String]("database").toOption.get
+    Files.writeString(configfile, original.mapObject(_.add("textus.component.file", _component.toString.asJson)
+      .add("workflow.mechanical-receipt.max-bytes", "67108864".asJson)).noSpaces)
+    val logroot = root.resolve("logs")
+    val files = Files.list(logroot)
+    val nextindex = try { import scala.jdk.CollectionConverters.*; files.iterator().asScala.map(_.getFileName.toString.takeWhile(_.isDigit)).filter(_.nonEmpty).map(_.toInt).max + 100 }
+      finally files.close()
+    val scenario = F.reopenInstalledRepository(root, host, plan, nextindex)
+    val commands = Files.readString(root.resolve("sbt-command-lines.txt"))
+    When("the exact reached Session's recovery description is requested through the installed CAR")
+    val descriptionresult = _call(scenario, "DelegateTaskService", "describeDelegateTaskValidationRecovery",
+      Vector("--input", _json(V.DelegateTaskValidationRecoveryDescriptionInput(session))))
+    manifest = manifest.mapObject(_.add("latestDescriptionLog", descriptionresult.invocation.stdout.toString.asJson))
+    Files.writeString(manifestfile, manifest.noSpaces)
+    val description = descriptionresult.business[V.DelegateTaskValidationRecoveryView]
+    val target = take(DelegateTaskValidationRecovery.targetC(description.target))
+    Then("the decoded target retains selected TestOnly and its successful actual prefix")
+    target.check.kind shouldBe WorkflowSbtValidation.Kind.TestOnly
+    target.successfulPrefix shouldBe Vector("compile", "fix-check")
+    if (collect && target.retainedOutcome.contains("incomplete")) {
+      Then("the reached genuine Incomplete is exposed without admitting another attempt")
+      take(DelegateTaskValidationRecovery.targetC(description.target)).retainedOutcome shouldBe Some("incomplete")
+    } else {
+      val available = target.captureAvailability == "available"
+      require(!collect || available, "Collection requires a genuine available native artifact; preserve this exact pending state")
+      require(collect || !manifest.hcursor.get[Boolean]("newAttemptEntered").toOption.contains(true),
+        "An actual new attempt was already entered; use collect on this same fixture")
+      val proof = if (available) {
+        val artifacts = Files.walk(root.resolve("capture-root"))
+        val captures = try { import scala.jdk.CollectionConverters.*; artifacts.iterator().asScala.filter(Files.isRegularFile(_)).filter(_.toString.endsWith(".json"))
+          .map(_read).filter(json => json.hcursor.downField("association").get[String]("session").contains(session) &&
+            json.hcursor.downField("association").get[Long]("intentRevision").contains(target.frontierRevision)).toVector }
+          finally artifacts.close()
+        captures.size shouldBe 1
+        val process = WorkflowSbtCapture.decode(captures.head.hcursor.get[Json]("process").toOption.get).toOption.get
+        val facts = captures.head.hcursor.get[WorkflowSbtValidation.Facts]("facts").toOption.get
+        WorkflowSbtCapture.structurallyValid(process, facts) shouldBe true
+        DelegateTaskValidationRecovery.Proof("SPECIFICATION-OWNED-authentic-native-artifact", "SPECIFICATION-OWNED-ended-caller",
+          WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process), "completed", 0, "host-attested", "available", "unknown")
+      } else {
+        target.captureAvailability shouldBe "not-retained"
+        val stderr = Path.of(manifest.hcursor.get[String]("oldAdvanceStderr").toOption.get)
+        val stdout = Path.of(manifest.hcursor.get[String]("oldAdvanceStdout").toOption.get)
+        (Files.readString(stderr) + Files.readString(stdout)) should include("OutputLimitExceeded")
+        DelegateTaskValidationRecovery.Proof(stderr.toUri.toASCIIString, stdout.toUri.toASCIIString, "output-limit-exceeded", None,
+          "failed", manifest.hcursor.get[Int]("oldCallerExit").toOption.get, "host-attested", "unavailable", "unknown")
+      }
+      When("the fixture prepares and admits its exact specification-owned Human direction through ordinary public operations")
+      val answer = _prepare_direction(scenario, fixture, description, proof)
+      val recovery = _call(scenario, "DelegateTaskService", "recoverDelegateTaskValidation", Vector("--input", _json(answer)))
+      manifest = manifest.mapObject(_.add("latestRecoveryLog", recovery.invocation.stdout.toString.asJson))
+      Files.writeString(manifestfile, manifest.noSpaces)
+      Then("recovery collects the actual result or records the direction without executing a check")
+      recovery.business[V.DelegateTaskValidationRecoveryView].outcome shouldBe (if (available) "actual-result-collected" else "authorized-awaiting-advance")
+      Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+      When("the same exact recovery direction is submitted again")
+      val repeated = _call(scenario, "DelegateTaskService", "recoverDelegateTaskValidation", Vector("--input", _json(answer)))
+      Then("the repeated direction is refused")
+      repeated.exitCode should not be 0
+      if (!available && !collect) {
+        manifest = manifest.mapObject(_.add("newAttemptEntered", Json.True)); Files.writeString(manifestfile, manifest.noSpaces)
+        When("a separate ordinary Advance consumes the admitted remaining-check attempt")
+        val advanced = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", session))
+        manifest = manifest.mapObject(_.add("newAdvanceStdout", advanced.invocation.stdout.toString.asJson).add("newAdvanceStderr", advanced.invocation.stderr.toString.asJson))
+        Files.writeString(manifestfile, manifest.noSpaces)
+        val result = _view(scenario, advanced)
+        Then("the genuine selected output-limit result is exposed as Wait")
+        result.kind shouldBe "Wait"
+        val state = _state(result.state.get)
+        val old = manifest.hcursor.get[S.State]("sourceState").toOption.get
+        Then("one remaining real TestOnly is Incomplete and the actual prefix and cumulative accounting survive unchanged")
+        state.receipts.take(2) shouldBe old.receipts
+        state.automaticCount shouldBe old.automaticCount
+        state.ordinaryCount shouldBe old.ordinaryCount
+        state.candidate shouldBe old.candidate
+        state.conditionReport shouldBe old.conditionReport
+        state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+        state.receipts.last.externalCapture should not be empty
+        val capture = state.receipts.last.externalCapture.get
+        val native = WorkflowSbtCapture.decode(_read(root.resolve("capture-root").resolve(capture.path))
+          .hcursor.get[Json]("process").toOption.get).toOption.get
+        native.stdout.truncated shouldBe true
+        WorkflowSbtCapture.externalMatches(capture, state.receipts.last.sbt.get, native) shouldBe true
+        Files.readAllLines(root.resolve("selected-body-executions.txt")).size() shouldBe manifest.hcursor.get[Int]("beforeBodyCount").toOption.get + 1
+        Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe 1
+        val aftercommands = Files.readString(root.resolve("sbt-command-lines.txt"))
+        aftercommands.linesIterator.count(_ == "compile") shouldBe commands.linesIterator.count(_ == "compile")
+        When("ordinary Advance is repeated at the newly recorded Incomplete frontier")
+        val repeatedadvance = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", session))
+        Then("the repeated Advance returns successfully without executing another check")
+        repeatedadvance.exitCode shouldBe 0
+        Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe aftercommands
+      }
+    }
+    if (collect) Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+  }
+  "Installed common TestOnly recovery" should {
+    "qualify only the explicitly selected before after or collect stage on the same physical Session" in {
+      val phase = sys.props.get("smworkflow.spec.testOnlyRecoveryPhase").getOrElse(fail("Select before|after|collect"))
+      val fixture = Path.of(sys.props.get("smworkflow.spec.testOnlyRecoveryFixture").getOrElse(fail("Select the parent-owned absolute ignored fixture directory")))
+      require(fixture.isAbsolute && fixture.normalize == fixture && fixture.startsWith(Path.of("target").toAbsolutePath.normalize),
+        "Fixture evidence must remain under the absolute ignored repository target")
+      Files.createDirectories(fixture)
+      phase match {
+        case "before" => _before(fixture)
+        case "after" => _after_or_collect(fixture, false)
+        case "collect" => _after_or_collect(fixture, true)
+        case _ => fail("Select exactly before|after|collect")
+      }
     }
   }
 }

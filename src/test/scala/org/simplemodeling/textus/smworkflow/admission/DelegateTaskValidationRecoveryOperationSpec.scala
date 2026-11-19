@@ -18,13 +18,14 @@ import DelegateTaskValidationRecovery.given
 
 /** Managed validation recovery and retained-capture qualification.
   * @since   Nov. 12, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Matchers with org.scalatest.GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val git = super.process_plan(root, scenario, goal)
+    val git = super.process_plan(root, if (Files.exists(root.resolve("SPEC-test-only-recovery"))) "Goal" else scenario, goal)
+    if (Files.exists(root.resolve("SPEC-test-only-recovery"))) return DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
     val baseline0 = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2), Some(git),
       operation = SbtOperation.Test, stdoutBytes = 2097152, stderrBytes = 131072)
     def array(value: Json, name: String) = value.hcursor.get[Vector[Json]](name).toOption.get
@@ -59,6 +60,46 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
       .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ ++ Vector(grant, readGrant))))
   }
   "The managed external capture owner" should {
+    "archive and discover exact TestOnly outcomes while refusing changed bytes and foreign owners" in {
+      Given("typed TestOnly result specimens and a finite artifact owner; these specimens claim no process execution")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/recovery-test-only-capture").toAbsolutePath), "SPEC-").toRealPath()
+      Files.createDirectories(root.resolve("capture-root/validation"))
+      val association = WorkflowSbtCapture.Association("SPEC-component", "SPEC-session", 7L, "participant", "test-only", 3,
+        root.resolve("repository").toString, "main", "a" * 40, "b" * 40)
+      val limits = org.goldenport.cncf.resource.ResourceReadLimits(1048576)
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      Vector(WorkflowSbtValidation.Outcome.Succeeded, WorkflowSbtValidation.Outcome.Failed,
+        WorkflowSbtValidation.Outcome.Incomplete).zipWithIndex.foreach { (outcome, index) =>
+        val incomplete = outcome == WorkflowSbtValidation.Outcome.Incomplete
+        val stdout = ProcessExecutionCapture(Vector.fill(32)(0x61.toByte), 32L, incomplete)
+        val process = ProcessExecutionResult(if (incomplete) ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout)
+          else ProcessExecutionTermination.Exited(if (outcome == WorkflowSbtValidation.Outcome.Succeeded) 0 else 1), stdout, empty,
+          Vector.empty, 1L, "selected-sbt")
+        val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly, outcome,
+          Option.when(outcome == WorkflowSbtValidation.Outcome.Succeeded)(WorkflowSbtValidation.Selection(Vector("example.SelectedSpec"), 1, 1L)), None)
+        val path = "validation/SPEC-" + index + ".json"
+        When("the owner archives the full canonical artifact and a fresh call discovers the same bytes")
+        _with_runtime_(root, "Equal") { (_, _, _, prepare) => prepare { call => for {
+          reference <- WorkflowSbtCapture.archiveC(call.core, "sm-workflow-validation-artifacts", path, association, facts, process, limits)
+          discovered <- WorkflowSbtCapture.discoverC(call.core, "sm-workflow-validation-artifacts", path, association, limits)
+          reopened <- WorkflowSbtCapture.hydrateC(call.core, reference, association, facts, limits)
+          _ = Then("the typed specimen's outcome and bytes remain exact and a foreign owner is refused")
+          _ <- if (discovered == ((reference, facts, process)) && reopened == process &&
+            WorkflowSbtCapture.discoverC(call.core, "sm-workflow-validation-artifacts", path,
+              association.copy(session = "foreign"), limits).isFaillure) org.goldenport.Consequence.unit
+            else org.goldenport.Consequence.stateConflict("SPEC TestOnly owner or actual outcome changed")
+        } yield () } }
+        When("the stored artifact is changed before new discovery requests inspect it and an absent path")
+        Files.writeString(root.resolve("capture-root").resolve(path), "unreadable canonical artifact")
+        _with_runtime_(root, "Equal") { (_, _, _, prepare) => prepare { call =>
+          val changed = WorkflowSbtCapture.discoverC(call.core, "sm-workflow-validation-artifacts", path, association, limits)
+          val absent = WorkflowSbtCapture.discoverC(call.core, "sm-workflow-validation-artifacts", "validation/absent.json", association, limits)
+          Then("neither the malformed artifact nor the absent artifact can be collected")
+          if (changed.isFaillure && absent.isFaillure) org.goldenport.Consequence.unit
+          else org.goldenport.Consequence.stateConflict("SPEC changed or absent capture was collected")
+        } }
+      }
+    }
     "create actual complete output and reopen the same File from a fresh host" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/recovery-capture").toAbsolutePath),
         "SPEC-").toRealPath()
@@ -85,6 +126,128 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
           discovered <- WorkflowSbtCapture.discoverC(call.core, "sm-workflow-validation-artifacts", "validation/SPEC.json", a, limits)
           _ <- if (discovered == ((retained.get, facts, process))) org.goldenport.Consequence.unit
             else org.goldenport.Consequence.stateConflict("SPEC discovery differs")
+        } yield () }
+      }
+    }
+  }
+  "The selected TestOnly stopped boundary" should {
+    "retain actual Compile and FixCheck across recorded Incomplete direction and one remaining attempt" in {
+      import org.goldenport.Consequence
+      import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
+      Given("a tiny real metadata project with an ordinary native Compile/FixCheck/TestOnly batch")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/recorded-test-only").toAbsolutePath), "SPEC-").toRealPath()
+      DelegateTaskTestOnlyRecoveryFixture.build(root, Some(Path.of("target/sm-workflow/validation-classpath.txt").toAbsolutePath.normalize))
+      Files.writeString(root.resolve("SPEC-test-only-recovery"), "SPECIFICATION-OWNED ordinary selected pipeline\n")
+      val checks = DelegateTaskTestOnlyRecoveryFixture.checks
+      val initial = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = initial.copy(goal = initial.goal.copy(candidatePaths = Vector("value.txt"),
+        stepValidation = initial.goal.stepValidation.copy(checks = checks)))
+      val parameters = BoundedWorkExecutionAdmissionFixture.parameters ++ Map("workflow.mechanical-receipt.max-bytes" -> "67108864")
+      val input = V.DelegateTaskInput("sm-workflow", "SPEC-recorded-TestOnly", "SPECIFICATION-OWNED bounded selected recovery",
+        NonEmptyVector.one("value.txt"), NonEmptyVector.of("compile", "fix-check", "test-only"), NonEmptyVector.one("behavior"),
+        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-source", "1")), true, "code", "off", 10,
+        "direct-instruction", Vector.empty, V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
+          "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
+          Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty, "SPEC-only"), Vector("behavior"))
+      _with_runtime_(root, "Equal", Some(host), parameters) { (owner, component, actor, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        def _call_(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
+          Request.of(component = component.name, service = "DelegateTaskService", operation = name, properties = properties), actor)
+        val selected = take(NativeDelegateTaskStartInput.prepareC(Map("input" -> "SPEC-input.json", "selection-id" -> "SPEC-recorded-selection",
+          "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "SPEC-recorded-key",
+          "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))
+        prepare { setup =>
+          val row = selected.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          setup.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        }
+        val started = read_value[V.DelegateTaskView](take(_call_("startDelegateTask", List(Property("input", input, None),
+          Property("selectionId", "SPEC-recorded-selection", None), Property("participant", "participant", None), Property("idempotencyKey", "SPEC-recorded-key", None)))))
+        val session = started.sessionId
+        val implement = read_value[V.DelegateTaskView](take(_call_("advanceDelegateTask", List(Property("sessionId", session, None)))))
+        Files.writeString(root.resolve("repository/value.txt"), "expected\n")
+        val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-implement", "1")
+        val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("SPECIFICATION-OWNED-worker"), None,
+          Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPECIFICATION-OWNED-worker", "ordinary")))
+        val result = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED fixture input", Vector.empty,
+          NonEmptyVector.one(V.DelegateTaskCondition("behavior", true, "SPEC selected fixture")), Vector.empty, None, None)
+        take(_call_("submitDelegateTaskWorkResult", List(Property("sessionId", session, None), Property("issuedWorkContext", implement.issuedWorkContext.get, None),
+          Property("result", result, None), Property("resultReference", reference, None), Property("executionEvidence", execution, None))))
+        When("ordinary Advance executes the actual selected batch and receives a real output-limit termination")
+        val stopped = read_value[V.DelegateTaskView](take(_call_("advanceDelegateTask", List(Property("sessionId", session, None)))))
+        Then("the actual stopped batch is exposed as Wait")
+        stopped.kind shouldBe "Wait"
+        val before = Files.readString(root.resolve("sbt-command-lines.txt"))
+        val bodies = Files.readString(root.resolve("selected-body-executions.txt"))
+        When("the stopped Session's recovery description is requested")
+        val description = read_value[V.DelegateTaskValidationRecoveryView](take(_call_("describeDelegateTaskValidationRecovery",
+          List(Property("input", V.DelegateTaskValidationRecoveryDescriptionInput(session), None)))))
+        val target = take(DelegateTaskValidationRecovery.targetC(description.target))
+        Then("the recovery source names the genuinely recorded Incomplete and its successful actual prefix")
+        target.check.kind shouldBe WorkflowSbtValidation.Kind.TestOnly
+        target.retainedOutcome shouldBe Some("incomplete")
+        target.successfulPrefix shouldBe Vector("compile", "fix-check")
+        target.captureAvailability shouldBe "available"
+        Files.readString(root.resolve("fix-check-executions.txt")).linesIterator.size shouldBe 1
+        When("ordinary Advance is repeated at the stopped frontier without a recovery direction")
+        take(_call_("advanceDelegateTask", List(Property("sessionId", session, None))))
+        Then("the repeated Advance executes no check")
+        Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe before
+        Given("an exact specification-owned terminal proof and Human direction without installed evidence")
+        val proof = DelegateTaskValidationRecovery.Proof("SPECIFICATION-OWNED-real-output-limit", "SPECIFICATION-OWNED-returned-caller",
+          "output-limit-exceeded", None, "completed", 0, "host-attested", "available", "unknown")
+        val human = ContextReference("SPECIFICATION-OWNED-exact-Human-direction", "1")
+        val binding = take(DelegateTaskValidationRecovery.bindingC(target, proof, "participant", human))
+        val recovery = V.DelegateTaskValidationRecoveryInput(session, description.target, proof.asJson.noSpaces, "participant",
+          V.WorkflowArtifactReference(human.identity, human.revision))
+        When("recovery is requested before that evidence is admitted")
+        val unadmitted = _call_("recoverDelegateTaskValidation", List(Property("input", recovery, None)))
+        Then("the unadmitted direction is refused")
+        unadmitted.isSuccess shouldBe false
+        Given("the independently installed specification-owned evidence for that exact direction")
+        prepare(_.evidenceC(NativeExternalEvidence.Purpose.DelegateTaskValidationRecovery,
+          ThreeWorkflowExternalEvidencePorts.key(human.identity, human.revision), human, "participant", binding))
+        When("the specification-owned exact direction is admitted without executing a check")
+        val admitted = read_value[V.DelegateTaskValidationRecoveryView](take(_call_("recoverDelegateTaskValidation",
+          List(Property("input", recovery, None)))))
+        Then("the direction awaits separate Advance and no check has executed")
+        admitted.outcome shouldBe "authorized-awaiting-advance"
+        Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe before
+        When("the same direction is submitted again")
+        val repeated = _call_("recoverDelegateTaskValidation", List(Property("input", recovery, None)))
+        Then("the repeated direction is refused")
+        repeated.isSuccess shouldBe false
+        Given("the same product input with the specification-owned output switch disabled")
+        Files.delete(root.resolve("flood-enabled"))
+        When("a separate ordinary Advance consumes the admitted same-check attempt")
+        take(_call_("advanceDelegateTask", List(Property("sessionId", session, None))))
+        Then("only one remaining selected body executes and native history retains the original Incomplete")
+        Files.readString(root.resolve("selected-body-executions.txt")).linesIterator.size shouldBe bodies.linesIterator.size + 1
+        Files.readString(root.resolve("fix-check-executions.txt")).linesIterator.size shouldBe 1
+        val commands = Files.readString(root.resolve("sbt-command-lines.txt"))
+        commands.linesIterator.count(_ == "compile") shouldBe before.linesIterator.count(_ == "compile")
+        When("ordinary Advance is repeated after the selected result was retained")
+        take(_call_("advanceDelegateTask", List(Property("sessionId", session, None))))
+        Then("the repeated Advance executes no additional check")
+        Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+        When("the exact original and successor native checkpoints are read")
+        prepare { setup => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_.copy(mechanicalReceiptMaxBytes = Some(67108864)), _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", Vector("value.txt"), checks, None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, setup.core)
+          instances <- store.bindInstancesC()(using setup.core.executionContext)
+          current <- instances.loadC(InstanceIdentity(session))(using setup.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC retained Session absent")))
+          old <- DelegateTaskNativeRun.loadPayloadC(store, session, target.frontierRevision, setup.core)
+          next <- DelegateTaskNativeRun.loadPayloadC(store, session, target.frontierRevision + 3, setup.core)
+          _ = Then("native history preserves the original Incomplete, successful prefix, candidate and accounting")
+          _ <- if (old.state.stage == "Wait" && old.state.receipts.last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Incomplete) &&
+            old.state.receipts.last.processObservation.exists(_.stdout.truncated) &&
+            next.state.receipts.take(2) == old.state.receipts.take(2) && next.state.receipts.last.externalCapture.nonEmpty &&
+            RepositorySyncNativeMergeValidation.productSuccessful(next.state.receipts.last, WorkflowSbtValidation.Kind.TestOnly) &&
+            next.state.automaticCount == old.state.automaticCount && next.state.ordinaryCount == old.state.ordinaryCount &&
+            next.state.candidate == old.state.candidate && next.state.conditionReport == old.state.conditionReport)
+            Consequence.unit else Consequence.stateConflict("SPEC recovery replayed prefix or changed native outcome/accounting")
         } yield () }
       }
     }
@@ -1020,7 +1183,9 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
           val intentPayload = payload.copy(state = intentState, validationCaptureReservation = Some(reservation))
           val target = DelegateTaskValidationRecovery.Target(DelegateTaskValidationRecovery.schema, "SPEC-component", "SPEC-session",
             "participant", current.revision.value, "/SPEC-repository", "main", "a" * 40, state.candidate.get,
-            check, Vector.empty, Json.obj("selectedStdoutCeiling" -> 1024L.asJson, "selectedStderrCeiling" -> 1024L.asJson), "absent")
+            check, Vector.empty, Json.obj("selectedStdoutCeiling" -> 1024L.asJson, "selectedStderrCeiling" -> 1024L.asJson,
+              "processExecution" -> Json.obj("sbtPrograms" -> Json.arr(Json.obj(
+                "target" -> "sm-workflow-repository-validation-1".asJson, "operation" -> "test".asJson)))), "absent")
           val host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
             "repository", "/SPEC-repository", "main", Vector("src"), Vector(check), None, None, None, None, None)
           val bounds = take(DelegateTaskNativeRun.recoveryCapacityBoundsC(host, current, intentPayload, check, association, target))
@@ -1123,6 +1288,34 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
     }
   }
   "The raw process capacity bound" should {
+    "use the exact fixed host ceiling conservatively and refuse ambiguous or malformed declarations" in {
+      Given("a selected TestOnly with default 64/8 MiB output policy and a uniquely fixed small host")
+      val check = GoalPhaseNativeValidation.Check("test-only", 3, WorkflowSbtValidation.Kind.TestOnly)
+      val program = Json.obj("target" -> "sm-workflow-repository-validation-3".asJson,
+        "operation" -> "test-only".asJson, "testClasses" -> Vector("example.SelectedSpec").asJson,
+        "limits" -> Json.obj("stdoutBytes" -> 786432L.asJson, "stderrBytes" -> 16384L.asJson))
+      def _policy_(programs: Vector[Json]) = Json.obj("selectedStdoutCeiling" -> (64L * 1024 * 1024).asJson,
+        "selectedStderrCeiling" -> (8L * 1024 * 1024).asJson,
+        "processExecution" -> Json.obj("sbtPrograms" -> programs.asJson))
+      When("preflight intersects only the selected ceiling with the exact declared fixed upper bound")
+      val bounds = take(DelegateTaskNativeRun.selectedCaptureBoundsC(_policy_(Vector(program)), check))
+      Then("the valid small host fits the common artifact budget without raising either policy")
+      bounds shouldBe ((786432L, 16384L))
+      WorkflowSbtCapture.maximumEncodedProcessBytes(bounds._1, bounds._2).get should be < WorkflowArtifactBudget.defaultMaximumBytes.toLong
+      val missing = program.mapObject(_.remove("limits"))
+      take(DelegateTaskNativeRun.selectedCaptureBoundsC(_policy_(Vector(missing)), check)) shouldBe ((64L * 1024 * 1024, 8L * 1024 * 1024))
+      val large = program.mapObject(_.add("limits", Json.obj("stdoutBytes" -> Long.MaxValue.asJson, "stderrBytes" -> Long.MaxValue.asJson)))
+      take(DelegateTaskNativeRun.selectedCaptureBoundsC(_policy_(Vector(large)), check)) shouldBe ((64L * 1024 * 1024, 8L * 1024 * 1024))
+      WorkflowSbtCapture.maximumEncodedProcessBytes(64L * 1024 * 1024, 8L * 1024 * 1024).get should be > WorkflowArtifactBudget.defaultMaximumBytes.toLong
+      Vector(Json.Null, Json.fromLong(0), Json.fromLong(-1), Json.fromString("786432"), Json.fromBigDecimal(BigDecimal("1.5")),
+        Json.fromBigInt(BigInt(Long.MaxValue) + 1)).foreach { invalid =>
+        val malformed = program.mapObject(_.add("limits", Json.obj("stdoutBytes" -> invalid)))
+        DelegateTaskNativeRun.selectedCaptureBoundsC(_policy_(Vector(malformed)), check).isSuccess shouldBe false
+      }
+      Vector(Vector.empty, Vector(program, program), Vector(program.mapObject(_.add("operation", "test".asJson))),
+        Vector(program.mapObject(_.add("target", "sm-workflow-repository-validation-2".asJson))))
+        .foreach(programs => DelegateTaskNativeRun.selectedCaptureBoundsC(_policy_(programs), check).isSuccess shouldBe false)
+    }
     "cover actual canonical JSON across Base64 boundaries and escaped raw bytes" in {
       for {
         out <- 0 to 12

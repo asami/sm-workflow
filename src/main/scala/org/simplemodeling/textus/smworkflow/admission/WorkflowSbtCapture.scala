@@ -15,7 +15,7 @@ import org.goldenport.cncf.workspace.*
 
 /** Closed persistence adapter for actual CNCF results. Captures are stored once.
   * @since   Oct. 24, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtCapture {
@@ -23,6 +23,8 @@ private[smworkflow] object WorkflowSbtCapture {
   val externalSchema = "sm-workflow.native-sbt-validation-artifact.v1"
   val externalReceiptSchema = "sm-workflow.native-sbt-validation-receipt.v3"
   val maximumArtifactBytes = 128 * 1024 * 1024
+  def selectedKind(kind: WorkflowSbtValidation.Kind): Boolean =
+    Set(WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Kind.TestOnly)(kind)
   final case class Text(value: String, textStatus: String, trailingUndecodedBytes: Int)
 
   /** Stable association with one native intent; it is not process success authority. */
@@ -73,7 +75,7 @@ private[smworkflow] object WorkflowSbtCapture {
   def archiveC(core: ActionCall.Core, workspace: String, path: String, association: Association,
     facts: WorkflowSbtValidation.Facts, process: ProcessExecutionResult,
     limits: ResourceReadLimits): Consequence[ExternalReference] = for {
-    _ <- if (associationValid(association) && structurallyValid(process, facts) && facts.kind == WorkflowSbtValidation.Kind.Test && limits != null &&
+    _ <- if (associationValid(association) && structurallyValid(process, facts) && selectedKind(facts.kind) && limits != null &&
       limits.maximumBytes > 0 && limits.maximumBytes <= maximumArtifactBytes && workspace != "sm-workflow-repository")
       Consequence.unit else Consequence.stateConflict("External capture requires valid actual observation and finite owned artifact policy")
     target <- WorkspaceId.parseC(workspace)
@@ -135,7 +137,7 @@ private[smworkflow] object WorkflowSbtCapture {
     facts <- json.hcursor.get[WorkflowSbtValidation.Facts]("facts").fold(e => Consequence.stateConflict(e.message), Consequence.success)
     raw <- json.hcursor.get[Json]("process").fold(e => Consequence.stateConflict(e.message), Consequence.success)
     process <- decode(raw).fold(Consequence.stateConflict(_), Consequence.success)
-    _ <- if (facts.kind == WorkflowSbtValidation.Kind.Test && structurallyValid(process, facts) &&
+    _ <- if (selectedKind(facts.kind) && structurallyValid(process, facts) &&
       json == artifactJson(expected, facts, process) && json.noSpaces.getBytes(StandardCharsets.UTF_8).toVector == bytes)
       Consequence.unit else Consequence.stateConflict("External capture discovery found foreign or contradictory data")
     reference = ExternalReference(workspace, path, expected, bytes.size.toLong, hash(bytes.toArray),

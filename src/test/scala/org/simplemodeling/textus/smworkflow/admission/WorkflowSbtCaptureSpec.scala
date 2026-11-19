@@ -12,7 +12,8 @@ import WorkflowSbtValidation.*
 
 /** Byte preservation controls use shaped actual CNCF values, without execution.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -26,6 +27,40 @@ final class WorkflowSbtCaptureSpec extends AnyWordSpec with Matchers with GivenW
     ProcessExecutionResult(terminal, _empty, _capture(bytes, true), Vector.empty, 100L, "selected-sbt")
 
   "Raw SBT capture persistence" should {
+    "retain selected TestOnly success failure and genuine truncated Incomplete through compact external receipts" in {
+      Given("the same actual-shaped selected process outcomes and their exact TestOnly metadata")
+      val association = WorkflowSbtCapture.Association("component", "session", 7L, "participant", "selected", 3,
+        "/repository", "main", "a" * 40, "b" * 40)
+      val selected = Selection(Vector("example.SelectedSpec"), 1, 1L)
+      Vector(Outcome.Succeeded, Outcome.Failed, Outcome.Incomplete).foreach { outcome =>
+        val facts = Facts(Kind.TestOnly, outcome, Option.when(outcome == Outcome.Succeeded)(selected), None)
+        val process = if (outcome == Outcome.Incomplete) _raw(Vector(0x61.toByte))
+          else ProcessExecutionResult(ProcessExecutionTermination.Exited(if (outcome == Outcome.Succeeded) 0 else 1),
+            _capture(Vector(0x61.toByte)), _empty, Vector.empty, 1L, "selected-sbt")
+        val artifact = Json.obj("schemaVersion" -> WorkflowSbtCapture.externalSchema.asJson,
+          "association" -> association.asJson, "facts" -> facts.asJson, "process" -> WorkflowSbtCapture.encode(process))
+          .noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(artifact).map(b => f"${b & 0xff}%02x").mkString
+        val reference = WorkflowSbtCapture.ExternalReference("sm-workflow-validation-artifacts", "validation/selected.json",
+          association, artifact.length.toLong, digest, process.stdout.byteCount, process.stderr.byteCount,
+          process.stdout.truncated, process.stderr.truncated, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process))
+        When("the exact process is compacted and the closed persisted reference is decoded")
+        val receipt = take(V.compactExternalC("selected", facts, process, reference))
+        val reopened = receipt.asJson.as[V.Receipt].toOption.get
+        Then("the original outcome survives and no unhydrated receipt is a successful check")
+        reopened.sbt shouldBe Some(facts)
+        reopened.externalCapture shouldBe Some(reference)
+        V.productSuccessful(reopened, Kind.TestOnly) shouldBe false
+        V.productSuccessful(receipt, Kind.TestOnly) shouldBe (outcome == Outcome.Succeeded)
+        WorkflowSbtCapture.valid(process, facts) shouldBe true
+        if (outcome == Outcome.Incomplete) {
+          receipt.termination shouldBe "output-limit-exceeded"
+          receipt.exitCode shouldBe None
+          receipt.processObservation.get.stderr.truncated shouldBe true
+          WorkflowSbtCapture.valid(process, facts.copy(outcome = Outcome.Failed)) shouldBe false
+        }
+      }
+    }
     "retain split UTF-8 tails and distinguish prefix from unavailable interior text without replacement" in {
       Given("a split multibyte tail and malformed interior or NUL in an actual-shaped truncated stderr")
       val bytes = Vector(0x61.toByte, 0xe2.toByte, 0x82.toByte)

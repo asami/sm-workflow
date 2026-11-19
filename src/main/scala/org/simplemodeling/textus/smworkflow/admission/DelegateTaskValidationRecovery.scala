@@ -18,14 +18,21 @@ import StandaloneFixExecution as S
 import StandaloneFixExecution.given
 import DelegateTaskNativeRun as N
 
-/** Direction for an independently attested ended intent; never a process receipt. */
+/** Direction for an independently attested ended intent; never a process receipt.
+  * @since   Nov. 12, 2026
+  * @version Nov. 19, 2026
+  */
 private[smworkflow] object DelegateTaskValidationRecovery {
   val purpose = "delegate-task-validation-recovery"
   val schema = "sm-workflow.delegate-task-validation-recovery.v1"
   final case class Target(schemaVersion: String, componentInstance: String, sessionId: String, participant: String,
     frontierRevision: Long, root: String, branch: String, baseHead: String, candidate: S.Candidate,
-    check: GoalPhaseNativeValidation.Check, successfulPrefix: Vector[String], policy: Json, captureAvailability: String)
-  given Encoder[Target] = deriveEncoder
+    check: GoalPhaseNativeValidation.Check, successfulPrefix: Vector[String], policy: Json, captureAvailability: String,
+    retainedOutcome: Option[String] = None)
+  given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter {
+    case ("retainedOutcome", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Target] = deriveDecoder
   final case class Proof(terminalEventReference: String, callerCompletionReference: String,
     termination: String, eventExitCode: Option[Int], callerStatus: String, callerExitCode: Int,
@@ -68,7 +75,8 @@ private[smworkflow] object DelegateTaskValidationRecovery {
     _ <- if (value.asJson == json && value.schemaVersion == schema && value.frontierRevision > 0 &&
       value.frontierRevision < Long.MaxValue && Vector(value.componentInstance, value.sessionId, value.participant,
         value.root, value.branch, value.baseHead).forall(exact) && value.candidate != null && S.validCandidate(value.candidate) &&
-      value.check != null && value.check.kind == WorkflowSbtValidation.Kind.Test && value.check.ordinal > 0 &&
+      value.check != null && WorkflowSbtCapture.selectedKind(value.check.kind) && value.check.ordinal > 0 &&
+      value.retainedOutcome != null && value.retainedOutcome.forall(_ == "incomplete") &&
       value.successfulPrefix != null && value.successfulPrefix.forall(exact) && value.policy != null && value.policy.isObject &&
       Set("available", "not-retained", "absent", "unavailable-or-unreadable")(value.captureAvailability))
       Consequence.unit else N.invalid("Invalid closed validation recovery target")
@@ -125,7 +133,8 @@ private[smworkflow] object DelegateTaskValidationRecovery {
       Consequence[(WorkflowSbtCapture.ExternalReference, WorkflowSbtValidation.Facts, org.goldenport.cncf.processexecution.ProcessExecutionResult)] = for {
     reservation <- p.validationCaptureReservation.map(Consequence.success).getOrElse(N.invalid("No capture reservation is retained"))
     a = reservation.association
-    check <- p.state.selected.lift(p.state.receipts.size).map(Consequence.success).getOrElse(N.invalid("No pending selected check"))
+    index <- S.validationRecoveryIndexC(p.state)
+    check = p.state.selected(index)
     _ <- if (reservation.workspace == "sm-workflow-validation-artifacts" && a.session == current.identity.value &&
       a.intentRevision == current.revision.value && a.participant == p.state.participant &&
       a.check == check.identity && a.ordinal == check.ordinal && a.root == p.root && a.branch == p.branch &&
@@ -134,9 +143,7 @@ private[smworkflow] object DelegateTaskValidationRecovery {
       else N.invalid("Capture reservation crosses the actual retained intent")
     limits <- org.goldenport.cncf.resource.ResourceReadLimits.createC(reservation.artifactBytes)
     observed <- WorkflowSbtCapture.discoverC(core, reservation.workspace, reservation.path, a, limits)
-    _ <- if (observed._2.kind == WorkflowSbtValidation.Kind.Test && observed._2.selection.isEmpty &&
-      observed._2.estimate.isEmpty && observed._2.mode.isEmpty && observed._2.batch.isEmpty && observed._2.reason.isEmpty)
-      Consequence.unit else N.invalid("Retained artifact does not contain an ordinary full-Test result")
+    _ <- selectedFactsC(p, check, observed._2, core)
   } yield observed
   private def availabilityC(p: Payload, current: InstanceRecord, core: ActionCall.Core): Consequence[String] =
     p.validationCaptureReservation match {
@@ -153,22 +160,40 @@ private[smworkflow] object DelegateTaskValidationRecovery {
         else "unavailable-or-unreadable").recoverWith(_ => Consequence.success("unavailable-or-unreadable"))
     }
   private[admission] def observeC(h: Host, current: InstanceRecord, p: Payload, core: ActionCall.Core): Consequence[Target] = for {
-    _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty && p.state.stage == "ValidationIntent" &&
+    index <- S.validationRecoveryIndexC(p.state)
+    _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty &&
       p.state.input.delegation.exists(_.role == "destination") &&
       p.state.input.repositoryIdentity == h.repository && p.root == h.root && p.branch == h.branch &&
       p.state.input.ownedPaths.forall(h.paths.contains) && p.state.candidate.nonEmpty &&
-      p.state.receipts.size < p.state.selected.size && p.state.pendingCheck.contains(p.state.selected(p.state.receipts.size).identity) &&
-      p.state.selected(p.state.receipts.size).kind == WorkflowSbtValidation.Kind.Test &&
-      p.state.receipts.zip(p.state.selected).forall((r, c) => r.identity == c.identity &&
-        RepositorySyncNativeMergeValidation.productSuccessful(r, c.kind))) Consequence.unit
-      else N.invalid("Recovery requires an exact destination full-Test intent with successful applicable prefix")
+      p.state.selected.forall(h.checks.contains)) Consequence.unit
+      else N.invalid("Recovery requires the exact destination selected checks, candidate and successful applicable prefix")
     _ <- GoalPhaseParticipantAdmission.admitC(p.state.participant, core.executionContext)
     _ <- N.freshC(p, core)
     policy <- policyC(h, core)
-    availability <- availabilityC(p, current, core)
+    _ <- if (p.state.stage == "Wait") selectedFactsC(p, p.state.selected(index), p.state.receipts.last.sbt.get, core)
+      else Consequence.unit
+    availability <- if (p.state.stage == "Wait") Consequence.success("available") else availabilityC(p, current, core)
   } yield Target(schema, core.component.get.core.instanceId.canonicalKey, current.identity.value, p.state.participant,
     current.revision.value, p.root, p.branch, p.baseHead, p.state.candidate.get,
-    p.state.selected(p.state.receipts.size), p.state.receipts.map(_.identity), policy, availability)
+    p.state.selected(index), p.state.receipts.take(index).map(_.identity), policy, availability,
+    Option.when(p.state.stage == "Wait")("incomplete"))
+
+  /** Verify the actual current fixed selection, without parsing command text. */
+  private[admission] def selectedFactsC(p: Payload, check: GoalPhaseNativeValidation.Check,
+    facts: WorkflowSbtValidation.Facts, core: ActionCall.Core): Consequence[Unit] = for {
+    _ <- if (facts.valid && facts.kind == check.kind) Consequence.unit
+      else N.invalid("Retained artifact kind differs from the actual selected check")
+    _ <- if (check.kind == WorkflowSbtValidation.Kind.TestOnly) for {
+      workspace <- org.goldenport.cncf.workspace.WorkspaceId.parseC("sm-workflow-repository-validation-" + check.ordinal)
+      classes <- org.goldenport.cncf.processexecution.SbtValidationEstimate.selectedTestClassesC(core.executionContext,
+        org.goldenport.cncf.processexecution.SbtTarget(workspace))
+      _ <- if (facts.selection.forall(_.testClasses == classes) &&
+        facts.estimate.forall(e => e.sourceRevision == p.state.candidate.get.tree &&
+          e.leaves.map(_.suiteClassName).distinct.toSet == classes.toSet) && facts.mode.isEmpty && facts.batch.isEmpty)
+        Consequence.unit else N.invalid("Retained TestOnly selection, estimate, mode or batch differs from the ordinary current target")
+    } yield () else if (facts.selection.isEmpty && facts.estimate.isEmpty && facts.mode.isEmpty && facts.batch.isEmpty && facts.reason.isEmpty)
+      Consequence.unit else N.invalid("Retained full-Test metadata differs from the ordinary current target")
+  } yield ()
 
   def operations(h: Host, definition: DefinitionBinding, evidence: EvidencePort): Vector[spec.OperationDefinition] =
     Vector(new Operation(false, h, definition, evidence), new Operation(true, h, definition, evidence))
@@ -205,7 +230,16 @@ private[smworkflow] object DelegateTaskValidationRecovery {
               reference = ContextReference(i.reference.identity, i.reference.revision)
               binding <- bindingC(target, proof, i.participant, reference)
               _ <- evidence.admitC(selected, reference, binding)
-              response <- if (target.captureAvailability == "available" && proof.rawCapture == "available") for {
+              response <- if (target.retainedOutcome.contains("incomplete")) for {
+                process <- payload.state.receipts.last.processObservation.map(Consequence.success)
+                  .getOrElse(N.invalid("Recorded Incomplete has no genuine native process observation"))
+                _ <- if (proof.rawCapture == "available" && WorkflowSbtCapture.termination(process) == proof.termination &&
+                  (proof.termination != "exited" || WorkflowSbtCapture.exitCode(process) == proof.eventExitCode))
+                  Consequence.unit else N.invalid("Proof contradicts the genuine recorded Incomplete result")
+                next <- N.planRecoveryC(h, current, payload, Direction(target.frontierRevision, reference.identity, reference.revision, target), selected)
+                _ <- N.saveC(h, storage, current, next, selected)
+              } yield output(target, "authorized-awaiting-advance")
+              else if (target.captureAvailability == "available" && proof.rawCapture == "available") for {
                 observed <- discoverC(payload, current, selected)
                 _ <- if (WorkflowSbtCapture.termination(observed._3) == proof.termination &&
                   (proof.termination != "exited" || WorkflowSbtCapture.exitCode(observed._3) == proof.eventExitCode))
@@ -233,5 +267,8 @@ private[smworkflow] object DelegateTaskValidationRecovery {
   }
   private def output(target: Target, outcome: String): OperationResponse = NativeWorkflowOperationOutput.response(
     V.DelegateTaskValidationRecoveryView(target.sessionId, outcome,
-      "The original intent remains in native history; this operation ran no check. Capture availability is reported in the target.", target.asJson.noSpaces))
+      (if (target.retainedOutcome.contains("incomplete")) "The recorded Incomplete remains in native history. Exact Human direction offers ONE new attempt of the same selected check on separate Advance."
+      else if (target.captureAvailability == "available") "Collect the authentic retained result without running a check; its actual outcome remains unchanged."
+      else "The old result remains unknown. Exact Human direction offers ONE new attempt of the same selected check on separate Advance.") +
+        " This operation runs no check; deferring or making no call runs nothing.", target.asJson.noSpaces))
 }

@@ -525,8 +525,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           WorkflowSbtCapture.exitCode(p), WorkflowSbtCapture.text(p.stdout).value, WorkflowSbtCapture.text(p.stderr).value,
           Some(facts), Some(p)))
         case Some(reservation) => for {
-          _ <- if (delegation && kind == WorkflowSbtValidation.Kind.Test && facts.selection.isEmpty && facts.estimate.isEmpty &&
-            facts.mode.isEmpty && facts.batch.isEmpty && facts.reason.isEmpty && reservation.workspace == "sm-workflow-validation-artifacts" &&
+          _ <- if (delegation && WorkflowSbtCapture.selectedKind(kind) && kind == check.kind && reservation.workspace == "sm-workflow-validation-artifacts" &&
             reservation.association.session == record.identity.value && reservation.association.intentRevision == record.revision.value &&
             reservation.association.check == check.identity && reservation.association.ordinal == check.ordinal &&
             reservation.association.root == payload.root && reservation.association.branch == payload.branch &&
@@ -534,9 +533,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
             reservation.association.participant == payload.state.participant &&
             core.component.exists(_.core.instanceId.canonicalKey == reservation.association.component) &&
             reservation.artifactBytes > 0 && reservation.artifactBytes <= WorkflowSbtCapture.maximumArtifactBytes)
-            Consequence.unit else invalid("Actual result crosses the retained ordinary full-Test capture reservation")
+            Consequence.unit else invalid("Actual result crosses the retained selected Test/TestOnly capture reservation")
           limits <- org.goldenport.cncf.resource.ResourceReadLimits.createC(reservation.artifactBytes)
           reference <- WorkflowSbtCapture.archiveC(core, reservation.workspace, reservation.path, reservation.association, facts, p, limits)
+          _ <- DelegateTaskValidationRecovery.selectedFactsC(payload, check, facts, core)
           compact <- RepositorySyncNativeMergeValidation.compactExternalC(check.identity, facts, p, reference)
         } yield compact
       }
@@ -569,13 +569,28 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     */
   private[admission] def recoveryCapacityBoundsC(h: Host, record: InstanceRecord, payload: Payload,
     check: GoalPhaseNativeValidation.Check, association: WorkflowSbtCapture.Association,
-    target: DelegateTaskValidationRecovery.Target): Consequence[(BigInt, BigInt, BigInt)] = for {
-    stdout <- target.policy.hcursor.get[Long]("selectedStdoutCeiling").fold(e => invalid(e.message), Consequence.success)
-    stderr <- target.policy.hcursor.get[Long]("selectedStderrCeiling").fold(e => invalid(e.message), Consequence.success)
-    process <- WorkflowSbtCapture.maximumEncodedProcessBytes(stdout, stderr).map(Consequence.success)
+    target: DelegateTaskValidationRecovery.Target,
+    estimate: Option[org.goldenport.cncf.processexecution.SbtValidationEstimate] = None): Consequence[(BigInt, BigInt, BigInt)] = for {
+    capture <- selectedCaptureBoundsC(target.policy, check)
+    process <- WorkflowSbtCapture.maximumEncodedProcessBytes(capture._1, capture._2).map(Consequence.success)
       .getOrElse(invalid("Selected output capture bound overflows"))
-    finiteFacts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Test,
-      WorkflowSbtValidation.Outcome.NotExecuted, None, None).asJson
+    finiteFacts <- if (check.kind == WorkflowSbtValidation.Kind.Test) Consequence.success(
+      WorkflowSbtValidation.Facts(check.kind, WorkflowSbtValidation.Outcome.NotExecuted, None, None).asJson)
+      else for {
+        selected <- _selected_program_c(target.policy, check)
+        classes <- selected.hcursor.get[Vector[String]]("testClasses").fold(e => invalid(e.message), Consequence.success)
+        _ <- if (classes.nonEmpty) Consequence.unit else invalid("TestOnly capacity requires declared selected classes")
+      } yield {
+        import io.circe.generic.auto.*
+        import WorkflowSbtValidation.given
+        // This upper-bound JSON is metadata only, never a receipt. Include the
+        // actual selection and estimate; numeric report counters use their full range.
+        Json.obj("kind" -> check.kind.asJson, "outcome" -> "unverified-tests".asJson,
+          "selection" -> Json.obj("testClasses" -> classes.asJson, "completedSuites" -> Int.MaxValue.asJson,
+            "testsRun" -> Long.MaxValue.asJson),
+          "reason" -> org.goldenport.cncf.processexecution.SbtTestSelectionFailure.values.map(_.toString).maxBy(_.length).asJson,
+          "estimate" -> estimate.asJson)
+      }
     artifactSkeleton = Json.obj("schemaVersion" -> WorkflowSbtCapture.externalSchema.asJson,
       "association" -> association.asJson, "facts" -> finiteFacts, "process" -> Json.Null).noSpaces
       .getBytes(java.nio.charset.StandardCharsets.UTF_8).length - 4
@@ -617,14 +632,100 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     intentBound = BigInt(intentEnvelope.noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
   } yield (intentBound, resultBound, artifactBound)
 
+  private def _selected_program_c(policy: Json, check: GoalPhaseNativeValidation.Check): Consequence[Json] = for {
+    programs <- policy.hcursor.downField("processExecution").get[Vector[Json]]("sbtPrograms")
+      .fold(e => invalid(e.message), Consequence.success)
+    selected = programs.filter(p => p.hcursor.get[String]("target").contains("sm-workflow-repository-validation-" + check.ordinal) &&
+      p.hcursor.get[String]("operation").contains(check.kind.wire))
+    result <- if (selected.size == 1) Consequence.success(selected.head)
+      else invalid("Capture capacity requires the unique actual ordinal and selected-kind fixed program")
+  } yield result
+
+  /** A declared upper bound only. CNCF admission can narrow it further. Missing
+    * fixed bounds retain the selected ceiling; malformed bounds cannot undercount.
+    */
+  private[admission] def selectedCaptureBoundsC(policy: Json,
+    check: GoalPhaseNativeValidation.Check): Consequence[(Long, Long)] = {
+    def _positive_(value: Json): Consequence[Long] = value.asNumber.flatMap(_.toBigDecimal)
+      .filter(n => n.isWhole && n.isValidLong && n > 0).map(n => Consequence.success(n.toLong))
+      .getOrElse(invalid("Selected and fixed capture bounds require positive integral numeric Long values"))
+    def _bound_(program: Json, key: String, selected: Long): Consequence[Long] = program.hcursor.downField("limits").focus match {
+      case None => Consequence.success(selected)
+      case Some(limits) if limits.isObject => limits.hcursor.downField(key).focus match {
+        case None => Consequence.success(selected)
+        case Some(value) => _positive_(value).map(selected.min)
+      }
+      case _ => invalid("Declared fixed capture limits must be an object")
+    }
+    for {
+      program <- _selected_program_c(policy, check)
+      stdout <- policy.hcursor.get[Json]("selectedStdoutCeiling").fold(e => invalid(e.message), _positive_)
+      stderr <- policy.hcursor.get[Json]("selectedStderrCeiling").fold(e => invalid(e.message), _positive_)
+      out <- _bound_(program, "stdoutBytes", stdout)
+      err <- _bound_(program, "stderrBytes", stderr)
+    } yield (out, err)
+  }
+
   private[admission] def recoveryCapacityC(h: Host, record: InstanceRecord, payload: Payload,
     check: GoalPhaseNativeValidation.Check, association: WorkflowSbtCapture.Association,
-    target: DelegateTaskValidationRecovery.Target): Consequence[Unit] = for {
-    bounds <- recoveryCapacityBoundsC(h, record, payload, check, association, target)
+    target: DelegateTaskValidationRecovery.Target,
+    estimate: Option[org.goldenport.cncf.processexecution.SbtValidationEstimate] = None): Consequence[Unit] = for {
+    bounds <- recoveryCapacityBoundsC(h, record, payload, check, association, target, estimate)
     maximum <- h.configuration.mechanicalReceiptLimitsC
-    _ <- if (bounds._3 <= WorkflowSbtCapture.maximumArtifactBytes && bounds._1 <= maximum.maxBytes && bounds._2 <= maximum.maxBytes)
+    artifact <- target.policy.hcursor.get[Long]("artifactBytes").fold(e => invalid(e.message), Consequence.success)
+    _ <- if (bounds._3 <= WorkflowSbtCapture.maximumArtifactBytes && bounds._3 <= artifact &&
+      bounds._1 <= maximum.maxBytes && bounds._2 <= maximum.maxBytes)
       Consequence.unit else invalid("Complete capture or current/next mechanical transition exceeds its proven finite bound")
   } yield ()
+
+  private def _artifact_workspace_c(policy: Json): Consequence[Unit] = for {
+    workspaces <- policy.hcursor.downField("processExecution").get[Vector[Json]]("workspaces")
+      .fold(e => invalid(e.message), Consequence.success)
+    grants <- policy.hcursor.downField("processExecution").get[Vector[Json]]("workspaceGrants")
+      .fold(e => invalid(e.message), Consequence.success)
+    selected = workspaces.filter(_.hcursor.get[String]("identity").contains("sm-workflow-validation-artifacts"))
+    permissions = grants.filter(g => g.hcursor.get[String]("workspaceId").contains("sm-workflow-validation-artifacts") &&
+      g.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name))
+    _ <- if (selected.size == 1 && selected.head.hcursor.get[String]("root").toOption.exists(s =>
+      s != null && java.nio.file.Path.of(s).isAbsolute && s.trim == s && !s.exists(_.isControl)) &&
+      permissions.size == 1 && permissions.head.hcursor.get[String]("access").contains("manage")) Consequence.unit
+      else Consequence.configurationInvalid("PRE-START Test/TestOnly capture requires one configured owned artifact workspace and Manage grant")
+  } yield ()
+
+  private def _recovery_estimate_c(original: Payload, check: GoalPhaseNativeValidation.Check,
+    core: ActionCall.Core): Consequence[Option[org.goldenport.cncf.processexecution.SbtValidationEstimate]] = for {
+    estimated <- EstimatedValidationExecution.selectedC(core, check.ordinal, check.kind)
+    retained = Option.when(original.state.stage == "Wait")(original.state.receipts.last).flatMap(_.sbt).flatMap(_.estimate)
+    result <- if (retained.nonEmpty) Consequence.success(retained)
+      else if (estimated) for {
+        compilation <- original.validationCompilations.toVector.flatten.find(c => c.ordinal == check.ordinal &&
+          c.sourceTree == original.state.candidate.get.tree).map(Consequence.success)
+          .getOrElse(invalid("Recovery requires the already retained successful TestCompile; preparation must not replay"))
+        prepared <- EstimatedValidationExecution.estimateC(core, check.ordinal, original.state.candidate.get.tree,
+          "Adopted change-specific check: " + check.identity, compilation)
+      } yield Some(prepared.estimate) else Consequence.success(None)
+  } yield result
+
+  private def _reserve_selected_c(h: Host, current: InstanceRecord, payload: Payload,
+    check: GoalPhaseNativeValidation.Check, core: ActionCall.Core,
+    estimate: Option[org.goldenport.cncf.processexecution.SbtValidationEstimate]): Consequence[Payload] = for {
+    policy <- DelegateTaskValidationRecovery.policyC(h, core)
+    _ <- _artifact_workspace_c(policy)
+    name = core.executionContext.idGeneration.opaqueId("sm-workflow-validation-capture")
+    _ <- if (name != null && name.matches("[A-Za-z0-9_-]{1,200}")) Consequence.unit
+      else invalid("Artifact allocation identity is not a bounded safe filename")
+    association = WorkflowSbtCapture.Association(core.component.get.core.instanceId.canonicalKey,
+      current.identity.value, current.revision.next.value, payload.state.participant, check.identity, check.ordinal,
+      payload.root, payload.branch, payload.baseHead, payload.state.candidate.get.tree)
+    reservation = ValidationCaptureReservation(association, "sm-workflow-validation-artifacts",
+      "validation/" + name + ".json", WorkflowSbtCapture.maximumArtifactBytes)
+    intent <- S.intentC(payload.state)
+    executing = payload.copy(state = intent, validationCaptureReservation = Some(reservation))
+    target = DelegateTaskValidationRecovery.Target(DelegateTaskValidationRecovery.schema, association.component,
+      association.session, association.participant, current.revision.value, payload.root, payload.branch,
+      payload.baseHead, payload.state.candidate.get, check, payload.state.receipts.map(_.identity), policy, "absent")
+    _ <- recoveryCapacityC(h, current, executing, check, association, target, estimate)
+  } yield executing
 
   /** Compute a future reservation and prove logical capacity before storing a
     * direction. This creates no File and never runs the selected check. */
@@ -633,19 +734,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- if (delegation && current.revision.value < Long.MaxValue - 2 && direction.target.frontierRevision == current.revision.value &&
       direction.frontierRevision == current.revision.value && original.state.candidate.nonEmpty)
       Consequence.unit else invalid("Recovery reservation crosses the current native frontier")
-    workspacePlan <- direction.target.policy.hcursor.downField("processExecution").get[Vector[Json]]("workspaces")
-      .fold(e => invalid(e.message), Consequence.success)
-    workspaceGrants <- direction.target.policy.hcursor.downField("processExecution").get[Vector[Json]]("workspaceGrants")
-      .fold(e => invalid(e.message), Consequence.success)
-    artifactWorkspaces = workspacePlan.filter(_.hcursor.get[String]("identity").contains("sm-workflow-validation-artifacts"))
-    artifactGrants = workspaceGrants.filter(g => g.hcursor.get[String]("workspaceId").contains("sm-workflow-validation-artifacts") &&
-      g.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name))
-    _ <- if (artifactWorkspaces.size == 1 && artifactWorkspaces.head.hcursor.get[String]("root").toOption.exists(s =>
-      s != null && s.nonEmpty && s.trim == s && !s.exists(_.isControl)) && artifactGrants.size == 1 &&
-      artifactGrants.head.hcursor.get[String]("access").contains("manage")) Consequence.unit
-      else invalid("Recovery requires one configured task-owned artifact workspace and Manage grant before direction")
-    check <- original.state.selected.lift(original.state.receipts.size).map(Consequence.success)
-      .getOrElse(invalid("Recovery has no selected pending check"))
+    _ <- _artifact_workspace_c(direction.target.policy)
+    index <- S.validationRecoveryIndexC(original.state)
+    check = original.state.selected(index)
+    estimate <- _recovery_estimate_c(original, check, core)
     name = core.executionContext.idGeneration.opaqueId("sm-workflow-validation-capture")
     _ <- if (name != null && name.matches("[A-Za-z0-9_-]{1,200}")) Consequence.unit
       else invalid("Artifact allocation identity is not a bounded safe filename")
@@ -657,11 +749,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else invalid("Planned validation intent has an invalid artifact association")
     reservation = ValidationCaptureReservation(association, "sm-workflow-validation-artifacts",
       "validation/" + name + ".json", WorkflowSbtCapture.maximumArtifactBytes)
-    ready = original.copy(state = original.state.copy(stage = "ValidationRecoveryReady",
-      message = "Prior validation result unavailable; an independently attested direction awaits separate Advance"),
+    state <- S.validationRecoveryReadyC(original.state)
+    ready = original.copy(state = state,
       validationRecovery = Some(direction), validationCaptureReservation = Some(reservation))
     intent <- S.intentC(ready.state.copy(stage = "Validate", pendingCheck = None))
-    _ <- recoveryCapacityC(h, readyRecord, ready.copy(state = intent), check, association, direction.target)
+    _ <- recoveryCapacityC(h, readyRecord, ready.copy(state = intent), check, association, direction.target, estimate)
   } yield ready
 
   /** Size the genuine collected state with the largest possible additional
@@ -751,8 +843,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         original <- loadPayloadC(store, record.identity.value, direction.frontierRevision, core)
         reservation <- payload.validationCaptureReservation.map(Consequence.success)
           .getOrElse(invalid("Planned validation capture reservation is absent"))
-        expected = original.copy(state = original.state.copy(stage = "ValidationRecoveryReady",
-          message = "Prior validation result unavailable; an independently attested direction awaits separate Advance"),
+        ready <- S.validationRecoveryReadyC(original.state)
+        expected = original.copy(state = ready,
           validationRecovery = Some(direction), validationCaptureReservation = Some(reservation))
         _ <- if (payload == expected && old.receipt.next.revision.value == direction.frontierRevision &&
           old.receipt.next.identity == record.identity) Consequence.unit
@@ -762,6 +854,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           else invalid("Recovery source, availability or selected policy changed; obtain a current description")
         _ <- freshC(payload, core)
         check = s.selected(s.receipts.size)
+        estimate <- _recovery_estimate_c(original, check, core)
         association = WorkflowSbtCapture.Association(target.componentInstance, record.identity.value, record.revision.next.value,
           s.participant, check.identity, check.ordinal, payload.root, payload.branch, payload.baseHead, s.candidate.get.tree)
         name = reservation.path.stripPrefix("validation/").stripSuffix(".json")
@@ -771,11 +864,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           else invalid("New validation intent differs from its planned artifact association")
         intent <- S.intentC(s.copy(stage = "Validate", pendingCheck = None))
         executing = payload.copy(state = intent, validationCaptureReservation = Some(reservation))
-        _ <- recoveryCapacityC(h, record, executing, check, association, target)
+        _ <- recoveryCapacityC(h, record, executing, check, association, target, estimate)
         _ <- probeRecoveryFileC(core, name)
         _ <- freshC(payload, core)
         savedIntent <- saveC(h, store, record, executing, core)
-        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind)
+        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = estimate)
         response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
       } yield response
       case "Inspect" => for {
@@ -824,6 +917,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case "Validate" => for {
         _ <- freshC(payload, core)
         check = s.selected(s.receipts.size)
+        // Prove artifact workspace and finite envelope capacity before starting
+        // even a preparation effect. The actual estimate is added below before TestOnly.
+        planned <- if (delegation && check.kind == WorkflowSbtValidation.Kind.TestOnly)
+          _reserve_selected_c(h, record, payload, check, core, None).map(Some(_))
+          else Consequence.success(None)
         estimated <- EstimatedValidationExecution.selectedC(core, check.ordinal, check.kind)
         compilation = payload.validationCompilations.toVector.flatten.find(c =>
           c.ordinal == check.ordinal && c.sourceTree == s.candidate.get.tree)
@@ -856,17 +954,25 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           ready <- if (estimated) EstimatedValidationExecution.estimateC(core, check.ordinal, s.candidate.get.tree,
             "Adopted change-specific check: " + check.identity, compilation.get).map(Some(_))
             else Consequence.success(None)
-          intent <- S.intentC(s)
-          executing = payload.copy(state = intent)
+          executing <- if (planned.nonEmpty) _reserve_selected_c(h, record, payload, check, core, ready.map(_.estimate))
+            else S.intentC(s).map(intent => payload.copy(state = intent))
+          _ <- executing.validationCaptureReservation match {
+            case Some(reservation) => probeRecoveryFileC(core, reservation.path.stripPrefix("validation/").stripSuffix(".json"))
+            case None => Consequence.unit
+          }
           savedIntent <- saveC(h, store, record, executing, core)
           actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate))
           response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
         } yield response
       } yield response
-      // A later Advance restarts a definitely ended incomplete attempt from
-      // candidate capture, rather than reconstructing applicability of its prefix.
+      case "Wait" if delegation && S.validationRecoveryIndexC(s).isSuccess =>
+        Consequence.success(view(record, s, "Wait",
+          "Recorded Incomplete and successful prefix retained. Describe DelegateTask validation recovery; exact Human direction and separate Advance are required for one same-check attempt."))
+      // Other standalone and distinct unverified continuation behavior remains unchanged.
       case "Wait" if depth == 0 && s.receipts.lastOption.flatMap(_.processObservation).exists(process =>
-          process.termination != org.goldenport.cncf.processexecution.ProcessExecutionTermination.TerminationUnconfirmed) =>
+          process.termination != org.goldenport.cncf.processexecution.ProcessExecutionTermination.TerminationUnconfirmed) &&
+          !(delegation && s.receipts.lastOption.flatMap(_.sbt).exists(f => WorkflowSbtCapture.selectedKind(f.kind) &&
+            f.outcome == WorkflowSbtValidation.Outcome.Incomplete)) =>
         _restart_candidate_c(h, definition, store, record, payload, core, depth)
       case "Wait" if depth > 0 => Consequence.success(view(record, s, "Wait", s.message))
       case "Wait" | "ValidationIntent" | "ValidationPreparationIntent" =>

@@ -22,9 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  3, 2026
-  *  version Nov.  4, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -132,7 +130,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       facts <- cursor.get[WorkflowSbtValidation.Facts]("sbt")
       rawFacts <- cursor.get[Json]("sbt")
       reference <- cursor.get[WorkflowSbtCapture.ExternalReference]("externalCapture")
-      _ <- Either.cond(id(identity) && facts.valid && externalFactsMatch(facts, rawFacts) && facts.kind == WorkflowSbtValidation.Kind.Test &&
+      _ <- Either.cond(id(identity) && facts.valid && externalFactsMatch(facts, rawFacts) && WorkflowSbtCapture.selectedKind(facts.kind) &&
         WorkflowSbtCapture.externalReferenceValid(reference) && reference.association.check == identity, (),
         DecodingFailure("Invalid external SBT observation reference", cursor.history))
     } yield Receipt(identity, "external-unhydrated", None, "", "", Some(facts), None, None, Some(reference))
@@ -178,12 +176,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   }
   def compactExternalC(identity: String, facts: WorkflowSbtValidation.Facts, process: ProcessExecutionResult,
     reference: WorkflowSbtCapture.ExternalReference): Consequence[Receipt] =
-    if (id(identity) && facts != null && facts.kind == WorkflowSbtValidation.Kind.Test &&
+    if (id(identity) && facts != null && WorkflowSbtCapture.selectedKind(facts.kind) &&
       WorkflowSbtCapture.externalReferenceValid(reference) && reference.association.check == identity && WorkflowSbtCapture.externalMatches(reference, facts, process))
       Consequence.success(Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
         WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value,
         Some(facts), Some(process), None, Some(reference)))
-    else Consequence.stateConflict("External receipt requires its exact actual full-Test observation")
+    else Consequence.stateConflict("External receipt requires its exact actual selected Test/TestOnly observation")
   /** Hydration is an owner File read; an unhydrated v3 reference cannot pass checks. */
   def hydrateExternalC(core: org.goldenport.cncf.action.ActionCall.Core, receipt: Receipt,
     expected: WorkflowSbtCapture.Association, limits: org.goldenport.cncf.resource.ResourceReadLimits,

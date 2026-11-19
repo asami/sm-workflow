@@ -14,7 +14,7 @@ import GoalPhaseRuntimeRepairControl as R
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -178,6 +178,25 @@ private[smworkflow] object StandaloneFixExecution {
       stage = "Validate", receipts = state.receipts.dropRight(1),
       message = "Confirmed terminated incomplete attempt retained in history; continue only its selected check"))
     else invalid("Validation continuation requires the original confirmed terminal incomplete observation")
+
+  /** The common recovery owner alone admits this projection. The immutable
+    * predecessor retains the unsuccessful receipt and every earlier fact.
+    */
+  def validationRecoveryIndexC(state: State): Consequence[Int] = {
+    val index = if (state.stage == "ValidationIntent") state.receipts.size else state.receipts.size - 1
+    val pending = state.stage == "ValidationIntent" && state.selected.lift(index).exists(c => state.pendingCheck.contains(c.identity))
+    val ended = state.stage == "Wait" && TerminatedValidationContinuation.eligible(state)
+    if ((pending || ended) && state.selected.lift(index).exists(c =>
+        Set(WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Kind.TestOnly)(c.kind)) &&
+        state.receipts.take(index).zip(state.selected).forall((r, c) => r.identity == c.identity &&
+          RepositorySyncNativeMergeValidation.productSuccessful(r, c.kind))) Consequence.success(index)
+    else invalid("Recovery requires a selected Test/TestOnly unresolved intent or confirmed ended Incomplete result with successful prefix")
+  }
+
+  def validationRecoveryReadyC(state: State): Consequence[State] = validationRecoveryIndexC(state).map { index =>
+    state.copy(stage = "ValidationRecoveryReady", receipts = state.receipts.take(index), pendingCheck = None,
+      message = "Prior validation retained in native history; an independently attested direction awaits separate Advance")
+  }
 
   /** The public adoption owner has independently admitted the new selected
     * attempt. Its predecessor checkpoint keeps the original Unverified receipt.
