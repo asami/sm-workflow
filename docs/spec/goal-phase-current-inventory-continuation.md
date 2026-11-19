@@ -29,7 +29,8 @@ and normal generation advance; fresh candidate, checks and independent review
 remain necessary. No Human answer or external grant is fabricated.
 
 R3. Only the native history walker constructs a Source from contiguous actual
-issue, suspension and completion. Review, dependency/diagnostic changes, changed
+issue, suspension and completion. Independent ReviewStep work and new review
+judgments, dependency/diagnostic changes, changed
 requirements/ownership/acceptance/operations and unknown or executing work remain
 actual concerns. Fixed hosts retain their explicit capabilities. Standard runtime
 appends invocation-local candidate paths, preserving prior staging ordinals and
@@ -43,7 +44,9 @@ changed to satisfied by inventory continuation. An unconfigured legacy result
 with nonempty findings remains Human. A real current-Step Repair may retain its
 mandatory exact assigned issue report only with every disposition BLOCKED. Those
 issues stay unresolved; FIXED/DECLINED or an unassigned issue cannot qualify this
-inventory-only branch. Review, completion, repair-source,
+inventory-only branch. A RepairStep may carry the authentic review context from
+its issued work; that retained input is not a new review judgment. Review-result,
+completion, repair-source,
 dependency and diagnostic adjunct judgments remain excluded.
 An optional valid fix assessment is concern-free only when requirementChanged
 and contractChanged are both false and convergence is PROGRESSING. Its actual
@@ -94,3 +97,9 @@ E5. An accepted exact inventory proposal that repeats the current Plan revision
 continues through ordinary Advance with a recorded original-to-effective revision
 correction. It preserves the source result, base, history and acceptance duties;
 reentry reconstructs the same successor without replaying Submit.
+
+E6. A current-Step RepairStep may retain its authentic original review context.
+Pending nonblocking observations from reviews of that unfinished Step survive
+inventory adoption and reopening until the reviewed and committed Step reaches
+the existing recording frontier. Observations from another Step or Phase do not
+qualify for this deferral.

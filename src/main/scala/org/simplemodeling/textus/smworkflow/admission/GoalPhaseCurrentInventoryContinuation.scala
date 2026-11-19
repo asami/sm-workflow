@@ -19,7 +19,7 @@ import GoalPhasePlanRevision as R
 /** Automatic inventory under the retained original-purpose execution. A decoded
   * proposal is data; only the native issue/completion walker constructs Source.
   * @since   Nov. 3, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
@@ -54,7 +54,8 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       controller.pendingRepair.isEmpty && controller.closureIntent.isEmpty && controller.releaseCommit.isEmpty &&
       controller.phaseReviewedCandidate.isEmpty && controller.repairControl.flatMap(_.stop).isEmpty &&
       Set("ImplementStep", "RepairStep")(input.kind) && input.stepIdentity.contains(controller.step.identity) &&
-      input.review.isEmpty && input.publicationFailure.isEmpty &&
+      input.review != null && input.review.forall(_ != null) &&
+      (input.kind == "RepairStep" || input.review.isEmpty) && input.publicationFailure.isEmpty &&
       input.checkFailure.forall(failure => failure.validation.dependency.isEmpty && failure.validation.dependencySource.isEmpty) &&
       result.outcome == "decision-needed" && result.findings != null &&
       (result.findings.isEmpty || result.acceptance != null && result.acceptance.nonEmpty) &&

@@ -19,7 +19,7 @@ import GoalPhaseOrderedProgression as O
 /** Finite clerical work reconstructed from actual accepted review completions.
   * Canonical suspension/completion owns persistence; submission has no effects.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeFindingRecording {
@@ -63,6 +63,14 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
     source.controller.closureIntent.isEmpty && source.controller.releaseRepairActive &&
     source.controller.stage == O.Stage.PhaseInspection && source.findings.pending.nonEmpty &&
     source.findings.pending.forall(p => p.sourceKind == "ReviewPhase" && p.stepIdentity.isEmpty)
+  /** Retain observations of the unfinished Step until its committed frontier. */
+  def awaitsCurrentStepAcceptance(source: Source): Boolean = source.from.suspension.isEmpty &&
+    source.controller.closureIntent.isEmpty && source.controller.stage == O.Stage.Implementation &&
+    source.controller.cursor == source.controller.completed.size &&
+    source.controller.cursor < source.controller.plan.steps.size && source.findings.pending.nonEmpty &&
+    source.findings.pending.forall(p => p.sourceKind == "ReviewStep" &&
+      p.stepIdentity.contains(source.controller.step.identity))
+
   def identity(source: Source): ContinuationIdentity =
     ContinuationIdentity(source.from.identity.value + ":ordered-recording:" + source.from.revision.value)
 

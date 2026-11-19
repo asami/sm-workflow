@@ -3198,7 +3198,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Left(reason) => _wait_cursor_c(cursor, reason)
         case Right(request) => _recording_port.advanceC(recording, request, core)
       }
-      else if (cursor.findings.pending.nonEmpty && !N.awaitsPhaseAcceptance(recording) && Set(O.Stage.Implementation, O.Stage.PhaseInspection,
+      else if (cursor.findings.pending.nonEmpty && !N.awaitsPhaseAcceptance(recording) && !N.awaitsCurrentStepAcceptance(recording) && Set(O.Stage.Implementation, O.Stage.PhaseInspection,
           O.Stage.PhaseClosing)(cursor.controller.stage)) F.invalid("pending observations cross the completed Step or Phase recording frontier")
       else _document_frontier_c(source, cursor, core)
     }

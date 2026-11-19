@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -376,6 +376,9 @@ private[admission] object NativeWorkflowCliFixture {
     def readRetainedWork(reference: V.WorkflowRetainedWorkReference): Result =
       _run(_operation_argv("command", s"$_component.WorkflowRetainedWorkService.readWorkflowRetainedWork") ++ Vector("--input",
         _take(reference.toRecord().toJsonStringC, "Public retained work reference"), "--json"))
+    def readRetainedSnapshot(reference: V.WorkflowRetainedSnapshotReference): Result =
+      _run(_operation_argv("command", s"$_component.WorkflowRetainedWorkService.readWorkflowRetainedSnapshot") ++ Vector("--input",
+        _take(reference.toRecord().toJsonStringC, "Public retained snapshot reference"), "--json"))
     def recordEvidenceJournal(input: V.EvidenceReadInput): Result =
       _run(_operation_argv("command", s"$_component.EvidenceService.recordEvidenceJournal") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence Journal input")) ++ _output)

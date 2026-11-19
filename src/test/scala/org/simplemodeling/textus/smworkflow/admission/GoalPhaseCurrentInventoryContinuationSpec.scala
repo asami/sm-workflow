@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
   * @since   Nov. 3, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -81,6 +81,10 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
         Vector("selected-product"), false, false, "The existing product is progressing", false, false),
         GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "No requirement or contract change"))
       C.pureProposal(source, _request(source, "RepairStep"), result.copy(fixAssessment = Some(progressing))) shouldBe true
+      val review = Some(GoalPhaseNativeReview.Context(Vector("src/Product.scala"), "Retained review context", Vector.empty))
+      C.pureProposal(source, _request(source, "RepairStep").copy(review = review), result) shouldBe true
+      C.pureProposal(source, request.copy(review = review), result) shouldBe false
+      C.pureProposal(source, _request(source, "RepairStep").copy(review = Some(null)), result) shouldBe false
       val issue = GoalPhaseFixIssues.Issue("existing-check", plan.repository, source.step.identity, "TEST", Some("test:selected"),
         "Existing selected check remains unresolved", "actual-check", "OPEN", None)
       val repairRequest = _request(source, "RepairStep").copy(issues = Some(GoalPhaseFixIssues.State(Vector(issue), Vector.empty, None)))
