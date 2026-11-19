@@ -1,6 +1,6 @@
 ---
 name: sm-repository-sync
-description: Synchronize selected repositories through the installed sm-workflow RepositorySync entry, and return typed semantic results only for its issued work. The runtime owns Git preparation, history classification, validation, commits, synchronization and effect recovery.
+description: Synchronize selected repositories and worktrees with their configured Git remotes through sm-workflow RepositorySync. Use for local-main-first integration, ordinary GitHub synchronization, or continuation of an existing RepositorySync Session.
 ---
 
 ## Shared Journal operations
@@ -169,10 +169,15 @@ authority. If no binding or issued result contract is available, report the gap.
 
 ## sm-workflow command execution
 
-The owning caller chat invokes the installed `sm-workflow` command directly
-through its command tool, without a command-execution subagent. Request scoped
-`require_escalated` execution on the first attempt, using the exact installed
-executable as the approval prefix. Follow the
+The owning caller chat invokes the selected executable directly from the
+runtime host directory. Use the absolute installed `sm-workflow` executable by
+default. When the user selects the development entry, take the executable
+from that entry and use this same operation contract. Keep the executable
+and runtime host for Start, continuation, retained reads and Submit/Advance.
+For finite callers pass them as `--executable` and `--runtime-root`. Select
+synchronization checkouts independently of the runtime host.
+Request scoped `require_escalated` execution on the first direct call, using
+the exact selected executable as the approval prefix. Follow the
 [native host command contract](../../docs/spec/native-host-execution.md#installed-sm-workflow-command).
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
@@ -211,7 +216,7 @@ both hops. A missing mapping is same-Session setup, not permission to bypass
 local main, start again or run caller-owned Git. A successful local hop alone
 does not establish remote convergence; report the actual completed route.
 
-For an authorized configured directory list, use the ordinary installed
+For one or more authorized configured checkouts, use the ordinary
 `RepositorySyncService.syncRepositoryDirectories` with
 `input={"syncMode":"FULL_STATE"}`. The normal
 `sm-workflow.repository-sync.directories` property selects checkouts; existing
@@ -219,6 +224,24 @@ workspace/Git bindings select exact source and destination branches. Runtime
 resolves, deduplicates and executes the list in one call. Keep the returned
 aggregate Session and `resultReference`. No per-directory caller loop, periodic
 monitoring or added semantic call is needed for normal clean synchronization.
+
+For a working checkout targeting GitHub main, `local-first` integrates its
+accepted contribution into the admitted local `main` checkout before syncing
+with GitHub. If the user names both checkouts, pass both paths in the same
+batch. The runtime coordinates their common target and push. A checkout
+already on main uses the normal remote route once. Other destinations keep
+their configured branches.
+
+On a new call, `mainIntegration` accepts `local-first`, `direct` or `confirm`,
+and `uncommittedPolicy` accepts `auto-commit`, `confirm` or `error`. Omitted
+values use the host configuration, with defaults of `local-first` and
+`auto-commit`. Pass an explicit policy when the user selects it. `direct`
+syncs the selected checkout with its remote. `auto-commit` groups intended
+dirty work by purpose, while `error` stops at the reported dirty inventory.
+The Session retains both policies. For `confirm`, present the returned Human
+choices and submit the genuine answer with its independent host evidence through
+`submitRepositorySyncPolicyDecision`, then let the caller Advance. Route
+selection and acceptance of dirty-work preparation are separate choices.
 
 Resolve the directory property through normal definition-file or invocation-time
 configuration. For an explicitly requested list, pass exactly those authorized
@@ -234,8 +257,10 @@ override such as:
 ```
 
 Keep other selected configuration inputs and the original runtime cwd. This
-property selects existing admitted workspace/Git bindings; it supplies no new
-destination, validation workspace or execution grant.
+property selects existing admitted workspace/Git bindings. Each participating
+checkout needs a unique binding with its actual root, source branch and intended
+remote target. Resolve missing or ambiguous bindings through the selected
+Subsystem's normal host configuration, which owns process plans and grants.
 
 Keep `textus.subsystem.process-execution.plan` in its normally admitted selected
 Subsystem file or CAR defaults. An invocation-time `--textus.config.file` is
@@ -252,10 +277,13 @@ selection, history, candidates and successful results; do not Start again to
 apply setup. For a later validation-workspace or other setup gap, reuse existing
 admitted bindings and the returned public continuation; directory refresh is
 not a general failure-retry operation. Other actual failures and uncertain
-effects keep their existing explicit recovery. Recollect with
-`syncRepositoryDirectories` and the same Session; inspect an exact historical
-aggregate using `readRepositoryDirectoryResult`. Neither read nor recollection
-grants a replay.
+effects keep their existing explicit recovery. Continue the batch with
+`syncRepositoryDirectories` and the same aggregate Session after an accepted
+child submission. Read an exact historical result with
+`readRepositoryDirectoryResult`. Assess completion from the aggregate and its
+reported member outcomes. For local-first, report the accepted source
+contribution, local integration and observed remote tip based on the returned
+results. Report the source checkout's tip only if observed.
 
 Ordinary text and JSON controls return outcomes and retained owner/revision
 references. Fetch needed assigned content once through the returned
@@ -282,10 +310,18 @@ Use the actual issued `RepositorySyncPurposeRequest` and return only its typed
 `RepositorySyncPurposeResult` to `submitRepositoryPurposeResult`. Group actual
 content by purpose and prior dependencies; identify excluded ongoing work and
 inseparable meaning explicitly. A shared file can contain several purposes and
-an excluded remainder. Semantic grouping supplies no check, review or commit
-acceptance. Ordinary Advance owns each candidate's acceptance and installation.
+an excluded remainder. Submit under the issued child Session. For a large
+result, pass the complete typed JSON through `resultResource` with the required
+`resultReference` and the host's normal Resource read scope. Ordinary Advance
+owns each candidate's validation, acceptance and installation.
 Missing configuration is a precise preparation gap, never permission to invent
 authority imports, stage everything or checkpoint unrelated work.
+
+For a newly added executable, the candidate takes its file mode from the Git
+index. If the file is still untracked, identify the mode as a preparation gap.
+With explicit authorization for that preparation, stage only the executable
+with the intended mode before a fresh inventory. Keep any earlier Session
+record because its purpose request binds the original HEAD and index.
 
 ### Session-owned candidate setup
 
@@ -298,15 +334,21 @@ Existing explicit fixed-slot bindings keep their configured meaning and cannot
 be silently replaced by a caller-authored setup recipe.
 
 A returned `ValidationSetupRequired` or pre-effect
-`purpose-materialization-preflight` wait is a setup condition, not an executed
-test failure. Present the actual missing resource or permission and use only
-the public continuation applicable to that exact retained condition. Supported
+`purpose-materialization-preflight` wait identifies setup to correct before
+test execution. Present the actual file and read failure when a required
+project declaration could not be read. Use the public continuation for that
+retained condition. Supported
 configuration refresh keeps the same accepted grouping and prepared candidate;
 it does not replay materialization, checks or accepted Submit. Actual intent,
 live execution and UNKNOWN retain their distinct recovery requirements.
 Preserve all sources, Sessions, history, results and repair counts. Missing
 capability is a concrete host gap, not permission to invent grants or fixed
 slots, reset the Session or switch execution owners.
+
+When ordinary Session-candidate selection chooses static FULL validation,
+successful Compile and Test receipts can satisfy code assessment. The actual
+Test report must show at least one executed successful test and no failures,
+cancellations or aborted suites. Apply any other selected checks or review.
 
 Repeated continuation collects saved effects/results in the same Session.
 A retained integration intent is observed without reissuing merge/fast-forward;

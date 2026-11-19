@@ -4,6 +4,8 @@ import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.parser.parse
 import io.circe.syntax.*
+import org.goldenport.Consequence
+import org.goldenport.cncf.processexecution.{GitObjectId, GitPath, GitTreeChange}
 import org.goldenport.cncf.workflow.ContextReference
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -63,12 +65,65 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 /** Strict v3 classification continuation, preserved historical codecs and real
   * production eligibility predicates. Native process evidence is separate.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncReviewInputContinuationFixture.*
+
+  "Retained Git submodule references" should {
+    "reclassify a covered pointer update with the same successful check selection" in {
+      Given("an old assessment that treated a consumed submodule's two commit IDs as unavailable blobs")
+      val path = "ai/directive"
+      val before = Some(take(GitObjectId.parseC("1" * 40)))
+      val after = Some(take(GitObjectId.parseC("2" * 40)))
+      val change = GitTreeChange("160000", "160000", before, after, "M", take(GitPath.parseC(path)))
+      val old = D.Assessment(Vector(path), Vector(path), Vector(path), Vector.empty, "Historical file-only classifier")
+      val policy = mapping.copy(consumedPaths = Vector("ai"))
+      val selected = validation.copy(impact = Some(impact.copy(fullPaths = Vector("ai"), coverage = impact.coverage.map(c =>
+        c.copy(affectedPaths = Vector("ai"), inputPaths = Vector("ai"))))))
+      When("the actual entry modes are used to build the proposed assessment")
+      val current = take(D.assessChangesC(Vector(change), Some(policy), _ => fail("Gitlink commit IDs are never read as blobs")))
+      val described = target.copy(originalInputs = old, proposedPolicy = Some(policy), proposedInputs = current, validationPolicy = selected)
+      Then("the unchanged consumed input gains a detailed-review reference with the original checks still applicable")
+      current.consumedPaths shouldBe Vector(path)
+      current.gitlinkPaths shouldBe Vector(path)
+      current.unknownPaths shouldBe empty
+      R.eligibilityIssues(old, current, selected, checks) shouldBe empty
+      R.availableChoices(described) should contain("AdoptInputClassificationAndContinueReview")
+      R.decodeTarget(described.asJson) shouldBe Right(described)
+      old.asJson.hcursor.downField("gitlinkPaths").focus shouldBe None
+      old.asJson.as[D.Assessment] shouldBe Right(old)
+    }
+
+    "classify link additions updates and removals across arbitrary paths while preserving file checks" in {
+      Given("a mixed-mode path, several unmapped links, a Git submodule configuration and a binary file")
+      val before = Some(take(GitObjectId.parseC("1" * 40)))
+      val after = Some(take(GitObjectId.parseC("2" * 40)))
+      val blob = take(GitObjectId.parseC("3" * 40))
+      val config = take(GitObjectId.parseC("4" * 40))
+      val mixed = take(GitPath.parseC("ai/mixed"))
+      val changes = Vector(GitTreeChange("160000", "160000", before, after, "M", mixed),
+        GitTreeChange("100644", "160000", Some(blob), after, "T", mixed),
+        GitTreeChange("160000", "160000", before, after, "M", take(GitPath.parseC("docs/external"))),
+        GitTreeChange("000000", "160000", None, after, "A", take(GitPath.parseC("components/new"))),
+        GitTreeChange("160000", "000000", before, None, "D", take(GitPath.parseC("vendor/removed"))),
+        GitTreeChange("000000", "100644", None, Some(config), "A", take(GitPath.parseC(".gitmodules"))),
+        GitTreeChange("000000", "100644", None, Some(blob), "A", take(GitPath.parseC("ai/file"))))
+      When("the current assessment reads its ordinary file objects")
+      val assessed = take(D.assessChangesC(changes, Some(mapping.copy(consumedPaths = Vector("ai"))), oid => {
+        Vector(blob, config) should contain(oid)
+        Consequence.success(Some(oid == config))
+      }))
+      Then("typed link changes are consumed at every location and only mixed-mode input remains unknown")
+      assessed.gitlinkPaths shouldBe Vector("components/new", "docs/external", "vendor/removed")
+      assessed.consumedPaths shouldBe assessed.changedPaths
+      assessed.unknownPaths shouldBe Vector("ai/mixed")
+      assessed.binaryPaths shouldBe Vector("ai/file", "ai/mixed")
+      assessed.submoduleChanges shouldBe true
+    }
+  }
 
   "P8-03 phase-bound review-input targets" should {
     "preserve absent legacy phase and bind candidate references to the exact current phase" in {
@@ -130,6 +185,22 @@ final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with M
         result.copy(inputClassification = Some(mapping.copy(consumedPaths = Vector("value.txt")))),
         result.copy(findings = Vector(M.Finding("ownership-risk", Vector("README.md"), "Human must resolve ownership"))))
         .foreach(value => R.semanticDirectionC(target, value, target.review.result).isSuccess shouldBe false)
+    }
+
+    "select the admitted technical mapping for merge assessment while retaining the current host mapping for a Human direction" in {
+      Given("a retained independently classified merge and its original host mapping")
+      val result = M.Result("decision-needed", "Technical mapping only", Vector.empty, Some(mapping))
+      val technical = take(R.semanticDirectionC(target, result, target.review.result))
+      val host = Some(D.Policy(Vector("docs/guide.md"), Vector("src", "value.txt"), "Original host mapping"))
+      val human = technical.copy(reference = reference)
+
+      When("merge assessment selects which mapping to recapture")
+      val technicalpolicy = technical.assessmentPolicy(host)
+      val humanpolicy = human.assessmentPolicy(host)
+
+      Then("technical review uses the admitted proposal and a Human continuation uses its current host declaration")
+      technicalpolicy shouldBe Some(mapping)
+      humanpolicy shouldBe host
     }
 
     "reject reuse when actual consumption candidate selection or evidence ceases to match" in {

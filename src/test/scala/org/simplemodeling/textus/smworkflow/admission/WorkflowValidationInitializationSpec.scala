@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import java.nio.file.Path
+import org.goldenport.cncf.config.ComponentInitializationParameters
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,11 +42,37 @@ final class WorkflowValidationInitializationSpec extends AnyWordSpec with Matche
       val initialized = take(I.assembleC(root, normal, project, None, None))
       Then("actual ordinal bindings and declared CML consumption reach delta selection")
       val p = initialized.program.get
-      p.checks.map(c => c.identity -> c.ordinal) shouldBe Vector("compile" -> 1, "fix-check" -> 2, "test" -> 3)
+      p.checks.map(c => c.identity -> c.ordinal) shouldBe Vector("compile" -> 1, "test" -> 3)
       initialized.documents.get.consumedPaths should contain("models/public.cml")
       RepositorySyncProgramImpact.select(p, assessment("src/main/scala/Product.scala")).depth shouldBe "FULL"
       RepositorySyncProgramImpact.select(p, assessment("custom/resource.conf")).checks shouldBe p.fullChecks
       p.priorEvidence shouldBe empty
+    }
+    "select inferred lint only for a project that declares its command and has a managed binding" in {
+      Given("a project advertising its fixCheck command and a separate host execution profile")
+      val lintproject = take(WorkflowProjectDeclaration.fromC(Some("addCommandAlias(\"fixCheck\", \"Compile / scalafix --check\")"),
+        Some("validation:\n  fixCheck: true\n")))
+      val nolintbinding = plan(Vector(1 -> "compile", 3 -> "test"))
+      When("fallback selection resolves each execution profile")
+      val bound = take(I.assembleC(root, normal, lintproject, None, None)).program.get
+      val unbound = take(I.assembleC(root, nolintbinding, lintproject, None, None)).program.get
+      Then("the project and binding together select the applicable lint ordinal")
+      bound.checks.map(c => c.identity -> c.ordinal) shouldBe Vector("compile" -> 1, "fix-check" -> 2, "test" -> 3)
+      unbound.checks.map(_.identity) shouldBe Vector("compile", "test")
+      take(I.assembleC(root, normal, project, Some(bound), None)).program shouldBe Some(bound)
+    }
+    "apply the same project declaration to inferred framework discovery" in {
+      Given("framework discovery and lint sharing one admitted project workspace")
+      val managed = plan(Vector(1 -> "test-only", 1 -> "fix-check")).mapObject(fields =>
+        fields.add("sbtPrograms", fields("sbtPrograms").get.mapArray(rows =>
+          rows.updated(0, rows.head.mapObject(_.add("discoveredTests", Json.True))))))
+      val parameters = ComponentInitializationParameters.empty
+      When("ordinary discovery is resolved with and without a project lint declaration")
+      val declared = take(RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, managed, providesFixCheck = true))
+      val absent = take(RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, managed, providesFixCheck = false))
+      Then("only the declared project receives a lint check alongside its discovered tests")
+      declared.get.checks.map(_.identity) shouldBe Vector("ordinary-project-full", "scala-lint")
+      absent.get.checks.map(_.identity) shouldBe Vector("ordinary-project-full")
     }
     "preserve independent explicit policy and evidence overrides" in {
       Given("a declared coverage policy with genuine native record locators")

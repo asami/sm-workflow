@@ -892,7 +892,7 @@ private[admission] object NativeWorkflowCliFixture {
     denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None,
     sbtRepair: Option[Path] = None, classifiedSbtRepair: Boolean = false, sourceHistory: Boolean = false,
     repairContinuation: Boolean = false, documentRevision: Boolean = false, sbtDiagnosticBytes: Int = 0,
-    laterPlanPurpose: Option[String] = None): Scenario = {
+    laterPlanPurpose: Option[String] = None, selectedGoalPaths: Option[Vector[String]] = None): Scenario = {
     require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
       (sbtDiagnosticBytes == 0 || sbtRepair.nonEmpty),
       "Diagnostic padding requires a selected SBT build and 0..90000 or exactly 1500000 bytes")
@@ -917,7 +917,8 @@ private[admission] object NativeWorkflowCliFixture {
       else if (sbtRepair.nonEmpty) original.goal.copy(
       input = V.GoalPhaseStartInput("1", "smwf-p61-cli-check-repair"), candidatePaths = Vector("value.txt"))
       else original.goal
-    val host = original.copy(target = original.target.copy(root = root.resolve("repository").toString), goal = goal,
+    val selectedgoal = goal.copy(candidatePaths = selectedGoalPaths.getOrElse(goal.candidatePaths))
+    val host = original.copy(target = original.target.copy(root = root.resolve("repository").toString), goal = selectedgoal,
       repository = original.repository.copy(input = original.repository.input.copy(
         repositoryIdentity = goal.input.repositoryIdentity)))
     sbtRepair.foreach { _ =>

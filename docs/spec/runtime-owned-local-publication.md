@@ -138,13 +138,22 @@ staged paths alone produce a bounded build-relevance question. Unknown unstaged
 inputs are conservatively rebuilt; an answer cannot stand in for unknown bytes.
 Renamed source paths retain their original provenance in this decision.
 
-Historical target-attempt traversal matches `identity`, `component`, `workspace`
-and `dependency`. Changing only `beforeChecks` or `beforeSync` does not change
-that effect identity: ordinary source necessity still decides whether a new
-request publishes, and retained unknown effects still prevent execution.
-Scheduling changes grant no retry or renewed authority. Persisted targets and
-requests retain both flags; replay, collection and qualified successor admission
-continue to require their exact full bindings. Historical rows are never rewritten.
+Historical attempt traversal binds a target's identity, workspace, dependency
+and declared component. The standard `repository` target in
+`sm-workflow-repository` can also use `repository` as its generic component
+label. On that target without a dependency, resolve the concrete component
+from the current declaration and the retained attempts. The generic label
+does not assert a component, and the sequence must agree on any concrete
+component names. The traversal preserves the actual attempt order, including
+any unresolved writer, across the generic and concrete forms.
+
+A successful publication under the other label can satisfy a new request for
+the same clean HEAD and tree. Committed non-input descendant evidence still
+requires its matching declared component. For changed inputs or an explicit
+publish request, the normal necessity and effect admission rules apply.
+Changing `beforeChecks` or `beforeSync` affects scheduling only. Collection
+and qualified successor admission use the original full binding, and existing
+requests, attempts and results retain the labels and flags originally saved.
 
 For an explicitly bound catalog, the runtime may project one unstaged modified
 worktree entry with an unchanged index status and no rename. It reads the actual

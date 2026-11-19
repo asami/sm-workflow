@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -528,7 +528,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else invalid("Plan adoption must retain Plan identity, Phase, repository and closure policy")
       _ <- if (current &&
           proposed.steps.size == plan.steps.size && proposed.steps.updated(cursor, step) == plan.steps &&
-          proposed.steps(cursor).copy(purpose = step.purpose, checks = step.checks) == step) Consequence.unit
+          (proposed.steps(cursor).copy(purpose = step.purpose, checks = step.checks) == step ||
+            (proposed.steps(cursor).ownedPaths != step.ownedPaths &&
+              proposed.steps(cursor).ownedPaths == step.ownedPaths.filter(proposed.steps(cursor).ownedPaths.contains) &&
+              proposed.steps(cursor).copy(ownedPaths = step.ownedPaths) == step &&
+              proposed.acceptance == plan.acceptance && proposed.effectiveAcceptance == plan.effectiveAcceptance))) Consequence.unit
         else if (corrective && proposed.steps.size == plan.steps.size + 1 &&
           proposed.steps.take(plan.steps.size) == plan.steps &&
           proposed.steps.last.dependencies.toSet == plan.steps.map(_.identity).toSet &&

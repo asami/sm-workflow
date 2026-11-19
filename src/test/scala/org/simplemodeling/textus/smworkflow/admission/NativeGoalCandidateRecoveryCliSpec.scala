@@ -29,7 +29,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * The existing normal-host acknowledgement hook arranges interruption only.
   * No private row is seeded or changed; all Human input is specification-owned.
   * @since   Oct. 22, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -49,6 +50,8 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
   private def _call(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
     sys.props.get("smworkflow.spec.installedCommand") match {
       case None => if (service == "GoalPhaseService") scenario.call("command", operation, arguments)
+        else if (service == WorkflowRetainedWork.serviceName)
+          scenario.readRetainedWork(take(new org.goldenport.record.io.RecordDecoder().json(arguments(1))))
         else scenario.prepareHostInput(operation, take(new org.goldenport.record.io.RecordDecoder().json(arguments(1))))
       case Some(value) =>
         // Select this isolated host's existing assembly before its first Start.
@@ -62,8 +65,8 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
         Files.isRegularFile(executable) shouldBe true
         Files.isExecutable(executable) shouldBe true
         val result = scenario.callInstalled(executable, service, operation, arguments)
-        result.invocation.argv.take(5) shouldBe Vector(executable.toString, "--runtime-root", scenario.root.toString,
-          "command", s"${SmWorkflowComponent.componentId.name}.$service.$operation")
+        result.invocation.argv.take(2) shouldBe Vector(executable.toString,
+          s"${SmWorkflowComponent.componentId.name}.$service.$operation")
         result
     }
   private def _goal(fixture: Implemented, operation: String, arguments: Vector[String]): F.Result =
@@ -194,9 +197,7 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
       "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", Some("participant"))
     val prepared = _call(fixture.scenario, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input)))
     prepared.exitCode shouldBe 0
-    val config = fixture.scenario.root.resolve(".textus/config.json")
-    val current = parse(Files.readString(config)).toOption.get
-    Files.writeString(config, current.mapObject(_.add("textus.import.data.file", Json.fromString(prepared.invocation.stdout.toString))).noSpaces)
+    fixture.scenario.selectPreparedImport(prepared)
     V.GoalPhaseCandidateRecoveryInput(fixture.request.sessionId, description.target, choice, answer.rationale, reference)
   }
 
@@ -479,6 +480,168 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
       if (process.isAlive) { process.destroyForcibly(); process.waitFor() }
       process.getInputStream.close()
       process.getErrorStream.close()
+    }
+  }
+
+  "Native post-staging binary candidate recovery" should {
+    "return to fresh same-Step implementation without replaying the accepted result or losing future documents" in {
+      Given("an isolated normal host with a real PNG and two future-Phase documents owned by the current Plan")
+      val documents = Vector("docs/phase/README.md", "docs/strategy/development.md")
+      val paths = Vector("value.txt", "src/test/resources/phase17") ++ documents
+      val scenario = F.fresh("candidate-binary-revision", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable),
+        selectedGoalPaths = Some(paths))
+      def _view_(result: F.Result): V.GoalPhaseAdvanceResult = {
+        val control = result.business[V.GoalPhaseAdvanceResult]
+        control.retainedWork.fold(control) { reference =>
+          val retained = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
+            Vector("--input", _json(reference))).business[V.WorkflowRetainedWorkReadResult]
+          take(V.GoalPhaseAdvanceResult.createC(retained.response))
+        }
+      }
+      val repository = Path.of(scenario.host.target.root)
+      val task = scenario.ownTask("binary-candidate-recovery")
+      val started = _call(scenario, "GoalPhaseService", "startGoalPhase", Vector("--input", scenario.input.noSpaces))
+        .business[V.GoalPhaseStartResult]
+      scenario.retain(task, started)
+      val original = _view_(_call(scenario, "GoalPhaseService", "advanceGoalPhase", Vector("--sessionId", started.sessionId)))
+      val fixture = Implemented(scenario, task, original, repository.resolve("value.txt"))
+      original.work.get.kind shouldBe "ImplementStep"
+      Files.writeString(fixture.source, "expected\n")
+      val png = repository.resolve("src/test/resources/phase17/pixel.png")
+      Files.createDirectories(png.getParent)
+      val encoded = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+      val image = java.util.Base64.getDecoder.decode(encoded)
+      Files.write(png, image)
+      documents.foreach { path =>
+        val file = repository.resolve(path)
+        Files.createDirectories(file.getParent)
+        Files.writeString(file, "Future Phase 18 work must remain available\n")
+      }
+      val result = V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED initial implementation",
+        Vector.empty, None, None, None, None, None, None, None, None,
+        dependencyValidation = None, diagnosticRepair = None)
+      _goal(fixture, original.submitOperation.get, Vector("--sessionId", original.submitSessionId.get,
+        "--result", _json(result), "--resultReference", _json(V.WorkflowArtifactReference("binary-first-implementation", "1"))))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+
+      When("ordinary Advance stages the selected paths and rejects the actual binary diff before checks")
+      val failed = _advance(fixture)
+      Then("the public recovery describes this genuine complete-staging frontier without an interruption hook")
+      failed.exitCode should not be 0
+      Files.readString(failed.invocation.stderr) should include("candidate diff is binary")
+      executions(scenario) shouldBe empty
+      val before = _current(fixture)
+      val described = _describe(fixture)
+      val description = described.business[V.GoalPhaseCandidateRecoveryDescriptionResult]
+      val target = take(R.targetC(description.target))
+      description.choices shouldBe Vector("AuthorizeNewObservation", "ReviseWork", "Defer")
+      target.stagingPrefix.last.result.stagedPaths shouldBe paths
+
+      Given("separate specification-owned Human evidence selecting ReviseWork for this exact frontier")
+      val input = _prepare(fixture, described, description, "ReviseWork", "binary-revision-human")
+      When("the public recovery admits that direction and a separate ordinary Advance requests new work")
+      _recover(fixture, input).business[V.GoalPhaseCandidateRecoveryResult].outcome shouldBe "revision-work-authorized"
+      val directed = _current(fixture)
+      val issued = _view_(_advance(fixture))
+      Then("the original accepted implementation and staging history remain while new work keeps Session base prefix and counts")
+      directed.history.dropRight(1) shouldBe before.history
+      issued.sessionId shouldBe original.sessionId
+      issued.work.get.kind shouldBe "ImplementStep"
+      issued.work.get.stepIdentity shouldBe original.work.get.stepIdentity
+      issued.work.get.originalBase shouldBe original.work.get.originalBase
+      issued.work.get.completed shouldBe original.work.get.completed
+      issued.repairProgress shouldBe original.repairProgress
+      issued.issuedWorkContext.get.continuationId should not be original.issuedWorkContext.get.continuationId
+      executions(scenario) shouldBe empty
+
+      When("the fixture author replaces the binary source with text and decodes it only into test output")
+      Files.delete(png)
+      Files.writeString(png.resolveSibling("pixel.png.base64"), encoded + "\n")
+      val output = Files.createDirectories(repository.resolve("target/test-images")).resolve("pixel.png")
+      Files.write(output, java.util.Base64.getDecoder.decode(Files.readString(png.resolveSibling("pixel.png.base64")).trim))
+      Then("the image remains usable and both future-Phase document contents survive for the separate ownership decision")
+      Files.readAllBytes(output).toVector shouldBe image.toVector
+      documents.foreach(path => Files.readString(repository.resolve(path)) shouldBe "Future Phase 18 work must remain available\n")
+      issued.work.get.selectedPlan.steps.head.ownedPaths shouldBe paths
+
+      Given("a fresh ordinary Plan revision removing only the future-Phase documents from this Step")
+      val remaining = paths.filterNot(documents.contains)
+      val proposed = scenario.plan.copy(revision = "2", steps = scenario.plan.steps.updated(0,
+        scenario.plan.steps.head.copy(ownedPaths = remaining)))
+      val proposal = GoalPhasePlanRevision.Proposal("binary-ownership-narrowing", "1",
+        "SPECIFICATION-OWNED preserve future documents outside this candidate", proposed)
+      val decision = result.copy(outcome = "decision-needed", summary = "Explicit ownership narrowing requires Human",
+        planRevision = GoalPhasePlanRevision.publicProposal(Some(proposal)))
+      _goal(fixture, issued.submitOperation.get, Vector("--sessionId", issued.submitSessionId.get,
+        "--result", _json(decision), "--resultReference", _json(V.WorkflowArtifactReference("binary-plan-proposal", "1"))))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val asked = _advance(fixture)
+      val question = _view_(asked)
+      question.kind shouldBe "Human"
+      question.human.get.choices should contain("AdoptPlanRevision")
+
+      When("separate specification-owned Human evidence explicitly adopts the captured narrowing through the ordinary answer Operation")
+      val answer = V.GoalPhaseOrderedDecisionAnswer("AdoptPlanRevision", "SPECIFICATION-OWNED narrow this Step only")
+      val reference = V.WorkflowArtifactReference("binary-plan-human", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-owned-human-answer"), None, None)
+      def _file_(name: String, value: RecordPresentable): String = {
+        val file = scenario.root.resolve("binary-plan-" + name + ".json")
+        Files.writeString(file, _json(value))
+        file.toUri.toASCIIString
+      }
+      val prepared = _call(scenario, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(
+        V.WorkflowEvidencePreparationInput("GoalPhase", "human",
+          asked.business[V.GoalPhaseAdvanceResult].retainedWork.map(_.resource).getOrElse(asked.invocation.stdout.toUri.toASCIIString),
+          _file_("answer", answer), _file_("reference", reference), _file_("execution", execution),
+          "normal-development-host", java.time.Instant.now.toString, "entity:smworkflow.cli.host_evidence", Some("participant")))))
+      prepared.exitCode shouldBe 0
+      scenario.selectPreparedImport(prepared)
+      _goal(fixture, question.submitOperation.get, Vector("--sessionId", question.submitSessionId.get,
+        "--answer", _json(answer), "--resultReference", _json(reference), "--executionEvidence", _json(execution)))
+        .business[V.GoalPhaseOrderedDecisionSubmissionResult].accepted shouldBe true
+      val revised = _view_(_advance(fixture))
+      Then("new implementation keeps Session base counts and only the explicit narrowed ownership")
+      revised.work.get.kind shouldBe "ImplementStep"
+      revised.work.get.selectedPlan.steps.head.ownedPaths shouldBe remaining
+      revised.work.get.originalBase shouldBe original.work.get.originalBase
+      revised.work.get.completed shouldBe original.work.get.completed
+      revised.repairProgress shouldBe original.repairProgress
+
+      Given("fixture-owner index correction for exactly the two excluded future documents, retaining their worktree contents")
+      val indexlog = scenario.root.resolve("binary-plan-index-correction.log")
+      val process = new ProcessBuilder((Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-C", repository.toString, "-c", "core.hooksPath=/dev/null", "--literal-pathspecs",
+        "restore", "--staged", "--source=HEAD", "--") ++ documents).asJava)
+        .redirectErrorStream(true).redirectOutput(indexlog.toFile).start()
+      try {
+        process.getOutputStream.close()
+        process.waitFor(20, TimeUnit.SECONDS) shouldBe true
+        process.exitValue() shouldBe 0
+      } finally {
+        if (process.isAlive) { process.destroyForcibly(); process.waitFor() }
+        process.getInputStream.close()
+        process.getErrorStream.close()
+      }
+      When("only the fresh implementation is submitted and ordinary Advance captures and checks the corrected text candidate")
+      _goal(fixture, revised.submitOperation.get, Vector("--sessionId", revised.submitSessionId.get,
+        "--result", _json(result.copy(summary = "SPECIFICATION-OWNED corrected text fixture and narrowed ownership")),
+        "--resultReference", _json(V.WorkflowArtifactReference("binary-corrected-implementation", "1"))))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val review = _view_(_advance(fixture))
+      Then("fresh successful checks reach independent review without either future document or binary PNG in the candidate")
+      review.work.get.kind shouldBe "ReviewStep"
+      review.sessionId shouldBe original.sessionId
+      review.work.get.selectedPlan.steps.head.ownedPaths shouldBe remaining
+      review.work.get.review.get.changedPaths should contain("src/test/resources/phase17/pixel.png.base64")
+      review.work.get.review.get.changedPaths should not contain "src/test/resources/phase17/pixel.png"
+      documents.foreach { path =>
+        review.work.get.review.get.changedPaths should not contain path
+        scenario.candidateIndex.linesIterator.toVector should not contain path
+        Files.readString(repository.resolve(path)) shouldBe "Future Phase 18 work must remain available\n"
+      }
+      review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      executions(scenario).size shouldBe 1
+      review.repairProgress shouldBe original.repairProgress
     }
   }
 

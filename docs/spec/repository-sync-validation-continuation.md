@@ -219,9 +219,10 @@ or stale adoption either returns its exact passive receipt or refuses without
 effects. Original Session, accepted work, history, repair budget and original
 check results retain their meaning throughout.
 
-For a genuinely new Scala pending-merge candidate, required-lint selection is
-checked against typed actual parent/index paths and host program-impact policy
-before the first SBT effect. Missing required lint therefore refuses before
+For a genuinely new pending-merge candidate, an explicit lint requirement is
+checked against the current program-impact selection before the first SBT effect.
+The ordinary project declaration requires lint when the typed parent/index paths
+include Scala changes. Missing applicable required lint therefore refuses before
 Compile/Test. Retained old completed validation remains available through the
 bounded v2 recovery branch after ordinary host correction.
 
@@ -357,6 +358,13 @@ consumed scope takes precedence: scripts and skills covered by selected
 end in `.md`. Previously known documents retain their classification even under
 broader unchanged program coverage. There is no generic filename-based
 classification rule.
+
+The same proposal may re-observe a changed submodule reference that an older
+assessment recorded as unknown. The current typed parent/index diff must show
+a Git-link addition, update or removal. The new assessment records the path as
+consumed for detailed review. Reusing the old checks still requires their
+existing input coverage and exact selection. This correction keeps the old
+candidate, successful receipts and decision-needed review in history.
 
 Binary or unavailable text, remaining/new unknown paths, changed actual scope,
 missing program policy, missing consumed input coverage, or changed ordered

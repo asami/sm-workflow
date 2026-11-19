@@ -12,12 +12,16 @@ import RepositorySyncNativeMergeValidation as V
   * An admission is neither a semantic review verdict nor Git effect authority.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncMergeAssessment {
+  val projectScalaLint = "required-for-scala"
   final case class Policy(detailedReview: String, scalaLint: String, carLint: String,
-    lintReason: String, contractPaths: Vector[String], repairLimit: Int = 3)
+    lintReason: String, contractPaths: Vector[String], repairLimit: Int = 3) {
+    def requiresLint(changedPaths: Vector[String]): Boolean = scalaLint == "required" ||
+      (scalaLint == projectScalaLint && changedPaths.exists(_.endsWith(".scala")))
+  }
   final case class Result(policy: Policy, sourceRevision: String, branch: String,
     reason: String, overlappingPaths: Vector[String], contractPaths: Vector[String],
     conflictResolution: Boolean, triageReference: Option[ContextReference] = None)
@@ -33,7 +37,7 @@ private[smworkflow] object RepositorySyncMergeAssessment {
 
   def validateC(policy: Policy): Consequence[Unit] =
     if (policy != null && Set("required", "conditional")(policy.detailedReview) &&
-        Set("required", "not-applicable")(policy.scalaLint) &&
+        Set("required", projectScalaLint, "not-applicable")(policy.scalaLint) &&
         Set("off", "not-applicable")(policy.carLint) && policy.lintReason != null &&
         policy.lintReason.trim.nonEmpty &&
         policy.contractPaths != null && policy.contractPaths.size <= 128 &&
@@ -53,11 +57,13 @@ private[smworkflow] object RepositorySyncMergeAssessment {
         source.payload.indexTree.nonEmpty && state.receipts.size == state.selected.size + 2 &&
         V.successful(state.receipts, merge = true, selected = state.selected)) Consequence.unit
       else N.invalid("merge assessment requires complete successful merge checks")
-    _ <- if (policy.scalaLint != "required" || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
-      Consequence.unit else N.invalid("required merge lint has no selected actual fix-check result")
     _ <- V.preconditionsC(store, source)
     _ <- if (!store.declaration.runtimeCleanSync) Consequence.unit else for {
-      actual <- RepositorySyncDocumentInputs.captureC(store, source)
+      actual <- {
+        val hostpolicy = store.declaration.documentInputs
+        val selectedpolicy = source.payload.reviewInputs.fold(hostpolicy)(_.assessmentPolicy(hostpolicy))
+        RepositorySyncDocumentInputs.captureC(store, source, selectedpolicy)
+      }
       _ <- if (state.inputs.exists(_.applicableTo(actual)) && (actual.documentOnly || state.impact.exists(_.checks == state.selected))) Consequence.unit
         else N.invalid("merge assessment has no applicable retained input/impact observation")
     } yield ()
@@ -68,17 +74,19 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     _ <- V.preconditionsC(store, source)
     overlap = (localPaths.map(_.value).toSet intersect remotePaths.map(_.value).toSet).toVector.sorted
     changed = (localPaths ++ remotePaths).map(_.value).distinct.sorted
-    _ <- if (!changed.exists(_.endsWith(".scala")) || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) Consequence.unit
-      else N.invalid("actual Scala merge paths cannot claim lint non-applicability")
+    _ <- if (!policy.requiresLint(changed) || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      Consequence.unit else N.invalid("required merge lint has no selected actual fix-check result")
     contracts = changed.filter(path => policy.contractPaths.exists(prefix => path == prefix || path.startsWith(prefix + "/")))
     resolved = source.record.history.exists(_.currentProgression.exists(p =>
       Set("sync.MergeConflicted", "sync.MaterializingConflict", "sync.MergeResolutionAdmitted")(p.value)))
     reviewRepair = source.payload.repairContext.nonEmpty
-    branch = if (policy.detailedReview == "required" || resolved || reviewRepair) "detailed-review"
+    submodules = state.inputs.exists(_.submoduleChanges)
+    branch = if (policy.detailedReview == "required" || resolved || reviewRepair || submodules) "detailed-review"
       else if (overlap.nonEmpty || contracts.nonEmpty || state.inputs.exists(i => i.binaryPaths.nonEmpty || i.unknownPaths.nonEmpty)) "semantic-uncertainty" else "admit"
     reason = if (policy.detailedReview == "required") "Selected policy requires independent detailed review"
       else if (resolved) "Conflict resolution retains independent detailed review"
       else if (reviewRepair) "Original review findings and the affected repair delta require independent detailed re-review"
+      else if (submodules) "Changed submodule references or configuration require independent detailed review"
       else if (branch == "semantic-uncertainty") "Actual parent overlap, selected contract paths or binary document inputs require scoped semantic judgment"
       else "Actual selected checks passed without unresolved merge interaction; no semantic Action selected"
     applicability = state.impact.map(impact => "; " + impact.reason +

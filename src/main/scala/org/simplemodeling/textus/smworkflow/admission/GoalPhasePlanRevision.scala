@@ -16,7 +16,7 @@ import GoalPhaseDocumentPlan as P
   * Neither value certifies consent, transport integrity or execution authority.
   * @since   Oct. 18, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePlanRevision {
@@ -168,8 +168,8 @@ private[smworkflow] object GoalPhasePlanRevision {
       _ <- validateCapturedC(selected)
       _ <- controller.adoptPhaseRepairInventoryC(plan, "proposal-eligibility")
     } yield selected else if (controller.cursor < controller.plan.steps.size &&
-        O.currentInventoryPathsC(controller.plan,
-          proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), controller.step.identity).isSuccess) for {
+        proposal.plan.steps.size == controller.plan.steps.size &&
+        proposal.plan.steps.map(_.ownedPaths) != controller.plan.steps.map(_.ownedPaths)) for {
       selected <- Consequence.success(Captured(proposal,
         proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), documents))
       _ <- eligibleC(controller, selected)
@@ -267,7 +267,8 @@ private[smworkflow] object GoalPhasePlanRevision {
   /** Describing or retaining a proposal is not authority to adopt it. Exact
     * current inventory may reach its pending question so the separate public
     * supersession owner can authenticate a Human directive or retained boundary.
-    * Ordinary AdoptPlanRevision continues to use its unchanged stricter guard.
+    * Ownership narrowing uses ordinary explicit AdoptPlanRevision; appends keep
+    * their separate inventory authority and stricter append-only guard.
     */
   def eligibleC(controller: O.State, captured: Captured): Consequence[Unit] = for {
     _ <- validateCapturedC(captured)
@@ -276,7 +277,7 @@ private[smworkflow] object GoalPhasePlanRevision {
       captured.revisionScope.contains(remainingPurposeScope))
       adoptedC(controller, captured, "proposal-eligibility").map(_ => ())
       else if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
-        captured.plan.steps.map(_.ownedPaths) != controller.plan.steps.map(_.ownedPaths))
+        captured.plan.steps(controller.cursor).ownedPaths.size > controller.step.ownedPaths.size)
       controller.adoptCurrentInventoryRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
       else controller.adoptRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
   } yield ()

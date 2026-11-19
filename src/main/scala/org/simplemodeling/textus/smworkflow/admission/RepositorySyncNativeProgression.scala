@@ -2,7 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.processexecution.GitObjectId
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, Lifecycle}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -33,6 +33,11 @@ private[smworkflow] object RepositorySyncNativeProgression {
     continuationstore <- bindC(session, declaration, core, acknowledgement)
     pushcontinuation <- RepositorySyncPushContinuation.selectedC(continuationstore, session.started.current)
     continuation <- RepositorySyncValidationContinuation.selectedC(continuationstore, session.started.current)
+    reconstruction <- if (policyGate.isEmpty && remoteGate.isEmpty && session.started.current.currentProgression.contains(
+        WorkflowInstancePersistence.ProgressionReference("sync.PurposeRepairRequired")))
+      validationPolicy.fold(Consequence.success(Option.empty[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult]))(
+        RepositorySyncFormalFailureContinuation.reconstructionWaitC(continuationstore, session.started.current, _))
+      else Consequence.success(None)
     technical <- if (policyGate.isEmpty && remoteGate.isEmpty && session.started.current.suspension.isEmpty &&
         session.started.current.currentProgression.contains(WorkflowInstancePersistence.ProgressionReference("sync.ReviewDecisionRequired")) &&
         !RepositorySyncPurposeRuntime.selected(session.started.current)) (validationPolicy, review) match {
@@ -43,6 +48,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
     output <- if (technical.nonEmpty) Consequence.success(technical.get)
       else if (policyGate.nonEmpty) Consequence.success(policyGate.get)
       else if (remoteGate.nonEmpty) Consequence.success(remoteGate.get)
+      else if (reconstruction.nonEmpty) Consequence.success(reconstruction.get)
       else if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
@@ -291,8 +297,14 @@ private[smworkflow] object RepositorySyncNativeProgression {
       else "Actual local integration retained; selected validation and non-force final convergence are not complete. No semantic merge review is needed."
     wire <- if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
       conflicts.get.advanceC(store.identity, store.core)
-      else if (integrated.payload.stage == "PendingMergePrepared")
-        pendingMergeC(store.scoped(""), integrated, validationPolicy, review, convergence, store.namespace, repair)
+      else if (integrated.payload.stage == "PendingMergePrepared") for {
+        refreshed <- if (store.declaration.runtimeCleanSync) _project_declarations_changed_c(store, integrated)
+          else Consequence.success(false)
+        result <- if (refreshed) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
+          "Pending merge updates project declarations. Advance selects validation from the updated build.", integrated.payload.stage)
+          .copy(kind = "Progress"))
+          else pendingMergeC(store.scoped(""), integrated, validationPolicy, review, convergence, store.namespace, repair)
+      } yield result
       else if (integrated.payload.stage == "Integrated" && validationPolicy.nonEmpty) for {
         checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, integrationPolicy(store.declaration, validationPolicy.get))
         wire <- if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
@@ -304,6 +316,13 @@ private[smworkflow] object RepositorySyncNativeProgression {
       } yield wire
       else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
   } yield wire
+
+  private def _project_declarations_changed_c(store: Store, pending: Stage): Consequence[Boolean] = for {
+    before <- GitObjectId.parseC(pending.payload.before.head)
+    after <- pending.payload.indexTree.map(GitObjectId.parseC)
+      .getOrElse(invalid("Pending merge has no index tree for project declaration selection"))
+    changed <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
+  } yield changed.exists(change => Set("build.sbt", "project.yaml")(change.path.value))
 
   private[admission] def integrationPolicy(declaration: Fetch.Declaration,
     mergePolicy: RepositorySyncNativeMergeValidation.Policy): RepositorySyncNativeMergeValidation.Policy =
@@ -326,7 +345,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
       setup <- if (checked.payload.validation.exists(_.groups.values.exists(_.refusal.nonEmpty)))
         Consequence.success(checked.payload.validation.toVector.flatMap(_.groups.values.flatMap(_.refusal)).headOption.map("ValidationSetupRequired: " + _))
         else if (checked.payload.stage == "PendingMergePrepared" && store.declaration.runtimeCleanSync)
-        RepositorySyncDocumentInputs.captureC(store, pending).map(RepositorySyncNativeMergeValidation.setupReason(policy, _))
+        RepositorySyncDocumentInputs.captureC(store, pending).flatMap(
+          RepositorySyncNativeMergeValidation.mergeSetupReasonC(store, pending, policy, _, namespace))
         else Consequence.success(Option.empty[String])
       assessed <- if (checked.payload.stage == "MergeValidated")
         RepositorySyncMergeAssessment.admitC(store, checked, policy, namespace)

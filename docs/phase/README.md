@@ -1,5 +1,25 @@
 # sm-workflow incremental-use roadmap
 
+Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
+**stabilization -> remaining [Phase 7](phase-7.md) ->
+[necessary producer/setup prerequisites](phase-24.md#prerequisites-and-development-schedule) ->
+[Phase 24: practical API-credit use](phase-24.md)**.
+[Phase 25](phase-25.md) follows with generic textus-ai Task API and selected
+provider expansion. This is the user's latest priority for this consumer chat;
+the earlier 8.1 -> 9 -> 18 producer/feature sequence below remains recorded with
+its original ownership. Whole Phases 8.1/9/13/20/22/23/25 are not added ahead of
+Phase 24; concrete missing producer capabilities are named and scheduled in its
+PRE-1–4 table. Reuse applicable Phase 9 dispatch/handoff evidence without
+duplicate implementation or acceptance claims.
+
+API plans previously called 22/23 existed only as unpublished local documents.
+They are now [24](phase-24.md) / [25](phase-25.md), preserving the canonical
+[22 runtime stabilization](phase-22.md) and [23 strategic convergence](phase-23.md)
+plans and checklists. Phase 8's accepted FORMAL release is consumed without
+reopening its approved NOT RUN boundaries. See the
+[allocation record](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md).
+No Phase/Session is started by this planning change.
+
 Current release and priority — 2026-11-19:
 [Phase 8](phase-8.md#human-approved-formal-release--2026-11-19) is closed as a
 Human-approved FORMAL local release, without additional validation or review
@@ -7,8 +27,9 @@ Human-approved FORMAL local release, without additional validation or review
 management issues are recorded in [Phase 22](phase-22.md), P22-01–06, and its
 [checklist](phase-22-checklist.md). Historical successes, failed/UNKNOWN outcomes,
 accepted Steps and repair count 10/10 are retained. Native Session reconciliation
-remains Phase 22 work and does not invalidate this accepted release. Next planned
-work remains 8.1 -> 9 -> 18; Phase 22 does not interrupt API-use priority. No
+remains Phase 22 work and does not invalidate this accepted release. The
+release-time sequence was 8.1 -> 9 -> 18; the latest consumer-chat priority is
+recorded above. Phase 22 does not interrupt API-use priority. No
 successor is started and no push is selected by this release.
 
 Historical priority and residual allocation — 2026-11-18:
@@ -630,6 +651,8 @@ in Phase 6, using the corrected runtime contract.
 | [21: Recursive Repository Catch-up](phase-21.md) | Existing local repository/worktree and registered dependency catch-up from remote/local main; fast-forward, explicit rebase/merge and resumable Human decisions | Restores former P13-01–06 as P21-01–06; [checklist](phase-21-checklist.md); no implicit push/publication and no selected execution slot |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | FORMAL local release closed 2026-11-19; additional validation/review NOT RUN — USER-APPROVED; residuals in Phase 22; next 8.1 |
 | [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Planned after API-use delivery; preserve 9 -> 18 priority; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
+| [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, existing textus-ai/OpenAI connection, ordinary acceptance, bounded agent handoff and no-paid-overage setup | Consumer lane: stabilization -> remaining Phase 7 -> concrete producer/setup prerequisites -> 24; [checklist](phase-24-checklist.md); preserves canonical 22/23 |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, capability/quota-aware provider selection and selected additional-provider integration | After 24's usable delivery; [checklist](phase-25-checklist.md); no prerequisite for 24 |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal single-entry decisions, issues and handoffs](phase-11.1.md) | Linked semantic records, single-entry correction/history, state/query and one real consumer | After 7 and before 8; reuse 11 without reopening its trial |

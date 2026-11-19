@@ -256,6 +256,13 @@ allocation. These selection fields are preserved and refused, never stripped to
 run a kind-only substitute. Metadata/discovery and ordinary FULL-group execution
 remain outside this route's supported scope.
 
+When ordinary impact selection chooses FULL for a Session-owned Purpose,
+the selected static Compile and Test checks can satisfy code assessment.
+The actual Test receipt must include a complete report with at least one
+executed successful test and no failures, cancellations or aborted suites.
+Every selected check and any required lint or review still applies. Assessment
+consumes the retained check receipts for the current candidate.
+
 Every known managed continuation independently derives its logical binding and
 Slot from the current ordinary per-call validation and assessment policy. The
 logical reference and complete derived Slot must equal the retained selection
@@ -284,7 +291,7 @@ existing recovery contract remain supported.
 
 Executable contract: `RepositorySyncSessionCandidateWorkspaceSpec` authors small
 local repositories for managed materialization, actual structural Git, ordinary
-Compile and nonempty ScalaTest TestOnly candidate consumption, same-storage
+Compile and nonempty ScalaTest Test or TestOnly candidate consumption, same-storage
 reopening, current check/review-policy mismatch, unsupported selection preflight
 and same-candidate setup correction. Its uncertainty case creates an occupied
 candidate through a real CNCF allocation solely as fixture arrangement, then

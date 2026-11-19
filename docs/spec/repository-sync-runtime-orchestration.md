@@ -136,6 +136,14 @@ with zero-based Unicode code point offset/count; range access is not review
 coverage. See the [S2 source/evidence note](../notes/phase-6.9-s2-merge-assessment.md)
 for configuration, API inputs, authored cases and runtime qualification limits.
 
+Git submodule additions, updates and removals are consumed inputs at any path.
+The typed parent/index diff records their Git-link commit IDs. Blob checks apply
+to file objects only, including `.gitmodules` when it changes. Submodule reference
+and configuration changes require detailed review after the selected product
+checks. Changes between a Git link and another entry type remain unknown.
+Classification of a reference makes no claim about the availability or contents
+of its target commit.
+
 ## S3 program impact connection
 
 The standard runtime accepts optional host `sm-workflow.repository-sync.program-inputs`
@@ -400,9 +408,13 @@ For RepositorySync it reads the existing managed process profile and the ordinar
 does not execute a build, create a grant or claim a successful result.
 
 Available checks retain their actual operation, ordinal, repository workspace and
-component grants. The standard fallback selects Compile, available FixCheck and
-Test (FULL); it never guesses a TestOnly selector or a suite's precise consumption
-scope. Source/build scopes and a declared `cml.source` are consumed inputs.
+component grants. The standard fallback selects Compile and Test (FULL). Both
+the fallback and inferred framework discovery add FixCheck when the project's
+`project.yaml` declares `validation.fixCheck: true` and the selected workspace
+supplies a managed FixCheck binding. This declaration says that the project
+supplies the SBT command `fixCheck`. Explicit check policies keep their selected
+checks. The fallback never guesses a TestOnly selector or a suite's precise
+consumption scope. Source/build scopes and a declared `cml.source` are consumed inputs.
 README, LICENSE, CHANGELOG and development notes/journals are standard document
 scopes; explicit project consumption overrides these defaults. Other paths remain
 unknown and require FULL coverage when integrated in a merge.
@@ -412,6 +424,19 @@ An unknown project or unavailable declaration does not create authority, a PASS,
 or an initialization refusal for a light sync. Actual fetched parent/index deltas
 still determine whether a merge needs product validation. Equal, local-ahead and
 fast-forward retain their existing structural-only integration policy.
+
+When a declaration read failure prevents required validation from being
+resolved, the setup wait identifies the file and reports the resource reader's
+reason. An absent optional declaration remains unknown or uses the applicable
+SBT defaults. In an ordinary merge, actual Scala changes require a selected
+FixCheck when the project declares `validation.fixCheck: true`. A missing
+managed binding then produces a validation setup wait before product checks.
+Without that declaration, actual consumed program changes still run the selected
+Compile and Test checks. Explicitly required merge lint remains binding. Setup
+refresh continues the same Session with its retained candidate and accepted work.
+When an automatic merge updates either project declaration, the first Advance
+retains that pending merge. The next Advance reads its updated declarations
+before selecting any product checks.
 
 Existing configured prior-evidence references retain their native reader and
 actual input-applicability checks. There is no new evidence ledger or claim of

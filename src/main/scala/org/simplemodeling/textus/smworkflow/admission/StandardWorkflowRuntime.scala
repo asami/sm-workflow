@@ -271,7 +271,9 @@ private[smworkflow] object StandardWorkflowRuntime {
     programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
-    validation = if (selectedInput._2) normalRepositoryValidation(programInputs) else repositoryValidation
+    validation = if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
+      initialized.projectProvidesFixCheck)
+      else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
     evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
       Vector(goalDefinition.definition), p.instances, p.continuations)
@@ -691,10 +693,17 @@ private[smworkflow] object StandardWorkflowRuntime {
       ThreeWorkflowRuntimeParameters.Target(target.root.toString, target.localBranch, target.remote, target.remoteBranch, target.endpoint), goal, repository)
   }
 
-  private[admission] def normalRepositoryValidation(programinputs: Option[RepositorySyncProgramImpact.Policy]): RepositorySyncNativeMergeValidation.Policy =
-    programinputs.fold(documentValidation)(p => documentValidation.copy(
+  private[admission] def normalRepositoryValidation(programInputs: Option[RepositorySyncProgramImpact.Policy],
+    declarationReadFailure: Option[WorkflowProjectDeclaration.ReadFailure] = None,
+    projectProvidesFixCheck: Boolean = false): RepositorySyncNativeMergeValidation.Policy = {
+    val validation = programInputs.fold(documentValidation.copy(setupRequired =
+      declarationReadFailure.map(failure => s"ValidationSetupRequired: ${failure.diagnostic}")))(p => documentValidation.copy(
       identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
       assessment = documentValidation.assessment.map(_.copy(lintReason = p.reason))))
+    if (projectProvidesFixCheck) validation.copy(assessment = validation.assessment.map(_.copy(
+      scalaLint = RepositorySyncMergeAssessment.projectScalaLint,
+      lintReason = "The project's project.yaml declares validation.fixCheck for Scala changes"))) else validation
+  }
 
   private def documentValidation = RepositorySyncNativeMergeValidation.Policy("document-repository-sync", 1,
     "explicit-no-product-tests", "Reuse applicable program validation: actual parent/index deltas contain only declared non-consumed documents; no uncovered program behavior is introduced.",

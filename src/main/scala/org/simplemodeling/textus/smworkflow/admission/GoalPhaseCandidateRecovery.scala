@@ -28,7 +28,7 @@ import D.given
   * Old process settlement remains unknown; no completed effect is replayed.
   * @since   Oct. 22, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateRecovery {
@@ -38,13 +38,15 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
   val choices = Vector("AuthorizeNewObservation", "Defer")
   def choicesFor(target: RecoveryTarget): Vector[String] =
     if (!validTarget(target)) Vector.empty
-    else if (observationAllowed(target)) choices
+    else if (observationAllowed(target))
+      if (target.controller.generation < Long.MaxValue) Vector("AuthorizeNewObservation", "ReviseWork", "Defer") else choices
     else if (target.controller.generation < Long.MaxValue) Vector("ReviseWork", "Defer")
     else Vector("Defer")
   val message = "The old candidate observation remains UNKNOWN and its termination is unconfirmed. " +
     "AuthorizeNewObservation permits ONE NEW remaining candidate observation, including Git write-tree, " +
     "without repeating staging or source-history writes. It never establishes NotExecuted or termination. " +
     "Original implementation, Plan, base, accepted work and repair counters remain retained. " +
+    "ReviseWork requests fresh same-Step implementation after candidate preparation, preserving its completed staging facts. " +
     "An incomplete or UNKNOWN dependency stage offers only explicit ReviseWork or Defer; " +
     "ReviseWork preserves every old intent and uses the existing same-Step semantic generation transition. " +
     "Recovery appends independent Human direction only; a separate ordinary Advance performs the new observation. " +

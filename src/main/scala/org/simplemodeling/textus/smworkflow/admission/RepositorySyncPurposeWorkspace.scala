@@ -111,7 +111,7 @@ private[smworkflow] object RepositorySyncPurposeWorkspace {
     _ <- policy.validateC
     assessment <- policy.assessment.map(Consequence.success).getOrElse(N.invalid("Managed Purpose ordinary assessment policy is absent"))
     _ <- RepositorySyncMergeAssessment.validateC(assessment)
-    _ <- policy.setupRequired.fold(Consequence.unit)(N.invalid[Unit])
+    _ <- if (document) Consequence.unit else policy.setupRequired.fold(Consequence.unit)(N.invalid[Unit])
     checks <- if (document) Consequence.success(Vector.empty[C.Check]) else for {
       impact <- policy.impact.map(Consequence.success).getOrElse(N.invalid("Managed Purpose program inputs require ordinary declared coverage; no FULL is inferred"))
       _ <- RepositorySyncProgramImpact.validateC(impact)

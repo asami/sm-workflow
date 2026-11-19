@@ -99,10 +99,12 @@ connection, validation/FIX/cost integration and assembled review remain open.
 
 An absent assessment policy retains the legacy required review route. An explicit
 `validation.assessment` selects `detailedReview` (required/conditional), Scala lint
-(required/not-applicable), CAR lint (off/not-applicable), a meaningful lint reason,
-relative contract paths and a bounded repair limit (default 3). Actual Scala paths
-cannot claim lint non-applicability; required lint needs a selected successful
-native fix-check receipt. Unsupported semantic scanners remain absent.
+(required/required-for-scala/not-applicable), CAR lint (off/not-applicable), a
+meaningful lint reason, relative contract paths and a bounded repair limit (default
+3). An ordinary project declaration can set `required-for-scala`, which applies
+to actual Scala paths in the pending merge. Both applicable lint modes need a
+selected successful native fix-check receipt. Unsupported semantic scanners remain
+absent.
 
 The actual pending-index paths relative to both genuine parents select overlap
 and declared contract uncertainty. Complete actual selected checks with neither

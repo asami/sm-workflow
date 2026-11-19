@@ -1,5 +1,29 @@
 # Explicit bounded Plan revision
 
+## Explicit current-Step ownership narrowing (2026-11-19)
+
+Ordinary `PlanRevision` followed by independently admitted Human
+`AdoptPlanRevision` may reduce the current unaccepted Step's `ownedPaths` to a
+nonempty order-preserving subset. The fresh revision changes only those paths:
+purpose, checks, dependencies, classifications, action policy, other Steps,
+accepted prefix and raw/saved effective acceptance remain exact. Plan identity,
+Phase, repository, closure policies and repair limit retain their existing
+adoption rules. The new semantic generation retains base, reviews, failure
+history and consumed repair counts. Capture retains the saved acceptance rather
+than adopting later host defaults. The proposal itself is not Human authority.
+
+This permission belongs to ordinary explicit Plan adoption, not automatic
+inventory continuation or the separate append-only remaining-Plan inventory
+target. It does not unstage or edit files. The repository owner corrects the
+selected index entries while retaining excluded worktree contents. A changed
+candidate still requires fresh validation and independent review.
+
+`GoalPhasePlanRevisionSpec` documents accepted-prefix/acceptance preservation and
+refusal of mixed ownership/policy changes. `NativeGoalCandidateRecoveryCliSpec`
+connects the actual PNG rejection, genuine specification-owned Human recovery,
+ordinary narrowing proposal/adoption and a newly checked text candidate. These
+isolated inputs do not authorize production Session changes.
+
 The separate [Phase acceptance deferral contract](goal-phase-acceptance-deferral.md)
 adds the explicit `phase-acceptance-deferral` saved revision scope for an
 all-closed PhaseReview decision. It permits only adopted Phase conditions to
@@ -75,8 +99,8 @@ genuine Human direction; parent validation and independent review remain require
 Updated 2026-10-27: the separate
 [current primary-Component inventory adoption](goal-phase-remaining-plan-adoption.md#current-primary-component-inventory-continuation-r13r16-e3)
 uses its own pure current-Step literal append guard and typed `Target.currentInventory`
-within the existing remaining-Plan operations. Ordinary `adoptRevisionC` and
-`adoptRemainingRevisionC` remain strict about ownership. The inventory branch
+within the existing remaining-Plan operations. `adoptRemainingRevisionC` remains
+strict about ownership; ordinary explicit narrowing is defined above. The inventory branch
 changes only the fresh revision and current uncompleted Step's explicit appended
 paths; every purpose, check, condition/source, closure policy and other Step remains
 exact. Each added path requires explicit same-Component host registration and an
@@ -186,9 +210,11 @@ An exhausted repair window cannot be renewed through adoption.
 
 The complete proposed Plan must have a new revision. Plan identity, Phase,
 repository, repair limit, Phase checks, Phase review classification, Step count
-and every other Step remain equal. Current Step identity, owned paths,
-dependencies and work classification remain equal. Only its purpose and selected
-literal check identities may change. Fresh question capture requires nonempty
+and every other Step remain equal. Current Step identity, dependencies and work
+classification remain equal. Its purpose and selected literal check identities
+may change with unchanged ownership. Alternatively, the explicit ownership
+narrowing above may change only its nonempty ordered path subset while retaining
+purpose, checks and saved acceptance. Fresh question capture requires nonempty
 current-Step check identities that all match declared `validationPolicy` checks.
 Executable, workspace and permission checks remain with their existing owners.
 

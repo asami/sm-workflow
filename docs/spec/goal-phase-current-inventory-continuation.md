@@ -44,9 +44,10 @@ changed to satisfied by inventory continuation. An unconfigured legacy result
 with nonempty findings remains Human. A real current-Step Repair may retain its
 mandatory exact assigned issue report only with every disposition BLOCKED. Those
 issues stay unresolved; FIXED/DECLINED or an unassigned issue cannot qualify this
-inventory-only branch. A RepairStep may carry the authentic review context from
-its issued work; that retained input is not a new review judgment. Review-result,
-completion, repair-source,
+inventory-only branch. A review-origin Repair retains its original input review;
+that existing evidence does not disqualify its otherwise exact inventory append
+or repeated-revision correction. It remains original evidence, not a new verdict.
+New returned review, completion, repair-source,
 dependency and diagnostic adjunct judgments remain excluded.
 An optional valid fix assessment is concern-free only when requirementChanged
 and contractChanged are both false and convergence is PROGRESSING. Its actual
