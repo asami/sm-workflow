@@ -94,7 +94,8 @@ private[smworkflow] object DelegateTaskDeliveryService {
               b.sourceCandidateTree == a.candidateTree && b.sourceWorkspace == ref.workspace &&
               state.candidate.exists(c => c.head == b.sourceBaseHead && c.tree == b.sourceCandidateTree) &&
               state.commit.exists(_.identity == b.sourceCommit) && a.check == check.identity && a.ordinal == check.ordinal &&
-              check.kind == WorkflowSbtValidation.Kind.Test && ref.encodedBytes <= b.maximumBytes)
+              WorkflowSbtCapture.selectedKind(check.kind) && receipt.sbt.exists(_.kind == check.kind) &&
+              ref.encodedBytes <= b.maximumBytes)
             _ <- if (matching.size == 1) Consequence.unit else N.invalid("Returned capture binding is missing, ambiguous or crossed")
             binding = matching.head
             hydrated <- RepositorySyncNativeMergeValidation.hydrateExternalC(core, receipt, a,
