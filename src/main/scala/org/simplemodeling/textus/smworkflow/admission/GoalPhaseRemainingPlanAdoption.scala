@@ -24,7 +24,8 @@ import GoalPhaseDocumentSource as D
 /** New Human direction for future work, separately from the unanswered old
   * question. All effects belong to the owning native guarded transaction.
   * @since   Oct. 20, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRemainingPlanAdoption {
@@ -80,7 +81,8 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     inventoryAuthority: Option[GoalPhaseInventoryAuthority.Boundary] = None)
   final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound],
     decisionContext: Option[GoalPhaseNativeWork.DecisionContext] = None,
-    dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
+    dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+    currentinventory: Option[CurrentInventoryTarget] = None)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
     def inventoryAuthorityC(core: ActionCall.Core, reference: ContextReference): Consequence[Option[GoalPhaseInventoryAuthority.Boundary]] =
@@ -245,7 +247,21 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         next <- GoalPhaseNativeHistory.completionC(source.session.current, pending, payload.directive, state.stage.toString)
         _ <- if (next.revision == nextRevision && nextRevision == sourceRevision.next) Consequence.unit
           else F.invalid("retained remaining Plan adoption crosses its actual native receipt revisions")
-  } yield Selected(state, next, target.captured.documents)
+  } yield Selected(state, next, target.captured.documents, currentinventory = target.currentInventory)
+
+  /** Pure projection only. The caller must authenticate the retained adoption
+    * before using this finite vector to restore a standard runtime binding. */
+  private[admission] def currentInventoryPathsC(target: CurrentInventoryTarget, candidatePaths: Vector[String],
+    componentInstance: String): Consequence[Vector[String]] = for {
+    _ <- if (_valid_inventory_target(target) && _exact(componentInstance) &&
+        target.componentInstance == componentInstance && candidatePaths != null &&
+        candidatePaths.distinct == candidatePaths && candidatePaths.forall(path => _exact(path) &&
+          RepositorySyncNativeConflictInput.relative(path) && !path.exists(c => "*?[]{}".contains(c)))) Consequence.unit
+      else F.invalid("Current inventory projection requires exact Component identity and literal unique candidate paths")
+    paths <- if (target.candidatePaths.startsWith(candidatePaths)) Consequence.success(target.candidatePaths)
+      else if (candidatePaths.startsWith(target.candidatePaths)) Consequence.success(candidatePaths)
+      else F.invalid("Current inventory projection crosses the recorded ordered candidate prefix")
+  } yield paths
 
   private def _target_c(source: H.Source, d: F.Declaration, core: ActionCall.Core, raw: Record): Consequence[Target] = for {
     pending <- _pending_c(source)

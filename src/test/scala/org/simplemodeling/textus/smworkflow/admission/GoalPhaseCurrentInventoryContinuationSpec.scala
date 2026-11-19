@@ -47,6 +47,35 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
 
   "AUTO-FILE-GP current inventory" should afterWord(
     "in spec:goal-phase-current-inventory-continuation, example:E1, rules:R1,R2,R3, phase:AUTO-FILE-GP-01") {
+    "project a Human-adopted finite inventory only for the same Component and complete ordered prefixes" in {
+      Given("R4: authenticated Human metadata retains every candidate ordinal, including an unused capability")
+      val adoption = GoalPhaseRemainingPlanAdoption
+      val prefix = Vector("src/Product.scala", "docs/product.md")
+      val recorded = prefix ++ Vector("src/Unused.scala", "src/Needed.scala")
+      val target = adoption.CurrentInventoryTarget("actual-component", "S1", Vector("src/Needed.scala"), recorded)
+      When("standard binding projects compatible shorter, equal and longer complete candidate vectors")
+      val cases = Vector(Vector.empty[String] -> recorded, prefix -> recorded, recorded -> recorded,
+        (recorded :+ "docs/later.md") -> (recorded :+ "docs/later.md"))
+      Then("the longer vector survives intact without compacting unused capabilities or changing their ordinals")
+      cases.foreach { case (current, expected) =>
+        take(adoption.currentInventoryPathsC(target, current, "actual-component")) shouldBe expected
+      }
+      Given("foreign Component identity, reordered or unrelated paths, and malformed finite metadata")
+      val invalidpaths = Vector(prefix.reverse, Vector("src/Foreign.scala"), prefix :+ "src/Foreign.scala",
+        Vector("src/Product.scala", "src/Product.scala"), Vector("../escape"), Vector("src/*.scala"),
+        null)
+      val invalidtargets = Vector(target.copy(componentInstance = "other-component"),
+        target.copy(stepIdentity = ""), target.copy(appendedPaths = Vector("src/Absent.scala")),
+        target.copy(candidatePaths = recorded :+ "../escape"), target.copy(candidatePaths = recorded.reverse),
+        target.copy(candidatePaths = recorded :+ recorded.head), target.copy(candidatePaths = Vector.empty),
+        target.copy(candidatePaths = null), null)
+      When("pure projection checks their exact boundary without granting adoption authority")
+      Then("every incompatible or malformed input refuses")
+      adoption.currentInventoryPathsC(target, prefix, "other-component").isSuccess shouldBe false
+      invalidpaths.foreach(paths => adoption.currentInventoryPathsC(target, paths, "actual-component").isSuccess shouldBe false)
+      invalidtargets.foreach(value => adoption.currentInventoryPathsC(value, prefix, "actual-component").isSuccess shouldBe false)
+    }
+
     "retain configured unsatisfied observations and findings without accepting them or suppressing typed concerns" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R2,R3: required behavior and validation remain unmet while concrete files are needed")
       val boundary = GoalPhaseAcceptanceBoundary

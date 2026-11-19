@@ -272,7 +272,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     reviewContext: Option[GoalPhaseNativeReview.Context] = None,
     stepReviewReason: Option[String] = None,
     consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
-    sourcehistoryfailedrepair: Option[T.Observed] = None)
+    sourcehistoryfailedrepair: Option[T.Observed] = None,
+    projectedpaths: Option[Vector[String]] = None)
   private final case class Cursor(from: InstanceRecord, controller: O.State,
     documents: Option[D.Bound], candidate: Option[GoalPhaseNativeCandidate.Saved],
     validation: Option[GoalPhaseNativeValidation.Saved],
@@ -330,16 +331,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencypublicationalignments: Vector[Alignment.Saved] = Vector.empty,
     developmentReconstruction: Option[X.Saved] = None,
     developmentReconstructionAnswer: Option[(String, ContextReference)] = None,
-    reconstructionPrefixReuse: Option[X.PrefixReuse] = None)
+    reconstructionPrefixReuse: Option[X.PrefixReuse] = None,
+    projectedpaths: Option[Vector[String]] = None)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
   private final case class Human(source: H.Source, findings: N.State, cursor: Cursor) extends Located
-  private final case class LocatedRecording(source: N.Source) extends Located
+  private final case class LocatedRecording(source: N.Source, projectedpaths: Option[Vector[String]] = None) extends Located
   private final case class Paused(cursor: Cursor, reason: String, repository: Boolean = false) extends Located
 
   final class Port private[GoalPhaseNativeWorkContinuation](d: F.Declaration, definition: DefinitionBinding,
-    acknowledgement: String => Consequence[Unit]) {
+    acknowledgement: String => Consequence[Unit], private val _projection_mode: Boolean = false) {
     def reconstructDevelopmentC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDevelopmentReconstructionInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       _ <- X.proposalC(input)
@@ -354,7 +356,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case Some(result) => Consequence.success(result)
             case None => _human_output_c(human, findings, core)
           }
-        case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
+        case LocatedRecording(recording, _) => _recording_port.issuedC(recording, core)
           .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
         case Frontier(cursor) if cursor.controller.pendingRepair.nonEmpty || cursor.controller.policyRepairPending ||
             cursor.controller.repairControl.flatMap(_.stop).nonEmpty =>
@@ -631,7 +633,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       proposal: Option[GoalPhasePlanRevision.Proposal]): Consequence[(O.Plan, Vector[String])] = for {
       source <- F.retainedSessionC(identity, d, definition, core)
       paths <- K.runtimeCandidatePathsC(source, d.candidatePaths, core)
-      selected <- new Port(d.copy(candidatePaths = paths), definition, acknowledgement)
+      selected <- new Port(d.copy(candidatePaths = paths), definition, acknowledgement, _projection_mode = true)
         ._runtime_binding_c(source, core, proposal)
     } yield selected
 
@@ -643,9 +645,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Frontier(value) => value.controller
         case Work(value) => value.controller
         case Human(value, _, _) => value.controller
-        case LocatedRecording(value) => value.controller
+        case LocatedRecording(value, _) => value.controller
         case Paused(value, _, _) => value.controller
       }
+      restoredpaths = located match {
+        case Frontier(value) => value.projectedpaths
+        case Work(value) => value.projectedpaths
+        case Human(_, _, value) => value.projectedpaths
+        case LocatedRecording(_, paths) => paths
+        case Paused(value, _, _) => value.projectedpaths
+      }
+      candidatepaths = restoredpaths.getOrElse(d.candidatePaths)
       inventory <- located match {
         case Frontier(cursor) => K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
         case Human(human, _, cursor) if proposal.exists(_.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) =>
@@ -656,13 +666,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case _ => Consequence.success(Option.empty[K.Source])
       }
       paths <- inventory match {
-        case None => Consequence.success((d.candidatePaths ++ controller.plan.phaseOwnedPaths).distinct)
+        case None => Consequence.success((candidatepaths ++ controller.plan.phaseOwnedPaths).distinct)
         case Some(value) => for {
           selected <- proposal.orElse(value.result.result.value.planRevision).map(Consequence.success)
             .getOrElse(F.invalid("runtime inventory lost its actual proposal"))
           captured <- GoalPhasePlanRevision.phaseRepairInventoryPlanC(controller.plan, selected.plan)
           appended <- O.phaseRepairInventoryPathsC(controller.plan, captured)
-          paths = (d.candidatePaths ++ controller.plan.phaseOwnedPaths ++ appended).distinct
+          paths = (candidatepaths ++ controller.plan.phaseOwnedPaths ++ appended).distinct
           _ <- K.targetForC(value, d.copy(candidatePaths = paths), core, selected)
         } yield paths
       }
@@ -1960,6 +1970,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               Consequence.success(value.copy(from = predecessor))
             case _ => F.invalid("development reconstruction crossed pending actual work, Human or recording")
           }
+          nextport = if (_projection_mode && historyonly) prior.projectedpaths.map(paths =>
+            new Port(d.copy(candidatePaths = paths), definition, acknowledgement, _projection_mode = true)).getOrElse(this)
+            else this
           actualanswer = prior.developmentReconstructionAnswer.filter(answer =>
             Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer._1))
           saved <- X.retainedC(source, predecessor, prior.controller, core, actualanswer, superseded)
@@ -1967,7 +1980,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case None => if (superseded.isEmpty) Consequence.unit
               else F.invalid("legacy common reconstruction cannot supersede an unanswered Human")
             case Some(proof) => for {
-              origin <- _prefix_origin_c(source, prior, core, superseded).flatMap(_.map(Consequence.success)
+              origin <- nextport._prefix_origin_c(source, prior, core, superseded).flatMap(_.map(Consequence.success)
                 .getOrElse(F.invalid("prefix reconstruction has no authenticated formal failed normalization source")))
               (direction, failed) = origin
               reference = GoalPhaseSourceHistoryNormalization.reference(direction.direction.target)
@@ -2001,8 +2014,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                 previous.payload.documents == saved.payload.documents && previous.payload.observation == saved.payload.observation &&
                   previous.payload.assessment == saved.payload.assessment))) Consequence.unit
             else F.invalid("development reconstruction crosses its actual selected projection or ordered Human answer")
-          selected <- _development_cursor_c(prior, saved)
-          result <- _walk_c(source, selected, soughtwork, soughthuman,
+          selected <- nextport._development_cursor_c(prior, saved)
+          result <- nextport._walk_c(source, selected, soughtwork, soughthuman,
             soughtrecording, core, historyonly)
         } yield result
       }
@@ -2070,9 +2083,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           result <- if (boundary.completion.value == recording.metadata.completionContract.identity) {
             val recordingsource = _recording_source(source, cursor)
             if (soughtrecording.contains(N.identity(recordingsource)))
-              _recording_port.issuedC(recordingsource, core).map(_ => LocatedRecording(recordingsource): Located)
+              _recording_port.issuedC(recordingsource, core).map(_ => LocatedRecording(recordingsource, cursor.projectedpaths): Located)
             else _recording_port.retainedC(recordingsource, core).flatMap {
-              case None => Consequence.success[Located](LocatedRecording(recordingsource))
+              case None => Consequence.success[Located](LocatedRecording(recordingsource, cursor.projectedpaths))
               case Some(value) => _walk_c(source, cursor.copy(from = value.record,
                 findings = N.consumed(cursor.findings, value.completed)), soughtwork, soughthuman, soughtrecording, core, historyonly)
             }
@@ -2141,6 +2154,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               _walk_c(source, _phase_inventory_cursor(cursor, inventory.get), soughtwork, soughthuman, soughtrecording, core, historyonly)
             else adopted match {
               case Some(value) => for {
+                projected <- if (_projection_mode && historyonly && value.currentinventory.nonEmpty)
+                  GoalPhaseRemainingPlanAdoption.currentInventoryPathsC(value.currentinventory.get, d.candidatePaths,
+                    core.component.get.core.instanceId.canonicalKey).map(Some(_))
+                  else Consequence.success(Option.empty[Vector[String]])
+                selectedpaths = projected.getOrElse(d.candidatePaths)
                 _ <- value.dependencySourceDirection.fold(Consequence.unit) { direction =>
                   if (GoalPhaseDependencySourceRevision.isSuccessor(direction.target)) cursor.dependencySourceDirection match {
                     case Some(original) if GoalPhaseDependencySourceRevision.successorValid(original, direction, cursor.dependencyApprovals) &&
@@ -2157,9 +2175,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     cursor.dependencyChain.resolveC(direction.target.predecessor)
                   else F.invalid("source direction crosses the actual reconstructed dependency lineage")
                 }
-                policy <- value.documents.map(documents => P.policyC(value.controller.plan, documents, d.candidatePaths).map(Some(_)))
+                policy <- value.documents.map(documents => P.policyC(value.controller.plan, documents, selectedpaths).map(Some(_)))
                   .getOrElse(Consequence.success(Option.empty[P.Policy]))
-                result <- _walk_c(source, cursor.copy(from = value.record, controller = value.controller,
+                nextport = if (projected.nonEmpty) new Port(d.copy(candidatePaths = selectedpaths), definition,
+                  acknowledgement, _projection_mode = true) else this
+                result <- nextport._walk_c(source, cursor.copy(from = value.record, controller = value.controller,
+                  projectedpaths = projected.orElse(cursor.projectedpaths),
                   documents = value.documents, documentpolicy = policy, candidate = None, validation = None,
                   decisioncontext = value.decisionContext, recordingCandidate = None,
                   dependencySourceDirection = value.dependencySourceDirection.filterNot(value => GoalPhaseDependencySourceRevision.isSuccessor(value.target)).orElse(cursor.dependencySourceDirection),
@@ -2997,7 +3018,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       cursor.dependencyApprovals, cursor.dependencyAdmission, d.dependencyValidation, cursor.dependencyChain,
       cursor.dependencySourceDirection, validation = cursor.validation, reviewContext = context,
       stepReviewReason = cursor.stepReviewRequest.map(_.reason), consumptionDirection = cursor.consumptionDirection,
-      sourcehistoryfailedrepair = _source_history_failure_provenance(cursor.copy(controller = controller)))
+      sourcehistoryfailedrepair = _source_history_failure_provenance(cursor.copy(controller = controller)),
+      projectedpaths = cursor.projectedpaths.orElse(if (_projection_mode) Some(d.candidatePaths) else None))
 
     /** Only the walker installs this fact after the retained native owner and
       * pure controller have authenticated the exact formal-failure edge. */
@@ -3141,7 +3163,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case _ => _human_output_c(decision, findings, core)
               .map(_.copy(validation = cursor.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))))
           }
-          case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
+          case LocatedRecording(recording, _) => _recording_port.issuedC(recording, core)
             .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
             cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
@@ -3818,7 +3840,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       initial <- _initial_cursor_c(source)
       located <- _walk_c(source, initial, None, None, Some(selected), core)
       recording <- located match {
-        case LocatedRecording(value) if N.identity(value) == selected => Consequence.success(value)
+        case LocatedRecording(value, _) if N.identity(value) == selected => Consequence.success(value)
         case _ => F.invalid("submitted recording is unreachable through actual contiguous native history")
       }
     } yield recording
@@ -3963,7 +3985,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield Prepared(source, input, Some(intent), pending, work, controller, candidate, documentpolicy, findings,
       dependencyapprovals, dependencyadmission, d.dependencyValidation, dependencychain, dependencysourcedirection,
       reviewContext = input.review, stepReviewReason = stepreviewreason, consumptionDirection = consumptiondirection,
-      sourcehistoryfailedrepair = sourcehistoryfailedrepair)
+      sourcehistoryfailedrepair = sourcehistoryfailedrepair,
+      projectedpaths = if (_projection_mode) Some(d.candidatePaths) else None)
 
     private def _requirement_c(input: S.Request, required: StateMachineRequiredOperation,
       independent: Boolean): Consequence[ExecutionRequirement] = {

@@ -68,6 +68,17 @@ the ordinary native DecisionSupersession adapter under the same standing purpose
 The question is retained without an answer. Mixed judgments and accepted Defer or
 Cancel remain retained and unchanged. Existing manual RemainingPlan and external
 InventoryAuthority receipts remain readable, with no backfill or invented grant.
+For a genuine Human RemainingPlan inventory adoption, standard runtime binding
+authenticates the existing supersession, target, Plan and adjacent native
+revisions before restoring its finite candidate vector. The actual Component
+must match, and the recorded and current literal unique vectors must be ordered
+prefixes of one another. The longer complete vector is carried through this
+invocation's native history walk, including unused capabilities, so prior path
+ordinals remain stable. This is a read projection of authenticated native facts;
+it adds no stored cache or adoption authority. Fixed hosts keep their explicit
+candidate restrictions. File existence supplies no scope. Ordinary current
+source/Git checks, independent evidence consumption and typed Git/UoW closure
+remain required after restoration.
 The existing all-closed Phase repair inventory continuation retains its owner.
 
 E1. An unchanged existing build file and a new concrete source file enter native
@@ -104,3 +115,16 @@ Pending nonblocking observations from reviews of that unfinished Step survive
 inventory adoption and reopening until the reviewed and committed Step reaches
 the existing recording frontier. Observations from another Step or Phase do not
 qualify for this deferral.
+
+E7. A repair carrying an actual typed dependency concern remains Human. An
+independently prepared genuine Human RemainingPlan directive may select the
+same product's exact expanded inventory through an explicit fixed capability
+declaration. Reopening the same Session with standard composition reconstructs
+that adoption before checking later candidates, then uses fresh selected checks,
+independent Review Submit and ordinary typed Git/UoW Step closure. The original
+pending Hygiene observation records once at that committed Step frontier;
+reentry reads the same Entry and commit. The old result, unanswered superseded
+question, base, accepted prefix and repair accounting retain their meaning.
+`NativeGoalHumanInventoryCliSpec` specifies this isolated scenario separately
+from the automatic and review-only selectors, using the same installed command
+selection described above.

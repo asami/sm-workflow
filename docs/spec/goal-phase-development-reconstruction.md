@@ -17,6 +17,21 @@ or another incident-specific recovery mechanism. The qualified cases and
 eligibility limits below describe delivered coverage separately from this
 normal-behavior requirement.
 
+Standard runtime binding also reconstructs the finite candidate inventory from
+a genuinely retained Human RemainingPlan inventory adoption through the existing
+native history walker. It authenticates the Human supersession, actual target,
+Plan and native revisions before projecting paths for the same Component.
+Recorded and current literal unique candidate vectors must preserve a complete
+ordered prefix; the longer vector survives intact, including unused capabilities
+and their path ordinals. The projection lives only in the current invocation and
+does not introduce another serialized runtime cache or management controller.
+Fixed host declarations retain their explicit path restrictions. Current source
+and Git observations, selected checks, independent evidence and normal typed
+Git/UoW closure still determine acceptance; existing files alone grant no scope.
+Pending review findings retain their existing exactly-once recording frontier
+after the actual committed Step. `GoalPhaseCurrentInventoryContinuationSpec`
+and `NativeGoalHumanInventoryCliSpec` specify this boundary.
+
 ## Shared management reconstruction policy
 
 GoalPhase and unstarted DelegateTask requester correction use the same

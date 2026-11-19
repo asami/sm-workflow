@@ -34,6 +34,7 @@ import SplitPhaseExplicitPartitionFixture.take
 class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   protected def isolated_review_inventory: Boolean = false
+  protected def isolated_human_inventory: Boolean = false
   private val _source = "src/main/scala/NeededInventory.scala"
   private val _added = Vector("build.sbt", _source)
   override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
@@ -221,7 +222,7 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
     }
   }
 
-  if (!isolated_review_inventory) "AUTO-FILE-GP ordinary native and installed current inventory" should afterWord(
+  if (!isolated_review_inventory && !isolated_human_inventory) "AUTO-FILE-GP ordinary native and installed current inventory" should afterWord(
     "in spec:goal-phase-current-inventory-continuation, example:E1, rules:R1,R2,R3,R4, phase:AUTO-FILE-GP-01") {
     "append an existing unchanged file and new source without Human and retain them through checks review and actual Step closure" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R1–R3 E1: one small isolated normal host and specification-owned semantic inputs")
@@ -533,10 +534,12 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
     }
   }
 
-  if (isolated_review_inventory) "Review-backed current inventory through ordinary CLI processes" should {
-    "retain the review observation through reopening and record it once after the reviewed commit" in {
+  if (isolated_review_inventory || isolated_human_inventory)
+    (if (isolated_human_inventory) "Human-adopted current inventory through standard CLI processes"
+      else "Review-backed current inventory through ordinary CLI processes") should {
+    "retain the inventory and review observation through reopening and record it once after the reviewed commit" in {
       Given("a small isolated host with an independent blocking review and one nonblocking observation")
-      val scenario = _fresh("review-inventory-cli")
+      val scenario = _fresh(if (isolated_human_inventory) "human-inventory-cli" else "review-inventory-cli")
       val config = scenario.root.resolve(".textus/config.json")
       val policy = DevelopmentJournal.Policy("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
         org.simplemodeling.model.datatype.EntityCollectionId("smworkflow", "cli", "development_journal")))
@@ -581,15 +584,90 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       val assigned = repair.work.get.issues.get.issues.filter(issue => issue.status != "RESOLVED" && issue.status != "DECLINED")
       val blocked = V.GoalPhaseIssueReport(assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
         "BLOCKED", "The original issue awaits the required inventory", None)))
-      val inventory = _result("decision-needed", Some(_proposal(scenario))).copy(issueReport = Some(blocked))
-      When("the issued repair returns an inventory-only decision and later CLI invocations reopen it")
+      val dependency = GoalPhaseDependencyScope.Proposal("specification-dependency-concern", "1", "REPAIR",
+        GoalPhaseDependencyScope.Component("SmWorkflow", scenario.plan.repository, "repository"),
+        GoalPhaseDependencyScope.Component("OtherComponent", "other-library", "repository"),
+        org.goldenport.cncf.workflow.ContextReference("specification-usage", "1"),
+        "SPECIFICATION-OWNED actual dependency concern requires independent Human direction",
+        Vector("src/other.scala"), Vector("Preserve the selected product"),
+        Vector(org.goldenport.cncf.workflow.ContextReference("step-1", "1")), Vector.empty)
+      val inventory = if (isolated_human_inventory) _result("decision-needed").copy(issueReport = Some(blocked),
+        dependencyProposal = GoalPhaseDependencyScope.publicProposal(Some(dependency)))
+        else _result("decision-needed", Some(_proposal(scenario))).copy(issueReport = Some(blocked))
+      When("the issued repair returns its genuine typed decision and later CLI invocations reopen it")
       _submit(scenario, repair, inventory, "review-inventory-repair-result").business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val beforeadoption = if (isolated_human_inventory) {
+        val question = _advance(scenario, task)
+        question.kind shouldBe "Human"
+        _advance(scenario, task) shouldBe question
+        val retained = _stored(scenario)
+        retained.exists(_.contains(C.decision)) shouldBe false
+        retained.exists(_.contains(C.humanCausation)) shouldBe false
+        Given("the exact fixed expanded capability vector and independently prepared genuine Human remaining-Plan evidence")
+        // Unused capability precedes the needed source deliberately: restoring
+        // only Plan-owned paths would change the recorded staging ordinal.
+        val paths = scenario.host.goal.candidatePaths ++ Vector("src/main/scala/UnusedCapability.scala") ++ _added
+        val host = scenario.host.copy(goal = scenario.host.goal.copy(candidatePaths = paths))
+        Files.writeString(config, _read(config).mapObject(_.add("sm-workflow.runtime.definition",
+          Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))).noSpaces, UTF_8)
+        val proposal = R.publicProposal(Some(_proposal(scenario))).get
+        val described = scenario.call("command", GoalPhaseRemainingPlanAdoption.describeOperation,
+          Vector("--input", _json(V.GoalPhaseRemainingPlanDescriptionInput(repair.sessionId, proposal))))
+        val description = described.business[V.GoalPhaseRemainingPlanDescriptionResult]
+        val target = take(GoalPhaseRemainingPlanAdoption.targetC(description.target))
+        target.currentInventory.get.candidatePaths shouldBe paths
+        target.currentInventory.get.appendedPaths shouldBe _added
+        target.base.head shouldBe repair.work.get.originalBase.head
+        target.base.tree shouldBe repair.work.get.originalBase.tree
+        target.completed.map(value => value.step -> value.commit.identity) shouldBe
+          repair.work.get.completed.map(value => value.step -> value.commit.identity)
+        val direction = V.GoalPhaseRemainingPlanAdoptionInput(repair.sessionId, description.target, proposal,
+          "SPECIFICATION-OWNED actual Human supersedes the dependency concern with the unchanged product inventory",
+          V.WorkflowArtifactReference("human-inventory-directive", "1"))
+        val execution = V.WorkflowExecutionEvidence(Vector(direction.reference), Some("participant"), None, None)
+        val prepared = scenario.prepareHostInput("prepareEvidence", V.WorkflowEvidencePreparationInput(
+          "GoalPhase", "remaining-plan-adoption", described.invocation.stdout.toUri.toASCIIString,
+          _file(scenario, "human-inventory-direction", direction), _file(scenario, "human-inventory-reference", direction.reference),
+          _file(scenario, "human-inventory-execution", execution), "normal-development-host",
+          Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", Some("participant")).toRecord())
+        scenario.selectPreparedImport(prepared)
+        scenario.call("command", GoalPhaseRemainingPlanAdoption.adoptionOperation, Vector("--input", _json(direction)))
+          .business[V.GoalPhaseRemainingPlanAdoptionResult].accepted shouldBe true
+        _normal(scenario)
+        _read(config).hcursor.downField("sm-workflow.runtime.definition").focus shouldBe None
+        Given("the unchanged accepted proposal, the existing Phase note and product input with no checklist items")
+        val reconstruction = V.GoalPhaseDevelopmentReconstructionInput(repair.sessionId, "docs/phase.md", "value.txt",
+          proposal, "SPECIFICATION-OWNED reconstruct the unchanged accepted Plan from the fixture Phase note and " +
+            "the item-free product input selected as checklist source; preserve the genuine Human inventory")
+        When("standard composition reconstructs current development before another implementation is issued")
+        val reconstructed = _advance(scenario, scenario.call("command", GoalPhaseDevelopmentReconstruction.operation,
+          Vector("--input", _json(reconstruction))))
+        Then("the native reconstruction waits in the same Session and retains the authenticated inventory history")
+        reconstructed.kind shouldBe "Wait"
+        reconstructed.sessionId shouldBe repair.sessionId
+        reconstructed.repairProgress shouldBe repair.repairProgress
+        _stored(scenario).exists(_.contains(GoalPhaseDevelopmentReconstruction.causation)) shouldBe true
+        Some(retained.filter(value => value.contains("review-inventory-repair-result") &&
+          value.contains("sm-workflow.goal-phase-native-work-result.v1")))
+      } else None
       val continued = _advance(scenario, task)
       continued.work.get.kind shouldBe "ImplementStep"
       continued.repairProgress shouldBe repair.repairProgress
       continued.work.get.selectedPlan.steps.head.ownedPaths shouldBe repair.work.get.selectedPlan.steps.head.ownedPaths ++ _added
       continued.work.get.originalBase shouldBe repair.work.get.originalBase
       _advance(scenario, task) shouldBe continued
+      beforeadoption.foreach { previous =>
+        previous should not be empty
+        val restored = _stored(scenario)
+        previous.foreach(value => restored should contain(value))
+        restored.exists(_.contains(C.decision)) shouldBe false
+        restored.exists(_.contains(C.humanCausation)) shouldBe false
+        restored.exists(_.contains("human-inventory-directive")) shouldBe true
+        restored.exists(_.contains(GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity)) shouldBe true
+        GoalPhaseOrderedHumanDecision.choices.foreach { choice =>
+          restored.exists(_.contains(choice + "\",\"rationale")) shouldBe false
+        }
+      }
       val key = DevelopmentJournalFinding.identity(org.goldenport.cncf.workflow.ContextReference(
         "review-inventory-original-review", "1"), observation.identity)
       scenario.readJournalEntry(V.JournalReadInput(key, None)).business[V.JournalReadResult].status shouldBe "absent"
@@ -600,6 +678,13 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       val rechecked = scenario.advance(task)
       val rereview = _advance(scenario, rechecked)
       rereview.work.get.kind shouldBe "ReviewStep"
+      rereview.work.get.selectedPlan shouldBe continued.work.get.selectedPlan
+      rereview.work.get.originalBase shouldBe repair.work.get.originalBase
+      rereview.repairProgress shouldBe repair.repairProgress
+      rereview.work.get.review.get.toString should include(_source)
+      rereview.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      rereview.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
+      _advance(scenario, task) shouldBe rereview
       val reviewedissues = rereview.work.get.issues.get.issues.filter(issue => issue.status != "RESOLVED" && issue.status != "DECLINED")
       val resolved = V.GoalPhaseIssueReport(reviewedissues.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
         "RESOLVED", "Independent review covers the corrected behavior", None)))
@@ -619,9 +704,18 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       val entry = scenario.readJournalEntry(V.JournalReadInput(key, None)).business[V.JournalReadResult].entry.get
       entry.sourceReference shouldBe V.WorkflowArtifactReference("review-inventory-original-review", "1")
       entry.finding.get.completed.last.commit.identity shouldBe next.work.get.completed.last.commit.identity
+      next.work.get.completed.last.commit.identity should not be repair.work.get.originalBase.head
+      next.work.get.completed.last.step shouldBe "step-1"
+      next.work.get.originalBase shouldBe repair.work.get.originalBase
       val again = _advance(scenario, task)
       again.findingRecording shouldBe next.findingRecording
       scenario.readJournalEntry(V.JournalReadInput(key, None)).business[V.JournalReadResult].entry shouldBe Some(entry)
+      val recorded = scenario.findJournalEntries(V.JournalFindInput(scenario.plan.repository, Some(scenario.plan.phase),
+        Some(repair.sessionId), Some(DevelopmentJournalFinding.kind), Some(entry.sourceReference), None, None, Some(20)))
+        .business[V.JournalFindResult]
+      recorded.status shouldBe "found"
+      recorded.entries.map(_.entry.identity) shouldBe Vector(key)
+      recorded.hasMore shouldBe false
     }
   }
 }
@@ -631,4 +725,11 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalReviewInventoryCliSpec extends NativeGoalCurrentInventoryCliSpec {
   override protected def isolated_review_inventory: Boolean = true
+}
+
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeGoalHumanInventoryCliSpec extends NativeGoalCurrentInventoryCliSpec {
+  override protected def isolated_human_inventory: Boolean = true
 }
