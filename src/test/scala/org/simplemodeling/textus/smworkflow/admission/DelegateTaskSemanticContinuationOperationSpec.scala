@@ -63,10 +63,13 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       require(archive.isAbsolute && Files.isRegularFile(archive), "Candidate CAR must exist")
     }
     repeated.foreach { (phase, path) =>
-      require(Set("before", "after")(phase) && path.isAbsolute, "Select before|after and an absolute dedicated fixture")
+      require(Set("before", "after", "collect-after")(phase) && path.isAbsolute,
+        "Select before|after|collect-after and an absolute dedicated fixture")
     }
-    if (repeated.exists(_._1 == "after")) {
-      _repeated_stop(repeated.get._2.toRealPath(), installed, None)
+    if (repeated.exists(pair => Set("after", "collect-after")(pair._1))) {
+      val collectonly = repeated.get._1 == "collect-after"
+      require(!collectonly || installed.nonEmpty, "Collection requires the explicitly selected installed runtime")
+      _repeated_stop(repeated.get._2.toRealPath(), installed, None, collectonly = collectonly)
       return
     }
     Given("a small isolated managed destination with actual initial semantic work")
@@ -407,7 +410,8 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     * are actual issued/submitted native work on this single retained Session.
     */
   private def _repeated_stop(root: Path, installed: Option[(Path, Path)],
-    initial: Option[(String, V.DelegateTaskSemanticContinuationInput, V.WorkflowRetainedWorkReference)]): Unit = {
+    initial: Option[(String, V.DelegateTaskSemanticContinuationInput, V.WorkflowRetainedWorkReference)],
+    collectonly: Boolean = false): Unit = {
     import scala.jdk.CollectionConverters.*
     import java.util.concurrent.TimeUnit
     import org.goldenport.convert.ValueReader
@@ -454,6 +458,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     var stoppedrevision = 0L
     var stoppedpayload = Option.empty[BoundedWorkRuntime.Payload]
     var repairreference = Option.empty[V.WorkflowArtifactReference]
+    var pendingidentity = Option.empty[String]
     if (initial.isEmpty) {
       Given("the same small fixture retained by the old installed runtime before publication")
       Files.isRegularFile(manifest) shouldBe true
@@ -465,6 +470,14 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       repairreference = Some(_take(V.WorkflowArtifactReference.createC(_take(new org.goldenport.record.io.RecordDecoder()
         .json(saved.hcursor.get[Json]("repairResultReference").toOption.get.noSpaces)))))
     }
+    val collecteddirection = if (collectonly) {
+      Given("the actual complete direction file retained by the successful installed admission")
+      val path = root.resolve("SPEC-later-resume-input.json")
+      Files.isRegularFile(path) shouldBe true
+      Some(_take(V.DelegateTaskSemanticContinuationInput.createC(_take(
+        new org.goldenport.record.io.RecordDecoder().json(Files.readString(path))))))
+    } else None
+    val collectedtarget = collecteddirection.map(direction => _take(R.targetC(direction.target)))
     _with_runtime_(root, "TaskSemantic", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def _call_[A: ValueReader](operation: String, properties: List[Property], arguments: Vector[String],
         control: Boolean = false, service: String = "DelegateTaskService"): A =
@@ -486,9 +499,31 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
         _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("describeDelegateTaskSemanticContinuation",
           List(Property("input", query, None)), Vector("--inputResource", _file_("later-description-input", query)))
       }
-      def _resume_(direction: V.DelegateTaskSemanticContinuationInput): V.DelegateTaskSemanticContinuationDescriptionResult =
+      def _resume_(direction: V.DelegateTaskSemanticContinuationInput,
+        name: String = "later-resume-input"): V.DelegateTaskSemanticContinuationDescriptionResult =
         _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation",
-          List(Property("input", direction, None)), Vector("--inputResource", _file_("later-resume-input", direction)))
+          List(Property("input", direction, None)), Vector("--inputResource", _file_(name, direction)))
+      def _verify_successor_(successor: V.DelegateTaskView, original: BoundedWorkRuntime.Payload,
+        direction: V.DelegateTaskSemanticContinuationInput): Unit = {
+        val raw = io.circe.parser.parse(_take(successor.work.get.toJsonStringC)).toOption.get
+        val work = GoalPhaseNativeMetadata.normalizePublicJson(raw).toOption.get.as[S.Work].toOption.get
+        work.session shouldBe retainedsession
+        work.kind shouldBe "Repair"
+        work.state.generation shouldBe 3
+        work.state.automaticCount shouldBe 2
+        work.state.ordinaryCount shouldBe 2
+        work.state.candidate shouldBe original.state.candidate
+        work.state.receipts.asJson shouldBe original.state.receipts.asJson
+        work.state.asJson shouldBe original.state.copy(stage = "Repair").asJson
+        val rawcontext = io.circe.parser.parse(_take(successor.issuedWorkContext.get.context.toJsonStringC)).toOption.get
+        val context = GoalPhaseNativeMetadata.normalizePublicJson(rawcontext).toOption.get
+        val references = context.hcursor.get[Vector[Json]]("requiredFacts").toOption.get.map { reference =>
+          ContextReference(reference.hcursor.get[String]("identity").toOption.get,
+            reference.hcursor.get[String]("revision").toOption.get)
+        }
+        references should contain (ContextReference(direction.reference.identity, direction.reference.revision))
+        references should contain (ContextReference("SPEC-later-upstream", "1"))
+      }
       def _submit_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, reference: V.WorkflowArtifactReference): Unit = {
         val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("SPEC-repeated-implementer"), None,
           Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPEC-repeated-implementer", "ordinary")))
@@ -537,7 +572,11 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
             case None => Consequence.success(current)
           }
           actual <- DelegateTaskNativeRun.retainedPayloadC(store, retainedsession, selected)
-          _ = { stoppedrevision = saved.revision.value; stoppedpayload = Some(actual) }
+          _ = {
+            stoppedrevision = saved.revision.value
+            stoppedpayload = Some(actual)
+            pendingidentity = saved.suspension.map(_.continuationIdentity.value)
+          }
         } yield () }
       initial.foreach { (session, direction, reference) =>
         retainedsession = session
@@ -648,7 +687,80 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           "humanRevision" -> stoppedrevision.asJson,
           "repairResultReference" -> io.circe.parser.parse(_encoded_(actualreference)).toOption.get).spaces2)
       }
-      if (initial.isEmpty || installed.isEmpty) {
+      if (collectonly) {
+        Given("the original admitted target and exact first and later directions retained in this same fixture")
+        val direction = collecteddirection.get
+        val target = collectedtarget.get
+        val original = target.business
+        direction.sessionId shouldBe retainedsession
+        target.sessionId shouldBe retainedsession
+        target.frontierRevision shouldBe stoppedrevision
+        val first = firstdirection.get
+        val firsttarget = _take(R.targetC(first.target))
+        val expectedfirst = R.Direction(firsttarget.asJson, first.choice, first.rationale, first.participant,
+          ContextReference(first.reference.identity, first.reference.revision),
+          first.upstream.map(reference => ContextReference(reference.identity, reference.revision)))
+        val expectedlatest = R.Direction(target.asJson, direction.choice, direction.rationale, direction.participant,
+          ContextReference(direction.reference.identity, direction.reference.revision),
+          direction.upstream.map(reference => ContextReference(reference.identity, reference.revision)))
+        original.delegateSemanticContinuation shouldBe Some(expectedfirst)
+        original.delegateRepairContinuation should not be empty
+        When("the existing native checkpoint and current Git HEAD are read without changing the frontier")
+        _checkpoint_()
+        val collectionrevision = stoppedrevision
+        val current = stoppedpayload.get
+        pendingidentity should not be empty
+        val pending = pendingidentity.get
+        var observedhead = ""
+        prepare { setup => RepositorySyncManagedGitObservation.observeC(setup.core).map(observed => observedhead = observed.head) }
+        Then("the actual pending Repair retains the original semantic facts, both directions and cumulative allowance")
+        collectionrevision should be > target.frontierRevision
+        current.state.stage shouldBe "Repair"
+        current.state.generation shouldBe 3
+        current.state.automaticCount shouldBe 2
+        current.state.ordinaryCount shouldBe 2
+        current.state.candidate shouldBe original.state.candidate
+        current.state.receipts.asJson shouldBe original.state.receipts.asJson
+        current.state.asJson shouldBe original.state.copy(stage = "Repair").asJson
+        current.delegateSemanticContinuation shouldBe Some(expectedlatest)
+        current.delegateSemanticContinuation.get.target.as[R.Target].toOption.get.business.delegateSemanticContinuation shouldBe Some(expectedfirst)
+        current.delegateRepairContinuation shouldBe original.delegateRepairContinuation
+        current.state.semanticReference shouldBe Some(target.original.resultReference)
+        current.state.semanticReference shouldBe Some(ContextReference(repairreference.get.identity, repairreference.get.revision))
+        current.root shouldBe original.root
+        current.branch shouldBe original.branch
+        current.baseHead shouldBe observedhead
+        current.baseHead should not be original.baseHead
+        When("ordinary installed Advance collects the already pending successor and its retained work")
+        val issued = _advance_()
+        val successor = _detail_(issued.retainedWork.get)
+        Then("the same actual issued Repair exposes the complete required Human and upstream facts")
+        issued.kind shouldBe "Request"
+        successor.issuedWorkContext.get.continuationId shouldBe pending
+        _verify_successor_(successor, original, direction)
+        _checkpoint_()
+        stoppedrevision shouldBe collectionrevision
+        pendingidentity shouldBe Some(pending)
+        When("both exact historical directions are recollected from their retained complete inputs")
+        val firstcollection = _resume_(first, "collection-first-resume-input")
+        val latercollection = _resume_(direction, "collection-later-resume-input")
+        Then("both report already-resumed without appending a checkpoint")
+        firstcollection.outcome shouldBe "already-resumed"
+        latercollection.outcome shouldBe "already-resumed"
+        _checkpoint_()
+        stoppedrevision shouldBe collectionrevision
+        stoppedpayload.get shouldBe current
+        When("ordinary Advance is repeated against that still pending work")
+        val repeated = _advance_()
+        Then("it returns the identical retained work with unchanged native revision and no SBT execution")
+        repeated.retainedWork shouldBe issued.retainedWork
+        _checkpoint_()
+        stoppedrevision shouldBe collectionrevision
+        stoppedpayload.get shouldBe current
+        pendingidentity shouldBe Some(pending)
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+      if (!collectonly && (initial.isEmpty || installed.isEmpty)) {
         Given("a later actual Repair semantic stop with remaining allowance and the first immutable direction")
         val retainedrevision = stoppedrevision
         _checkpoint_()
@@ -770,21 +882,8 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
         When("a separate ordinary Advance selects the next native work")
         val issued = _advance_()
         val successor = _detail_(issued.retainedWork.get)
-        val raw = io.circe.parser.parse(_take(successor.work.get.toJsonStringC)).toOption.get
-        val work = GoalPhaseNativeMetadata.normalizePublicJson(raw).toOption.get.as[S.Work].toOption.get
         Then("it issues Repair from current source while all earlier qualification remains historical")
-        work.kind shouldBe "Repair"
-        work.state.generation shouldBe 3
-        work.state.automaticCount shouldBe 2
-        work.state.ordinaryCount shouldBe 2
-        work.state.candidate shouldBe original.state.candidate
-        work.state.receipts.asJson shouldBe original.state.receipts.asJson
-        val references = successor.issuedWorkContext.get.context.getVector("requiredFacts").get.map { value =>
-          val record = value.asInstanceOf[Record]
-          ContextReference(record.getString("identity").get, record.getString("revision").get)
-        }
-        references should contain (ContextReference(direction.reference.identity, direction.reference.revision))
-        references should contain (ContextReference("SPEC-later-upstream", "1"))
+        _verify_successor_(successor, original, direction)
         _checkpoint_()
         stoppedpayload.get.baseHead shouldBe currenthead
         val afterissuerevision = { _checkpoint_(); stoppedrevision }

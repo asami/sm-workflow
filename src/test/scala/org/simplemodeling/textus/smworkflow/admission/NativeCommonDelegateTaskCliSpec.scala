@@ -458,11 +458,11 @@ final class NativeDelegateTaskSemanticContinuationCliSpec extends AnyWordSpec wi
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeDelegateTaskRepeatedSemanticContinuationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Installed repeated DelegateTask semantic continuation" should {
-    "retain the same actual Repair stop before publication and continue it after publication" in {
-      Given("an explicitly selected before|after phase and dedicated absolute fixture path")
-      val phase = sys.props.getOrElse("smworkflow.spec.semanticContinuationPhase", fail("Select semanticContinuationPhase=before|after"))
+    "retain, continue or collect the same actual Repair across installed publication" in {
+      Given("an explicitly selected before|after|collect-after phase and dedicated absolute fixture path")
+      val phase = sys.props.getOrElse("smworkflow.spec.semanticContinuationPhase", fail("Select semanticContinuationPhase=before|after|collect-after"))
       val fixture = Path.of(sys.props.getOrElse("smworkflow.spec.semanticContinuationFixture", fail("Select semanticContinuationFixture")))
-      Set("before", "after") should contain (phase)
+      Set("before", "after", "collect-after") should contain (phase)
       fixture.isAbsolute shouldBe true
       val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
         .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
