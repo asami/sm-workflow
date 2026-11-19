@@ -61,5 +61,20 @@ final class WorkflowManagementReconstructionSpec extends AnyWordSpec with Matche
       Then("fresh capture has exactly the original predicate and every unresolved effect remains visible")
       checked.passed shouldBe true
     }
+
+    "select ordinary fresh capture for authorized source movement without reusing historical evidence" in {
+      Given("the family owner's current source assessment and independently admitted exact semantic direction")
+      val direction = ContextReference("SPECIFICATION-OWNED-new-semantic-direction", "1")
+      val assessments = Vector(
+        M.Assessment(Vector.empty, Vector("actual supplier result needed"), Vector.empty, true, false),
+        M.Assessment(Vector.empty, Vector("actual supplier result needed"), Vector.empty, false, false))
+      When("hard reconstruction admission precedes the shared logical resume selection")
+      val admissions = assessments.map(M.requireReconstructibleC)
+      val selections = assessments.map(a => take(M.selectedC(a, Some(direction), adoptProposed = true)))
+      Then("source movement chooses fresh capture and unchanged source retains only its current boundary")
+      admissions.foreach(_.isSuccess shouldBe true)
+      selections.map(_.resumePoint) shouldBe Vector(M.ResumePoint.FreshCapture, M.ResumePoint.CurrentBoundary)
+      selections.foreach { selected => selected.adoptProposed shouldBe true; selected.reasons shouldBe empty }
+    }
   }
 }

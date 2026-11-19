@@ -15843,7 +15843,7 @@ DelegateTaskRequestReconstructionDescriptionResult
 
 ##### DESCRIPTION
 
-Describe the exact retained initial destination Implement semantic Human stop without advancing it.
+Describe the exact materialized destination Implement or Repair semantic Human stop selected by its actual native result reference, including later stops after earlier admitted directions, without advancing it. Supply exactly one inline input or inputResource using the normal finite Resource policy.
 
 ##### TYPE
 
@@ -15859,7 +15859,8 @@ DelegateTaskSemanticContinuationDescriptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | DelegateTaskSemanticContinuationDescriptionInput | 1 |
+| input | DelegateTaskSemanticContinuationDescriptionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -15871,7 +15872,7 @@ DelegateTaskSemanticContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Admit independently verified covering Human direction and actual upstream references for the exact target. A separate ordinary Advance issues the successor.
+Admit independently verified covering Human direction and actual upstream references for the exact current Implement or Repair semantic target, after shared reconstruction of actual source facts. Historical exact direction collection is idempotent. Admission only appends a native checkpoint; a separate ordinary Advance issues the authenticated successor kind. Supply exactly one inline input or inputResource using the normal finite Resource policy.
 
 ##### TYPE
 
@@ -15887,7 +15888,8 @@ DelegateTaskSemanticContinuationInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | DelegateTaskSemanticContinuationInput | 1 |
+| input | DelegateTaskSemanticContinuationInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 

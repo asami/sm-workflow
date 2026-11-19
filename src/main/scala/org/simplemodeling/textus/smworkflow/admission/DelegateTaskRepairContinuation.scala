@@ -19,7 +19,7 @@ import DelegateTaskNativeRun as N
 /** Human continuations of actual retained trend stops. The normal native
   * checkpoint transaction owns persistence; ordinary Advance owns all work.
   * @since Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object DelegateTaskRepairContinuation {
   val purpose = "delegate-task-repair-continuation"
@@ -55,7 +55,24 @@ private[smworkflow] object DelegateTaskRepairContinuation {
   /** Only terminal failed selected qualification can enter this continuation.
     * Other Human reasons, pending intents and exhausted budgets remain stopped.
     */
-  def eligible(payload: Payload): Boolean = {
+  def eligible(payload: Payload): Boolean = _eligible(payload, metadata = false)
+
+  /** A decoded external reference describes a retained observation; the native
+    * loader must reopen its actual File before executable eligibility applies.
+    */
+  private def _terminal_receipt(receipt: RepositorySyncNativeMergeValidation.Receipt,
+    check: GoalPhaseNativeValidation.Check, passed: Boolean, metadata: Boolean): Boolean = {
+    val terminal = if (metadata && receipt.externalCapture.nonEmpty) receipt.externalCapture.exists(reference =>
+      WorkflowSbtCapture.externalReferenceValid(reference) && reference.termination == "exited" &&
+        (if (passed) reference.exitCode.contains(0) else reference.exitCode.exists(_ != 0)))
+      else receipt.termination == "exited" &&
+        (if (passed) receipt.exitCode.contains(0) else receipt.exitCode.exists(_ != 0)) &&
+        (receipt.externalCapture.isEmpty || RepositorySyncNativeMergeValidation.storedProductOutputValid(receipt))
+    terminal && receipt.identity == check.identity && receipt.sbt.exists(facts => facts.kind == check.kind &&
+      facts.outcome == (if (passed) WorkflowSbtValidation.Outcome.Succeeded else WorkflowSbtValidation.Outcome.Failed))
+  }
+
+  private def _eligible(payload: Payload, metadata: Boolean): Boolean = {
     val state = payload.state
     val control = state.repairControl
     state.input.task.nonEmpty && state.input.delegation.exists(_.role == "destination") && state.input.kind != "validation" &&
@@ -64,11 +81,9 @@ private[smworkflow] object DelegateTaskRepairContinuation {
       control.policy == GoalPhaseRuntimeRepairControl.version && control.selectedLimit == state.input.repairLimit &&
       control.stop.contains(state.message) && state.candidate.nonEmpty && state.receipts.nonEmpty &&
       state.receipts.size <= state.selected.size && state.receipts.zip(state.selected).forall((receipt, check) => receipt.identity == check.identity) &&
-      state.receipts.dropRight(1).zip(state.selected).forall((receipt, check) => receipt.termination == "exited" &&
-        receipt.exitCode.contains(0) && receipt.sbt.exists(facts => facts.outcome == WorkflowSbtValidation.Outcome.Succeeded && facts.kind == check.kind)) &&
-      state.receipts.last.termination == "exited" && state.receipts.last.exitCode.exists(_ != 0) &&
-      state.receipts.last.sbt.exists(facts => facts.outcome == WorkflowSbtValidation.Outcome.Failed &&
-        facts.kind == state.selected(state.receipts.size - 1).kind) &&
+      state.receipts.dropRight(1).zip(state.selected).forall((receipt, check) =>
+        _terminal_receipt(receipt, check, passed = true, metadata = metadata)) &&
+      _terminal_receipt(state.receipts.last, state.selected(state.receipts.size - 1), passed = false, metadata = metadata) &&
       control.observations.lastOption.exists(observation => observation.scope == state.input.requestIdentity &&
         observation.reference == state.input.requestIdentity + ":generation:" + state.generation + ":" + state.receipts.last.identity) &&
       state.automaticCount >= 0 && state.ordinaryCount >= 0 && state.ordinaryCount < Int.MaxValue &&
@@ -80,7 +95,7 @@ private[smworkflow] object DelegateTaskRepairContinuation {
     _ <- Either.cond(target.asJson == value &&
       Vector(target.componentInstance, target.sessionId, target.participant).forall(_exact) &&
       target.frontierRevision > 0 && target.frontier.isObject &&
-      target.participant == target.business.state.participant && eligible(target.business),
+      target.participant == target.business.state.participant && _eligible(target.business, metadata = true),
       (), "Task continuation target is incomplete, unsupported or not an eligible trend stop")
   } yield target
 
@@ -195,7 +210,7 @@ private[smworkflow] object DelegateTaskRepairContinuation {
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
           retained <- _retained(payload, _owner(selected), session, current.revision.value).fold(N.invalid(_), Consequence.success)
           requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
-          previous = requested.flatMap(target => retained.find(_._2 == target))
+          previous = requested.flatMap(target => retained.find(_._2.asJson == target.asJson))
           result <- previous match {
             case Some((direction, target)) => input match {
               case Left(answer) =>
@@ -216,7 +231,7 @@ private[smworkflow] object DelegateTaskRepairContinuation {
               result <- input match {
                 case Right(_) => Consequence.success(_output(target, "decision-required", "Separate exact Human admission is required"))
                 case Left(answer) => for {
-                  _ <- if (requested.contains(target)) Consequence.unit else N.invalid("Task continuation target changed; describe and admit fresh Human direction")
+                  _ <- if (requested.exists(_.asJson == target.asJson)) Consequence.unit else N.invalid("Task continuation target changed; describe and admit fresh Human direction")
                   reference = ContextReference(answer.reference.identity, answer.reference.revision)
                   binding <- bindingC(_owner(selected), target, answer.choice, answer.rationale, answer.participant, reference)
                   _ <- evidence.admitC(selected, reference, binding)

@@ -166,11 +166,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           check <- state.selected.find(_.identity == receipt.identity).map(Consequence.success)
             .getOrElse(invalid("External capture has no selected check"))
           a = ref.association
+          // The artifact belongs to its retained candidate. Ordinary source
+          // reconstruction may advance payload.baseHead without rewriting it.
           _ <- if (delegation && ref.workspace == "sm-workflow-validation-artifacts" &&
             core.component.exists(_.core.instanceId.canonicalKey == a.component) && a.session == session &&
             a.participant == state.participant && a.check == check.identity && a.ordinal == check.ordinal &&
             state.candidate.exists(c => c.head == a.baseHead && c.tree == a.candidateTree) &&
-            payload.forall(p => p.root == a.root && p.branch == a.branch && p.baseHead == a.baseHead))
+            payload.forall(p => p.root == a.root && p.branch == a.branch))
             Consequence.unit else invalid("External capture crosses its native owner, Session, check or candidate")
           result <- RepositorySyncNativeMergeValidation.hydrateExternalC(core, receipt, a, limits)
         } yield result
@@ -981,6 +983,32 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       dirtyCovers(payload, actual.dirty)) Consequence.unit else invalid("Implementation crossed the retained target or unrelated work")
   } yield ()
 
+  /** Read-only reconstruction facts for an unissued destination semantic stop.
+    * Source movement within the logical boundary requires ordinary recapture;
+    * it never turns retained qualification into evidence for the current bytes.
+    */
+  private[admission] def semanticSourceAssessmentC(payload: Payload,
+    core: ActionCall.Core): Consequence[WorkflowManagementReconstruction.Assessment] = for {
+    root <- G.rootC(core)
+    native <- G.inspectC(core)
+    tree <- G.indexTreeC(core)
+    observed = native.observed
+    owners = payload.state.input.ownedPaths
+    compatible = root == payload.root && observed.branch == payload.branch && observed.dirty.forall { entry =>
+      val endpoints = entry.path +: entry.renamedFrom.toVector
+      val owned = endpoints.map(S.owned(_, owners))
+      !owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, payload.state.input))
+    }
+    current = observed.head == payload.baseHead && payload.state.candidate.forall(candidate =>
+      candidate.head == observed.head && candidate.tree == tree) &&
+      observed.dirty.filter(d => S.owned(d.path, owners)).forall(_.worktree == ' ')
+  } yield WorkflowManagementReconstruction.Assessment(
+    if (compatible) Vector.empty else Vector("Current source crosses the retained root, branch or owned paths"),
+    Vector.empty,
+    if (native.mergeHead.nonEmpty || observed.dirty.exists(_.unmerged)) Vector("Current source has an unresolved merge")
+      else Vector.empty,
+    freshCapture = !current, retainEvidence = false)
+
   /** Unissued semantic work and fresh candidate capture consume current source.
     * Earlier bases and results remain diagnostic history, not restart gates.
     */
@@ -1224,8 +1252,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else Consequence.success(None)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state,
       reviewReevaluation = reevaluation)
+    semanticreferences = payload.delegateSemanticContinuation.toVector.filter { direction =>
+      val reference = direction.target.hcursor.downField("original").downField("resultReference")
+      payload.state.semanticReference.exists(actual => reference.get[String]("identity").contains(actual.identity) &&
+        reference.get[String]("revision").contains(actual.revision))
+    }.flatMap(direction => direction.reference +: direction.upstream)
     bundle = ContextBundle((if (reviewReevaluation) "Independently reevaluate the current candidate against the original purpose and all retained evidence, including the original Review result and Human clarification. Read reviewReevaluation.originalWork through WorkflowRetainedWorkService.readWorkflowRetainedWork for the exact original work and issued context; reviewReevaluation.originalResult and clarification are resolved from native completion and admitted direction. Do not treat a prior review repair as the sole scope or accept an earlier verdict automatically. " else "") + "Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit." + (if (reviewReevaluation) "" else " If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.") + " Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
-      (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct,
+      (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++
+        payload.state.evidenceReferences ++ semanticreferences).distinct,
       payload.supersededWork.toVector.map(id => ContextReference(id, "1")),
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))
     continuation = Continuation(StateMachineRunIdentity(from.identity.value),

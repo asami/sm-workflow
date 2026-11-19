@@ -448,6 +448,36 @@ final class NativeDelegateTaskSemanticContinuationCliSpec extends AnyWordSpec wi
   }
 }
 
+/** Two explicitly selected phases reopen one isolated native Session across
+  * normal installed publication; fixture facts never stand in for execution.
+  * @since Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskRepeatedSemanticContinuationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Installed repeated DelegateTask semantic continuation" should {
+    "retain the same actual Repair stop before publication and continue it after publication" in {
+      Given("an explicitly selected before|after phase and dedicated absolute fixture path")
+      val phase = sys.props.getOrElse("smworkflow.spec.semanticContinuationPhase", fail("Select semanticContinuationPhase=before|after"))
+      val fixture = Path.of(sys.props.getOrElse("smworkflow.spec.semanticContinuationFixture", fail("Select semanticContinuationFixture")))
+      Set("before", "after") should contain (phase)
+      fixture.isAbsolute shouldBe true
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      When("the selected ordinary installed runtime uses that same fixture")
+      new DelegateTaskSemanticContinuationOperationSpec().qualify(Some(executable -> component), Some(phase -> fixture))
+      Then("the actual Session references remain recorded in that same dedicated fixture")
+      Files.isRegularFile(fixture.resolve("SPEC-repeated-semantic-fixture.json")) shouldBe true
+    }
+  }
+}
+
 /** Installed Review continuation qualification on a specification-owned Session. */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
