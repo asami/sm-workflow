@@ -21,7 +21,7 @@ import StandaloneFixExecution.given
 /** Read the original semantic stop from native issued and completion records.
   * The description and admission operations must never infer it from a summary.
   * @since Nov. 12, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object DelegateTaskSemanticContinuation {
   final case class Original(continuationId: String, sourceRevision: Long,
@@ -51,33 +51,41 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
   private def _exact(s: String) = s != null && s.nonEmpty && s.trim == s
   private def _valid_reference(r: ContextReference) = r != null && _exact(r.identity) && _exact(r.revision)
 
-  private def _covered_trend(payload: Payload): Option[DelegateTaskRepairContinuation.Target] =
+  private def _covered_trend(payload: Payload, metadata: Boolean): Option[DelegateTaskRepairContinuation.Target] =
     payload.delegateRepairContinuation.flatMap { direction =>
       direction.target.as[DelegateTaskRepairContinuation.Target].toOption.filter { target =>
         val before = target.business.state
         val current = payload.state
+        val covered = target.source match {
+          case None => before.stage == "Human" && before.repairControl.stop.contains(before.message) &&
+            direction.choice == "ContinueRepair" &&
+            before.receipts.zip(before.selected).forall((receipt, check) => _receipt_metadata(receipt, check))
+          case Some(DelegateTaskRepairContinuation.Source.RecordedIncomplete) =>
+            DelegateTaskRepairContinuation.decodeTarget(direction.target).isRight &&
+              direction.choice == DelegateTaskRepairContinuation.choicesFor(target).head &&
+              before.selected == current.selected && (metadata ||
+                DelegateTaskRepairContinuation.eligible(payload.copy(state = current.copy(stage = "Wait"))))
+        }
         target.asJson == direction.target &&
           Vector(target.componentInstance, target.sessionId, target.participant).forall(_exact) &&
-          target.frontierRevision > 0 && target.frontier.isObject && before.stage == "Human" &&
-          before.repairControl.stop.contains(before.message) &&
-          direction.choice == "ContinueRepair" && direction.participant == current.participant &&
+          target.frontierRevision > 0 && target.frontier.isObject && covered && direction.participant == current.participant &&
           _exact(direction.rationale) && _valid_reference(direction.reference) &&
           target.participant == before.participant && target.participant == current.participant && before.input == current.input &&
           before.repairControl == current.repairControl && before.generation == current.generation &&
           before.automaticCount == current.automaticCount && before.ordinaryCount == current.ordinaryCount &&
           before.candidate == current.candidate && before.receipts.asJson == current.receipts.asJson &&
-          before.receipts.size <= before.selected.size && before.receipts.nonEmpty && before.candidate.nonEmpty &&
-          before.receipts.zip(before.selected).forall((receipt, check) => _receipt_metadata(receipt, check))
+          before.receipts.size <= before.selected.size && before.receipts.nonEmpty && before.candidate.nonEmpty
       }
     }
 
-  /** A derived historical trend is covered only by its actual native prior
-    * ContinueRepair checkpoint, before the current issued Repair source.
+  /** Historical qualification is covered only by its actual prior admitted
+    * repair checkpoint, before the current issued Repair source.
     */
   private def _historical_trend_c(storage: WorkflowComponentStorage, current: InstanceRecord,
     payload: Payload, original: Original, core: ActionCall.Core): Consequence[Unit] =
-    if (payload.state.repairControl.stop.isEmpty) Consequence.unit else for {
-      target <- _covered_trend(payload).map(Consequence.success)
+    if (payload.state.repairControl.stop.isEmpty && !_covered_trend(payload, metadata = false)
+        .exists(_.source.contains(DelegateTaskRepairContinuation.Source.RecordedIncomplete))) Consequence.unit else for {
+      target <- _covered_trend(payload, metadata = false).map(Consequence.success)
         .getOrElse(N.invalid("Current repair policy stop has no covering historical direction"))
       _ <- if (original.work.kind == "Repair" && target.sessionId == current.identity.value &&
         target.componentInstance == core.component.get.core.instanceId.canonicalKey &&
@@ -87,13 +95,17 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
       admitted <- N.loadPayloadC(storage, current.identity.value, target.frontierRevision + 1, core)
       source <- N.loadPayloadC(storage, current.identity.value, original.sourceRevision, core)
       expected = before.copy(state = before.state.copy(stage = "Repair"),
-        delegateRepairContinuation = payload.delegateRepairContinuation)
+        delegateRepairContinuation = payload.delegateRepairContinuation,
+        validationRecovery = if (target.source.nonEmpty) None else before.validationRecovery,
+        validationCaptureReservation = if (target.source.nonEmpty) None else before.validationCaptureReservation)
       _ <- if (DelegateTaskRepairContinuation.eligible(before) && before.asJson == target.business.asJson &&
         admitted.asJson == expected.asJson &&
         source.delegateRepairContinuation == payload.delegateRepairContinuation &&
         source.state.repairControl == before.state.repairControl &&
         source.state.generation == before.state.generation && source.state.automaticCount == before.state.automaticCount &&
-        source.state.ordinaryCount == before.state.ordinaryCount) Consequence.unit
+        source.state.ordinaryCount == before.state.ordinaryCount && (target.source.isEmpty ||
+          (source.state.input == before.state.input && source.state.selected == before.state.selected &&
+            source.state.candidate == before.state.candidate && source.state.receipts.asJson == before.state.receipts.asJson))) Consequence.unit
         else N.invalid("Historical repair policy direction lacks its exact persisted native association")
     } yield ()
 
@@ -162,17 +174,19 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
 
   private def _eligible(p: Payload, metadata: Boolean): Boolean = {
     val s = p.state
+    val covered = _covered_trend(p, metadata)
+    val incomplete = covered.exists(_.source.contains(DelegateTaskRepairContinuation.Source.RecordedIncomplete))
     s.input.task.nonEmpty && s.input.delegation.exists(_.role == "destination") && s.input.kind != "validation" &&
       s.stage == "Human" && s.generation > 0 && s.generation < Long.MaxValue &&
       s.automaticCount >= 0 && s.ordinaryCount >= 0 && s.ordinaryCount <= s.automaticCount &&
       s.automaticCount < s.repairControl.effectiveLimit &&
       s.repairControl.policy == GoalPhaseRuntimeRepairControl.version && s.repairControl.selectedLimit == s.input.repairLimit &&
-      s.repairControl.effectiveLimit > 0 && (s.repairControl.stop.isEmpty || _covered_trend(p).nonEmpty) &&
+      s.repairControl.effectiveLimit > 0 && (s.repairControl.stop.isEmpty || covered.nonEmpty) &&
       s.repairControl.observations.forall(o => o.scope == s.input.requestIdentity && _exact(o.reference)) &&
       s.receipts.size <= s.selected.size && (s.receipts.isEmpty || s.candidate.nonEmpty) &&
-      s.receipts.zip(s.selected).forall { (receipt, check) =>
+      (incomplete || s.receipts.zip(s.selected).forall { (receipt, check) =>
         if (metadata) _receipt_metadata(receipt, check) else _receipt_hydrated(receipt, check)
-      } && s.pendingCheck.isEmpty && s.commit.isEmpty &&
+      }) && s.pendingCheck.isEmpty && s.commit.isEmpty &&
       s.commitExecution.isEmpty && s.commitReconciliation.isEmpty &&
       s.semanticReference.nonEmpty && p.supersededWork.isEmpty && p.hygiene.isEmpty && p.records.isEmpty &&
       s.recoveredValidation.isEmpty && p.validationRecovery.isEmpty && p.validationCaptureReservation.isEmpty

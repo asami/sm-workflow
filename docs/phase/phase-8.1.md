@@ -201,25 +201,39 @@ obligation, and add no second whole-repository test or review cycle. This update
 adds producer planning documents only; it does not implement Core/Cozy/common
 instruction changes, execute a workflow or publish.
 
-## Later adoption: 6.2 Sol, when available — 2026-11-18
+## Sol 6.2 adoption
 
-Add 6.2 Sol support in the latter part of this Phase after it becomes available
-on the selected machine. Availability and support are not established now.
-Verify the actual official model identifier and supported effort settings,
-then connect the existing model configuration and sm-workflow selection route
-and perform one lightweight real execution check. Use the existing provider
-and role owners; do not add a new execution engine or infer capability from a
-model name.
+Use the next newly issued Sol assignment in Phase 8.1 to qualify the upgrade
+when the target host exposes the required model and effort. Follow SLP-M01–M04
+in the [checklist](phase-8.1-checklist.md). Verify the supported model ID and
+efforts, update the existing caller mapping, and retain the selected and
+observed model/effort separately for one lightweight real dispatch. Keep Medium
+for bounded Sol re-reviews and High for open-ended Sol reviews. Existing
+Requests retain their captured choices. If unavailable, record the outstanding
+item and continue the scheduled work.
 
-Preserve model/effort choices already captured in issued work, existing Sessions,
-history and repair accounting. Apply new selection only to newly issued work.
-This is conditional planning, not a current model switch or Phase execution.
-It is not a Phase 8 completion condition and does not delay its repair,
-validation or closure. If unavailable, retain the explicit deferred status;
-availability is not a reason to hold the prioritized API-use delivery.
+## Repair Request classification
 
-Track the bounded adoption as SLP-M01–SLP-M04 in the checklist. Existing A/B/C
-requirements and previously issued selections remain unchanged.
+When issuing a new Repair Request, classify the decision that the repair
+worker must make. Use the retained diagnostic and the relevant source to
+establish the edit location, the intended correction and the compilation
+check that can confirm it. When all three are known and the correction
+requires no further behavioral or contract decision, issue the coding work
+as `SIMPLE` and select `small` (Terra medium in the standard mapping).
+The parent Task's delivery scope, including publication and integration
+validation, does not determine the effort for this repair.
+
+Qualify the producer and caller together with two newly issued Requests:
+
+- Reproduce the November 19 sbt-cozy test-compilation case with a localized
+  quoting error in a fixture's embedded build definition. Given the diagnostic,
+  intended string and affected Test compile check, verify that the issued
+  role is `small` and the caller selects Terra medium when available.
+  The owning workflow runs the check and retains its actual result.
+- Use a failure at one known line where two compiling fixes have different
+  behavior. Verify that the issuer retains the semantic decision in the
+  handoff and selects the appropriate ordinary or deeper route. A short diff
+  and a passing compile alone cannot establish the intended behavior.
 
 ## Completion
 

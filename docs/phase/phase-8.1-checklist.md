@@ -1,6 +1,6 @@
 # Phase 8.1 acceptance checklist
 
-Conditional latter-stage model adoption, selected 2026-11-18:
+Conditional model adoption and repair classification in Phase 8.1:
 
 - [ ] SLP-M01: When 6.2 Sol becomes available on the selected machine, verify its
       official model ID and actual supported effort values; keep unavailable
@@ -11,10 +11,8 @@ Conditional latter-stage model adoption, selected 2026-11-18:
       route; configured identity is distinguished from observed execution.
 - [ ] SLP-M04: Preserve issued choices, Sessions, histories and repair counts;
       apply selection to new work only. Unavailable adoption stays deferred and
-      is neither a Phase 8 gate nor a reason to delay prioritized API delivery.
-
-These conditional items supplement the later-stage plan; they do not assert
-current availability, launch work or change existing A/B/C acceptance.
+      does not delay prioritized API delivery.
+- [ ] Verify both Repair Request cases in the [classification plan](phase-8.1.md#repair-request-classification), including the issued role and caller selection for the localized compile fix.
 
 Stage Status:
 - Current status: OPEN

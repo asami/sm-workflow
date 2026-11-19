@@ -72,7 +72,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -967,7 +967,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield response
       case "Wait" if delegation && S.validationRecoveryIndexC(s).isSuccess =>
         Consequence.success(view(record, s, "Wait",
-          "Recorded Incomplete and successful prefix retained. Describe DelegateTask validation recovery; exact Human direction and separate Advance are required for one same-check attempt."))
+          "Recorded Incomplete and successful prefix retained. Describe DelegateTask repair continuation for RepairBeforeRetry when eligible, or validation recovery for one same-check attempt. Independent exact Human direction and separate Advance are required."))
       // Other standalone and distinct unverified continuation behavior remains unchanged.
       case "Wait" if depth == 0 && s.receipts.lastOption.flatMap(_.processObservation).exists(process =>
           process.termination != org.goldenport.cncf.processexecution.ProcessExecutionTermination.TerminationUnconfirmed) &&

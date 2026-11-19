@@ -83,6 +83,8 @@ Phase 10 and is not a prerequisite here. Consume actual accepted interfaces;
 this Phase adds observed convergence/provider switching without duplicating
 either the ordinary route or the separately scheduled CBD integration.
 
+The [Phase 8.1 Sol 6.2 plan](phase-8.1.md#sol-62-adoption) owns adoption through the existing caller mapping. Phase 9 consumes its evidence for any selected model comparison.
+
 Extend Provider Routing from provider-declared DECLINED escalation into validation-observed model switching.
 
 sm-workflow MUST execute a bounded, cost-aware correction loop. Lightweight compile/targeted-test/diagnostic/repair-history evidence is used first to observe convergence. CAR lint is a heavier architectural/Textus-conformance gate and MUST NOT run on every inner-loop repair merely to check progress. Re-route when lightweight evidence already shows non-convergence, or when a later CAR lint result shows that the candidate is architecturally unsuitable.

@@ -19,7 +19,7 @@ import S.given
 /** Purpose-owned bounded output producer; selected explicitly by the tiny sbt
   * metadata build, never discovered in the owning repository's ordinary suite.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -30,23 +30,24 @@ final class DelegateTaskTestOnlyOutputFixtureSpec extends AnyWordSpec with Match
       Given("one isolated metadata build and its explicit specification-owned output switch")
       val repository = Path.of("").toAbsolutePath.normalize
       val root = repository.getParent
+      val repairmode = Files.exists(root.resolve("repair-before-retry-enabled"))
       When("the actual selected body observes the fixture input")
       Files.writeString(root.resolve("selected-body-executions.txt"), java.lang.ProcessHandle.current().pid().toString + "\n",
         StandardOpenOption.CREATE, StandardOpenOption.APPEND)
-      if (Files.exists(root.resolve("flood-enabled"))) {
+      val actual = Files.readString(repository.resolve("value.txt"))
+      if (if (repairmode) actual.linesIterator.contains("verbose") else Files.exists(root.resolve("flood-enabled"))) {
         System.out.print("D" * (2 * 1024 * 1024))
         System.out.flush()
       }
-      val actual = Files.readString(repository.resolve("value.txt"))
       Then("the actual product input remains selected and successful when its report is complete")
-      actual shouldBe "expected\n"
+      if (repairmode) actual.linesIterator.next() shouldBe "expected" else actual shouldBe "expected\n"
     }
   }
 }
 
 /** Inputs for the common native pipeline, with no manufactured process receipt.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 private[admission] object DelegateTaskTestOnlyRecoveryFixture {
   val suite = classOf[DelegateTaskTestOnlyOutputFixtureSpec].getName
@@ -61,7 +62,9 @@ private[admission] object DelegateTaskTestOnlyRecoveryFixture {
       |lazy val fixCheck = taskKey[Unit]("Check the actual isolated product input")
       |fixCheck := {
       |  IO.append(baseDirectory.value.getParentFile / "fix-check-executions.txt", "executed\n")
-      |  if (IO.read(baseDirectory.value / "value.txt") != "expected\n") sys.error("SPEC actual input differs")
+      |  val actual = IO.read(baseDirectory.value / "value.txt")
+      |  val repairmode = (baseDirectory.value.getParentFile / "repair-before-retry-enabled").isFile
+      |  if (if (repairmode) !actual.startsWith("expected\n") else actual != "expected\n") sys.error("SPEC actual input differs")
       |}
       |""".stripMargin, StandardOpenOption.APPEND)
     Files.writeString(root.resolve("flood-enabled"), "SPECIFICATION-OWNED bounded 2 MiB output producer\n")
@@ -487,15 +490,12 @@ final class NativeDelegateTaskValidationRecoveryReviewCliSpec extends AnyWordSpe
   }
 }
 
-/** Explicit OLD -> NEW qualification of one physical store. Fixture evidence is
-  * specification-owned admission, never an answer on any consumer Session.
+/** Shared qualification helpers run on the currently executing suite instance.
+  * Fixture evidence never supplies an answer on a consumer Session.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
-@DoNotDiscover
-@org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
+private[admission] trait NativeDelegateTaskTestOnlyQualification extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   private def _read(path: Path): Json = parser.parse(Files.readString(path)).toOption.get
@@ -590,7 +590,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     _select_import(scenario, prepared)
     answer
   }
-  private def _before(fixture: Path): Unit = {
+  private def _before(fixture: Path, repair: Boolean = false): Unit = {
     Given("the parent-selected OLD published CAR and a small real isolated ordinary native host")
     val manifestfile = fixture.resolve("fixture.json")
     val prior = Option.when(Files.exists(manifestfile))(_read(manifestfile))
@@ -604,6 +604,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
         sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
       val root = initial.root.toRealPath()
       DelegateTaskTestOnlyRecoveryFixture.build(root)
+      if (repair) Files.writeString(root.resolve("repair-before-retry-enabled"), "SPEC source-controlled verbose output\n")
       take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt", "project/build.properties", ".gitignore")))
       take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
         "commit", "-m", "Configure actual tiny TestOnly recovery build")))
@@ -615,7 +616,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
       val process = DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
       Files.writeString(configfile, config.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
         .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)
-        .add("workflow.mechanical-receipt.max-bytes", "1048576".asJson)
+        .add("workflow.mechanical-receipt.max-bytes", (if (repair) "67108864" else "1048576").asJson)
         .add("textus.resource.url.file.roots", Vector(root, fixture).map(_.toString).mkString(",").asJson)
         .add("textus.component.file", _component.toString.asJson)).noSpaces)
       initial.enablePreparedImportRetention()
@@ -623,6 +624,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
         "database" -> _read(configfile).hcursor.get[String]("textus.datastore.path").toOption.get.asJson,
         "host" -> ThreeWorkflowRuntimeParameters.encode(host), "plan" -> initial.plan.asJson,
         "oldComponent" -> _component.toString.asJson,
+        "recordedIncompleteRepair" -> repair.asJson,
         "fixtureAuthority" -> "SPECIFICATION-OWNED; no actual consumer Human answer".asJson)
     }
     val root = Path.of(manifest.hcursor.get[String]("root").toOption.get).toRealPath()
@@ -679,7 +681,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     val componentinstance = control.retainedWork.map(_.componentInstance)
       .orElse(control.retainedMaterials.headOption.map(_.reference.componentInstance)).getOrElse(fail("Issued work must retain its owning Component reference"))
     manifest = manifest.mapObject(_.add("componentInstance", componentinstance.asJson)); _save_()
-    Files.writeString(root.resolve("repository/value.txt"), "expected\n")
+    Files.writeString(root.resolve("repository/value.txt"), if (repair) "expected\nverbose\n" else "expected\n")
     val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-implementation", "1")
     val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("SPECIFICATION-OWNED-implementer"), None,
       Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPECIFICATION-OWNED-implementer", "ordinary")))
@@ -689,7 +691,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
       "--issuedWorkContext", _json(implement.issuedWorkContext.get), "--result", _json(result), "--resultReference", _json(reference), "--executionEvidence", _json(evidence)))
     manifest = manifest.mapObject(_.add("acceptedSubmitLog", submitted.invocation.stdout.toString.asJson)); _save_()
     submitted.exitCode shouldBe 0
-    When("OLD ordinary Advance executes real Compile, FixCheck and bounded TestOnly before its inline save fails")
+    When("OLD ordinary Advance executes real Compile, FixCheck and bounded TestOnly")
     val advanced = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId))
     manifest = manifest.mapObject(_.add("oldAdvanceStdout", advanced.invocation.stdout.toString.asJson)
       .add("oldAdvanceStderr", advanced.invocation.stderr.toString.asJson).add("oldCallerExit", advanced.exitCode.asJson)); _save_()
@@ -707,19 +709,35 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     native.definition shouldBe definition
     val (snapshot, read) = _snapshot(scenario, frontier.componentInstance, frontier.sessionId, native.revision.value)
     val state = _state(read.business[V.WorkflowRetainedSnapshotReadResult].material)
-    state.stage shouldBe "ValidationIntent"
-    state.pendingCheck shouldBe Some("test-only")
+    state.stage shouldBe (if (repair) "Wait" else "ValidationIntent")
+    state.pendingCheck shouldBe (if (repair) None else Some("test-only"))
     manifest = manifest.mapObject(_.add("sourceReference", parser.parse(_json(snapshot)).toOption.get)
       .add("sourceState", state.asJson).add("beforeCommands", Files.readString(root.resolve("sbt-command-lines.txt")).asJson)
       .add("beforeBodyCount", Files.readAllLines(root.resolve("selected-body-executions.txt")).size().asJson)
       .add("readyForAfter", Json.True)); _save_()
-    Then("the same physical Session retains actual successful prefix receipts and the old terminal/save evidence")
-    advanced.exitCode should not be 0
+    Then("the same physical Session retains actual successful prefix receipts and the old terminal evidence")
     val logs = Files.readString(advanced.invocation.stdout) + Files.readString(advanced.invocation.stderr)
-    logs should include("Mechanical receipt encoding")
-    logs should include("OutputLimitExceeded")
-    state.receipts.map(_.identity) shouldBe Vector("compile", "fix-check")
-    state.receipts.zip(DelegateTaskTestOnlyRecoveryFixture.checks).foreach { (receipt, check) =>
+    if (repair) {
+      advanced.exitCode shouldBe 0
+      state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+      val capture = state.receipts.last.externalCapture.get
+      val process = WorkflowSbtCapture.decode(_read(root.resolve("capture-root").resolve(capture.path))
+        .hcursor.get[Json]("process").toOption.get).toOption.get
+      process.termination shouldBe org.goldenport.cncf.processexecution.ProcessExecutionTermination.OutputLimitExceeded(
+        org.goldenport.cncf.processexecution.ProcessExecutionStream.Stdout)
+      WorkflowSbtCapture.externalMatches(capture, state.receipts.last.sbt.get, process) shouldBe true
+      val refused = _call(scenario, "DelegateTaskService", "describeDelegateTaskRepairContinuation",
+        Vector("--input", _json(V.GoalTaskRepairContinuationDescriptionInput(started.sessionId))))
+      refused.exitCode should not be 0
+      manifest = manifest.mapObject(_.add("oldRepairRefusalLog", refused.invocation.stdout.toString.asJson))
+      _save_()
+    } else {
+      advanced.exitCode should not be 0
+      logs should include("Mechanical receipt encoding")
+      logs should include("OutputLimitExceeded")
+    }
+    state.receipts.take(2).map(_.identity) shouldBe Vector("compile", "fix-check")
+    state.receipts.take(2).zip(DelegateTaskTestOnlyRecoveryFixture.checks).foreach { (receipt, check) =>
       receipt.processObservation should not be empty
       RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind) shouldBe true
     }
@@ -819,19 +837,239 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     }
     if (collect) Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
   }
+  protected def qualify_recorded_incomplete(phase: String, fixture: Path): Unit = {
+    require(fixture.isAbsolute && fixture.normalize == fixture && fixture.startsWith(Path.of("target").toAbsolutePath.normalize),
+      "Select one parent-owned ignored absolute fixture directory")
+    Files.createDirectories(fixture)
+    phase match {
+      case "prepare-old" => _before(fixture, repair = true)
+      case "resume-new" => _resume_recorded_repair(fixture)
+      case _ => fail("Select prepare-old|resume-new")
+    }
+  }
+
+  private def _resume_recorded_repair(fixture: Path): Unit = {
+    import DelegateTaskRepairContinuation as R
+    import BoundedWorkRuntime.given
+    Given("the OLD genuine ended Incomplete and successful prefix in the same physical isolated Session")
+    val manifestfile = fixture.resolve("fixture.json")
+    var manifest = _read(manifestfile)
+    require(manifest.hcursor.get[Boolean]("recordedIncompleteRepair").contains(true) &&
+      !manifest.hcursor.get[Boolean]("repairDirectionEntered").contains(true),
+      "Resume this exact prepared Session once; preserve any already entered direction")
+    val root = Path.of(manifest.hcursor.get[String]("root").toOption.get).toRealPath()
+    val session = manifest.hcursor.get[String]("sessionId").toOption.get
+    val old = manifest.hcursor.get[S.State]("sourceState").toOption.get
+    val oldreference = take(V.WorkflowRetainedSnapshotReference.createC(
+      take(new org.goldenport.record.io.RecordDecoder().json(manifest.hcursor.get[Json]("sourceReference").toOption.get.noSpaces))))
+    val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(manifest.hcursor.get[Json]("host").toOption.get))
+    val plan = manifest.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption.get
+    val configfile = root.resolve(".textus/config.json")
+    val config = _read(configfile)
+    config.hcursor.get[String]("textus.datastore.path") shouldBe manifest.hcursor.get[String]("database")
+    Files.isRegularFile(Path.of(manifest.hcursor.get[String]("database").toOption.get)) shouldBe true
+    Files.writeString(configfile, config.mapObject(_.add("textus.component.file", _component.toString.asJson)).noSpaces)
+    val files = Files.list(root.resolve("logs"))
+    val nextindex = try { import scala.jdk.CollectionConverters.*; files.iterator().asScala
+      .flatMap(_.getFileName.toString.takeWhile(_.isDigit).toIntOption).max + 100 } finally files.close()
+    val scenario = F.reopenInstalledRepository(root, host, plan, nextindex)
+    val commands = Files.readString(root.resolve("sbt-command-lines.txt"))
+    val capture = old.receipts.last.externalCapture.get
+    val capturefile = root.resolve("capture-root").resolve(capture.path)
+    val capturebytes = Files.readAllBytes(capturefile).toVector
+    def _save_(): Unit = Files.writeString(manifestfile, manifest.noSpaces)
+    def _advance_(): V.DelegateTaskView = _view(scenario,
+      _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", session)))
+    def _work_(view: V.DelegateTaskView): S.Work = GoalPhaseNativeMetadata.normalizePublicJson(
+      parser.parse(take(view.work.get.toJsonStringC)).toOption.get).toOption.get.as[S.Work].toOption.get
+    def _prepare_(kind: String, name: String, request: RecordPresentable, answer: RecordPresentable,
+      reference: V.WorkflowArtifactReference, worker: String): V.WorkflowExecutionEvidence = {
+      def _write_(suffix: String, value: RecordPresentable): String = {
+        val file = fixture.resolve(name + "-" + suffix + ".json")
+        Files.writeString(file, _json(value))
+        file.toUri.toASCIIString
+      }
+      val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some(worker), None,
+        Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", worker, "ordinary")))
+      val preparation = V.WorkflowEvidencePreparationInput("DelegateTask", kind,
+        _write_("request", request), _write_("answer", answer), _write_("reference", reference), _write_("execution", evidence),
+        "normal-development-host", java.time.Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence",
+        Option.when(kind == "repair-continuation")("participant"))
+      _select_import(scenario, _call(scenario, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(preparation))))
+      evidence
+    }
+    def _submit_(view: V.DelegateTaskView, outcome: String, name: String, worker: String): F.Result = {
+      val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + name, "1")
+      val work = _work_(view)
+      val required = if (work.kind == "DeliveryAcceptance") work.state.input.conditions.toSet
+        else work.state.input.submissionConditions.getOrElse(work.state.input.conditions).toSet
+      val report = work.state.input.conditions.map(identity => V.DelegateTaskCondition(identity, required(identity),
+        if (required(identity)) "Actual scoped input and retained selected evidence"
+        else "Later validation commit and delivery remain unevaluated by this submission"))
+      val result = V.DelegateTaskWorkResult(outcome, "SPECIFICATION-OWNED " + name, Vector.empty,
+        NonEmptyVector.fromVectorUnsafe(report),
+        Vector.empty, None, None)
+      val evidence = if (outcome == "accept" && work.kind == "Review")
+        _prepare_("review", name, view, result, reference, worker)
+        else V.WorkflowExecutionEvidence(Vector(reference), Some(worker), None,
+          Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", worker, "ordinary")))
+      _call(scenario, "DelegateTaskService", "submitDelegateTaskWorkResult", Vector("--sessionId", session,
+        "--issuedWorkContext", _json(view.issuedWorkContext.get), "--result", _json(result),
+        "--resultReference", _json(reference), "--executionEvidence", _json(evidence)))
+    }
+    When("NEW describes the original Wait through its existing public repair operation")
+    val describedresult = _call(scenario, "DelegateTaskService", "describeDelegateTaskRepairContinuation",
+      Vector("--input", _json(V.GoalTaskRepairContinuationDescriptionInput(session))))
+    val description = describedresult.business[V.GoalTaskRepairContinuationDescriptionResult]
+    val target = take(R.targetC(description.target))
+    Then("the new source retains the original candidate receipt prefix and cumulative accounting")
+    target.source shouldBe Some(R.Source.RecordedIncomplete)
+    description.choices shouldBe Vector("RepairBeforeRetry", "Defer")
+    target.business.state.asJson shouldBe old.asJson
+    target.sessionId shouldBe session
+    target.componentInstance shouldBe manifest.hcursor.get[String]("componentInstance").toOption.get
+    val human = V.WorkflowArtifactReference("SPECIFICATION-OWNED-repair-before-retry-human", "1")
+    val answer = V.GoalTaskRepairContinuationInput(session, description.target, "RepairBeforeRetry",
+      "SPEC remove source-selected verbose output while preserving the scalar expectation", "participant", human)
+    _call(scenario, "DelegateTaskService", "resumeDelegateTaskRepair", Vector("--input", _json(answer))).exitCode should not be 0
+    val defer = answer.copy(choice = "Defer", reference = human.copy(identity = human.identity + "-defer"))
+    When("independent specification-owned Human evidence selects Defer")
+    _prepare_("repair-continuation", "defer", description, defer, defer.reference, "participant")
+    _call(scenario, "DelegateTaskService", "resumeDelegateTaskRepair", Vector("--input", _json(defer)))
+      .business[V.GoalTaskRepairContinuationDescriptionResult].outcome shouldBe "deferred"
+    Then("description Defer and refusal execute no checks and leave the frontier exact")
+    _call(scenario, "DelegateTaskService", "describeDelegateTaskRepairContinuation",
+      Vector("--input", _json(V.GoalTaskRepairContinuationDescriptionInput(session))))
+      .business[V.GoalTaskRepairContinuationDescriptionResult].target shouldBe description.target
+    Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+    When("compatible owned source movement precedes separately admitted RepairBeforeRetry")
+    Files.writeString(root.resolve("repository/value.txt"), "expected\nverbose\n# owned movement\n")
+    _prepare_("repair-continuation", "repair", description, answer, human, "participant")
+    manifest = manifest.mapObject(_.add("repairDirectionEntered", Json.True).add("repairTarget", parser.parse(description.target).toOption.get)
+      .add("newComponent", _component.toString.asJson)); _save_()
+    val admitted = _call(scenario, "DelegateTaskService", "resumeDelegateTaskRepair", Vector("--input", _json(answer)))
+    admitted.business[V.GoalTaskRepairContinuationDescriptionResult].outcome shouldBe "resumed-awaiting-advance"
+    val repeated = _call(scenario, "DelegateTaskService", "resumeDelegateTaskRepair", Vector("--input", _json(answer)))
+    repeated.business[V.GoalTaskRepairContinuationDescriptionResult].outcome shouldBe "already-resumed"
+    _call(scenario, "DelegateTaskService", "resumeDelegateTaskRepair", Vector("--input", _json(answer.copy(choice = "ContinueRepair"))))
+      .exitCode should not be 0
+    Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+    When("separate ordinary Advance issues actual Repair for that same Task")
+    val repair = _advance_()
+    val repairwork = _work_(repair)
+    Then("the original Incomplete and accounting remain available to ordinary semantic Repair")
+    repairwork.kind shouldBe "Repair"
+    repairwork.state.receipts.asJson shouldBe old.receipts.asJson
+    repairwork.state.automaticCount shouldBe old.automaticCount
+    repairwork.state.ordinaryCount shouldBe old.ordinaryCount
+    repairwork.state.generation shouldBe old.generation
+    repairwork.state.input shouldBe old.input
+    _advance_().issuedWorkContext shouldBe repair.issuedWorkContext
+    When("a scoped source correction removes verbose output and normal Submit admits one ordinary batch")
+    Files.writeString(root.resolve("repository/value.txt"), "expected\n")
+    _submit_(repair, "completed", "actual-scoped-repair", "SPECIFICATION-OWNED-repairer").exitCode shouldBe 0
+    var review = _advance_()
+    var remaining = 10
+    while (review.work.isEmpty && remaining > 0) { review = _advance_(); remaining -= 1 }
+    val reviewed = _work_(review).state
+    Then("the changed candidate runs every ordinary selected check and requires an independent review")
+    _work_(review).kind shouldBe "Review"
+    reviewed.automaticCount shouldBe old.automaticCount + 1
+    reviewed.ordinaryCount shouldBe old.ordinaryCount + 1
+    reviewed.generation shouldBe old.generation + 1
+    reviewed.candidate.get.tree should not be old.candidate.get.tree
+    reviewed.receipts.map(_.identity) shouldBe Vector("compile", "fix-check", "test-only")
+    reviewed.receipts.zip(DelegateTaskTestOnlyRecoveryFixture.checks).foreach { (receipt, check) =>
+      receipt.externalCapture match {
+        case None => RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind) shouldBe true
+        case Some(reference) =>
+          val native = WorkflowSbtCapture.decode(_read(root.resolve("capture-root").resolve(reference.path))
+            .hcursor.get[Json]("process").toOption.get).toOption.get
+          WorkflowSbtCapture.externalMatches(reference, receipt.sbt.get, native) shouldBe true
+          receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+          native.termination shouldBe org.goldenport.cncf.processexecution.ProcessExecutionTermination.Exited(0)
+      }
+    }
+    Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe 2
+    Files.readAllLines(root.resolve("selected-body-executions.txt")).size() shouldBe manifest.hcursor.get[Int]("beforeBodyCount").toOption.get + 1
+    val newcommands = Files.readString(root.resolve("sbt-command-lines.txt"))
+    newcommands.linesIterator.count(_ == "compile") shouldBe commands.linesIterator.count(_ == "compile") + 1
+    When("a distinct specification-owned reviewer admits actual independent review and ordinary Advance completes the local commit")
+    _submit_(review, "accept", "independent-review", "SPECIFICATION-OWNED-independent-reviewer").exitCode shouldBe 0
+    var completed = _advance_()
+    remaining = 10
+    while (completed.work.isEmpty && _state(completed.state.get).commit.isEmpty && remaining > 0) {
+      completed = _advance_(); remaining -= 1
+    }
+    if (completed.work.nonEmpty && _work_(completed).kind == "DeliveryAcceptance") {
+      _submit_(completed, "accept", "delivery-acceptance", "SPECIFICATION-OWNED-delivery-reviewer").exitCode shouldBe 0
+      completed = _advance_()
+    }
+    val finalstate = _state(completed.state.get)
+    Then("the actual selected commit completes while the original capture and every historical result remain readable")
+    finalstate.commit.get.identity shouldBe scenario.candidateHead
+    finalstate.commit.get.parent shouldBe old.candidate.get.head
+    finalstate.reviewReference should not be empty
+    finalstate.automaticCount shouldBe old.automaticCount + 1
+    finalstate.ordinaryCount shouldBe old.ordinaryCount + 1
+    finalstate.input shouldBe old.input
+    Files.readAllBytes(capturefile).toVector shouldBe capturebytes
+    val historical = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+      Vector("--input", _json(oldreference)))
+    _state(historical.business[V.WorkflowRetainedSnapshotReadResult].material).asJson shouldBe old.asJson
+    Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe newcommands
+    scenario.candidateStatus shouldBe ""
+    manifest = manifest.mapObject(_.add("repairCompleted", Json.True).add("finalState", finalstate.asJson)
+      .add("finalReadLog", historical.invocation.stdout.toString.asJson)); _save_()
+  }
+
+  protected def qualify_test_only(phase: String, fixture: Path): Unit = {
+    require(fixture.isAbsolute && fixture.normalize == fixture && fixture.startsWith(Path.of("target").toAbsolutePath.normalize),
+      "Fixture evidence must remain under the absolute ignored repository target")
+    Files.createDirectories(fixture)
+    phase match {
+      case "before" => _before(fixture)
+      case "after" => _after_or_collect(fixture, false)
+      case "collect" => _after_or_collect(fixture, true)
+      case _ => fail("Select exactly before|after|collect")
+    }
+  }
+}
+
+/** Explicit OLD -> NEW TestOnly qualification on one physical store.
+  * @since Nov. 19, 2026
+  * @version Nov. 20, 2026
+  */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends NativeDelegateTaskTestOnlyQualification {
   "Installed common TestOnly recovery" should {
     "qualify only the explicitly selected before after or collect stage on the same physical Session" in {
       val phase = sys.props.get("smworkflow.spec.testOnlyRecoveryPhase").getOrElse(fail("Select before|after|collect"))
       val fixture = Path.of(sys.props.get("smworkflow.spec.testOnlyRecoveryFixture").getOrElse(fail("Select the parent-owned absolute ignored fixture directory")))
-      require(fixture.isAbsolute && fixture.normalize == fixture && fixture.startsWith(Path.of("target").toAbsolutePath.normalize),
-        "Fixture evidence must remain under the absolute ignored repository target")
-      Files.createDirectories(fixture)
-      phase match {
-        case "before" => _before(fixture)
-        case "after" => _after_or_collect(fixture, false)
-        case "collect" => _after_or_collect(fixture, true)
-        case _ => fail("Select exactly before|after|collect")
-      }
+      qualify_test_only(phase, fixture)
+    }
+  }
+}
+
+/** OLD produces a real ended capture; NEW continues that same physical Task.
+  * All Human and reviewer judgments belong only to this isolated specification.
+  * @since Nov. 20, 2026
+  * @version Nov. 20, 2026
+  */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskRecordedIncompleteRepairCliSpec extends NativeDelegateTaskTestOnlyQualification {
+  "Installed recorded Incomplete repair" should {
+    "preserve one physical Session from OLD capture through NEW ordinary Repair and completion" in {
+      Given("the parent-selected installed CAR and one retained fixture directory")
+      val phase = sys.props.get("smworkflow.spec.recordedIncompleteRepairPhase").getOrElse(fail("Select prepare-old|resume-new"))
+      val fixture = Path.of(sys.props.get("smworkflow.spec.recordedIncompleteRepairFixture")
+        .getOrElse(fail("Select the same absolute ignored fixture directory")))
+      When("the selected stage uses the actual installed operations")
+      qualify_recorded_incomplete(phase, fixture)
     }
   }
 }

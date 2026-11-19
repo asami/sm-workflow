@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
@@ -166,14 +166,14 @@ object NativeReviewPreparation {
     import org.simplemodeling.textus.smworkflow.admission.DelegateTaskRepairContinuation as R
     for {
       _ <- if (description != null && answer != null && reference != null && execution != null &&
-        description.outcome == "decision-required" && description.choices == R.choices &&
+        description.outcome == "decision-required" &&
         description.resumeOperation == R.resumeOperation && answer.reference == reference &&
         execution.workerIdentity.contains(participant) && participant == answer.participant &&
         org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
         Consequence.unit else Consequence.stateConflict("Task continuation preparation requires its actual description, Human reference, participant, worker, issuer and time")
       target <- R.targetC(description.target)
       supplied <- R.targetC(answer.target)
-      _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+      _ <- if (description.choices == R.choicesFor(target) && target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
         description.componentInstance == target.componentInstance) Consequence.unit
         else Consequence.stateConflict("Task continuation preparation crosses the exact opaque target")
       binding <- R.bindingC(target.componentInstance, target, answer.choice, answer.rationale, participant,
