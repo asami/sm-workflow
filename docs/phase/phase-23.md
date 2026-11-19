@@ -77,3 +77,11 @@ Execute **after Phase 9 and Phase 18**. Do not modify the selected Phase 9 -> Ph
 - Whether and how textus-ai exposes the Astra capability and hard no-overage budget policy.
 
 The detailed implementation should inspect current public APIs before allocating code-level changes.
+
+## Hygiene selection during stabilization planning — 2026-11-19
+
+A strategic disposition to HYGIENE retains the finding as **open, nonblocking, attributable work** rather than silently fixing or deleting it. When planning a future Stabilization Phase, collect eligible accumulated Hygiene candidates from the existing canonical Journal, including oversized handwritten source-file warnings originating in Phase 9. Select a **bounded subset** based on maintainability impact, expected reduction in AI context/processing cost, dependencies, change risk, and cost/benefit. Record which findings are selected, their destination/owner and acceptance conditions; keep unselected Hygiene open for later consideration.
+
+The Stabilization Phase must have its **own fixed Effective Acceptance Boundary**. Do not import every Hygiene item automatically, convert a warning into a mandatory source split, or let cleanup work recursively expand closure requirements. File splitting may affect Scala visibility, given/implicit resolution, initialization and contracts; require appropriate validation and normal Admission. Existing mandatory defects remain CURRENT and cannot be reclassified as optional Hygiene.
+
+Lifecycle: discover/record during ordinary development -> assess as nonblocking Hygiene where justified -> select a bounded set when creating stabilization work -> implement and verify through ordinary controls -> update original canonical findings without duplicates. This is a planning/handoff policy, not a second backlog system or an authorization for autonomous Phase creation.
