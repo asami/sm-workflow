@@ -55,3 +55,9 @@ These checks refine existing R1/R2 provider selection and do not replace P9-01â€
 - [ ] P9-22: Missing/uncertain completeness or payload exceeding 512 KiB declines the bounded API path without dropping necessary information; the existing capable-agent/Takeover route retains the problem.
 - [ ] P9-23: textus-ai checks model token/context/output/tool capabilities and budget separately from the packaging byte bound; packaging uses no expensive AI (optional bounded Local LLM/Luna only).
 - [ ] P9-24: Existing Test/Lint/Admission, authority, Continuation, accepted evidence and repair limits remain unchanged; routing introduces no extra mandatory review or model-selection AI call.
+
+## Oversized-source Hygiene signal â€” 2026-11-19
+
+- [ ] P9-25: Compile-error API input conservatively includes diagnostics and complete relevant source files; a truncated error-neighborhood excerpt is not presumed self-contained.
+- [ ] P9-26: A single oversized handwritten source file emits a deterministic, deduplicated, nonblocking Hygiene candidate signal with source path/size/revision; generated files and package-total-only excess do not automatically trigger source-size Hygiene.
+- [ ] P9-27: An oversized or incomplete package routes to a capable agent without forced truncation, expensive packaging AI, automatic refactoring or a new current-Phase closure gate.
