@@ -34,6 +34,7 @@ import LocalPublication.*
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _target = Target("producer", "org.example.Producer", "producer-workspace")
+  private val _repository_target = Target("repository", "repository", "sm-workflow-repository")
   private val _clean = Source("a" * 40, "b" * 40, Vector.empty)
   private val _catalog_path = "src/main/catalog/car/org/example/producer.yaml"
   private val _catalog = "schemaVersion: 2\nkind: car\nversions:\n  - version: 0.1.0-SNAPSHOT\n" +
@@ -1074,6 +1075,60 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
         m.sourceObservations shouldBe observations
         m.rows.toMap shouldBe history
       }
+    }
+  }
+
+  "The standard repository publication history" should {
+    "resolve the generic label and one declared component against retained attempts" in {
+      Given("a successful ordinary publication using the generic component label")
+      val memory = new Memory
+      val generic = _repository_target
+      val named = generic.copy(component = "org.example.Producer")
+      memory.next = _observed(ProcessExecutionTermination.Exited(0), generic.workspace)
+      val initial = Input("ordinary-publication", generic.identity, explicit = true)
+      val original = take(ensureC(initial, generic, "actor", memory))
+      val delegated = Input("delegated-publication", named.identity)
+
+      When("delegated publication first observes the same clean source and later observes a new commit")
+      val reused = take(ensureDeliveryC(delegated, named, "actor", memory))
+      memory.source = Source("c" * 40, "d" * 40, Vector.empty)
+      val changed = delegated.copy(requestIdentity = "delegated-new-source")
+      val published = take(ensureDeliveryC(changed, named, "actor", memory))
+      val ordinary = take(ensureC(Input("ordinary-new-source", generic.identity), generic, "actor", memory))
+      val crossed = ensureC(Input("different-component", named.identity), named.copy(component = "org.example.Other"),
+        "actor", memory)
+
+      Then("the same clean source is reused, a new commit is published once, and a distinct component is refused")
+      reused.status shouldBe "unnecessary"
+      reused.request.target shouldBe named
+      reused.request.source shouldBe original.request.source
+      published.status shouldBe "published"
+      published.request.target shouldBe named
+      published.request.source shouldBe memory.source
+      ordinary.status shouldBe "unnecessary"
+      take(collectC(initial, generic, "actor", memory)) shouldBe Some(original)
+      crossed.isSuccess shouldBe false
+      memory.starts shouldBe 2
+    }
+
+    "retain unresolved effects across the generic and declared component forms" in {
+      Given("an ordinary publication whose execution has no confirmed outcome")
+      val memory = new Memory
+      val generic = _repository_target
+      val named = generic.copy(component = "org.example.Producer")
+      memory.next = _observed(ProcessExecutionTermination.TerminationUnconfirmed, generic.workspace)
+      val initial = Input("ordinary-uncertain", generic.identity, explicit = true)
+      val original = take(ensureC(initial, generic, "actor", memory))
+
+      When("the declared component requests publication for a new clean commit")
+      memory.source = Source("c" * 40, "d" * 40, Vector.empty)
+      memory.next = _observed(ProcessExecutionTermination.Exited(0), named.workspace)
+      val blocked = take(ensureDeliveryC(Input("delegated-after-uncertain", named.identity), named, "actor", memory))
+
+      Then("the request reports the unresolved effect without starting a publisher")
+      blocked.status shouldBe "uncertain"
+      take(collectC(initial, generic, "actor", memory)) shouldBe Some(original)
+      memory.starts shouldBe 1
     }
   }
 
