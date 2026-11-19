@@ -552,45 +552,83 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
   private def _before(fixture: Path): Unit = {
     Given("the parent-selected OLD published CAR and a small real isolated ordinary native host")
     val manifestfile = fixture.resolve("fixture.json")
-    require(!Files.exists(manifestfile), "BEFORE is create-only; preserve an already reached fixture and select collect")
-    val initial = F.fresh("test-only-recovery-old-new", bootstrapSelectedInput = false,
-      sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
-    val root = initial.root.toRealPath()
-    DelegateTaskTestOnlyRecoveryFixture.build(root)
-    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt", "project/build.properties", ".gitignore")))
-    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-      "commit", "-m", "Configure actual tiny TestOnly recovery build")))
-    val host = initial.host.copy(goal = initial.host.goal.copy(candidatePaths = Vector("value.txt"),
-      stepValidation = initial.host.goal.stepValidation.copy(checks = DelegateTaskTestOnlyRecoveryFixture.checks)))
+    val prior = Option.when(Files.exists(manifestfile))(_read(manifestfile))
+    prior.foreach { saved =>
+      require(saved.hcursor.downField("sessionId").focus.isEmpty && saved.hcursor.downField("readyForAfter").focus.isEmpty,
+        "BEFORE cannot replay an accepted or reached Session; preserve this fixture and select after or collect")
+      require(saved.hcursor.get[String]("schemaVersion").contains("SPEC-TestOnly-old-new-v1"), "Select the saved pre-Session fixture")
+    }
+    var manifest = prior.getOrElse {
+      val initial = F.fresh("test-only-recovery-old-new", bootstrapSelectedInput = false,
+        sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
+      val root = initial.root.toRealPath()
+      DelegateTaskTestOnlyRecoveryFixture.build(root)
+      take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt", "project/build.properties", ".gitignore")))
+      take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "-m", "Configure actual tiny TestOnly recovery build")))
+      val host = initial.host.copy(goal = initial.host.goal.copy(candidatePaths = Vector("value.txt"),
+        stepValidation = initial.host.goal.stepValidation.copy(checks = DelegateTaskTestOnlyRecoveryFixture.checks)))
+      val configfile = root.resolve(".textus/config.json")
+      val config = _read(configfile)
+      val git = parser.parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val process = DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
+      Files.writeString(configfile, config.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
+        .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)
+        .add("workflow.mechanical-receipt.max-bytes", "1048576".asJson)
+        .add("textus.resource.url.file.roots", Vector(root, fixture).map(_.toString).mkString(",").asJson)
+        .add("textus.component.file", _component.toString.asJson)).noSpaces)
+      initial.enablePreparedImportRetention()
+      Json.obj("schemaVersion" -> "SPEC-TestOnly-old-new-v1".asJson, "root" -> root.toString.asJson,
+        "database" -> _read(configfile).hcursor.get[String]("textus.datastore.path").toOption.get.asJson,
+        "host" -> ThreeWorkflowRuntimeParameters.encode(host), "plan" -> initial.plan.asJson,
+        "oldComponent" -> _component.toString.asJson,
+        "fixtureAuthority" -> "SPECIFICATION-OWNED; no actual consumer Human answer".asJson)
+    }
+    val root = Path.of(manifest.hcursor.get[String]("root").toOption.get).toRealPath()
+    val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(manifest.hcursor.get[Json]("host").toOption.get))
+    val plan = manifest.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption.get
     val configfile = root.resolve(".textus/config.json")
     val config = _read(configfile)
-    val git = parser.parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
-    val process = DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
-    Files.writeString(configfile, config.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
-      .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)
-      .add("workflow.mechanical-receipt.max-bytes", "1048576".asJson)
-      .add("textus.resource.url.file.roots", (root.toString + java.io.File.pathSeparator + fixture.toString).asJson)
-      .add("textus.component.file", _component.toString.asJson)).noSpaces)
-    initial.enablePreparedImportRetention()
-    val scenario = F.reopenInstalledRepository(root, host, initial.plan, 100)
-    var manifest = Json.obj("schemaVersion" -> "SPEC-TestOnly-old-new-v1".asJson, "root" -> root.toString.asJson,
-      "database" -> _read(configfile).hcursor.get[String]("textus.datastore.path").toOption.get.asJson,
-      "host" -> ThreeWorkflowRuntimeParameters.encode(host), "plan" -> initial.plan.asJson,
-      "oldComponent" -> _component.toString.asJson,
-      "fixtureAuthority" -> "SPECIFICATION-OWNED; no actual consumer Human answer".asJson)
+    require(root.toString == manifest.hcursor.get[String]("root").toOption.get &&
+      host.target.root == root.resolve("repository").toRealPath().toString &&
+      config.hcursor.get[String]("textus.datastore.path") == manifest.hcursor.get[String]("database") &&
+      (prior.isEmpty || Files.isRegularFile(Path.of(manifest.hcursor.get[String]("database").toOption.get))) &&
+      config.hcursor.get[String]("textus.component.file") == manifest.hcursor.get[String]("oldComponent") &&
+      manifest.hcursor.get[String]("oldComponent").contains(_component.toString),
+      "Pre-Session continuation requires the same physical root, database, saved host and selected OLD CAR")
+    val logical = BoundedWorkExecutionAdmissionFixture.logicalParameters.foldLeft(config) { case (retained, (key, value)) =>
+      retained.mapObject(_.add(key, value.asJson))
+    }
+    val corrected = logical.mapObject(_.add("textus.resource.url.file.roots", Vector(root, fixture).map(_.toString).mkString(",").asJson))
+    if (corrected != config) Files.writeString(configfile, corrected.noSpaces)
+    val logroot = root.resolve("logs")
+    val nextindex = if (Files.isDirectory(logroot)) {
+      val files = Files.list(logroot)
+      try {
+        import scala.jdk.CollectionConverters.*
+        files.iterator().asScala.flatMap(_.getFileName.toString.takeWhile(_.isDigit).toIntOption).maxOption
+          .map(index => Math.addExact(index, 100)).getOrElse(100)
+      } finally files.close()
+    } else 100
+    val scenario = F.reopenInstalledRepository(root, host, plan, nextindex)
     def _save_(): Unit = Files.writeString(manifestfile, manifest.noSpaces)
-    _save_()
-    val input = V.DelegateTaskInput(host.goal.input.repositoryIdentity, "SPEC-TestOnly-old-new", "SPECIFICATION-OWNED same physical native recovery",
+    if (prior.isEmpty) _save_()
+    val inputfile = root.resolve("SPEC-start-input.json")
+    val input = if (prior.nonEmpty) {
+      val retained = take(new org.goldenport.record.io.RecordDecoder().json(Files.readString(inputfile)))
+      take(V.DelegateTaskInput.createC(retained))
+    } else V.DelegateTaskInput(host.goal.input.repositoryIdentity, "SPEC-TestOnly-old-new", "SPECIFICATION-OWNED same physical native recovery",
       NonEmptyVector.one("value.txt"), NonEmptyVector.of("compile", "fix-check", "test-only"), NonEmptyVector.one("behavior"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-source", "1")), true, "code", "off", 10, "direct-instruction", Vector.empty,
       V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination", "localized",
         NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request-authority", "1")), None, Vector.empty, "SPEC-only"), Vector("behavior"))
-    val inputfile = root.resolve("SPEC-start-input.json")
-    Files.writeString(inputfile, _json(input))
+    if (prior.isEmpty) Files.writeString(inputfile, _json(input))
     val preparation = V.WorkflowDelegateTaskStartPreparationInput(inputfile.toUri.toASCIIString,
       "SPEC-TestOnly-selection", "participant", "ExplicitHuman", "SPEC-TestOnly-key", "entity:smworkflow.cli.goal_selection")
+    When("the unchanged unaccepted input is prepared through the ordinary public route")
     _select_import(scenario, _call(scenario, "NativeWorkflowPreparationService", "prepareDelegateTaskStart", Vector("--input", _json(preparation))))
+    When("the first ordinary Start selects that same prepared input and original properties")
     val started = _view(scenario, _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(input),
       "--selectionId", "SPEC-TestOnly-selection", "--participant", "participant", "--idempotencyKey", "SPEC-TestOnly-key")))
     manifest = manifest.mapObject(_.add("sessionId", started.sessionId.asJson)); _save_()
