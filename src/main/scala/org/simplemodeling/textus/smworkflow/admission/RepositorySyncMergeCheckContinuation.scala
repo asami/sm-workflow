@@ -25,7 +25,7 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
   * missing results remain UNKNOWN; typed preparation refusals remain refusals.
   * No adoption or source preparation performs a Git mutation or executes SBT.
   * @since   Nov.  4, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncMergeCheckContinuation {
   val policy = "sm-workflow.repository-sync-merge-check-continuation.v1"
@@ -272,7 +272,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       .map(Consequence.success).getOrElse(N.invalid("ordinary resolved process plan is absent")))
     def execute(): Consequence[OperationResponse] = N.invalid("merge check host configuration reader is not an Operation")
   }
-  private def _host_c(core: ActionCall.Core): Consequence[Json] = new HostPlanRead(core).readC
+  private[admission] def hostPlanC(core: ActionCall.Core): Consequence[Json] = new HostPlanRead(core).readC
   private def _history_c(current: InstanceRecord, stage: N.Stage): Consequence[Unit] =
     prefixC(current, stage.record.revision.value.toString).flatMap(actual =>
       if (actual == stage.record) Consequence.unit else N.invalid("merge check source crosses native history"))
@@ -351,7 +351,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     _ <- store.scopeC(actual.observed)
     tree <- G.indexTreeC(core)
     _ <- C.preconditionsC(store, candidate.pending)
-    plan <- _host_c(core)
+    plan <- hostPlanC(core)
     candidatekey = N.candidateKey(candidate.namespace, "pending-merge")
     target = Target(core.component.get.core.instanceId.canonicalKey, identity, session.context, store.original.repositoryRoot,
       d.target.endpoint, current.revision.value.toString, current.causation.value, candidate.namespace, candidatekey,
@@ -417,7 +417,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     actual <- G.inspectC(store.core)
     _ <- store.scopeC(actual.observed)
     tree <- G.indexTreeC(store.core)
-    host <- _host_c(store.core)
+    host <- hostPlanC(store.core)
     _ <- if (actual == target.actual && tree == target.indexTree && host == target.processPlan && validation == target.validationPolicy)
       Consequence.unit else N.invalid("merge check current candidate, index, host program plan or selected policy changed")
   } yield ()

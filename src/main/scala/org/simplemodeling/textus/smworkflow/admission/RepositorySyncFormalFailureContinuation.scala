@@ -9,7 +9,6 @@ import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as _, *}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.{TypedValue, WorkflowContinuation}
-import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.value as V
 import RepositorySyncManagedFetch as F
@@ -23,7 +22,7 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
 /** A genuine new validation attempt after explicit host-correction direction.
   * Formal failure and unknown old-worker effects retain separate provenance.
   * @since   Nov.  3, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncFormalFailureContinuation {
   val policy = "sm-workflow.repository-sync-formal-failure-continuation.v1"
@@ -344,15 +343,6 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
         "answer" -> Json.obj("choice" -> choice.asJson, "rationale" -> rationale.asJson,
           "participant" -> participant.asJson, "reference" -> reference.asJson,
           "priorExecutionEnded" -> ended.asJson, "acceptOriginalUncertainty" -> accepted.asJson))))
-  private def _host_c(core: ActionCall.Core): Consequence[Json] = for {
-    raw <- Option(core.executionContext.resolvedParameters).flatMap(_.get(GoalPhaseWholePhaseCandidateRecovery.processPlanKey))
-      .map(_.value).map(Consequence.success).getOrElse(N.invalid("ordinary resolved process-execution plan is absent"))
-    plan <- (raw match {
-      case ConfigurationValue.StringValue(text) if text != null => io.circe.parser.parse(text).left.map(_.message)
-      case value => GoalPhaseWholePhaseCandidateRecovery.configurationJson(value)
-    }).fold(N.invalid, Consequence.success)
-    _ <- if (plan.asObject.exists(_.nonEmpty)) Consequence.unit else N.invalid("ordinary resolved process plan is malformed")
-  } yield plan
   private def _load_c(store: N.Store, key: String): Consequence[N.Stage] = store.loadC(key)
     .flatMap(_.map(Consequence.success).getOrElse(N.invalid("formal failure native source is absent: " + key)))
   private def _history_c(current: InstanceRecord, stage: N.Stage): Consequence[Unit] =
@@ -507,7 +497,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     actual <- G.inspectC(core)
     _ <- store.scopeC(actual.observed)
     tree <- G.indexTreeC(core)
-    plan <- if (reconstructed.nonEmpty) RepositorySyncPurposeMaterializationContinuation.hostPlanC(core) else _host_c(core)
+    plan <- if (reconstructed.nonEmpty) RepositorySyncPurposeMaterializationContinuation.hostPlanC(core) else RepositorySyncMergeCheckContinuation.hostPlanC(core)
     proposed = reconstructed.map(_.checks).orElse(Option.when(source.failed.payload.purposes.nonEmpty)(
       proposedChecks(source.checks, validation, source.slot)).flatten)
     version = if (reconstructed.nonEmpty) reconstructionPolicy else if (proposed.nonEmpty) selectionPolicy else policy
@@ -688,7 +678,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
 
   def requireCurrentContextC(store: N.Store, target: Target, validation: C.Policy): Consequence[Unit] = for {
     host <- if (target.continuationPolicy == reconstructionPolicy)
-      RepositorySyncPurposeMaterializationContinuation.hostPlanC(store.core) else _host_c(store.core)
+      RepositorySyncPurposeMaterializationContinuation.hostPlanC(store.core) else RepositorySyncMergeCheckContinuation.hostPlanC(store.core)
     actual <- G.inspectC(store.core)
     tree <- G.indexTreeC(store.core)
     _ <- store.scopeC(actual.observed)

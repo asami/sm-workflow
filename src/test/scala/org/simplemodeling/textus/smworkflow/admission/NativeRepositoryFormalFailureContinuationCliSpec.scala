@@ -20,17 +20,30 @@ import SplitPhaseExplicitPartitionFixture.take
   * the SBT launcher's actual nonzero exit under an isolated invalid JVM launch option;
   * neither a success provider nor an authored process receipt participates.
   * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @version Nov. 20, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeRepositoryFormalFailureContinuationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeRepositoryContinuationCliFixture {
+  private val _plan_key = GoalPhaseWholePhaseCandidateRecovery.processPlanKey
   private val _checks = Vector(C.Check("formal-compile", 1, WorkflowSbtValidation.Kind.Compile),
     C.Check("formal-test", 2, WorkflowSbtValidation.Kind.Test), C.Check("formal-lint", 3, WorkflowSbtValidation.Kind.FixCheck))
   private def _array(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
   private def _plan(scenario: NativeWorkflowCliFixture.Scenario, purpose: Boolean, broken: Boolean): Json = {
-    val base = process_plan(scenario.root, "Equal", scenario.host.goal)
+    val original = (for {
+      config <- parse(Files.readString(scenario.root.resolve(".textus/config.json")))
+      raw <- config.hcursor.get[String](_plan_key)
+      plan <- parse(raw)
+    } yield plan).fold(error => fail(error.getMessage), identity)
+    val base = process_plan(scenario.root, "Equal", scenario.host.goal).mapObject { fields =>
+      Vector("workspaces" -> "identity", "workspaceGrants" -> "workspaceId").foldLeft(fields) {
+        case (current, (key, field)) =>
+          val retained = _array(original, key).filter(_.hcursor.get[String](field).toOption.contains("prepared-imports"))
+          require(retained.size == 1, s"Expected exactly one prepared-imports entry in $key")
+          current.add(key, current(key).get.mapArray(_ ++ retained))
+      }
+    }
     val selections = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck).zipWithIndex.map { (operation, index) =>
       TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable, Vector(index + 1), operation = operation)
     }
@@ -78,7 +91,7 @@ final class NativeRepositoryFormalFailureContinuationCliSpec extends AnyWordSpec
       git(scenario.root, "-C", repository.toString, "add", "--", "docs/formal-local.md")
       git(scenario.root, "-C", repository.toString, "commit", "-m", "Local independent document")
     }
-    configure(scenario, _parameters(purpose) + ("textus.subsystem.process-execution.plan" -> _plan(scenario, purpose, broken = true).noSpaces))
+    configure(scenario, _parameters(purpose) + (_plan_key -> _plan(scenario, purpose, broken = true).noSpaces))
     scenario
   }
   private def _formal(scenario: NativeWorkflowCliFixture.Scenario, session: String): Vector[(String, C.Receipt)] =
@@ -137,25 +150,32 @@ final class NativeRepositoryFormalFailureContinuationCliSpec extends AnyWordSpec
           val head = git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD")
           val index = git(scenario.root, "-C", repository.toString, "write-tree")
           When("the host is corrected and public description observes its actual resolved context")
-          configure(scenario, Map("textus.subsystem.process-execution.plan" -> _plan(scenario, purpose, broken = false).noSpaces))
+          val correctedplan = _plan(scenario, purpose, broken = false)
+          configure(scenario, Map(_plan_key -> correctedplan.noSpaces))
           val described = describe(scenario, session)
           val description = described.business[V.RepositorySyncValidationContinuationDescriptionResult]
-          val target = N.decodeTarget(parse(take(description.target.toJsonStringC)).toOption.get).fold(fail(_), identity)
-          Then("the target binds the immutable failed check and successful prefix")
+          val target = take(RepositorySyncValidationContinuation.anyTargetC(description.target)) match {
+            case RepositorySyncValidationContinuation.FormalFailureTarget(value) => value
+            case _ => fail("This fixture requires a formal failure continuation target")
+          }
+          Then("the target binds the immutable failed check, successful prefix and full corrected host plan")
           target.failed shouldBe original.find(_._2.identity == "formal-test").get._2
           target.successfulPrefix.last.identity shouldBe "formal-compile"
+          target.processPlan shouldBe correctedplan
           When("prepared direction is submitted after the described host plan changes again")
           val input = direction(scenario, session, described, N.choices.head, target.pending.nonEmpty, target.pending.nonEmpty)
-          val changedplan = _plan(scenario, purpose, broken = false).mapObject(fields => fields.add("sbtPrograms",
+          val changedplan = correctedplan.mapObject(fields => fields.add("sbtPrograms",
             fields("sbtPrograms").get.mapArray(_.map(_.mapObject(program => program.add("limits",
               program("limits").get.mapObject(_.add("executionTimeoutMillis", Json.fromLong(179999L)))))))))
-          configure(scenario, Map("textus.subsystem.process-execution.plan" -> changedplan.noSpaces))
+          configure(scenario, Map(_plan_key -> changedplan.noSpaces))
           val refused = adopt(scenario, input)
           Then("the changed host context is refused without changing the session")
           refused.exitCode should not be 0
+          (Files.readString(refused.invocation.stdout) + Files.readString(refused.invocation.stderr)) should
+            include("formal target drifted; describe again")
           current(scenario, session) shouldBe old
           When("the exact described host context is restored and its prepared direction is adopted")
-          configure(scenario, Map("textus.subsystem.process-execution.plan" -> _plan(scenario, purpose, broken = false).noSpaces))
+          configure(scenario, Map(_plan_key -> correctedplan.noSpaces))
           val adoption = adopt(scenario, input)
           Then("adoption appends direction without replaying checks, modifying Git or incrementing repair counters")
           adoption.business[V.RepositorySyncValidationContinuationAdoptionResult].outcome shouldBe "adopted"
@@ -180,13 +200,24 @@ final class NativeRepositoryFormalFailureContinuationCliSpec extends AnyWordSpec
           When("separate normal Advance uses the same candidate under the exact adopted host context")
           val next = advance(scenario, session)
           Then("only the failed check obtains a new attempt and the successful prefix and old failure are immutable")
-          withClue(next.invocation.logs) { next.exitCode shouldBe 0 }
+          withClue(next.invocation.logs) {
+            if (purpose) {
+              next.exitCode should not be 0
+              (Files.readString(next.invocation.stdout) + Files.readString(next.invocation.stderr)) should
+                include("Code admission requires compilation and actually executed nonempty focused behavioral tests")
+            } else {
+              next.exitCode shouldBe 0
+            }
+          }
           val after = _formal(scenario, session)
           original.foreach(value => after should contain(value))
           after.count(_._2.identity == "formal-compile") shouldBe 1
           after.count(_._2.identity == "formal-test") shouldBe 2
           after.find(value => value._1.startsWith(session + ":native-" + N.namespace(target)) || value._1.contains("-host-" + target.frontierRevision))
             .exists(_._2.exitCode.contains(0)) shouldBe true
+          if (purpose) {
+            after.filter(_._2.identity == "formal-lint").map(_._2.exitCode) shouldBe Vector(Some(0))
+          }
           When("the old target is submitted after the new validation attempt")
           val obsolete = adopt(scenario, input)
           Then("the obsolete target is refused")
