@@ -531,3 +531,27 @@ feedback into the existing configuration contract, not automatic optimization,
 a new AI approval gate or a change to live model settings.
 
 See [the accounting and evaluation note](../notes/ai-efficiency-evaluation-and-phase-total.md).
+
+
+## Context Packaging API eligibility policy — 2026-11-19
+
+The initial **maximum Context Package payload is 512 KiB (524,288 bytes)**, configurable as a single upper bound, **not** a target size or a reserved allocation. Package only the necessary, complete problem information: a 64 KiB problem sends approximately 64 KiB, not 512 KiB. No separate 64/128/256 KiB routing tiers or size-based model ladder are required.
+
+Eligibility for a bounded API task requires:
+1. **Completeness:** the supplied file set and instructions contain all information needed to understand and solve the problem; multiple source files are allowed. If completeness is unknown, decline API routing and use a capable agent.
+2. **Payload size:** the actual serialized Context Package is at most the configured 512 KiB bound. Never truncate required evidence or use costly AI summarization to force it under the limit.
+3. **Provider capability:** textus-ai confirms model context-window capacity (including output allowance), required input/output formats and tools. Token estimates and actual API billing are checked by the provider layer, not a separate packaging-size threshold.
+
+Construct packages deterministically from existing task, source, contract, diagnostic and evidence references. Packaging must not call an expensive model; exceptional assistance, if warranted, is limited to Local LLM or Luna and may decline. The package is a self-contained task boundary, not a single-source-file restriction. textus-ai owns provider-specific formatting, model selection, quota and no-paid-overage policy; sm-workflow owns packaging, workflow state, patch application, verification and Admission.
+
+The 512 KiB policy is an initial **maximum**, subject to empirical revision. The actual input token count and output/reasoning usage determine cost; unused capacity is not billed. No new AI classification, mandatory review, or separate orchestration engine is introduced. Preserve R1–R3 ordering, existing acceptance criteria and the Phase 9 -> Phase 18 -> Phase 23 roadmap. This is a bounded integration requirement, not authorization to expand Phase 9 into a generic context discovery project.
+
+## Oversized source files and Hygiene signals — 2026-11-19
+
+The 512 KiB Context Package bound also provides a useful **maintainability signal**, but package size and individual source-file size are distinct. A package assembled from several well-structured files may exceed 512 KiB without any one source being oversized. Conversely, a single handwritten source file larger than the bound is a candidate for maintainability review, even when a narrow task could use a smaller package.
+
+For initial compile-error API routing, prefer compiler diagnostics plus the **complete relevant source file(s)**; do not assume that extracting the error line or nearby function yields complete context. Scala type inference, given/implicit scope, imports and inheritance can make the true cause nonlocal. Do not add expensive semantic extraction or AI summarization solely to fit the byte limit. If a complete package cannot fit, retain the issue and route to an agent capable of exploration.
+
+When a **single handwritten source file** exceeds the configurable 512 KiB warning threshold, emit a deterministic, nonblocking **Hygiene candidate signal** with path, size, revision and reason. Exclude generated code and declared non-source/data artifacts where appropriate; reuse canonical Hygiene/Journal identity and deduplicate rather than inventing a new issue database. A size warning is **not** proof of poor design, a command to split the file, or a new current-Phase acceptance gate. Existing explicit requirements and real defects still govern acceptance.
+
+Hygiene remediation may later be selected into a **bounded stabilization Phase**, with its own adopted scope and acceptance boundary; do not automatically include all accumulated Hygiene. Phase 23 owns the strategic selection/handoff policy, while Phase 9 only provides size observation and routing. Preserve normal workflow progress and truthful unresolved records.

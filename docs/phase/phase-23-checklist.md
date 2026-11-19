@@ -20,3 +20,9 @@ Priority: Phase 9 -> Phase 18 -> Phase 23.
 | P23-12 | Regression preserves Phase 9 routing/repair limits and Phase 18 tool-neutral validation; independent acceptance is recorded. | TODO |
 
 No Step, Session, validation, review, commit of product code or release is initiated by creating this plan.
+
+## Stabilization Hygiene intake — 2026-11-19
+
+- [ ] P23-13: Stabilization planning can select a bounded subset of existing canonical Hygiene records, including oversized-source warnings, using impact, dependencies, risk and cost/benefit.
+- [ ] P23-14: Unselected Hygiene remains open and nonblocking; selected items retain source identity, owner, destination and separate stabilization acceptance criteria without duplicate issue creation.
+- [ ] P23-15: Source-size warnings do not mandate splitting or change current-Phase acceptance; any selected refactor passes normal validation/Admission and preserves contracts.
