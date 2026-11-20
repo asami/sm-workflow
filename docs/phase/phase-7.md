@@ -285,6 +285,54 @@ are scope updates judged by sm-workflow, not automatic Human questions. Preserve
 real Component and operation boundaries. Reuse the producer implementation and
 evidence; do not create another consent owner or repeat accepted Phase 6 work.
 
+### Phase/Task-owned chat permissions — 2026-11-21
+
+Clarify P7-DD-01/04/10/13 within the ongoing Phase 7 delivery work. Reuse the
+existing dependency-edge `AssignedChat` binding, delegated request contract and
+purpose-based authorization owner. Existing source already checks the configured
+destination; the Phase policy retains admitted in-purpose repair permission.
+These authored mechanisms do not establish installed qualification of the complete
+Phase/Task permission lifecycle described here.
+
+Each Phase or Task retains its effective permitted destination chats and their
+authorized scope in the existing Workflow state. Bind the actual chat identity
+to the responsible Component/project, development purpose, acceptance boundary,
+permitted operations and explicit exclusions, with the original authorization
+references. A Task may inherit applicable authorization from its owning Phase
+or retain its own adopted scope; it cannot enlarge that authority by changing
+caller settings. A chat's availability or registration alone grants no effects.
+
+Within that retained scope, runtime admits necessary requests, same-purpose
+follow-up requests, repairs, affected revalidation and result return/adoption
+without another Human permission question. Preserve destination FIFO and actual
+validation, review and delivery ownership. A changed candidate, Step, source
+revision, failure reason, or necessary file/test/fixture inventory does not by
+itself invalidate the permission. Compare changes against the retained purpose
+and actual restrictions, rather than treating an initial path estimate as a
+Human-imposed exact-file boundary. Resume/reconnect retains the same policy.
+
+A request to an unpermitted destination, work outside the adopted purpose, or
+an operation beyond retained authority requires the missing direction; report
+the actual difference instead of asking for the whole task again. Preserve
+explicit Fixed choices, exclusions and independent shared-CLI/publication/push
+permissions. Missing execution configuration is a setup error, not absent Human
+consent. Unknown effects still require normal reconciliation before any retry.
+
+For example, an admitted Cozy generation repair includes its necessary tests
+and fixtures, follow-up corrections and revalidation within that same purpose;
+changing their inventory must not produce another `ApproveDependencyScope`
+question solely for those changes. This does not authorize unrelated Cozy work
+or an excluded effect.
+
+Integrate this clarification at the next applicable boundary of the existing
+Phase 7 work. Retain original Step/condition IDs, accepted results, successful
+checks, Sessions, histories and repair counts. Do not restart/rebaseline the
+active Phase, add a separate permission store or approval gate, or mark existing
+pending Human questions answered through this document. Reconcile legacy pending
+records through the existing public continuation using genuine retained authority;
+otherwise identify the actual missing decision. Track remaining qualification
+under P7-DD-01/04/10/13 without reopening already covered acceptance.
+
 
 Evidence ownership update (2026-10-20): consume [Phase 6.4](phase-6.4.md)'s
 accepted operational use of [Phase 12](phase-12.md)'s common Evidence service.
