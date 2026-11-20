@@ -364,3 +364,117 @@ source/diagnostic scope and reason; none is claimed from inspection.
 Full Workflow/FailureModel bodies retain the prior duplicate-context exclusions.
 No current model representation, historical Session/result/count, successful
 effect or Core stage C requirement changed, and B04 remains open.
+
+## SLP-C1 accepted Core source delivery — 2026-11-21
+
+C01 now records the adopted bounded Core delivery
+`P81-SLPC1-CORE-EQUALITY-IDENTITY-API-20261120`. The producer's `ReturnReady`
+result identifies canonical `goldenport-core` main commit
+`e4972601207d4597f0ed3aa77fc0ed62fb286c75`, parent
+`d959a576bc64a5480edbe3781eff624b7cae8698`, and validated tree
+`b431c2b2a11946761912472f591b9faaf2efa19e`. The requester is `Adopted` for
+that attributed result/selection attachment. Source selection is this exact
+commit, not the ambient version coordinate. No local publication was performed;
+`org.goldenport:goldenport-core_3:0.4.3-SNAPSHOT` identifies the producer version
+but supplies no verified binary selection. Consumer activation remains pending.
+
+### Accepted public surface and comparison meaning
+
+The committed [TypeSafeCollections.scala](../../../goldenport-core/src/main/scala/org/goldenport/util/TypeSafeCollections.scala)
+and [TypeSafeCollectionsSpec.scala](../../../goldenport-core/src/test/scala/org/goldenport/util/TypeSafeCollectionsSpec.scala)
+at the selected commit define this immutable-Vector-only surface. Use
+`import org.goldenport.util.TypeSafeCollections.*`, `cats.Eq`, and the existing
+`org.goldenport.id.{Identified, Identifiable, UniversalId}` types. Both relation
+traits are declared in
+[Identified.scala](../../../goldenport-core/src/main/scala/org/goldenport/id/Identified.scala):
+`Identified[T, I <: UniversalId].id(entity: T): I` and
+`Identifiable[T, I <: UniversalId].id(entity: T): Option[I]`.
+
+The exact public signatures below are transcribed from the selected source;
+wrapper constructors are `private[TypeSafeCollections]`.
+
+```scala
+extension [A](values: Vector[A])
+  def typeSafe: VectorValues[A]
+
+// VectorValues[A]
+def containsEq[B](value: B)(using equality: Eq[A])(using same: B =:= A): Boolean
+def identifiedBy[I <: UniversalId](relation: Identified[A, I])(using equality: Eq[I]): VectorIds[A, I]
+def identifiableBy[I <: UniversalId](relation: Identifiable[A, I])(using equality: Eq[I]): VectorIds[A, I]
+
+// VectorIds[A, I <: UniversalId]
+def containsId(id: I): Boolean
+def findById(id: I): Option[A]
+def distinctById: Vector[A]
+```
+
+`typeSafe` fixes receiver element type `A` before a comparison argument is
+supplied. `containsEq` scans with the supplied `Eq[A]`; the separate `B =:= A`
+evidence prevents argument-driven widening. The receiver's already declared
+type remains significant: an explicitly widened `Vector[Any]` still has `A = Any`.
+The API does not recover a narrower domain contract from that declaration.
+
+Callers explicitly select `identifiedBy(relation)` for mandatory IDs or
+`identifiableBy(relation)` for optional IDs. That selection captures `I` before
+a lookup argument is supplied; no implicit adapter chooses between relations
+when both exist. `containsEq` expresses value equality; the ID wrapper uses
+`Eq[I]` over the selected relation, separately from value/reference equality.
+Importing the extension does not change standard `Vector.contains` behavior.
+
+Lookup returns the first entity with a present Eq-equivalent ID; absent IDs
+never match. `distinctById` preserves input order, the first entity for each
+Eq-equivalent present ID, and every absent-ID occurrence, including repeated
+references. Conflicting payloads are not merged or resolved. Lookup is O(n);
+distinct is O(n²) in the worst case. Both use Eq scans without Hash, Ordering,
+Set or Map. This delivery adds no grouping API or other collection-family API.
+Its distinct names are available at this selected source revision; earlier
+provisional names did not establish their availability or direct Vector syntax.
+
+### Reused producer evidence and remaining Phase work
+
+The caller-retained `return-derived-snapshot.json` contains the actual
+`ReturnReady` material, commit and native receipts: compile exited 0 and
+test-only exited 0 with one completed suite / seven tests, associated with the
+validated tree above. Its `adopted.json` records requester attachment adoption;
+`adoption-observation.json` selects `canonical-source-commit` and records no
+local publication or consumer activation. These are retained public delivery
+inputs, separate from this Phase's validation receipts.
+
+Producer `review3-result.json` accepts the repaired strict-compilation boundary
+with no findings; `acceptance-result.json` accepts all three delivery conditions
+and the actual commit. Those records describe strict compilation as an inference
+from the successful test-only result and its build dependency because the
+receipt then available to the reviewer lacked detailed compiler stdout. The
+caller-retained `strict-test-stdout.log` additionally shows two Scala sources
+compiled to `collectionStrict-classes`, one Test source compiled, and all seven
+focused tests passed. This source record uses that actual log; it does not
+attribute the later stdout inspection to the earlier reviewer.
+
+The committed build selects only the API and its specification for
+`CollectionStrict`, extends Test, reuses Test's dependency classpath and makes
+`Test / compile` depend on `CollectionStrict / compile`. The producer toolchain
+is Scala 3.3.8, Cats 2.7.0, sbt 1.9.8 and JDK 21.0.13.0.3. Its selected flags are:
+
+```text
+-release:17 -language:strictEquality -Yexplicit-nulls -Ysafe-init
+-Wvalue-discard -Wnonunit-statement -Wunused:imports,privates,locals
+-unchecked -deprecation -feature -Werror
+```
+
+The seven producer cases cover supplied lawful string Eq with property checks,
+explicit nested-array Eq, stable first-ID/absent-ID behavior, mandatory-relation
+Eq consumption, matching direct/captured calls with common-parent Eq instances,
+and diagnostic-specific rejection of mismatched elements and sibling IDs in both
+direct and captured calls. The latter establish `String =:= Entity` rejection
+and `SpanId` versus required `TraceId` diagnostics at the tested calls, even with
+generic `Eq[Any]` / `Eq[UniversalId]` and applicable common-parent instances in
+scope. The positive case also deliberately retains an explicitly widened receiver.
+These results concern the selected API/specification, not a strict conversion of
+all legacy Core sources or proof of arbitrary caller-supplied Eq laws.
+
+This C01 update records the accepted API and source evidence only. No Core work,
+producer check or successful effect is repeated. No consumer build/dependency,
+generated output or AI instruction is changed. Phase C02/C03 qualification stays
+with SLP-C2; C04/C05 generated/AI adoption and guidance stay with SLP-C3. Runtime
+Phase validation, independent review and acceptance of this record remain
+pending; the existing checklist is unchanged.

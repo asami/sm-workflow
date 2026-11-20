@@ -45,8 +45,9 @@ producer work or active Session is started by this scheduling decision.
 
 The IDs below identify bounded handoffs, not new Sessions or producer Phase
 numbers. The bounded local SLP-1/SLP-2 acceptance above does not close the
-cross-project handoffs below. They remain planned and unaccepted. Existing code
-alone is inspection evidence, not qualification of the remaining requirements.
+cross-project handoffs below. Each accepted subset is recorded separately below;
+the remaining handoffs stay planned and unaccepted. Existing code alone is
+inspection evidence, not qualification of the remaining requirements.
 
 | Delivery | Producer and local plan | Handoff to Phase 8.1 | Required before |
 | --- | --- | --- | --- |
@@ -302,6 +303,36 @@ requires actual selected diagnostics; no generated warning bypass is assumed.
 Prior B1 evidence remains applicable to its actual source selection. Full
 Workflow/FailureModel bodies, historical settings and Core stage C retain their
 separate boundaries.
+
+### C01 accepted Core source handoff — 2026-11-21
+
+The requester adopted the bounded
+`P81-SLPC1-CORE-EQUALITY-IDENTITY-API-20261120` delivery from canonical
+`goldenport-core` main commit `e4972601207d4597f0ed3aa77fc0ed62fb286c75`,
+tree `b431c2b2a11946761912472f591b9faaf2efa19e`. The selection is the exact
+source commit. Producer native compile and focused test-only receipts exited 0;
+the retained stdout explicitly records strict compilation of the API and its
+specification, followed by one suite with seven successful tests. Independent
+review accepted the repaired delivery and producer acceptance satisfied its
+three delivery conditions. The requester attachment is `Adopted`; it certifies
+neither consumer activation nor consumer checks.
+
+The accepted import is `org.goldenport.util.TypeSafeCollections.*`. Immutable
+`Vector[A].typeSafe` captures `A`; `containsEq` uses Cats `Eq[A]` and requires
+argument-type equality `B =:= A`. Explicit `identifiedBy` / `identifiableBy`
+selection captures `I <: UniversalId` from the existing mandatory/optional
+identity relation before `containsId`, `findById` or `distinctById` is used.
+The [accepted API and producer evidence record](../notes/phase8.1-producer-deliveries.md#slp-c1-accepted-core-source-delivery--2026-11-21)
+contains the exact signatures, semantics, compiler policy and evidence limits.
+It supersedes provisional API-name assumptions for this selected Core revision.
+
+No local publication was performed and no binary selection is claimed for
+`org.goldenport:goldenport-core_3:0.4.3-SNAPSHOT`. This C01 source record changes
+no dependency or consumer build. SLP-C2 retains Phase C02/C03 qualification;
+SLP-C3 retains generated/AI consumer adoption and C04/C05 guidance. Existing
+checklist items remain unchanged pending their owning runtime's validation,
+review and acceptance. Applicable producer evidence is reused without repeating
+producer work or requiring its whole Phase to close.
 
 All plans preserve current priorities, Goals, Sessions, base, accepted results,
 history, repair counts and unrelated tracked/untracked work. They start no
