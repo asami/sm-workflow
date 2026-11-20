@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -96,6 +96,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation",
       "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation",
       "describeDelegateTaskValidationRecovery", "recoverDelegateTaskValidation",
+      "describeDelegateTaskRequestReconstruction", "reconstructDelegateTaskRequest",
       "describeDelegateTaskSemanticContinuation", "resumeDelegateTaskSemanticContinuation",
       "describeDelegateTaskRepairContinuation", "resumeDelegateTaskRepair",
       "describeDelegateTaskReviewContinuation", "resumeDelegateTaskReviewContinuation"),

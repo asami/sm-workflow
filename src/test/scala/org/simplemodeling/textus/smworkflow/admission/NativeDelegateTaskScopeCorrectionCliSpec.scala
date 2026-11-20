@@ -21,7 +21,8 @@ import S.given
   * All Human selections, worker observations and semantic facts below are
   * SPECIFICATION-OWNED. They establish no actual consumer consent or delivery.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov. 20, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -59,7 +60,8 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       .toOption.get.as[S.State].toOption.get
   private def _call(scenario: F.Scenario, service: String, operation: String, parameters: Vector[String]): F.Result =
     scenario.callInstalled(_executable, service, operation, parameters, installations = None,
-      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")),
+      wait = Some(F.InstalledCallWait(180000L, 5000L)))
   private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView = {
     val control = result.business[V.DelegateTaskView]
     val work = control.retainedWork.map { reference =>
@@ -130,11 +132,83 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       val started = startedresult.business[V.DelegateTaskView]
       def _advance_() = _view(scenario, _call(scenario, "DelegateTaskService", "advanceDelegateTask",
         Vector("--sessionId", started.sessionId)))
+      val initial = _advance_()
+      val originalreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-unresolved", "1")
+      val originalresult = V.DelegateTaskWorkResult("decision-needed", "SPECIFICATION-OWNED dependency unresolved", Vector.empty,
+        NonEmptyVector.of(V.DelegateTaskCondition("behavior", false, "await direction"),
+          V.DelegateTaskCondition("coverage", false, "await direction"),
+          V.DelegateTaskCondition("preservation", false, "await direction"),
+          V.DelegateTaskCondition("delivery", false, "await direction")),
+        Vector("SPECIFICATION-OWNED dependency requires direction"), None, None)
+      val originalexecution = V.WorkflowExecutionEvidence(Vector(originalreference), Some("SPECIFICATION-OWNED-worker"), None,
+        Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+          BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity)))
+      _call(scenario, "DelegateTaskService", "submitDelegateTaskWorkResult", Vector("--sessionId", started.sessionId,
+        "--issuedWorkContext", _json(initial.issuedWorkContext.get), "--result", _json(originalresult),
+        "--resultReference", _json(originalreference), "--executionEvidence", _json(originalexecution))).exitCode shouldBe 0
+      _state(_advance_()).stage shouldBe "Human"
+      val semanticdescription = _call(scenario, "DelegateTaskService", "describeDelegateTaskSemanticContinuation",
+        Vector("--input", _json(V.DelegateTaskSemanticContinuationDescriptionInput(started.sessionId))))
+        .business[V.DelegateTaskSemanticContinuationDescriptionResult]
+      val semantictarget = take(DelegateTaskSemanticContinuation.targetC(semanticdescription.target))
+      semantictarget.original.resultReference.identity shouldBe originalreference.identity
+      semantictarget.original.resultReference.revision shouldBe originalreference.revision
+      val humanreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-semantic-Human", "1")
+      val direction = V.DelegateTaskSemanticContinuationInput(started.sessionId, semanticdescription.target,
+        "ContinueAfterDependencyResolution", "SPECIFICATION-OWNED direction", "participant", humanreference,
+        Vector(V.WorkflowArtifactReference("SPECIFICATION-OWNED-upstream", "1")))
+      Given("the same guard with actual-shaped retained data and independently varied blockers")
+      val retaineddirection = DelegateTaskSemanticContinuation.Direction(parser.parse(direction.target).toOption.get,
+        direction.choice, direction.rationale, direction.participant,
+        org.goldenport.cncf.workflow.ContextReference(humanreference.identity, humanreference.revision),
+        Vector(org.goldenport.cncf.workflow.ContextReference("SPECIFICATION-OWNED-upstream", "1")))
+      val original = semantictarget.original
+      val retainedreference = original.resultReference
+      def _matches_(target: DelegateTaskSemanticContinuation.Target, originalvalue: DelegateTaskSemanticContinuation.Original,
+        ref: org.goldenport.cncf.workflow.ContextReference, selected: DelegateTaskSemanticContinuation.Direction,
+        owner: String, session: String): Boolean =
+        DelegateTaskImplementationContinuation.matchesOriginal(ref, selected, target, originalvalue, owner, session)
+      _matches_(semantictarget, original, retainedreference, retaineddirection, semantictarget.componentInstance, started.sessionId) shouldBe true
+      _matches_(semantictarget, original, retainedreference.copy(identity = "foreign"), retaineddirection, semantictarget.componentInstance, started.sessionId) shouldBe false
+      _matches_(semantictarget, original.copy(continuationId = "foreign"), retainedreference, retaineddirection, semantictarget.componentInstance, started.sessionId) shouldBe false
+      _matches_(semantictarget, original.copy(sourceRevision = original.sourceRevision + 1), retainedreference, retaineddirection, semantictarget.componentInstance, started.sessionId) shouldBe false
+      _matches_(semantictarget, original.copy(resultReference = retainedreference.copy(revision = "foreign")), retainedreference, retaineddirection, semantictarget.componentInstance, started.sessionId) shouldBe false
+      _matches_(semantictarget, original, retainedreference, retaineddirection.copy(choice = "Defer"), semantictarget.componentInstance, started.sessionId) shouldBe false
+      _matches_(semantictarget, original, retainedreference, retaineddirection, "foreign", started.sessionId) shouldBe false
+      _matches_(semantictarget, original, retainedreference, retaineddirection, semantictarget.componentInstance, "foreign") shouldBe false
+      val business = semantictarget.business
+      DelegateTaskImplementationContinuation.withoutExecutionEvidence(business) shouldBe true
+      Vector(
+        business.state.copy(candidate = Some(S.Candidate("head", "tree", Vector("value.txt"), "diff"))),
+        business.state.copy(pendingCheck = Some("test")),
+        business.state.copy(reviewReference = Some(retainedreference)),
+        business.state.copy(commit = Some(S.Commit("head", "parent", "tree")))
+      ).foreach(state => DelegateTaskImplementationContinuation.withoutExecutionEvidence(business.copy(state = state)) shouldBe false)
+      When("a separate Human direction is prepared and admitted")
+      val humanexecution = V.WorkflowExecutionEvidence(Vector(humanreference), Some("participant"), None, None)
+      def _save_(name: String, value: RecordPresentable): String = {
+        val path = scenario.root.resolve(name + ".json")
+        Files.writeString(path, _json(value))
+        path.toUri.toASCIIString
+      }
+      val evidencepreparation = V.WorkflowEvidencePreparationInput("DelegateTask", "semantic-continuation",
+        _save_("semantic-description", semanticdescription), _save_("semantic-direction", direction),
+        _save_("semantic-reference", humanreference), _save_("semantic-execution", humanexecution),
+        "normal-development-host", java.time.Instant.now().minusSeconds(60).toString,
+        "entity:smworkflow.cli.host_evidence", Some("participant"))
+      val evidenceprepared = _call(scenario, "NativeWorkflowPreparationService", "prepareEvidence",
+        Vector("--input", _json(evidencepreparation)))
+      scenario.selectPreparedImport(evidenceprepared)
+      _call(scenario, "DelegateTaskService", "resumeDelegateTaskSemanticContinuation",
+        Vector("--input", _json(direction))).business[V.DelegateTaskSemanticContinuationDescriptionResult].outcome shouldBe "resumed-awaiting-advance"
       val old = _advance_()
       val before = _state(old)
       val oldcontext = old.issuedWorkContext.get
       Then("normal Advance retains the exact initial Implement assignment")
       before.stage shouldBe "Implement"
+      before.semanticReference.get.identity shouldBe originalreference.identity
+      before.semanticReference.get.revision shouldBe originalreference.revision
+      old.issuedWorkContext.get.continuationId should not be initial.issuedWorkContext.get.continuationId
       old.kind shouldBe "Request"
       before.input.conditions shouldBe Vector("behavior", "coverage", "preservation", "delivery")
       before.input.submissionConditions shouldBe Some(Vector("behavior", "coverage", "preservation"))

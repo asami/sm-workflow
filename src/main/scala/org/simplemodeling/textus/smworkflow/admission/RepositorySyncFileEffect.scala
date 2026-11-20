@@ -10,7 +10,7 @@ import RepositorySyncNativeConflictInput as I
 /** Assigned semantic text effects in the existing repository workspace.
   * CNCF owns acquisition and installation; saved workflow intent owns no replay.
   * @since   Oct. 15, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncFileEffect {
@@ -60,7 +60,7 @@ private[smworkflow] object RepositorySyncFileEffect {
       } yield result(request, if (conflict) "conflict" else "applied")
   } yield outcome
 
-  private def targetC(core: ActionCall.Core): Consequence[FileTarget] =
+  private[admission] def targetC(core: ActionCall.Core): Consequence[FileTarget] =
     WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")).map(FileTarget.apply)
 
   private def validateC(policy: I.Policy, request: Request, capture: Boolean): Consequence[Unit] = for {

@@ -155,6 +155,8 @@ review-origin findings retain their existing scope.
 complete sorted desired assignment and its causal connection to the actual
 retained failed check. Runtime qualification reads only these concrete paths
 through typed Git `TreeEntries`/`BlobContent` and managed File operations.
+File qualification and repair use the same admitted participant workspace,
+including the canonical local-main checkout during a local-first merge.
 Existing unchanged tracked regular UTF-8 files are eligible within the same
 FULL_STATE repository, Component, purpose, acceptance and current capabilities.
 Missing, untracked, outside-root, symlink, tree, binary, crossed or stale files
