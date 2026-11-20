@@ -8,6 +8,8 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, GoalPhaseNativeMetadata as M}
+import org.simplemodeling.textus.smworkflow.admission.{RepositorySyncPurposeTestInterruption as T,
+  RepositorySyncValidationContinuation as A}
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeWork, NativeExternalEvidence,
   RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection,
   StandaloneFixValidationRecovery, ThreeWorkflowExternalEvidencePorts}
@@ -17,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -36,6 +38,8 @@ private[smworkflow] object NativeExternalEvidenceInput {
       _repair_budget_c(supplied, readText)
     else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("push-continuation"))
       _push_continuation_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains(T.observationKind))
+      _purpose_test_termination_c(supplied, readText)
     else if (supplied.get("kind").contains("force-closure"))
       NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
@@ -117,6 +121,44 @@ private[smworkflow] object NativeExternalEvidenceInput {
     } yield bootstrap
     }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
+
+  private def _purpose_test_termination_c(supplied: Map[String, String],
+    readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    participant <- options.get("participant").map(Consequence.success)
+      .getOrElse(_invalid("Purpose Test observation preparation requires the authenticated Session participant"))
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    description <- NativePreparationInput.readC(options("request"), readtext)
+      .flatMap(summon[ValueReader[V.RepositorySyncValidationContinuationDescriptionResult]].readC)
+    target <- A.anyTargetC(description.target).flatMap {
+      case A.PurposeTestInterruptionTarget(value) if description.sessionId == value.sessionId &&
+          description.componentInstance == value.componentInstance && description.choices == T.choices &&
+          description.outcome == "adoption-required" && description.adoptionOperation == A.adoptionOperation =>
+        Consequence.success(value)
+      case _ => _invalid("Purpose Test observation requires its exact public description")
+    }
+    raw <- readtext(options("result"))
+    observed <- io.circe.parser.decode[T.Observation](raw).fold(error => _invalid(error.getMessage), Consequence.success)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    refs = execution.references.map(value => ContextReference(value.identity, value.revision))
+    _ <- if (participant == target.context.participantIdentity && observed.target == target &&
+        observed.reference == ContextReference(reference.identity, reference.revision) &&
+        execution.workerIdentity.contains(observed.observer) && refs.size == observed.references.size &&
+        refs.toSet == observed.references.toSet) Consequence.unit
+      else _invalid("Purpose Test observation crosses its Session participant, description, observer, invocation, trace or as-run plan reference")
+    hosttext <- readtext(observed.hostPlanReference.identity)
+    host <- io.circe.parser.decode[T.AsRunPlan](hosttext).fold(error => _invalid(error.getMessage), Consequence.success)
+    _ <- if (T.matchesAsRunPlan(observed, host)) Consequence.unit
+      else _invalid("Purpose Test description differs from the independently recorded as-run plan or its invocation, trace and PID")
+    purpose = NativeExternalEvidence.Purpose.RepositoryPurposeTestTermination
+    identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+    encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+      purpose.identity, identity, reference.identity, reference.revision, options("issuer"), observed.observer,
+      T.observationBinding(observed), occurred.toString))
+    row = Record.data("id" -> NativeExternalEvidence.recordIdentity(purpose, identity), NativeExternalEvidence.storageField -> encoded)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
 
   private def _standalone_publication_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
     options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))

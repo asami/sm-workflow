@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Small isolated repositories and the real public CLI, normal host plan and
   * SQLite provider. These helpers observe native rows without writing them.
   * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @version Nov. 20, 2026
   */
 private[admission] trait NativeRepositoryContinuationCliFixture extends RepositorySyncMaintenanceFixture {
   protected def json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
@@ -70,7 +70,8 @@ private[admission] trait NativeRepositoryContinuationCliFixture extends Reposito
     val participant = take(RepositorySyncValidationContinuation.anyTargetC(result.target)) match {
       case RepositorySyncValidationContinuation.FormalFailureTarget(value) => value.context.participantIdentity
       case RepositorySyncValidationContinuation.PurposeContentTarget(value) => value.context.participantIdentity
-      case _ => fail("This fixture accepts only its explicit formal-failure or purpose-content policy")
+      case RepositorySyncValidationContinuation.PurposeTestInterruptionTarget(value) => value.context.participantIdentity
+      case _ => fail("This fixture accepts only its explicit repository continuation policies")
     }
     val answer = V.RepositorySyncValidationContinuationAnswer(choice,
       "Specification-owned independent direction after the prior CLI process returned; preserve original worker uncertainty", ended, accepted)

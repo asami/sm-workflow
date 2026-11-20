@@ -16,7 +16,7 @@ import WorkflowManagedProcessExecution as E
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -28,7 +28,7 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     indexTree: String, changedPaths: Vector[String], localDiff: String, remoteDiff: String,
     validationMode: String, validationReason: String, selectedChecks: Vector[String], checks: Vector[V.Receipt],
     judgmentMode: String = "detailed-review", uncertainties: Vector[String] = Vector.empty,
-    priorReview: Option[PriorReview] = None)
+    priorReview: Option[PriorReview] = None, interruption: Option[RepositorySyncPurposeTestInterruption.Proof] = None)
   final case class RepairContext(reference: ContextReference, indexTree: String, findings: Vector[Finding],
     rationale: String, affectedPaths: Vector[String])
   final case class PriorReview(context: RepairContext, repairDelta: String)
@@ -116,9 +116,11 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
   } yield Request(store.identity, source.record.revision.value.toString, candidate.parent, candidate.parent,
     candidate.tree, delta.map(_.path.value), diff.text, diff.text, selection.depth, selection.reason,
-    selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties)
+    selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties,
+    interruption = progress.interruption.map(RepositorySyncPurposeTestInterruption.proof))
 
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
+    _ <- if (input.interruption.isEmpty) Consequence.unit else invalid("Purpose Test interruption has no review acceptance")
     _ <- if (result != null && result.inputClassification != null && result.inputClassification.forall(p =>
         result.decision == "decision-needed" && input.judgmentMode == "detailed-review" && result.findings.isEmpty &&
           RepositorySyncDocumentInputs.validateC(p).isSuccess) && (!Set("accept", "clean")(result.decision) ||
@@ -185,12 +187,15 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   private given Encoder[Request] = deriveEncoder[Request].mapJson(_.mapObject(fields =>
     (if (fields("judgmentMode").contains(Json.fromString("detailed-review"))) fields.remove("judgmentMode") else fields)
       .filter { case ("uncertainties", value) => !value.asArray.exists(_.isEmpty);
-        case ("priorReview", value) => !value.isNull; case _ => true }))
+        case ("priorReview" | "interruption", value) => !value.isNull; case _ => true }))
   private val _request_decoder: Decoder[Request] = deriveDecoder
-  private given Decoder[Request] = Decoder.instance(c => _request_decoder.decodeJson(c.value.mapObject(fields => {
-    val mode = if (fields("judgmentMode").isEmpty) fields.add("judgmentMode", Json.fromString("detailed-review")) else fields
-    if (mode("uncertainties").isEmpty) mode.add("uncertainties", Json.arr()) else mode
-  })))
+  private given Decoder[Request] = Decoder.instance(c =>
+    if (c.downField("interruption").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Purpose Test interruption proof cannot be explicitly null", c.history))
+    else _request_decoder.decodeJson(c.value.mapObject(fields => {
+      val mode = if (fields("judgmentMode").isEmpty) fields.add("judgmentMode", Json.fromString("detailed-review")) else fields
+      if (mode("uncertainties").isEmpty) mode.add("uncertainties", Json.arr()) else mode
+    })))
   private given Encoder[Finding] = deriveEncoder
   private given Decoder[Finding] = deriveDecoder
   private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(fields =>

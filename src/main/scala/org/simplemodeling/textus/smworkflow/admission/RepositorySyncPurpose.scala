@@ -18,7 +18,7 @@ import WorkflowManagedProcessExecution as E
 /** Purpose proposals consume genuine work records and native content facts.
   * Neither grouping nor an old record establishes candidate acceptance.
   * @since   Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncPurpose {
@@ -103,7 +103,8 @@ private[smworkflow] object RepositorySyncPurpose {
     ownership: Option[OwnershipContinuation] = None, projectedWorktree: Option[Vector[Content]] = None,
     preparationNamespace: Option[String] = None, sessionWorkspace: Option[SessionWorkspace] = None,
     ordinaryGroups: Map[String, RepositorySyncProgramImpact.Group] = Map.empty,
-    managedWorkspace: Option[RepositorySyncPurposeWorkspace.Binding] = None)
+    managedWorkspace: Option[RepositorySyncPurposeWorkspace.Binding] = None,
+    interruption: Option[RepositorySyncPurposeTestInterruption.Direction] = None)
 
   /** Immutable failed progress and the original repository observation. The
     * virtual candidate tree deliberately differs from the original index. */
@@ -174,8 +175,9 @@ private[smworkflow] object RepositorySyncPurpose {
     "preparationNamespace" -> value.preparationNamespace.asJson,
     "sessionWorkspace" -> value.sessionWorkspace.asJson,
     "ordinaryGroups" -> value.ordinaryGroups.asJson,
-    "managedWorkspace" -> value.managedWorkspace.asJson)).mapJson(_.mapObject(_.filter {
-    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace" | "sessionWorkspace" | "managedWorkspace", value) => !value.isNull
+    "managedWorkspace" -> value.managedWorkspace.asJson,
+    "interruption" -> value.interruption.asJson)).mapJson(_.mapObject(_.filter {
+    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace" | "sessionWorkspace" | "managedWorkspace" | "interruption", value) => !value.isNull
     case ("ordinaryGroups", value) => value != Json.obj()
     case _ => true
   }))
@@ -201,16 +203,19 @@ private[smworkflow] object RepositorySyncPurpose {
     sessionWorkspace <- cursor.get[Option[SessionWorkspace]]("sessionWorkspace")
     ordinaryGroups <- cursor.get[Map[String, RepositorySyncProgramImpact.Group]]("ordinaryGroups")
     managedWorkspace <- cursor.get[Option[RepositorySyncPurposeWorkspace.Binding]]("managedWorkspace")
-  } yield Progress(request, plan, position, attempt, slotCursor, baselineTree, candidate, receipts, assessment, commits, selection, review, reusable, effects, hostContinuation, ownership, projectedWorktree, preparationNamespace, sessionWorkspace, ordinaryGroups, managedWorkspace))
+    interruption <- cursor.get[Option[RepositorySyncPurposeTestInterruption.Direction]]("interruption")
+  } yield Progress(request, plan, position, attempt, slotCursor, baselineTree, candidate, receipts, assessment, commits, selection, review, reusable, effects, hostContinuation, ownership, projectedWorktree, preparationNamespace, sessionWorkspace, ordinaryGroups, managedWorkspace, interruption))
   given Decoder[Progress] = Decoder.instance(cursor =>
-    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace", "sessionWorkspace", "managedWorkspace").exists(name => cursor.downField(name).focus.exists(_.isNull)))
+    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace", "sessionWorkspace",
+        "managedWorkspace", "interruption").exists(name => cursor.downField(name).focus.exists(_.isNull)))
       Left(io.circe.DecodingFailure("Purpose optional continuation/projection cannot be explicitly null", cursor.history))
     else _progress_decoder.decodeJson(if (cursor.downField("ordinaryGroups").focus.isEmpty)
       cursor.value.mapObject(_.add("ordinaryGroups", Json.obj())) else cursor.value).flatMap(value =>
       if (RepositorySyncPurposeOwnership.validProgress(value) && value.sessionWorkspace != null &&
           value.sessionWorkspace.forall(validSessionWorkspace) && value.managedWorkspace != null &&
           !(value.sessionWorkspace.nonEmpty && value.managedWorkspace.nonEmpty) && value.ordinaryGroups != null &&
-          value.ordinaryGroups.forall((identity, group) => identity != null && identity.nonEmpty && group != null && group.valid)) Right(value)
+          value.ordinaryGroups.forall((identity, group) => identity != null && identity.nonEmpty && group != null && group.valid) &&
+          value.interruption.forall(RepositorySyncPurposeTestInterruption.matchesProgress(value, _))) Right(value)
       else Left(io.circe.DecodingFailure("Purpose ownership or expected worktree projection crosses original provenance", cursor.history))))
 
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional("sm-workflow.repository-sync.dirty-purposes",

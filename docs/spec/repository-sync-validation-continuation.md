@@ -2,6 +2,65 @@
 
 Date: 2026-10-26. Contract: RS-VC1.
 
+## Resultless direct Purpose Test
+
+Policy `sm-workflow.repository-sync-purpose-test-interruption.v1` extends the
+existing describe and adopt operations. Description selects the active,
+unsuspended `PurposeChecking` frontier whose native cause identifies the
+current direct `Test` of that Purpose attempt. The native result key must be
+absent. The original candidate, group, slot, source, cursor, ordered check
+selection and original successful receipt references, including index-local
+and typed Compile, must agree with native history. Description and adoption
+read retained state and host configuration without observing live Git or
+reading project validation declarations.
+Saved outcomes, TestOnly or discovery, and structural checks are ineligible.
+Formal failed checks retain their formal continuation.
+
+`ContinuePurposeRepairAcceptingUnknown` requires the original participant's
+independent Human direction and two true assertions under the existing
+validation-continuation evidence purpose. The supplied execution evidence
+references the Human answer and one distinct independently provisioned
+termination observation. `Defer` requires only the Human direction and
+appends nothing.
+
+The trusted host prepares the observation with family `RepositorySync`, kind
+`purpose-test-termination` and schema
+`sm-workflow.repository-sync-purpose-test-termination.v1`. The observation
+contains the exact description target, reference, independent observer, source
+invocation and trace references, and metadata-only CNCF Started and Terminal
+events. Both events identify the same positive PID, operation `test`,
+workspace and safe program. The Terminal event records
+`OutputLimitExceeded(Stdout)` or `OutputLimitExceeded(Stderr)`, actual elapsed
+time and a numeric OS exit observation. The observation also references the
+independent host's archived as-run plan. Preparation reads that exact
+Resource and requires its original invocation, trace, PID and plan to match
+the observation and description. The preparation participant is the
+authenticated Session participant. The execution evidence names the separate
+observer and includes the observation, invocation, trace and as-run plan
+references.
+Preparation encodes supplied material. The independently configured host
+verifies provenance and provisions the termination evidence record under
+the observer's identity.
+
+One atomic adoption appends `native-purpose-test-interruption-admitted` to
+`PurposeRepairRequired`. It stores the direction with the old effects
+`UNKNOWN` and leaves the old Test intent, missing result, original successful
+prefix and attempt counts intact. An exact repeat is passive. Stale or
+conflicting direction and evidence for another target refuse.
+
+Separate ordinary Advance reauthenticates the adjacent direction and original
+intent before issuing ordinary Purpose Repair. It checks the current resolved
+host and slot, source HEAD/index/inventory and materialized candidate. The
+current impact branch must select the same ordered checks. FULL uses its
+declared full order and FOCUSED uses the checks covering the actual changes.
+The repair request identifies the interrupted check and its compact proof without
+a synthetic product receipt. Standard Purpose paths, ownership and repair
+budget apply. An accepted Repair creates a distinct candidate and clears the
+marker from its live progress. Its selected checks follow the normal impact
+rules and the original candidate's Test is never replayed.
+
+## Original validation continuation
+
 The original RS-VC1 behavior below retains its historical meaning. The explicit
 merge-check policy described below adds a same-candidate continuation for
 resultless pending-merge checks and actual typed preparation refusals.

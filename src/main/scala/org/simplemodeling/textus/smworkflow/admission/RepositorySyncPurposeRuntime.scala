@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -535,10 +535,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           p.selection.exists(selection => selection != null && selection.checks != null && p.receipts.size >= 2 &&
             p.receipts.drop(1).zip(selection.checks).forall((receipt, check) => receipt != null && receipt.identity == check.identity) &&
             p.receipts.size - 1 <= selection.checks.size &&
-            ((p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
+            (p.interruption match {
+              case Some(direction) => !review && RepositorySyncPurposeTestInterruption.matchesProgress(p, direction)
+              case None => (p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
               (review && p.receipts.size == selection.checks.size + 1 && p.receipts.head.termination == "exited" &&
                 p.receipts.head.exitCode.contains(0) && selection.checks.zip(p.receipts.drop(1)).forall((check, receipt) =>
-                  C.productSuccessful(receipt, check.kind))))) && p.commits != null && p.effects != null &&
+                  C.productSuccessful(receipt, check.kind)))
+            })) && p.commits != null && p.effects != null &&
           p.reusable != null && p.hostContinuation != null && RepositorySyncPurposeOwnership.validProgress(p)
       }
   }
@@ -609,6 +612,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- RepositorySyncNativeMergeRepair.admitC(input, result, policy)
     _ <- if (result.decision == "repaired") Consequence.unit else N.invalid("purpose decision-needed supplies no repair effect")
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("purpose repair candidate is absent"))
+    _ <- if (input.review.interruption == progress.interruption.map(RepositorySyncPurposeTestInterruption.proof))
+      Consequence.unit else N.invalid("Purpose repair crosses its interruption evidence")
     _ <- if (input.admittedInventory.forall(_.purpose.exists(_.snapshot.progress == progress))) Consequence.unit
       else N.invalid("Purpose repair input crosses its retained complete progress snapshot")
     _ <- if (RepositorySyncPurposeOwnership.assigned(progress, input.files.map(_.path)).isEmpty ||
@@ -634,7 +639,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
   } yield progress.copy(preparationNamespace = None, request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
     baselineTree = Some(candidate.tree), candidate = None, sessionWorkspace = None, managedWorkspace = None, ordinaryGroups = Map.empty, receipts = Vector.empty, selection = None,
-    assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected)
+    assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected, interruption = None)
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,
     input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,

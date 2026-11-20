@@ -17,7 +17,7 @@ import NativeExternalEvidence.Purpose
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -145,6 +145,9 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val repositoryValidationContinuation: RepositorySyncValidationContinuation.EvidencePort = new RepositorySyncValidationContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryValidationContinuation, key(reference.identity, reference.revision), binding)
+    override def purposeTestTerminationC(core: ActionCall.Core, reference: ContextReference,
+      target: RepositorySyncPurposeTestInterruption.Target): Consequence[Option[RepositorySyncPurposeTestInterruption.Observation]] =
+      reader.purposeTestTerminationC(core, reference, target)
   }
   val repositoryPurposePreparationContinuation: RepositorySyncPurposePreparationContinuation.EvidencePort = new RepositorySyncPurposePreparationContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =

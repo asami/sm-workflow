@@ -1,5 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import cats.data.NonEmptyVector
 import io.circe.Json
 import io.circe.syntax.*
 import java.nio.file.Paths
@@ -16,14 +17,15 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstructionInput, GoalPhaseStartInput, RepositorySyncStartInput}
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstructionInput, GoalPhaseStartInput,
+  RepositorySyncStartInput, RepositorySyncValidationContinuationAdoptionInput}
 
 /** Standard composition contains policies and logical destinations, never a
   * selected Phase or Plan. Read actual Start input or the retained native run
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -194,17 +196,31 @@ private[smworkflow] object StandardWorkflowRuntime {
     selectedtarget: Option[RepositoryGitRuntimePrograms.Target] = None): Consequence[spec.ServiceDefinition] = for {
     definition <- RepositorySyncDefinitionBinding.bindC
     p = shared.persistence
-    retained <- if (request.operation == "startRepositorySync") Consequence.success(Option.empty[RepositorySyncManagedFetch.Payload])
-      else for {
-        session <- _repository_session_c(request, core)
+    adoption <- if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
+      RepositorySyncValidationContinuation.routingInputC(request, core).map(Some(_))
+      else Consequence.success(Option.empty[RepositorySyncValidationContinuationAdoptionInput])
+    sessionid <- if (request.operation == "startRepositorySync") Consequence.success(Option.empty[String])
+      else adoption.fold(_repository_session_c(request, core).map(Some(_)))(value => Consequence.success(Some(value.sessionId)))
+    retainedstart <- sessionid.fold(Consequence.success(
+      Option.empty[WorkflowManagedMechanicalTransition.Retained[RepositorySyncManagedFetch.Payload]])) { session =>
+      for {
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
           Vector(definition), p.instances, p.continuations)
         starts <- storage.bindMechanicalC(RepositorySyncManagedFetch.startOperation, RepositorySyncManagedFetch.codec(true))
         retained <- starts.loadRetainedC(RepositorySyncManagedFetch.reference(session, "start"))(using context)
-        selected <- retained.map(value => Consequence.success(value.receipt.payload.value))
-          .getOrElse(invalid("Session has no native RepositorySync Start"))
+        selected <- retained.map(Consequence.success).getOrElse(invalid("Session has no native RepositorySync Start"))
       } yield Some(selected)
+    }
+    retained = retainedstart.map(_.receipt.payload.value)
+    passive <- adoption match {
+      case Some(input) => RepositorySyncValidationContinuation.anyTargetC(input.target).map {
+        case _: RepositorySyncValidationContinuation.PurposeTestInterruptionTarget => true
+        case _ => false
+      }
+      case None => Consequence.success(request.operation == RepositorySyncValidationContinuation.describeOperation &&
+        retainedstart.exists(value => RepositorySyncPurposeTestInterruption.descriptionFrontier(value.current)))
+    }
     binding <- selectedtarget match {
       case Some(target) => Consequence.success(target -> RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
       case None => _repository_target_c(creation, parameters, request, retained)
@@ -239,7 +255,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some(plan) if request.operation == "startRepositorySync" =>
         Consequence.success(Some(RepositorySyncLocalMain.Hop(plan, RepositorySyncLocalMain.Cursor("source", None, None))))
       case Some(plan) => for {
-        session <- _repository_session_c(request, core)
+        session <- sessionid.map(Consequence.success).getOrElse(invalid("Local-main Session has no canonical identity"))
         storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
           Vector(definition), p.instances, p.continuations)
         instances <- storage.bindInstancesC()(using core.executionContext)
@@ -266,32 +282,42 @@ private[smworkflow] object StandardWorkflowRuntime {
         else Consequence.unit
     } yield () else Consequence.unit
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
-    initialized <- shared.validation.repositoryC(target.root, call)
+    initialized <- if (passive) Consequence.success(WorkflowValidationInitialization.Repository(None, None))
+      else shared.validation.repositoryC(target.root, call)
     documentInputs = initialized.documents
     programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
-    validation = if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
+    validation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
       initialized.projectProvidesFixCheck)
       else repositoryValidation
-    goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
-    evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
-      Vector(goalDefinition.definition), p.instances, p.continuations)
+    programEvidence <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.EvidencePort]) else for {
+      goal <- GoalPhaseRuntimeCatalog.loadC()
+      storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
+        Vector(goal.definition), p.instances, p.continuations)
+    } yield Some(RepositorySyncProgramImpact.evidencePort(storage))
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
       target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence,
-      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)), purposePolicy = purposePolicy,
+      programEvidence = programEvidence, purposePolicy = purposePolicy,
       localPublication = publication, policies = policies, policyHuman = Some(shared.ports.repositoryPolicyHuman),
       localMain = participantSelection._1, localMainSetup = participantSelection._2, hop = hop)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
-    paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
+    paths <- if (passive || request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
       else repositoryPathsC(declaration, definition, request, call)
-    service <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, declaration, nativeProgression = true,
+    installation = RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)
+    service <- if (passive) for {
+      _ <- RepositorySyncManagedFetch.validateDeclarationC(declaration)
+      _ <- installation.validateC
+      operation = RepositorySyncValidationContinuation.passiveOperation(declaration, definition, validation, installation, adoption)
+    } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.RepositorySyncServiceService,
+      spec.OperationDefinitionGroup(NonEmptyVector.one(operation)))
+    else RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, declaration, nativeProgression = true,
       conflictPolicy = RepositorySyncNativeConflictInput.Policy(paths), validationPolicy = Some(validation),
       nativeReview = Some(RepositorySyncNativeMergeReview.Installation(repositoryReview, shared.ports.repositoryReview)),
       convergence = Some(if (selectedInput._2) StandardRepositorySyncIntent.authority else shared.ports.convergence),
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
-      repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)),
+      repositoryContinuation = Some(installation),
       repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)),
       repairBudgetContinuation = Some(RepositorySyncRepairBudgetContinuation.Installation(shared.ports.repositoryRepairBudgetContinuation)),
       purposePreparation = Some(RepositorySyncPurposePreparationContinuation.Installation(shared.ports.repositoryPurposePreparationContinuation)),

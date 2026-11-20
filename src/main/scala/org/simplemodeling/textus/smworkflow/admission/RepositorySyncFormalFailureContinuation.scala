@@ -352,6 +352,8 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
   private def _discover_c(store: N.Store, current: InstanceRecord, validation: C.Policy): Consequence[Source] = for {
     purpose <- store.currentPurposeC(current)
     source <- purpose match {
+      case Some(purpose) if purpose.payload.purposes.exists(_.interruption.nonEmpty) =>
+        N.invalid("Purpose Test interruption is already adopted; use ordinary advanceRepositorySync")
       case Some(failed) if failed.payload.stage == "PurposeRepairRequired" => for {
         progress <- failed.payload.purposes.map(Consequence.success).getOrElse(N.invalid("formal purpose failure has no progress"))
         checks <- progress.selection.map(s => Consequence.success(s.checks)).getOrElse(N.invalid("formal purpose failure has no selection"))
@@ -529,7 +531,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     validation: C.Policy): Consequence[Option[V.RepositorySyncAdvanceResult]] = for {
     stage <- store.currentPurposeC(current)
     failed = for {
-      progress <- stage.filter(_.payload.stage == "PurposeRepairRequired").flatMap(_.payload.purposes)
+      progress <- stage.filter(_.payload.stage == "PurposeRepairRequired").flatMap(_.payload.purposes).filter(_.interruption.isEmpty)
       receipt <- progress.receipts.lastOption
       selection <- progress.selection
       check <- selection.checks.lift(progress.receipts.size - 2)

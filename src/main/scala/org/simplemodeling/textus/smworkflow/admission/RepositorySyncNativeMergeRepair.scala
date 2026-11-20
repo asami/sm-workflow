@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as B
   * obtain a genuine retained repair review and separately authorize effects.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeRepair {
   final case class File(path: String, text: String)
@@ -43,10 +43,8 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
     _ <- if (request != null && request.review != null && request.review.changedPaths != null &&
         request.findings != null && request.validationFailure != null &&
         (request.validationFailure match {
-          case None => request.findings.nonEmpty
-          case Some(identity) => request.findings.isEmpty && request.review.checks.exists(receipt =>
-            receipt.identity == identity && request.review.selectedChecks.contains(identity) &&
-              receipt.termination == "exited" && receipt.exitCode.exists(_ != 0))
+          case None => request.findings.nonEmpty && request.review.interruption.isEmpty
+          case Some(identity) => request.findings.isEmpty && checkOrigin(request.review, identity)
         }) && request.findings.size <= 128 &&
         request.findings.forall(f => f != null && _identity(f.identity) && _rationale(f.rationale) &&
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
@@ -62,6 +60,13 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
         request.admittedInventory.forall(_.paths == paths)) Consequence.unit
       else _invalid("files must cover exactly the sorted affected paths with ordinary UTF-8 text")
   } yield ()
+
+  private[admission] def checkOrigin(review: R.Request, identity: String): Boolean =
+    review.interruption match {
+      case Some(_) => RepositorySyncPurposeTestInterruption.repairProofValid(review, identity)
+      case None => review.checks.exists(receipt => receipt.identity == identity && review.selectedChecks.contains(identity) &&
+        receipt.termination == "exited" && receipt.exitCode.exists(_ != 0))
+    }
 
   def admitC(request: Request, result: Result, policy: I.Policy): Consequence[Unit] = for {
     _ <- admitRequestC(request, policy)
@@ -93,9 +98,12 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   private given _review_request_encoder: Encoder[R.Request] = deriveEncoder[R.Request].mapJson(_.mapObject(fields =>
     (if (fields("judgmentMode").contains(Json.fromString("detailed-review"))) fields.remove("judgmentMode") else fields)
       .filter { case ("uncertainties", value) => !value.asArray.exists(_.isEmpty)
-        case ("priorReview", value) => !value.isNull; case _ => true }))
+        case ("priorReview" | "interruption", value) => !value.isNull; case _ => true }))
   private val _legacy_review_decoder: Decoder[R.Request] = deriveDecoder
-  private given _review_request_decoder: Decoder[R.Request] = Decoder.instance(c => _legacy_review_decoder.decodeJson(
+  private given _review_request_decoder: Decoder[R.Request] = Decoder.instance(c =>
+    if (c.downField("interruption").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Purpose Test interruption proof cannot be explicitly null", c.history))
+    else _legacy_review_decoder.decodeJson(
     c.value.mapObject(fields => {
       val mode = if (fields("judgmentMode").isEmpty) fields.add("judgmentMode", Json.fromString("detailed-review")) else fields
       if (mode("uncertainties").isEmpty) mode.add("uncertainties", Json.arr()) else mode
@@ -111,7 +119,9 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   }))
   private val _request_decoder: Decoder[Request] = deriveDecoder
   private given Decoder[Request] = _request_decoder.emap(request =>
-    if (request.admittedInventory != null && request.admittedInventory.forall(scope =>
+    if (request.review.interruption.forall(_ => request.findings.isEmpty &&
+        request.validationFailure.exists(RepositorySyncPurposeTestInterruption.repairProofValid(request.review, _))) &&
+        request.admittedInventory != null && request.admittedInventory.forall(scope =>
         request.findings != null && request.findings.isEmpty && request.files != null &&
         request.files.forall(_ != null) && RepositorySyncRepairInventory.valid(scope, request.review,
           request.validationFailure) && request.files.map(_.path) == scope.paths)) Right(request)

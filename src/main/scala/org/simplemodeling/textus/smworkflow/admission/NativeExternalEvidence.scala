@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -56,6 +56,7 @@ private[smworkflow] object NativeExternalEvidence {
     case SourceHistoryRecovery extends Purpose(GoalPhaseSourceHistoryRecovery.purpose)
     case SourceHistoryNormalization extends Purpose(GoalPhaseSourceHistoryNormalization.purpose)
     case RepositoryValidationContinuation extends Purpose(RepositorySyncValidationContinuation.purpose)
+    case RepositoryPurposeTestTermination extends Purpose(RepositorySyncPurposeTestInterruption.observationPurpose)
     case RepositoryPurposePreparationContinuation extends Purpose(RepositorySyncPurposePreparationContinuation.purpose)
     case RepositoryRepairScopeCorrection extends Purpose(RepositorySyncRepairScopeCorrection.purpose)
     case RepositoryRepairBudgetContinuation extends Purpose(RepositorySyncRepairBudgetContinuation.purpose)
@@ -209,6 +210,29 @@ private[smworkflow] object NativeExternalEvidence {
       }
     } yield boundary
 
+    def purposeTestTerminationC(core: ActionCall.Core, reference: org.goldenport.cncf.workflow.ContextReference,
+      target: RepositorySyncPurposeTestInterruption.Target):
+        Consequence[Option[RepositorySyncPurposeTestInterruption.Observation]] = for {
+      purpose <- Consequence.success(Purpose.RepositoryPurposeTestTermination)
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
+        recordIdentity(purpose, identity))
+      observation <- record match {
+        case None => Consequence.success(Option.empty[RepositorySyncPurposeTestInterruption.Observation])
+        case Some(row) => for {
+          raw <- row.getString(storageField).map(Consequence.success)
+            .getOrElse(Consequence.stateConflict("Purpose Test observation has no typed payload"))
+          value <- decodeStorageC(raw)
+          current <- decodeDeclarationC(core.component.get.subsystem.get.configuration)
+          admitted <- observeValidatedC(value, current, purpose, identity, value.binding, core.executionContext.clock.instant())
+          selected <- RepositorySyncPurposeTestInterruption.selectObservation(admitted.evidence.binding)
+            .fold(Consequence.stateConflict(_), Consequence.success)
+          _ <- if (selected.target == target && selected.reference == reference) Consequence.unit
+            else Consequence.securityPermissionDenied("Purpose Test observation crosses its exact target or reference")
+        } yield Some(selected)
+      }
+    } yield observation
+
     def loadC(core: ActionCall.Core, purpose: Purpose, identity: String,
       binding: Json): Consequence[Option[Observed]] = for {
       record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
@@ -282,6 +306,12 @@ private[smworkflow] object NativeExternalEvidence {
           observation.downField("reference").get[String]("identity").contains(value.reference) &&
           observation.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Publication observation crosses its participant or actual observation reference")
+    } else if (purpose == Purpose.RepositoryPurposeTestTermination) {
+      val observation = selected.hcursor.downField("purposeTestTermination")
+      if (observation.get[String]("observer").contains(value.participant) &&
+          observation.downField("reference").get[String]("identity").contains(value.reference) &&
+          observation.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Purpose Test observation crosses its independent observer or actual reference")
     } else if (purpose == Purpose.InventoryAuthority) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
@@ -412,6 +442,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.SourceHistoryRecovery => GoalPhaseSourceHistoryRecovery.selectBinding(value)
       case Purpose.SourceHistoryNormalization => GoalPhaseSourceHistoryNormalization.selectBinding(value)
       case Purpose.RepositoryValidationContinuation => RepositorySyncValidationContinuation.selectBinding(value)
+      case Purpose.RepositoryPurposeTestTermination => RepositorySyncPurposeTestInterruption.selectObservation(value).map(_ => value)
       case Purpose.RepositoryPurposePreparationContinuation => RepositorySyncPurposePreparationContinuation.selectBinding(value)
       case Purpose.RepositoryRepairScopeCorrection => RepositorySyncRepairScopeCorrection.selectBinding(value)
       case Purpose.RepositoryRepairBudgetContinuation => RepositorySyncRepairBudgetContinuation.selectBinding(value)
