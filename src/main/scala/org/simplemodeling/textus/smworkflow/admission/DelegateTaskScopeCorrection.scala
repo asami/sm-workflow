@@ -164,7 +164,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     implementation = work.kind == "Implement" && payload.state.stage == "Implement"
     repair = work.kind == "Repair" && payload.state.stage == "Repair" && additional.nonEmpty && submission.isEmpty
     _ <- if (work.session == session && (implementation || repair) &&
-        work.state == payload.state && order.request.completionOperation == N.completionOperation &&
+        work.state.asJson == payload.state.asJson && order.request.completionOperation == N.completionOperation &&
         payload.root == h.root && payload.branch == h.branch && payload.state.input.repositoryIdentity == h.repository)
       Consequence.unit else N.invalid("Scope correction requires the same pending implementation or a repair inventory addition without condition timing changes")
     _ <- correctedInputC(payload.state.input, additional, submission)
@@ -223,7 +223,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
         original.revision.value < current.revision.value && original.history == current.history.take(original.history.size))
       Consequence.unit else N.invalid("Validation scope lineage crosses the original native frontier")
     business <- N.loadPayloadC(storage, target.sessionId, target.frontierRevision, core)
-    _ <- if (business == target.business) Consequence.unit
+    _ <- if (business.asJson == target.business.asJson) Consequence.unit
       else N.invalid("Validation scope lineage differs from the original native checkpoint")
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
     issued <- storage.bindIssuedC(N.completionOperation, N.inputCodec)
@@ -256,7 +256,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
           current.history.find(_.revision == entry.revision).contains(entry) &&
           correction.componentInstance == target.componentInstance && correction.sessionId == target.sessionId &&
           correction.participant == target.participant && correction.oldContinuationId == old && correction.issued == wire &&
-          checkpoint == correction.business && work.session == target.sessionId && work.state == checkpoint.state &&
+          checkpoint.asJson == correction.business.asJson && work.session == target.sessionId && work.state.asJson == checkpoint.state.asJson &&
           Set("Implement", "Repair")(work.kind) && work.kind == checkpoint.state.stage &&
           checkpoint.validationContinuation.contains(direction) && checkpoint.state.input == expected &&
           checkpoint.root == target.business.root && checkpoint.branch == target.business.branch &&
@@ -342,7 +342,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
                 case Some(_) => N.invalid("Repeated correction differs from its committed target")
                 case None => for {
                   observed <- _observe_c(h, storage, definition, session, old, expected.additionalOwnedPaths, expected.submissionConditions, selected)
-                  _ <- if (expected == observed.target) Consequence.unit else N.invalid("Scope target changed; obtain a current description")
+                  _ <- if (expected.asJson == observed.target.asJson) Consequence.unit else N.invalid("Scope target changed; obtain a current description")
                   _ <- adapter.executeC(ContinuationIdentity(old), observed.current.revision, observed.entityrevision,
                     observed.current, N.history(observed.current, resumeCause + old),
                     TypedValue(checkpointCodec.typeIdentity, Checkpoint(expected, reference)))(using context)

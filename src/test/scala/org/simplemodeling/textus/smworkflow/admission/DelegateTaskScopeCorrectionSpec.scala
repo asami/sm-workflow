@@ -2,6 +2,8 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.{Json, parser}
+import io.circe.syntax.*
+import org.goldenport.cncf.processexecution.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
@@ -37,10 +39,17 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
-    TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
+    Files.createDirectories(root.resolve("capture-root/validation"))
+    val plan = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations ++ Vector(
         org.goldenport.cncf.processexecution.GitOperationKind.IndexTree,
         org.goldenport.cncf.processexecution.GitOperationKind.CommitMetadata))
+    val workspace = Json.obj("identity" -> "sm-workflow-validation-artifacts".asJson,
+      "root" -> root.resolve("capture-root").toString.asJson)
+    val grant = Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+      "workspaceId" -> "sm-workflow-validation-artifacts".asJson, "access" -> "manage".asJson)
+    plan.mapObject(fields => fields.add("workspaces", fields("workspaces").get.mapArray(_ :+ workspace))
+      .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ :+ grant)))
 
   private def _state(view: V.DelegateTaskView): S.State = GoalPhaseNativeMetadata.normalizePublicJson(
     parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
@@ -106,8 +115,17 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
             .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture Start is absent")))
           payload <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, current.revision.value, call.core)
           observed <- call.observeC()
-          failed = org.simplemodeling.textus.smworkflow.admission.RepositorySyncNativeMergeValidation.Receipt(
-            "focused", "exited", Some(1), "SPECIFICATION-OWNED retained check failure", "")
+          context <- NativeWorkflowSessionInput.contextC(call.executionContext, Some(started.sessionId))
+          selected = call.core.copy(executionContext = context)
+          empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+          process = ProcessExecutionResult(ProcessExecutionTermination.Exited(1), empty, empty, Vector.empty, 1L, "selected-sbt")
+          facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly, WorkflowSbtValidation.Outcome.Failed, None, None)
+          association = WorkflowSbtCapture.Association(call.core.component.get.core.instanceId.canonicalKey, started.sessionId,
+            current.revision.value, "participant", "focused", 2, payload.root, payload.branch, observed.head, observed.tree)
+          ref <- WorkflowSbtCapture.archiveC(selected, "sm-workflow-validation-artifacts", "validation/SPEC-repair.json",
+            association, facts, process, org.goldenport.cncf.resource.ResourceReadLimits(WorkflowSbtCapture.maximumArtifactBytes))
+          failed = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(1), "", "",
+            Some(facts), Some(process), None, Some(ref))
           repair = payload.state.copy(stage = "Repair", generation = 3, automaticCount = 2, ordinaryCount = 1,
             candidate = Some(S.Candidate(observed.head, observed.tree, Vector("src/test/scala/Repair.scala"), "fixture candidate")),
             receipts = Vector(failed), semanticReference = Some(ContextReference("retained-implementation", "1")),
@@ -127,6 +145,11 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
           List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector.empty), None)))
         Then("the public description is available while the repair and all its facts remain pending")
         old.work.get.getString("kind") shouldBe Some("Repair")
+        before.receipts.head.externalCapture should not be empty
+        val capture = before.receipts.head.externalCapture.get
+        capture.workspace shouldBe "sm-workflow-validation-artifacts"
+        capture.association.session shouldBe started.sessionId
+        capture.association.check shouldBe "focused"
         description.outcome shouldBe "decision-required"
         _advance_().issuedWorkContext shouldBe old.issuedWorkContext
         When("a condition timing change is proposed through the Repair inventory route")
@@ -158,6 +181,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         after.input.sourceReferences should contain(ContextReference(correction.reference.identity, correction.reference.revision))
         after.input.sourceReferences shouldBe before.input.sourceReferences
         after.copy(input = before.input) shouldBe before
+        after.receipts.head.externalCapture shouldBe Some(capture)
         after.automaticCount shouldBe 2
         after.ordinaryCount shouldBe 1
         after.repairControl.selectedLimit shouldBe 10

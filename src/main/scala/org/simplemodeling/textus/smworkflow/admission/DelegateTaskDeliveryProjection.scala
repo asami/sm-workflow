@@ -112,8 +112,8 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
         frontier.history == source.history.take(frontier.history.size) &&
         target.componentInstance == core.component.get.core.instanceId.canonicalKey &&
         target.sessionId == current.identity.value && target.participant == payload.state.participant &&
-        target.oldContinuationId == old && target.issued == wire && target.business == business &&
-        work.session == target.sessionId && work.state == business.state &&
+        target.oldContinuationId == old && target.issued == wire && target.business.asJson == business.asJson &&
+        work.session == target.sessionId && work.state.asJson == business.state.asJson &&
         Set("Implement", "Repair")(work.kind) && work.kind == business.state.stage &&
         business.root == payload.root && business.branch == payload.branch &&
         saved.reference.identity != null && saved.reference.identity.nonEmpty &&
