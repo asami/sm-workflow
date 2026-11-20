@@ -144,6 +144,63 @@ Map acceptance without adding or completing checklist IDs:
 | C01–C03 | SLP-CORE |
 | C04–C05 | SLP-CORE plus actual SLP-GEN/SLP-COZY/SLP-AI and affected SLP-MODEL consumption |
 
+### B01 producer boundaries
+
+B01 needs active strictEquality and explicit structural braces in the selected
+generated and AI-authored Scala 3 sources. SimpleModeler's shared
+`Scala3ClassGeneratorBase.section_import` already supplies the import; preserve
+that path. Its owner qualifies the emitted `given` implementations, including
+ValueReader, nested collection readers and entity-persistence instances, and
+repairs structural bodies at their emitting template. Positive generated
+fixtures must demonstrate that those bodies use braces while ordinary terminal
+implementation expressions remain permitted. Keep the Scala 2 generator host
+and other backends unchanged.
+
+Cozy owns the normal CML-to-SimpleModeler connection and the Scala sources it
+appends independently. Its B01 handoff must identify selected Compile and Test
+outputs, including applicable workflow/action-program, provided-API,
+candidate-admission, failure-model, logical-UI and validation-metadata sources.
+Qualification of the shared SimpleModeler base does not cover those independent
+emitters. Check active imports and structural syntax on actual generated output
+at the producer boundary; managed sources retain their generated classification.
+
+Development-workstation owns the common AI instruction/template delivery and
+its distribution handoff. Reference the authoritative ai-directive structural
+policy and require an active strictEquality import in the selected Scala 3
+source scope. Return representative authored-source evidence and the actual
+distributed revision so sm-workflow can establish agreement at normal adoption.
+
+The existing `ai/directive` selection and root `AGENTS.md`/`RULE.md` links are
+the primary shared-rule path. A freshly selected authoring role must actually
+read the selected linked rules before authoring; the presence of links or an
+agent TOML alone does not establish that consumption. Keep normative text at
+ai-directive. The current product and workstation skill/agent bundles do not
+transport that repository, so installing either bundle alone does not adopt a
+new shared-rule revision. Reconcile agent prompts only if qualification shows
+that their existing repository-rule reading path is insufficient.
+
+A task-private local selection of an isolated directive commit can qualify
+authoring behavior without committing a consumer gitlink. Existing admitted
+fixture paths and ordinary workspace/read bindings may select the exact policy
+source as an authoring input; that preparatory selection does not require a new
+tracked-source inventory. A missing host/read binding is a host/input dependency,
+not permission to change a tracked path. Retain the actual rule consumption,
+local source selection and its limitations with the authored-source evidence.
+This is local qualification, not reproducible common distribution.
+Before committing a consumer gitlink for normal adoption, its
+exact directive commit must be available through the consumer's supported source
+transport. Publication, product adoption and workstation adoption retain their
+separate owners and effect authorities; no such effect follows from a local
+source check or a dependency inventory.
+
+For each B01 handoff, retain the selected producer/source or artifact revision,
+actual generated or authored source scope, structural tree/token evidence and
+applicable compilation results. Compilation alone does not qualify structural
+braces. Reuse already qualified behavior where its conditions apply; remaining
+B02/B03 compiler and comparison qualification and B04 consumer acceptance keep
+their existing boundaries. Missing producer evidence leaves B01 open without
+requiring whole producer-Phase closure or Core stage C delivery.
+
 All plans preserve current priorities, Goals, Sessions, base, accepted results,
 history, repair counts and unrelated tracked/untracked work. They start no
 implementation, chat dispatch, workflow operation, build, publication, commit or
