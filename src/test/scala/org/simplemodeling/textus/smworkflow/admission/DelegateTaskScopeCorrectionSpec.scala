@@ -136,7 +136,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         timing.isSuccess shouldBe false
         Given("the exact correction selected independently by the fixture Human")
         val correction = V.DelegateTaskScopeCorrectionInput(started.sessionId, continuation, description.target,
-          "repair-inventory", "participant", "repair-inventory-key", V.WorkflowArtifactReference("fixture-repair-inventory-human", "1"))
+          "repair-inventory", "participant", "repair-inventory-key", V.WorkflowArtifactReference("specification-request", "1"))
         _import_selection_(take(NativeDelegateTaskScopeCorrectionInput.prepareC(options ++ Map(
           "selection-id" -> correction.selectionId, "idempotency-key" -> correction.idempotencyKey),
           _ => correction.toRecord().toJsonStringC)))
@@ -156,10 +156,91 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         after.input.conditions shouldBe before.input.conditions
         after.input.submissionConditions shouldBe before.input.submissionConditions
         after.input.sourceReferences should contain(ContextReference(correction.reference.identity, correction.reference.revision))
+        after.input.sourceReferences shouldBe before.input.sourceReferences
         after.copy(input = before.input) shouldBe before
         after.automaticCount shouldBe 2
         after.ordinaryCount shouldBe 1
         after.repairControl.selectedLimit shouldBe 10
+        Given("a SPECIFICATION-OWNED terminal result on the actual corrected descendant, without real check or publication claims")
+        // Complete the successor WorkOrder before saving a mechanical fixture
+        // descendant. This submission records fixture evidence, not a real check.
+        val fixtureResult = V.DelegateTaskWorkResult("completed", "Fixture repair", Vector.empty,
+          NonEmptyVector.one(V.DelegateTaskCondition("behavior", true, "specification")), Vector.empty, None, None)
+        take(_call_("submitDelegateTaskWorkResult", List(
+          Property("sessionId", started.sessionId, None),
+          Property("result", fixtureResult, None),
+          Property("resultReference", V.WorkflowArtifactReference("specification-repair-result", "1"), None),
+          Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference("specification-repair-result", "1")),
+            Some("specification-implementer"), None, Some(V.WorkflowExecutionObservation("INLINE",
+              BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+              BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+              BoundedWorkExecutionAdmissionFixture.profile.identity))), None),
+          Property("issuedWorkContext", next.issuedWorkContext.get, None))))
+        var selectedSnapshot = Option.empty[WorkflowRetainedSnapshot.Reference]
+        var missingProofSnapshot = Option.empty[WorkflowRetainedSnapshot.Reference]
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          instances <- store.bindInstancesC()(using call.core.executionContext)
+          current <- instances.loadC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture corrected descendant is absent")))
+          payload <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, _work(next).sourceRevision.toLong, call.core)
+          receipts = _checks.map(check => RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(0),
+            "SPECIFICATION-OWNED fixture, no real check", "", Some(WorkflowSbtValidation.Facts(check.kind,
+              WorkflowSbtValidation.Outcome.Succeeded, Option.when(check.kind == WorkflowSbtValidation.Kind.TestOnly)(
+                WorkflowSbtValidation.Selection(Vector("example.FixtureSpec"), 1, 1L)), None))))
+          head = "a" * 40
+          tree = "b" * 40
+          result = payload.state.copy(stage = "ReturnReady", candidate = Some(S.Candidate(head, tree, Vector.empty, "")),
+            receipts = receipts, findings = Vector.empty, unresolvedQuestions = Vector.empty,
+            conditionReport = payload.state.input.conditions.map(id => S.Condition(id, true, "SPECIFICATION-OWNED fixture")),
+            commit = Some(S.Commit(head, "c" * 40, tree)), delivery = Some(DelegateTask.Delivery(destinationSessionId = Some(started.sessionId))))
+          saved <- DelegateTaskNativeRun.saveC(h, store, current, payload.copy(state = result), call.core)
+          _ = selectedSnapshot = Some(WorkflowRetainedSnapshot.Reference(WorkflowRetainedSnapshot.schema,
+            call.core.component.get.core.instanceId.canonicalKey, "DelegateTaskWorkflow", definition.workflowRevision.value,
+            started.sessionId, started.sessionId + ":standalone-state:" + saved.revision.value, "1", saved.revision.value.toString,
+            DelegateTaskDeliveryProjection.materialKind, "json"))
+          // Append a fixture-only cause without creating the named supersession.
+          // The resulting native descendant must not manufacture its receipt.
+          missing <- instances.appendC(saved.identity, saved.revision,
+            DelegateTaskNativeRun.history(saved, DelegateTaskScopeCorrection.resumeCause + "SPECIFICATION-OWNED-unavailable-work"))(using call.core.executionContext)
+          rejected <- DelegateTaskNativeRun.saveC(h, store, missing, payload.copy(state = result), call.core)
+          _ = missingProofSnapshot = selectedSnapshot.map(_.copy(identity = started.sessionId + ":standalone-state:" + rejected.revision.value,
+            instanceRevision = rejected.revision.value.toString))
+        } yield () }
+        val selected = selectedSnapshot.getOrElse(fail("Fixture snapshot was not retained"))
+        def snapshot(reference: WorkflowRetainedSnapshot.Reference): Consequence[OperationResponse] =
+          owner.executeOperationResponseInContext(Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+            operation = WorkflowRetainedSnapshot.readOperation,
+            properties = List(Property("input", WorkflowRetainedSnapshot.publicReference(reference), None))), actor)
+        def material(reference: WorkflowRetainedSnapshot.Reference): Json = {
+          val read = read_value[V.WorkflowRetainedSnapshotReadResult](take(snapshot(reference)))
+          read.availability shouldBe "available"
+          parser.parse(take(read.material.toJsonStringC)).fold(error => fail(error.message), identity)
+        }
+        val expected = before.input.copy(delegation = before.input.delegation.map(_.copy(role = "requester")))
+        When("the public reader returns the exact derived and literal snapshots")
+        val derived = material(selected)
+        val literal = material(selected.copy(materialKind = "bounded-state"))
+        val received = take(DelegateTask.returnedC(expected, derived))
+        Then("the receiver admits the derived receipt provenance and rejects the literal result without it")
+        received.input.ownedPaths shouldBe after.input.ownedPaths
+        received.input.sourceReferences.take(expected.sourceReferences.size) shouldBe expected.sourceReferences
+        received.input.sourceReferences.size shouldBe expected.sourceReferences.size + 1
+        DelegateTask.returnedC(expected, literal).isSuccess shouldBe false
+        import io.circe.syntax.*
+        DelegateTask.returnedC(expected, received.copy(input = received.input.copy(
+          sourceReferences = expected.sourceReferences)).asJson).isSuccess shouldBe false
+        When("the selected snapshot or its native owner is crossed or missing")
+        val crossedSession = selected.copy(sessionId = selected.sessionId + "-crossed")
+        val missingReceipt = selected.copy(identity = selected.identity + "-missing")
+        Then("the public reader refuses both without constructing provenance")
+        snapshot(crossedSession).isSuccess shouldBe false
+        snapshot(missingReceipt).isSuccess shouldBe false
+        snapshot(missingProofSnapshot.getOrElse(fail("Fixture missing-proof descendant was not retained"))).isSuccess shouldBe false
         Files.readString(partial) shouldBe "// retained same-purpose repair in progress\n"
         Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
       }

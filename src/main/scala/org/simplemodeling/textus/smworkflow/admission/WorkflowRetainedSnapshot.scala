@@ -42,7 +42,8 @@ private[smworkflow] object WorkflowRetainedSnapshot {
     Vector(r.componentInstance, r.workflowRevision, r.sessionId, r.identity, r.revision).forall(exact) &&
     r.instanceRevision != null && r.instanceRevision.matches("[1-9][0-9]*") && Try(r.instanceRevision.toLong).isSuccess &&
     Set("native-payload", "purpose-progress", "purpose-repair-progress", "bounded-state", "bounded-local-closure-state", "goal-validation",
-      "goal-local-completion", "goal-repository-completion", "split-selected-preview", "split-selected-apply")(r.materialKind) &&
+      "goal-local-completion", "goal-repository-completion", "split-selected-preview", "split-selected-apply",
+      DelegateTaskDeliveryProjection.materialKind)(r.materialKind) &&
     Set("json", "serialized-json")(r.representation)
   def resource(r: Reference): String = resourcePrefix + Base64.getUrlEncoder.withoutPadding.encodeToString(r.asJson.noSpaces.getBytes(UTF_8))
   def publicReference(r: Reference): V.WorkflowRetainedSnapshotReference =
@@ -132,6 +133,19 @@ private[smworkflow] object WorkflowRetainedSnapshot {
         result <- project(saved.receipt.payload.value)
       } yield result
       r.materialKind match {
+        case DelegateTaskDeliveryProjection.materialKind if r.owner == "DelegateTaskWorkflow" =>
+          val engine = DelegateTaskNativeRun
+          for {
+            owner <- storage.bindMechanicalC(engine.advanceOperation, engine.stateCodec)
+            saved <- owner.loadRetainedC(WorkflowMechanicalTransition.Reference(r.identity, r.revision))(using core.executionContext)
+              .flatMap(_.map(Consequence.success).getOrElse(invalid("selected delivery source is unavailable")))
+            prefix <- RepositorySyncPurposeContentContinuation.prefixC(current, r.instanceRevision)
+            _ <- if (saved.receipt.next == prefix && prefix.identity.value == r.sessionId &&
+              prefix.definition == current.definition) Consequence.unit
+              else invalid("derived delivery source crosses its exact immutable native history")
+            state <- DelegateTaskDeliveryProjection.stateC(storage, current, prefix, saved.receipt.payload.value, core)
+            publicState <- { import StandaloneFixExecution.given; engine.recordC(state.asJson) }
+          } yield DevelopmentOperationalView.json(publicState)
         case "bounded-local-closure-state" if Set("GoalTaskWorkflow", "DelegateTaskWorkflow")(r.owner) =>
           load(CompletionRecordContinuation.operation, CompletionRecordContinuation.codec) { payload => for {
             _ <- if (payload.source.family == (if (r.owner == "GoalTaskWorkflow") "goal-task" else "delegate-task"))
