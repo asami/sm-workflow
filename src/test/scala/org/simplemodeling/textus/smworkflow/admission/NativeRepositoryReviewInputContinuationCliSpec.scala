@@ -35,7 +35,7 @@ class Phase8RemoteClassificationDeclaration extends org.simplemodeling.textus.sm
   * Independent semantic answers are specification-owned evidence, never live
   * provider acceptance. SQLite is observed read-only, never seeded or repaired.
   * @since   Nov.  3, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 20, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -45,8 +45,10 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
   private val _checks = Vector(C.Check("compile1", 1, WorkflowSbtValidation.Kind.Compile),
     C.Check("test2", 2, WorkflowSbtValidation.Kind.Test), C.Check("lint3", 3, WorkflowSbtValidation.Kind.FixCheck))
   private val _unknown = Vector("README.md", "scripts/probe.py", "skills/probe/SKILL.md")
+  private val _supplemental_paths = Vector(".gitignore", ".scalafix.conf")
   private val _consumed = Vector("value.txt", "src", "build.sbt", "project", ".scalafix.conf", "scripts", "skills")
   private val _catalog_path = "src/main/catalog/probe.yaml"
+  private def _supplemental: Boolean = sys.props.get("smworkflow.spec.reviewInputSupplemental").contains("true")
   private def _known_catalog: Boolean = sys.props.get("smworkflow.spec.reviewInputKnownCatalog").contains("true")
   private val _rationale = "Specification-owned independent review: the complete parent diffs show the resolved value and Scala value agree. " +
     "README, script and skill classification remains Unexamined; this decision-needed result accepts no path or partial semantic coverage."
@@ -58,8 +60,14 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
   private final case class Live(scenario: F.Scenario, session: String) {
     def root: Path = scenario.root
     def repository: Path = Path.of(scenario.host.target.root)
-    def call(service: String, operation: String, parameters: Vector[String]): F.Result = scenario.callInstalled(
-      _installed, service, operation, parameters, None, Some(root.resolve(".textus/assembly.yaml")))
+    def call(service: String, operation: String, parameters: Vector[String]): F.Result = {
+      val launcher = if (_supplemental) sys.props.get("smworkflow.spec.reviewInputLauncherHome").toVector.flatMap { value =>
+        val home = Path.of(value)
+        require(home.isAbsolute && home.normalize == home && Files.isDirectory(home), "Select an existing private launcher state root")
+        Vector("--launcher-home", home.toString)
+      } else Vector.empty
+      scenario.callInstalled(_installed, service, operation, launcher ++ parameters, None, Some(root.resolve(".textus/assembly.yaml")))
+    }
     def repositoryCall(operation: String, parameters: Vector[String]): F.Result = call("RepositorySyncService", operation, parameters)
     def advance(): F.Result = repositoryCall("advanceRepositorySync", Vector("--sessionId", session))
   }
@@ -134,12 +142,15 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     git(live.root, "-C", live.repository.toString, "rev-parse", "MERGE_HEAD"),
     git(live.root, "-C", live.repository.toString, "status", "--porcelain"), _formal(live),
     _lines(live.root, "sbt-invocations.txt"), _lines(live.root, "sbt-command-lines.txt"), _lines(live.root, "lint-entered.txt"))
-  private def _impact(checks: Vector[C.Check] = _checks): RepositorySyncProgramImpact.Policy =
+  private def _impact(checks: Vector[C.Check] = _checks, supplemental: Boolean = false): RepositorySyncProgramImpact.Policy = {
+    val consumed = if (supplemental) _consumed.filterNot(_supplemental_paths.contains) else _consumed
     RepositorySyncProgramImpact.Policy(checks.map(check => RepositorySyncProgramImpact.Coverage(check,
-      _consumed, _consumed, "The real selected product checks consume declared source script and skill inputs")),
+      consumed, consumed, "The real selected product checks consume declared source script and skill inputs")),
       checks, Vector("value.txt", "src"), "Actual source delta requires the existing full validation", Vector.empty)
+  }
   private def _configure(scenario: F.Scenario, corrected: Boolean, demote: Boolean = false,
-    checks: Vector[C.Check] = _checks, impact: Option[RepositorySyncProgramImpact.Policy] = None, remotePhase: Boolean = false): Unit = {
+    checks: Vector[C.Check] = _checks, impact: Option[RepositorySyncProgramImpact.Policy] = None,
+    remotePhase: Boolean = false, supplemental: Boolean = false): Unit = {
     val root = scenario.root
     val base = process_plan(root, "Equal", scenario.host.goal)
     def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
@@ -178,23 +189,33 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
             grant.mapObject(row => row.add("capabilities", row("capabilities").get.mapArray(_ :+ "review-input-main-git".asJson)))
           else grant).asJson))
     }
-    val documents = Vector("docs") ++ Option.when(_known_catalog)(_catalog_path) ++ Option.when(corrected)("README.md") ++
+    val knowncatalog = _known_catalog && !supplemental
+    val documents = Vector("docs") ++ Option.when(knowncatalog)(_catalog_path) ++ Option.when(corrected)("README.md") ++
       (if (demote) Vector("scripts", "skills") else Vector.empty)
-    val documentscopes = if (_known_catalog) _consumed.filterNot(_ == "src") ++ Vector("src/main/scala", "src/test") else _consumed
-    val consumed = documentscopes.filterNot(path => path == "scripts" || path == "skills") ++
-      (if (corrected && !demote) Vector("scripts", "skills") else Vector.empty)
+    val documentscopes = if (knowncatalog) _consumed.filterNot(_ == "src") ++ Vector("src/main/scala", "src/test") else _consumed
+    val consumed = documentscopes.filterNot(path => path == "scripts" || path == "skills" ||
+      (supplemental && _supplemental_paths.contains(path))) ++
+      (if (corrected && !demote) Vector("scripts", "skills") else Vector.empty) ++
+      (if (supplemental && corrected) _supplemental_paths else Vector.empty)
     val inputs = RepositorySyncDocumentInputs.Policy(documents, consumed, "Explicit proposed classification of the actual tiny fixture inputs")
     val file = root.resolve(".textus/config.json")
     val config = parse(Files.readString(file)).toOption.get
     val parameters = maintenance_parameters() ++ Map("textus.subsystem.process-execution.plan" -> plan.noSpaces,
-      "sm-workflow.repository-sync.program-inputs" -> impact.getOrElse(_impact(checks)).asJson.noSpaces,
+      "sm-workflow.repository-sync.program-inputs" -> impact.getOrElse(_impact(checks, supplemental)).asJson.noSpaces,
       "sm-workflow.repository-sync.document-inputs" -> inputs.asJson.noSpaces,
       "textus.resource.url.file.roots" -> root.toString)
     Files.writeString(file, config.mapObject(fields => parameters.foldLeft(fields.remove("sm-workflow.runtime.definition")) {
       case (prior, (key, value)) => prior.add(key, Json.fromString(value))
     }).noSpaces)
   }
-  private def _scenario(remotePhase: Boolean = false): F.Scenario = {
+  private def _append_ignore_rule(repository: Path, rule: String): Unit = {
+    val file = repository.resolve(".gitignore")
+    val prior = if (Files.exists(file)) Files.readString(file, UTF_8) else ""
+    val separator = if (prior.nonEmpty && !prior.endsWith("\n")) "\n" else ""
+    Files.writeString(file, separator + rule + "\n", UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+  }
+  private def _scenario(remotePhase: Boolean = false, checks: Vector[C.Check] = _checks,
+    supplemental: Boolean = false): F.Scenario = {
     sys.props.get("smworkflow.spec.sbt") should not be empty
     val scenario = F.fresh("installed-review-input", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), bootstrapSelectedInput = false)
     val root = scenario.root
@@ -202,7 +223,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     Files.createDirectories(repository.resolve("src/main/scala"))
     Files.createDirectories(repository.resolve("scripts"))
     Files.createDirectories(repository.resolve("skills/probe"))
-    if (_known_catalog) {
+    if (_known_catalog && !supplemental) {
       Files.createDirectories(repository.resolve("src/main/catalog"))
       Files.writeString(repository.resolve(_catalog_path), "name: probe\npublishedAt: 2026-11-02T00:00:00Z\n")
     }
@@ -221,7 +242,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       |}
       |""".stripMargin)
     Files.writeString(repository.resolve("project/plugins.sbt"), "addSbtPlugin(\"ch.epfl.scala\" % \"sbt-scalafix\" % \"0.12.1\")\n")
-    Files.writeString(repository.resolve(".scalafix.conf"), "rules = [DisableSyntax]\nDisableSyntax.noFinalize = true\n")
+    Files.writeString(repository.resolve(".scalafix.conf"), s"rules = [DisableSyntax]\nDisableSyntax.noFinalize = ${!supplemental}\n")
     Files.writeString(repository.resolve("build.sbt"), """
       |lazy val reviewInputLintMarker = taskKey[Unit]("Observe ordinary selected lint entry")
       |reviewInputLintMarker := IO.append(file(__LINT__), java.lang.ProcessHandle.current().pid().toString + "\n")
@@ -238,7 +259,14 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       |""".stripMargin.replace("__LINT__", root.resolve("lint-entered.txt").toString.asJson.noSpaces)
       .replace("__INVOCATIONS__", root.resolve("sbt-invocations.txt").toString.asJson.noSpaces)
       .replace("__COMMANDS__", root.resolve("sbt-command-lines.txt").toString.asJson.noSpaces), StandardOpenOption.APPEND)
-    git(root, "-C", repository.toString, "add", "--", "src", "scripts", "skills", "README.md", "project/plugins.sbt", ".scalafix.conf", "build.sbt")
+    val baseadd = Vector("-C", repository.toString, "add", "--", "src", "scripts", "skills", "README.md", "project/plugins.sbt")
+    if (supplemental) {
+      _append_ignore_rule(repository, "/.scalafix.conf")
+      git(root, (baseadd ++ Vector(".gitignore", "build.sbt"))*)
+      git(root, "-C", repository.toString, "add", "-f", "--", ".scalafix.conf")
+    } else {
+      git(root, (baseadd ++ Vector(".scalafix.conf", "build.sbt"))*)
+    }
     git(root, "-C", repository.toString, "commit", "-m", "Tiny actual review input consumption and ordinary fixed checks")
     git(root, "-C", repository.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
     val peer = root.resolve("peer")
@@ -248,8 +276,16 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     Files.writeString(peer.resolve("README.md"), "# Probe\nThe fixture reads value 1.\n")
     Files.writeString(peer.resolve("scripts/probe.py"), "VALUE = 1\n")
     Files.writeString(peer.resolve("skills/probe/SKILL.md"), "# Probe skill\nRead value 1.\n")
-    if (_known_catalog) Files.writeString(peer.resolve(_catalog_path), "name: probe\npublishedAt: 2026-11-03T00:00:00Z\n")
-    git(root, "-C", peer.toString, "add", "--", "value.txt", "src", "README.md", "scripts", "skills")
+    if (_known_catalog && !supplemental) Files.writeString(peer.resolve(_catalog_path), "name: probe\npublishedAt: 2026-11-03T00:00:00Z\n")
+    if (supplemental) {
+      _append_ignore_rule(peer, "!/.scalafix.conf")
+      val scalafix = peer.resolve(".scalafix.conf")
+      val rules = Files.readString(scalafix, UTF_8)
+      Files.writeString(scalafix, rules.replace("DisableSyntax.noFinalize = false", "DisableSyntax.noFinalize = true"), UTF_8)
+    }
+    val peeradd = Vector("-C", peer.toString, "add", "--", "value.txt", "src", "README.md", "scripts", "skills") ++
+      (if (supplemental) _supplemental_paths else Vector.empty)
+    git(root, peeradd*)
     git(root, "-C", peer.toString, "commit", "-m", "Remote actual product and unknown classification inputs")
     git(root, "-C", peer.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
     Files.writeString(repository.resolve("value.txt"), "local product input\n")
@@ -257,17 +293,22 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     git(root, "-C", repository.toString, "commit", "-m", "Local conflicting input")
     if (remotePhase) git(root, "-C", repository.toString, "worktree", "add", "-b", "contribution",
       root.resolve("contribution").toString, "HEAD")
-    _configure(scenario, corrected = false, remotePhase = remotePhase)
+    _configure(scenario, corrected = false, checks = checks, remotePhase = remotePhase, supplemental = supplemental)
     scenario
   }
   private def _prepare(live: Live, operation: String, issued: F.Result, result: String,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence): Unit =
+    _prepare(live, operation, issued.invocation.stdout, result, reference, execution)
+
+  private def _prepare(live: Live, operation: String, request: Path, result: String,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence): Unit = {
     val directory = Files.createTempDirectory(live.root, "independent-review-input-")
-    val input = V.WorkflowEvidencePreparationInput("RepositorySync", operation, issued.invocation.stdout.toUri.toASCIIString,
+    val input = V.WorkflowEvidencePreparationInput("RepositorySync", operation, request.toUri.toASCIIString,
       _save(directory, "result.json", result), _save(directory, "reference.json", _json(reference)),
       _save(directory, "execution.json", _json(execution)), "normal-development-host", java.time.Instant.now().toString,
       "entity:smworkflow.cli.host_evidence", Option.when(operation == "validation-continuation")("participant"))
-    val prepared = live.call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input)))
+    val format = if (_supplemental) Vector("--preparationFormat", "legacy-full") else Vector.empty
+    val prepared = live.call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input)) ++ format)
     withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
     live.scenario.selectPreparedImport(prepared)
   }
@@ -293,6 +334,41 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       .foreach(raw => currentrows should contain(raw))
   }
 
+  private def _supplemental_host(live: Live): (Json, Json) = {
+    val lint = _checks.last
+    val lintpaths = Vector(".scalafix.conf")
+    val ignore = "fixture-supplemental-check-ignore"
+    val impact = _impact(_checks.init, supplemental = true)
+    val policy = impact.copy(fullChecks = _checks, coverage = impact.coverage :+
+      RepositorySyncProgramImpact.Coverage(lint, lintpaths, lintpaths, "The fixed Scalafix check reads its tracked configuration"),
+      postReviewValidation = Some(RepositorySyncPostReviewValidation.Binding(ignore, ".gitignore", lintpaths, lint.identity)))
+    _configure(live.scenario, corrected = true, checks = _checks, impact = Some(policy), supplemental = true)
+    val config = parse(Files.readString(live.root.resolve(".textus/config.json"))).toOption.get
+    val plankey = "textus.subsystem.process-execution.plan"
+    val plan = parse(config.hcursor.get[String](plankey).toOption.get).toOption.get
+    val family = plan.hcursor.get[Vector[Json]]("gitRepositories").toOption.get
+      .find(_.hcursor.get[String]("target").contains("sm-workflow-repository")).get
+    val program = family.mapObject(_.add("identity", ignore.asJson).add("capability", ignore.asJson)
+      .add("operation", "check-ignore".asJson).add("selectionId", ignore.asJson).add("selectedPaths", lintpaths.asJson)
+      .add("gitExecutable", "/usr/bin/git".asJson).add("commitIdentity", Json.Null)
+      .add("selectedPath", Json.Null).add("commitMessage", Json.Null))
+    val lintcapability = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+      .find(_.hcursor.get[String]("target").contains(lint.workspaceIdentity)).get.hcursor.get[String]("capability").toOption.get
+    val component = org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name
+    def _configuration_(granted: Boolean): Json = {
+      val selected = plan.mapObject(fields => fields
+        .add("gitPrograms", fields("gitPrograms").get.mapArray(_ :+ program))
+        .add("grants", fields("grants").get.mapArray(_.map { grant =>
+          if (!grant.hcursor.get[String]("componentId").contains(component)) grant
+          else grant.mapObject(row => row.add("capabilities", row("capabilities").get.mapArray { existing =>
+            (if (granted) existing else existing.filterNot(_.asString.contains(lintcapability))) :+ ignore.asJson
+          }))
+        })))
+      config.mapObject(_.add(plankey, selected.noSpaces.asJson))
+    }
+    (_configuration_(false), _configuration_(true))
+  }
+
   @org.goldenport.cncf.validation.annotation.ValidationScenario(
     name = "Installed P8-03 semantic remote-phase classification should P8-03 REMOTE technical classification continue with actual retained product checks",
     identity = "phase8-remote-continue", declaration = classOf[Phase8RemoteClassificationDeclaration])
@@ -306,6 +382,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
   "Installed P8-03 semantic remote-phase classification" should {
     for (mode <- Vector("continue", "consumed-demotion")) {
       s"P8-03 REMOTE technical classification $mode with actual retained product checks" in {
+        assume(!_supplemental, "not selected in the supplemental before fixture")
         Given("an explicitly selected current installed runtime, real SBT, and a fresh linked contribution/canonical-main/bare fixture")
         val selectedCar = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile",
           fail("Select the actual updated normal component CAR explicitly for P8-03 qualification")))
@@ -464,16 +541,33 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
 
   "Installed retained review input continuation" should {
     "capture REVIEW-INPUT actual saved decision-needed" in {
+      assume(!_supplemental || !Files.exists(_episode_path), "reuse the explicitly selected supplemental episode for continuation")
       Given("the old normal published CAR, a new tiny real local/bare Git fixture and one unused private episode path")
       Files.exists(_episode_path) shouldBe false
-      val scenario = _scenario()
+      val supplemental = _supplemental
+      val checks = if (supplemental) _checks.take(2) else _checks
+      val unknown = if (supplemental) (_unknown ++ _supplemental_paths).sorted else _unknown
+      val scenario = _scenario(checks = checks, supplemental = supplemental)
       val started = Live(scenario, "").repositoryCall("startRepositorySync", Vector("--input",
         "{\"repositoryIdentity\":\"review-input-fixture\",\"syncMode\":\"FULL_STATE\"}")).business[V.RepositorySyncStartResult]
       val live = Live(scenario, started.sessionId)
+      def _advance_detail_(issued: V.RepositorySyncAdvanceResult): (V.RepositorySyncAdvanceResult, Option[V.WorkflowRetainedWorkReadResult]) =
+        issued.retainedWork match {
+          case Some(reference) =>
+            val detail = live.call("WorkflowRetainedWorkService", "readWorkflowRetainedWork", Vector("--input", _json(reference)))
+              .businessBounded[V.WorkflowRetainedWorkReadResult]
+            detail.availability shouldBe "available"
+            val full = take(V.RepositorySyncAdvanceResult.createC(detail.response))
+            full.issuedWorkContext shouldBe issued.issuedWorkContext
+            (full, Some(detail))
+          case None => (issued, None)
+        }
       When("ordinary Advance issues the real value conflict and the fixture submits its explicit semantic resolution")
       live.advance().business[V.RepositorySyncAdvanceResult].condition shouldBe Some("MergeConflicted")
-      val conflict = live.advance().business[V.RepositorySyncAdvanceResult]
-      val resolution = V.RepositorySyncConflictResult("resolved", conflict.conflict.get.conflicts.map(value =>
+      val conflictoutput = live.advance()
+      val (fullconflict, _) = _advance_detail_(conflictoutput.business[V.RepositorySyncAdvanceResult])
+      val conflict = fullconflict.conflict.getOrElse(fail("The issued work contains no Conflict assignment"))
+      val resolution = V.RepositorySyncConflictResult("resolved", conflict.conflicts.map(value =>
         V.RepositorySyncConflictResolution(value.identity, "resolved product input\n")), "Specification-owned actual conflict resolution")
       val conflictref = V.WorkflowArtifactReference("fixture-review-input-conflict", "1")
       val conflictexecution = V.WorkflowExecutionEvidence(Vector(conflictref), Some("fixture-conflict-author"), None, None)
@@ -481,27 +575,41 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
         "--result", _json(resolution), "--resultReference", _json(conflictref), "--executionEvidence", _json(conflictexecution)))
       Then("only the actual conflict result is accepted")
       submitted.business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
-      When("ordinary Advance runs actual Compile Test and scalafix before issuing independent detailed review")
+      When(if (supplemental) "ordinary Advance runs actual Compile and Test before issuing independent detailed review"
+        else "ordinary Advance runs actual Compile Test and scalafix before issuing independent detailed review")
       val output = live.advance()
       val issued = output.business[V.RepositorySyncAdvanceResult]
-      Then("the complete candidate and all three successful check receipts accompany actual Unexamined input")
-      val review = issued.review.get
-      review.changedPaths should contain allElementsOf _unknown
+      Then(if (supplemental) "the complete candidate and two successful check receipts accompany the Unexamined tooling inputs"
+        else "the complete candidate and all three successful check receipts accompany actual Unexamined input")
+      val (fullreview, retainedreview) = _advance_detail_(issued)
+      val review = fullreview.review.getOrElse(fail("The issued work contains no MergeReview assignment"))
+      review.changedPaths should contain allElementsOf unknown
       review.localDiff.trim shouldBe git(live.root, "-C", live.repository.toString, "diff", "--cached", review.localTip, "--")
       review.remoteDiff.trim shouldBe git(live.root, "-C", live.repository.toString, "diff", "--cached", review.remoteTip, "--")
       val originalinput = _requests(live).head
       originalinput.judgmentMode shouldBe "detailed-review"
-      _unknown.foreach(path => originalinput.uncertainties should contain("Unexamined unknown input: " + path))
+      unknown.foreach(path => originalinput.uncertainties should contain("Unexamined unknown input: " + path))
       val formal = _formal(live)
-      formal.map(value => parse(value._3).toOption.get.as[C.Receipt].toOption.get).map(receipt =>
-        receipt.identity -> receipt.sbt.get.outcome).toSet shouldBe _checks.map(check => check.identity -> WorkflowSbtValidation.Outcome.Succeeded).toSet
-      _lines(live.root, "sbt-invocations.txt").size shouldBe 3
-      _lines(live.root, "lint-entered.txt").size shouldBe 1
-      val result = V.RepositorySyncNativeMergeReviewResult("decision-needed", _rationale, Vector.empty, None)
+      val receipts = formal.map(value => parse(value._3).toOption.get.as[C.Receipt].toOption.get)
+      receipts.map(receipt => receipt.identity -> receipt.sbt.get.outcome).toSet shouldBe
+        checks.map(check => check.identity -> WorkflowSbtValidation.Outcome.Succeeded).toSet
+      _lines(live.root, "sbt-invocations.txt").size shouldBe checks.size
+      _lines(live.root, "lint-entered.txt").size shouldBe (if (supplemental) 0 else 1)
+      if (supplemental) {
+        receipts.map(receipt => receipt.identity -> receipt.sbt.get.kind) shouldBe checks.map(check => check.identity -> check.kind)
+        Files.exists(live.root.resolve("lint-entered.txt")) shouldBe false
+        originalinput.changedPaths should contain allElementsOf _supplemental_paths
+      }
+      val rationale = if (supplemental) _rationale + " The root ignore file and tracked Scalafix rules also remain Unexamined." else _rationale
+      val result = V.RepositorySyncNativeMergeReviewResult("decision-needed", rationale, Vector.empty, None)
       val reference = V.WorkflowArtifactReference("fixture-review-input-independent-original", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-original-reviewer"), None, None)
       When("the independent fixture prepares imports and submits decision-needed once through normal public operations")
-      _prepare(live, "review", output, _json(result), reference, execution)
+      val reviewrequest = retainedreview.fold(output.invocation.stdout) { detail =>
+        val directory = Files.createTempDirectory(live.root, "retained-review-input-")
+        Files.writeString(directory.resolve("request.json"), take(detail.response.toJsonStringC), UTF_8, StandardOpenOption.CREATE_NEW)
+      }
+      _prepare(live, "review", reviewrequest, _json(result), reference, execution)
       val accepted = live.repositoryCall("submitNativeMergeReview", Vector("--sessionId", live.session, "--result", _json(result),
         "--resultReference", _json(reference), "--executionEvidence", _json(execution)))
       Then("the actual decision-needed completion is accepted and ordinary Advance retains a nonterminal Wait")
@@ -516,7 +624,46 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       live.advance().business[V.RepositorySyncAdvanceResult].kind shouldBe "Wait"
       Then("the native instance candidate original result and check counters stay unchanged and one episode is retained")
       _snapshot(live) shouldBe saved
-      if (_known_catalog) {
+      if (supplemental) {
+        Given("the saved old review has two tooling paths outside the original document and program coverage")
+        val originalvalidation = _receipts(live).find(_.payload.value.stage == "MergeValidated").get.payload.value.validation.get
+        val originalassessment = originalvalidation.inputs.get
+        originalassessment.unknownPaths shouldBe unknown
+        originalvalidation.selected shouldBe checks
+        val rows = _stored(live.root).sorted
+        val config = live.root.resolve(".textus/config.json")
+        val oldconfig = Files.readAllBytes(config)
+        try {
+          When("the old normal CAR describes the corrected classification under its original Compile and Test policy")
+          _configure(live.scenario, corrected = true, checks = checks, supplemental = true)
+          val described = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+          val description = described.business[V.RepositorySyncValidationContinuationDescriptionResult]
+          val target = R.decodePublicTarget(parse(take(description.target.toJsonStringC)).toOption.get).toOption.get
+          Then("the same saved frontier permits only Defer because neither newly consumed tooling path has selected program coverage")
+          description.choices shouldBe Vector("Defer")
+          target.applicabilityIssues shouldBe _supplemental_paths.map("New consumed input has no actual selected program input coverage: " + _)
+          target.sessionId shouldBe live.session
+          target.candidate.before.head shouldBe review.localTip
+          target.candidate.tree shouldBe review.indexTree
+          target.candidate.mergeHead shouldBe review.remoteTip
+          target.review.continuationId shouldBe issued.issuedWorkContext.get.continuationId
+          target.review.result.identity shouldBe reference.identity
+          target.review.decision shouldBe "decision-needed"
+          target.originalInputs shouldBe originalassessment
+          target.proposedInputs.unknownPaths shouldBe empty
+          target.proposedInputs.consumedPaths should contain allElementsOf unknown.filterNot(_ == "README.md")
+          target.proposedInputs.consumedPaths should not contain "README.md"
+          target.selectedChecks shouldBe checks
+          target.validationPolicy.impact.get.coverage.foreach { coverage =>
+            _supplemental_paths.foreach { path =>
+              RepositorySyncProgramImpact.covers(coverage.inputPaths, path) shouldBe false
+              RepositorySyncProgramImpact.covers(coverage.affectedPaths, path) shouldBe false
+            }
+          }
+          _snapshot(live) shouldBe saved
+          _stored(live.root).sorted shouldBe rows
+        } finally Files.write(config, oldconfig)
+      } else if (_known_catalog) {
         Given("CATALOG-APPLICABILITY retains a changed known catalog document under the existing broad src program coverage")
         val originalvalidation = _receipts(live).find(_.payload.value.stage == "MergeValidated").get.payload.value.validation.get
         val originalassessment = originalvalidation.inputs.get
@@ -553,7 +700,82 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       Files.setPosixFilePermissions(_episode_path, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))
     }
 
+    "continue REVIEW-INPUT supplemental after pre-dispatch refusal" in {
+      assume(_supplemental, "select the supplemental installed fixture")
+      Given("the same installed Session at its decision-needed review with its candidate and successful Compile and Test")
+      val episode = parse(Files.readString(_episode_path)).toOption.get.as[Episode].toOption.get
+      val live = _reopen(episode)
+      take(WorkflowInstanceRecordJsonV1.encodeC(_current(live))) shouldBe episode.originalRecord
+      _retained(live, episode)
+      val original = _requests(live).head
+      val config = live.root.resolve(".textus/config.json")
+      val (denied, allowed) = _supplemental_host(live)
+      Files.writeString(config, denied.noSpaces)
+      val described = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+      val description = described.business[V.RepositorySyncValidationContinuationDescriptionResult]
+      val answer = V.RepositorySyncValidationContinuationAnswer("AuthorizeAdditionalValidationAndContinueReview",
+        "Independent fixture direction authorizes the selected Git observation and the fixed Scalafix check", false, false)
+      description.choices shouldBe Vector(answer.choice, "Defer")
+      val reference = V.WorkflowArtifactReference("fixture-supplemental-refusal-direction", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      _prepare(live, "validation-continuation", described, _json(answer), reference, execution)
+      val input = V.RepositorySyncValidationContinuationAdoptionInput(live.session, description.target, answer.choice,
+        answer.rationale, reference, false, false, execution)
+      val adopted = live.repositoryCall(N.adoptionOperation, Vector("--input", _json(input)))
+      adopted.business[V.RepositorySyncValidationContinuationAdoptionResult].accepted shouldBe true
+
+      When("ordinary Advance observes the exact Git exception but CNCF refuses admission of the selected FixCheck")
+      val stopped = live.advance().business[V.RepositorySyncAdvanceResult]
+      Then("the Git observation and actual refusal are saved, and no FixCheck process starts")
+      stopped.condition shouldBe Some("validation-not-started")
+      _retained(live, episode)
+      val refusal = _current(live)
+      val refusalsuffix = refusal.causation.value
+      refusalsuffix should endWith("-lint-result")
+      val initial = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+        .business[V.RepositorySyncValidationContinuationDescriptionResult]
+      initial.outcome shouldBe "validation-not-started"
+      val observed = parse(take(initial.target.toJsonStringC)).toOption.get
+      val normalized = observed.hcursor.get[String]("native_revision").orElse(observed.hcursor.get[String]("nativeRevision"))
+      normalized.toOption.get shouldBe refusal.revision.value.toString
+      val refusalevidence = _stored(live.root).filter(row => row.contains(refusalsuffix) && row.contains("not-dispatched"))
+      refusalevidence should not be empty
+
+      When("the host restores the configured FixCheck grant and ordinary Advance is called on the same Session")
+      val currentconfig = parse(Files.readString(config)).toOption.get
+      val plankey = "textus.subsystem.process-execution.plan"
+      Files.writeString(config, currentconfig.mapObject(_.add(plankey, allowed.hcursor.downField(plankey).focus.get)).noSpaces)
+      val issued = live.advance().business[V.RepositorySyncAdvanceResult]
+      Then("one FixCheck runs, the Git result and refusal stay in history, and a fresh review uses the successful attempt")
+      issued.sessionId shouldBe live.session
+      issued.submitOperation shouldBe Some("submitNativeMergeReview")
+      val completed = _current(live)
+      completed.history.take(refusal.history.size) shouldBe refusal.history
+      completed.history.count(_.causation.value.endsWith("-git-intent")) shouldBe 1
+      completed.history.count(_.causation.value.endsWith("-git-result")) shouldBe 1
+      val resumed = "-lint-result-retry-after-" + refusal.revision.value
+      completed.history.count(_.causation.value.endsWith(resumed)) shouldBe 1
+      refusalevidence.foreach(row => _stored(live.root) should contain(row))
+      _formal(live) shouldBe episode.formalReceipts
+      _lines(live.root, "sbt-invocations.txt").size shouldBe episode.invocations.size + 1
+      _lines(live.root, "lint-entered.txt").size shouldBe episode.lintEntries.size + 1
+      val fresh = _requests(live).find(_.validatedRevision != original.validatedRevision).get
+      fresh.indexTree shouldBe original.indexTree
+      fresh.localTip shouldBe original.localTip
+      fresh.remoteTip shouldBe original.remoteTip
+      fresh.checks.take(original.checks.size) shouldBe original.checks
+      fresh.checks.drop(original.checks.size).map(check => (check.identity, check.exitCode)) shouldBe Vector("lint3" -> Some(0))
+      fresh.uncertainties.exists(line => line.contains("Actual added typed FixCheck") && line.contains(resumed)) shouldBe true
+      val settled = _snapshot(live)
+      When("ordinary Advance recollects the pending fresh review")
+      val again = live.advance().business[V.RepositorySyncAdvanceResult]
+      Then("the same review is returned without another Git observation or FixCheck")
+      again.issuedWorkContext shouldBe issued.issuedWorkContext
+      _snapshot(live) shouldBe settled
+    }
+
     "continue REVIEW-INPUT retained review without check replay" in {
+      assume(!_supplemental, "not selected in the supplemental before fixture")
       Given("the newly published normal CAR and the single saved old decision-needed Session with actual successful receipts")
       val episode = parse(Files.readString(_episode_path)).toOption.get.as[Episode].toOption.get
       val live = _reopen(episode)

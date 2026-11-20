@@ -55,9 +55,9 @@ private[smworkflow] object RepositorySyncRepairInventory {
     scope.failureReference != null && scope.failureReference.identity != null &&
     scope.failureReference.identity.startsWith(scope.instanceIdentity + ":native-") && scope.failureReference.revision == "1" &&
     scope.localTip == review.localTip && scope.remoteTip == review.remoteTip && scope.candidateTree == review.indexTree &&
-    review.checks.exists(receipt => receipt != null && receipt.exitCode != null &&
-      receipt.identity == scope.failureIdentity && receipt.termination == "exited" &&
-      receipt.exitCode.exists(_ != 0) && review.selectedChecks.contains(receipt.identity)) &&
+    review.checks.forall(receipt => receipt != null && receipt.exitCode != null) &&
+    RepositorySyncNativeMergeRepair.checkOrigin(review, scope.failureIdentity) &&
+    (review.interruption.isEmpty || scope.purpose.nonEmpty) &&
     scope.paths != null && scope.paths.nonEmpty && scope.paths == scope.paths.distinct.sorted &&
     scope.paths.forall(RepositorySyncNativeConflictInput.relative) && scope.rationale != null &&
     scope.rationale.trim.nonEmpty && !scope.rationale.contains('\u0000') &&
@@ -80,6 +80,9 @@ private[smworkflow] object RepositorySyncRepairInventory {
     value.snapshot.progress.candidate.exists(candidate => candidate.parent == review.localTip &&
       candidate.parent == review.remoteTip && candidate.tree == review.indexTree) &&
     value.snapshot.progress.receipts.drop(1) == review.checks &&
+    value.snapshot.progress.interruption.map(RepositorySyncPurposeTestInterruption.proof) == review.interruption &&
+    value.snapshot.progress.interruption.forall(direction => scope.failureReference ==
+      RepositorySyncPurposeTestInterruption.repairReference(direction.target)) &&
     value.snapshot.progress.selection.exists(_.checks.map(_.identity) == review.selectedChecks) &&
     (if (scope.inventoryPolicy == ownershipPolicy)
       RepositorySyncPurposeOwnership.assigned(value.snapshot.progress, scope.paths).nonEmpty &&

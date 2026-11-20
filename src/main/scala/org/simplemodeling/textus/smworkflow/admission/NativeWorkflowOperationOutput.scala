@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.Json
 import io.circe.syntax.*
 import IncrementalSbtDiagnosisRepair.given
 import org.goldenport.Consequence
@@ -15,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -245,12 +246,15 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.findings.map(f => V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale)),
       value.files.map(f => V.RepositorySyncNativeMergeRepairFile(f.path, f.text)), value.validationFailure)
   } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request",
-    if (RepositorySyncPurposeOwnership.work(value).nonEmpty) "Repair the failed current candidate and return exact later-owner integrated text through purposeContinuation; preserve each later intent or return precise decision-needed for actual semantic/Human resolution."
+    if (value.review.interruption.nonEmpty) "The original Purpose Test ended with UNKNOWN product effects. Repair only the assigned files for the interrupted check and preserve any later-owner obligations."
+      else if (RepositorySyncPurposeOwnership.work(value).nonEmpty) "Repair the failed current candidate and return exact later-owner integrated text through purposeContinuation; preserve each later intent or return precise decision-needed for actual semantic/Human resolution."
       else if (value.validationFailure.nonEmpty) "Repair only the actual failed selected merge check within the assigned files."
       else "Repair only the assigned native merge findings.",
     Some(RepositorySyncNativeMergeRepairContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
     Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input), None,
-    RepositorySyncPurposeOwnership.work(value).map(GoalPhaseNativeMetadata.record), None, None, Vector.empty)
+    RepositorySyncPurposeOwnership.work(value).map(GoalPhaseNativeMetadata.record), None,
+    value.review.interruption.map(proof => GoalPhaseNativeMetadata.record(Json.obj("purposeTestInterruption" -> proof.asJson))),
+    Vector.empty)
 
   def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing], core: ActionCall.Core):
     Consequence[V.RepositorySyncAdvanceResult] = for {

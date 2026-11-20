@@ -120,6 +120,14 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       store <- N.bindC(session, selecteddeclaration, core, acknowledgement)
       purpose <- store.currentPurposeC(session.started.current)
       saved <- purpose match {
+        case Some(source) if source.payload.stage == "PurposeRepairRequired" &&
+            source.payload.purposes.exists(_.interruption.nonEmpty) => for {
+          direction <- RepositorySyncPurposeTestInterruption.requireRepairC(store, session.started.current, source, validation)
+          context <- RepositorySyncNativeMergeReview.capturePurposeC(store, source,
+            RepositorySyncNativeMergeReview.Policy("purpose-check-origin-repair", 1))
+          _ <- if (context.interruption.contains(RepositorySyncPurposeTestInterruption.proof(direction))) Consequence.unit
+            else N.invalid("Purpose Test interruption crosses its ordinary repair context")
+        } yield M.Basis(source, context, Vector.empty, source.record, Some(direction.target.check.identity))
         // A failed product check is a FIX source, never a completed review.
         // Preserve the owning candidate capture and require a settled failure.
         case Some(purpose) if purpose.payload.stage == "PurposeRepairRequired" => for {
@@ -301,7 +309,9 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       _ <- if (budget.forall(value => value.usedRepairs < value.effectiveLimit ||
           (source.correction.nonEmpty && value.usedRepairs <= value.effectiveLimit))) Consequence.unit
         else N.invalid("selected merge repair budget is exhausted; no new repair issue or counter reset")
-      bundle = ContextBundle("Repair only the actual retained review findings or failed selected checks and assigned captured files. " +
+      bundle = ContextBundle((if (input.review.interruption.nonEmpty)
+          "Repair only the assigned captured files for the selected interrupted Purpose Test whose original effects remain UNKNOWN. "
+        else "Repair only the actual retained review findings or failed selected checks and assigned captured files. ") +
         (if (RepositorySyncPurposeOwnership.work(input).nonEmpty)
           "The issued purposeWork includes exact later-owner/path assignments, baseline candidate text, original worktree and complete later groups. Preserve later intent while integrating the current correction and return purposeContinuation for every exact pair. If both meanings cannot safely be combined, return decision-needed with precise owner/path rationale and no replacements or continuation; actual semantic/Human resolution is required."
         else "Preserve all other purpose content and provenance."),

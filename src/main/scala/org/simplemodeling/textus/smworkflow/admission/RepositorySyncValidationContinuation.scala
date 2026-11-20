@@ -19,11 +19,12 @@ import RepositorySyncManagedFetch as F
 import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as C
+import RepositorySyncPurposeTestInterruption as T
 
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since   Oct. 26, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -135,6 +136,9 @@ private[smworkflow] object RepositorySyncValidationContinuation {
   final case class Source(session: F.Session, store: N.Store, candidate: N.Stage, intent: N.Stage, target: Target)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
+    def purposeTestTerminationC(core: ActionCall.Core, reference: ContextReference,
+      target: RepositorySyncPurposeTestInterruption.Target): Consequence[Option[RepositorySyncPurposeTestInterruption.Observation]] =
+      Consequence.securityPermissionDenied("Purpose Test interruption requires an independently admitted host observation")
   }
   final case class Installation(evidence: EvidencePort) {
     def validateC: Consequence[Unit] = if (evidence != null) Consequence.unit
@@ -216,6 +220,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncPurposeMaterializationContinuation.choices
   }
+  final case class PurposeTestInterruptionTarget(value: RepositorySyncPurposeTestInterruption.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = T.availableChoices(value)
+  }
   /** Dispatch on the explicit discriminator, never on a failed decoder. */
   def decodeAnyTarget(value: Json): Either[String, AnyTarget] = for {
     wire <- Option(value).toRight("Continuation target is absent")
@@ -223,13 +231,15 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     target <- discriminator match {
       case `policy` => decodeTarget(wire).map(OriginalTarget(_))
       case RepositorySyncRequiredLintContinuation.policy => RepositorySyncRequiredLintContinuation.decodeTarget(wire).map(RequiredLintTarget(_))
-      case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
+      case RepositorySyncReviewInputContinuation.policy | RepositorySyncReviewInputContinuation.supplementalPolicy =>
+        RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.reconstructionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case RepositorySyncPurposeMaterializationContinuation.policy => RepositorySyncPurposeMaterializationContinuation.decodeTarget(wire).map(PurposeMaterializationTarget(_))
+      case T.policy | T.legacyPolicy => T.decodeTarget(wire).map(PurposeTestInterruptionTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
   } yield target
@@ -245,6 +255,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
     case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.decodeAnswer(value)
+    case PurposeTestInterruptionTarget(target) => T.decodeAnswer(target, value)
     case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
@@ -264,6 +275,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeMaterializationTarget(value) => RepositorySyncPurposeMaterializationContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case PurposeTestInterruptionTarget(value) => RepositorySyncPurposeTestInterruption.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case MergeCheckTarget(value) => RepositorySyncMergeCheckContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
@@ -445,9 +458,16 @@ private[smworkflow] object RepositorySyncValidationContinuation {
 
   def describeC(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     policy: C.Policy, acknowledge: String => Consequence[Unit],
-    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
-    F.sessionC(identity, d, definition, core).flatMap { session =>
-      if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
+    purposeTestEvidencePolicy: Option[String] = None): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] = for {
+    selectedpolicy <- _purpose_test_policy_c(purposeTestEvidencePolicy)
+    session <- F.sessionC(identity, d, definition, core)
+    result <-
+      if (T.descriptionFrontier(session.started.current))
+        _describe_interruption_c(session, d, core, acknowledge, selectedpolicy)
+      else if (selectedpolicy.nonEmpty)
+        N.invalid("The requested Purpose Test evidence policy requires the exact Purpose Test interruption frontier")
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeMaterializing")))
         RepositorySyncPurposeMaterializationContinuation.describeC(identity, d, definition, core, acknowledge)
@@ -459,16 +479,42 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         result <- if (failed.nonEmpty) RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
           else RepositorySyncMergeCheckContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       } yield result
-      else if (session.started.current.currentProgression.exists(p => Set("sync.PurposeRepairRequired",
-          "sync.ValidationRepairRequired")(p.value)))
+      else if (session.started.current.currentProgression.exists(p =>
+          Set("sync.PurposeRepairRequired", "sync.ValidationRepairRequired")(p.value)))
         RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
         review.map(port => RepositorySyncReviewInputContinuation.describeC(identity, d, definition, core, policy, acknowledge, port))
           .getOrElse(N.invalid("review-input description requires the installed independent review Port"))
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewInputContinuationAdmitted")))
+        RepositorySyncReviewInputContinuation.describeRunningC(session, d, core, acknowledge).flatMap {
+          case Some(value) => Consequence.success(value)
+          case None => _describe_v1_c(identity, d, definition, core, policy, acknowledge)
+        }
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.MergeValidated")))
         RepositorySyncRequiredLintContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else _describe_v1_c(identity, d, definition, core, policy, acknowledge)
-    }
+  } yield result
+
+  private def _purpose_test_policy_c(selector: Option[String]): Consequence[Option[String]] = selector match {
+    case None => Consequence.success(None)
+    case Some(T.legacySelector) => Consequence.success(Some(T.legacyPolicy))
+    case Some(_) => N.invalid("Unrecognized purposeTestEvidencePolicy")
+  }
+
+  private def _describe_interruption_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    acknowledge: String => Consequence[Unit], selectedpolicy: Option[String]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] = {
+    val current = session.started.current
+    if (current.currentProgression.contains(ProgressionReference("sync.PurposeChecking")))
+      T.describeC(session, d, core, acknowledge, selectedpolicy.getOrElse(T.policy))
+    else if (T.descriptionFrontier(current)) for {
+      store <- N.bindC(session, d, core, acknowledge)
+      stage <- store.currentPurposeC(current)
+      source <- stage.filter(_.payload.purposes.exists(_.interruption.nonEmpty)).map(Consequence.success)
+        .getOrElse(N.invalid("Purpose Test interruption has no retained adopted direction"))
+      result <- T.describeAdoptedC(store, current, source, selectedpolicy)
+    } yield result
+    else N.invalid("Purpose Test interruption frontier changed; describe the current Session again")
+  }
   private def _describe_v1_c(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     policy: C.Policy, acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
     sourceC(identity, d, definition, core, policy, acknowledge).map(source =>
@@ -488,6 +534,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,
         installation, acknowledge)
       case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.adoptC(input, d, definition, core,
+        installation, acknowledge)
+      case PurposeTestInterruptionTarget(value) => RepositorySyncPurposeTestInterruption.adoptC(input, value, d, definition, core,
         installation, acknowledge)
       case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.adoptC(input, d, definition, core,
         policy, installation, acknowledge)
@@ -567,6 +615,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Vector[spec.OperationDefinition] =
     Vector(new Operation(true, d, definition, policy, installation, acknowledge, review),
       new Operation(false, d, definition, policy, installation, acknowledge, review))
+  private[admission] def passiveOperation(d: F.Declaration, definition: DefinitionBinding, policy: C.Policy,
+    installation: Installation, prepared: Option[V.RepositorySyncValidationContinuationAdoptionInput]): spec.OperationDefinition =
+    new Operation(prepared.isEmpty, d, definition, policy, installation, _ => Consequence.unit,
+      None, passive = true, prepared = prepared)
   private[admission] def adoptionSourceC(request: Request): Consequence[NativeWorkflowResourceInput.Source[Record]] = for {
     source <- GoalPhasePrerequisitePublicationRecovery.resourceInputC(request)
     _ <- source match {
@@ -584,16 +636,13 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       .flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC)).flatMap(adoptionInputC)
   /** Installed composition resolves routing inside the actual executing call,
     * with the same Resource owner and strict decoder as the native Operation. */
-  def sessionC(suppliedRequest: Request, call: ActionCall.Core): Consequence[String] = {
-    final class Reader extends ProcedureActionCall {
-      val core = call
-      def readSessionC: Consequence[String] = adoptionSourceC(suppliedRequest).flatMap(source =>
-        readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
-          Some(java.nio.charset.StandardCharsets.UTF_8))).map(_.sessionId))
-      def execute(): Consequence[OperationResponse] = N.invalid("validation continuation reader is not an Operation")
-    }
-    new Reader().readSessionC
-  }
+  private[admission] def routingInputC(suppliedRequest: Request, call: ActionCall.Core):
+      Consequence[V.RepositorySyncValidationContinuationAdoptionInput] =
+    adoptionSourceC(suppliedRequest).flatMap(source =>
+      readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(call, reference,
+        Some(java.nio.charset.StandardCharsets.UTF_8))))
+  def sessionC(suppliedRequest: Request, call: ActionCall.Core): Consequence[String] =
+    routingInputC(suppliedRequest, call).map(_.sessionId)
   private[admission] def adoptionInputC(record: Record): Consequence[V.RepositorySyncValidationContinuationAdoptionInput] = for {
     _ <- if (record != null && DevelopmentOperationalView.uniqueFields(record)) Consequence.unit
       else N.invalid("continuation input is absent or contains duplicate fields")
@@ -622,31 +671,46 @@ private[smworkflow] object RepositorySyncValidationContinuation {
   } yield value
   private final class Operation(describe: Boolean, d: F.Declaration, definition: DefinitionBinding,
     policy: C.Policy, installation: Installation, acknowledge: String => Consequence[Unit],
-    review: Option[RepositorySyncNativeMergeReviewContinuation.Port]) extends spec.OperationDefinition {
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port], passive: Boolean = false,
+    prepared: Option[V.RepositorySyncValidationContinuationAdoptionInput] = None) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(if (describe)
       SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncValidationContinuationOperation
       else SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("RepositorySyncService") ||
           request.operation != (if (describe) describeOperation else adoptionOperation)) N.invalid("continuation Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, Some(id), None))
-      else adoptionSourceC(request).map(source => Action(request, None, Some(source)))
+      else if (describe) for {
+        id <- NativeWorkflowOperationInput.textC(request, "sessionId")
+        selector <- NativeWorkflowOperationInput.optionalTextC(request, "purposeTestEvidencePolicy")
+      } yield Action(request, Some(id), None, selector)
+      else adoptionSourceC(request).map(source => Action(request, None, Some(source), None))
     private final case class Action(request: Request, identity: Option[String],
-      input: Option[NativeWorkflowResourceInput.Source[Record]]) extends CommandAction {
+      input: Option[NativeWorkflowResourceInput.Source[Record]], selector: Option[String]) extends CommandAction {
       override def commandExecutionMode = CommandExecutionMode.Sync
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
           value <- input match {
             case None => Consequence.success(Option.empty[V.RepositorySyncValidationContinuationAdoptionInput])
-            case Some(source) => readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
-              Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_))
+            case Some(source) => prepared.fold(readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core,
+              reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))(value => Consequence.success(Some(value)))
           }
           session = value.map(_.sessionId).orElse(identity).get
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
           selected = core.copy(executionContext = context)
           result <- value match {
-            case None => describeC(session, d, definition, selected, policy, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
+            case None if passive => for {
+              selectedpolicy <- _purpose_test_policy_c(selector)
+              saved <- F.sessionC(session, d, definition, selected)
+              described <- _describe_interruption_c(saved, d, selected, acknowledge, selectedpolicy)
+            } yield NativeWorkflowOperationOutput.response(described)
+            case Some(input) if passive => anyTargetC(input.target).flatMap {
+              case PurposeTestInterruptionTarget(target) =>
+                RepositorySyncPurposeTestInterruption.adoptC(input, target, d, definition, selected, installation, acknowledge)
+              case _ => N.invalid("Purpose Test interruption adoption routing target differs")
+            }.map(NativeWorkflowOperationOutput.response(_))
+            case None => describeC(session, d, definition, selected, policy, acknowledge, review, selector)
+              .map(NativeWorkflowOperationOutput.response(_))
             case Some(value) => adoptC(value, d, definition, selected, policy, installation, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
           }
         } yield result

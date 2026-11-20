@@ -688,9 +688,18 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
           finalView = advanceFull(session)
         }
         finalView.kind shouldBe "Return"
+        val launchesAtReturn = Files.readString(root.resolve("sbt-launches.txt"))
         val returnedJson = parser.parse(take(finalView.state.get.toJsonStringC)).toOption.get
         val producer = take(GoalPhaseNativeMetadata.normalizePublicJson(returnedJson)
           .flatMap(_.as[StandaloneFixExecution.State].left.map(_.message)).fold(Consequence.stateConflict(_), Consequence.success))
+        val selectedReceipts = Vector("test" -> WorkflowSbtValidation.Kind.Test, "test-only" -> WorkflowSbtValidation.Kind.TestOnly)
+        selectedReceipts.foreach { (identity, kind) =>
+          val receipt = producer.receipts.find(_.identity == identity).get
+          receipt.sbt.map(_.kind) shouldBe Some(kind)
+          receipt.externalCapture should not be empty
+          receipt.externalCapture.get.association.check shouldBe identity
+        }
+        returnedJson.noSpaces should include(WorkflowSbtCapture.externalReceiptSchema)
         val a = association.get
         val policy = Json.obj("schemaVersion" -> "sm-workflow.delegate-task-returned-capture-read.v1".asJson,
           "bindings" -> Json.arr(Json.obj("sourceComponentInstance" -> a.component.asJson, "sourceSessionId" -> session.asJson,
@@ -701,6 +710,19 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
             "maximumBytes" -> artifactLimits.maximumBytes.asJson)))
         val key = "sm-workflow.delegate-task.returned-capture-read-bindings"
         currentParameters = currentParameters + (key -> policy.noSpaces)
+        _with_runtime_(root, "Equal", Some(host), currentParameters, componentInstance = "default") { (_, _, _, provision) =>
+          provision { setup =>
+            DelegateTaskDeliveryService.hydrateReturnedC(setup.core, session, producer).isSuccess shouldBe true
+            selectedReceipts.foreach { (identity, kind) =>
+              val crossedKind = if (kind == WorkflowSbtValidation.Kind.Test) WorkflowSbtValidation.Kind.TestOnly
+                else WorkflowSbtValidation.Kind.Test
+              val crossed = producer.copy(selected = producer.selected.map(check =>
+                if (check.identity == identity) check.copy(kind = crossedKind) else check))
+              DelegateTaskDeliveryService.hydrateReturnedC(setup.core, session, crossed).isSuccess shouldBe false
+            }
+            Consequence.unit
+          }
+        }
         if (installed.nonEmpty) {
           val file = root.resolve(".textus/config.json")
           val config = parser.parse(Files.readString(file)).toOption.get
@@ -828,6 +850,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         observe(adopt).kind shouldBe "Terminal"
         advanceFull(requester.sessionId).kind shouldBe "Terminal"
         Files.readString(root.resolve("sbt-executions.txt")) shouldBe countBefore
+        Files.readString(root.resolve("sbt-launches.txt")) shouldBe launchesAtReturn
       }
   }
 

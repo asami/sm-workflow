@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -309,8 +309,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     val selected = progress.selection.get.checks
     val done = progress.receipts.size - 1
     val prefix = attemptPrefix(progress)
-    def _save_(key: String, stage: String, from: N.Stage, value: P.Progress) = store.saveC(prefix + "-" + key,
-      "purpose-progress", from.record, from.payload.copy(stage = stage, purposes = Some(value)))
+    def _save_(key: String, stage: String, from: N.Stage, value: P.Progress, evidencerequirement: Option[String] = None) =
+      store.saveC(prefix + "-" + key, "purpose-progress", from.record,
+        from.payload.copy(stage = stage, purposes = Some(value), purposeTestEvidenceRequirement = evidencerequirement))
     if (progress.receipts.drop(1).zip(selected).exists((receipt, check) => !C.productSuccessful(receipt, check.kind)))
       return Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
         "The retained actual failed or unknown purpose check requires its owning FIX disposition; no replay or success is inferred", "purpose-check-failed"))
@@ -320,6 +321,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))
       if (check.ordinaryDiscovery && (!reused.contains(check.identity) || forceFresh))
         return _ordinary_c(store, source, slot, check, done, reused, policy, authority, review, finish)
+      val reusable = reused.get(check.identity).filterNot(_ => forceFresh)
       for {
         _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
         _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
@@ -329,11 +331,11 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           expected <- E.executeGitC(scoped, GitOperation.Root, slot.workspace).flatMap(_.valueC)
           _ <- if (actual == expected) Consequence.unit else N.invalid("purpose check workspace does not consume the actual materialized candidate root")
         } yield ())
-        intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress)
+        intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress,
+          Option.when(reusable.isEmpty && RepositorySyncPurposeTestInterruption.direct(check))(N.strictPurposeTestEvidence))
         // Selection-correction additions require a real new typed invocation;
         // historical reuse cannot stand in for the missing TestOnly evidence.
-        receipt <- reused.get(check.identity).filterNot(_ => progress.hostContinuation.exists(direction =>
-          direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))) match {
+        receipt <- reusable match {
           case Some(value) => Consequence.success(value)
           case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)
@@ -535,10 +537,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           p.selection.exists(selection => selection != null && selection.checks != null && p.receipts.size >= 2 &&
             p.receipts.drop(1).zip(selection.checks).forall((receipt, check) => receipt != null && receipt.identity == check.identity) &&
             p.receipts.size - 1 <= selection.checks.size &&
-            ((p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
+            (p.interruption match {
+              case Some(direction) => !review && RepositorySyncPurposeTestInterruption.matchesProgress(p, direction)
+              case None => (p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
               (review && p.receipts.size == selection.checks.size + 1 && p.receipts.head.termination == "exited" &&
                 p.receipts.head.exitCode.contains(0) && selection.checks.zip(p.receipts.drop(1)).forall((check, receipt) =>
-                  C.productSuccessful(receipt, check.kind))))) && p.commits != null && p.effects != null &&
+                  C.productSuccessful(receipt, check.kind)))
+            })) && p.commits != null && p.effects != null &&
           p.reusable != null && p.hostContinuation != null && RepositorySyncPurposeOwnership.validProgress(p)
       }
   }
@@ -609,6 +614,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- RepositorySyncNativeMergeRepair.admitC(input, result, policy)
     _ <- if (result.decision == "repaired") Consequence.unit else N.invalid("purpose decision-needed supplies no repair effect")
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("purpose repair candidate is absent"))
+    _ <- if (input.review.interruption == progress.interruption.map(RepositorySyncPurposeTestInterruption.proof))
+      Consequence.unit else N.invalid("Purpose repair crosses its interruption evidence")
     _ <- if (input.admittedInventory.forall(_.purpose.exists(_.snapshot.progress == progress))) Consequence.unit
       else N.invalid("Purpose repair input crosses its retained complete progress snapshot")
     _ <- if (RepositorySyncPurposeOwnership.assigned(progress, input.files.map(_.path)).isEmpty ||
@@ -634,7 +641,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
   } yield progress.copy(preparationNamespace = None, request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
     baselineTree = Some(candidate.tree), candidate = None, sessionWorkspace = None, managedWorkspace = None, ordinaryGroups = Map.empty, receipts = Vector.empty, selection = None,
-    assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected)
+    assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected, interruption = None)
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,
     input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,

@@ -8,6 +8,8 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, GoalPhaseNativeMetadata as M}
+import org.simplemodeling.textus.smworkflow.admission.{RepositorySyncPurposeTestInterruption as T,
+  RepositorySyncValidationContinuation as A}
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeWork, NativeExternalEvidence,
   RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection,
   StandaloneFixValidationRecovery, ThreeWorkflowExternalEvidencePorts}
@@ -17,11 +19,12 @@ import org.simplemodeling.textus.smworkflow.value as V
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
+  private val _legacy_observation_parser = io.circe.jawn.JawnParser(allowDuplicateKeys = false)
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     if (supplied.get("family").contains("DelegateTask") && supplied.get("kind").contains("request-reconstruction"))
@@ -36,6 +39,9 @@ private[smworkflow] object NativeExternalEvidenceInput {
       _repair_budget_c(supplied, readText)
     else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("push-continuation"))
       _push_continuation_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySync") &&
+        supplied.get("kind").exists(Set(T.observationKind, T.legacyObservationKind)))
+      _purpose_test_termination_c(supplied, readText)
     else if (supplied.get("kind").contains("force-closure"))
       NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
@@ -117,6 +123,60 @@ private[smworkflow] object NativeExternalEvidenceInput {
     } yield bootstrap
     }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
+
+  private def _purpose_test_termination_c(supplied: Map[String, String],
+    readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    participant <- options.get("participant").map(Consequence.success)
+      .getOrElse(_invalid("Purpose Test observation preparation requires the authenticated Session participant"))
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    description <- NativePreparationInput.readC(options("request"), readtext)
+      .flatMap(summon[ValueReader[V.RepositorySyncValidationContinuationDescriptionResult]].readC)
+    target <- A.anyTargetC(description.target).flatMap {
+      case A.PurposeTestInterruptionTarget(value) if description.sessionId == value.sessionId &&
+          description.componentInstance == value.componentInstance && description.choices == T.availableChoices(value) &&
+          options("kind") == (if (T.isLegacy(value)) T.legacyObservationKind else T.observationKind) &&
+          description.outcome == "adoption-required" && description.adoptionOperation == A.adoptionOperation =>
+        Consequence.success(value)
+      case _ => _invalid("Purpose Test observation requires its exact public description")
+    }
+    raw <- readtext(options("result"))
+    observed <- (if (T.isLegacy(target)) _legacy_observation_parser.decode[T.Observation](raw)
+      else io.circe.parser.decode[T.Observation](raw)).fold(error => _invalid(error.getMessage), Consequence.success)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    refs = execution.references.map(value => ContextReference(value.identity, value.revision))
+    _ <- if (participant == target.context.participantIdentity && observed.target == target &&
+        observed.reference == ContextReference(reference.identity, reference.revision) &&
+        execution.workerIdentity.contains(observed.observer) && refs.size == observed.references.size &&
+        refs.toSet == observed.references.toSet) Consequence.unit
+      else _invalid("Purpose Test observation crosses its Session participant, description, observer, invocation, trace or as-run plan reference")
+    _ <- (observed.hostPlanReference, observed.legacyBindingReference) match {
+      case (Some(planref), None) => for {
+        hosttext <- readtext(planref.identity)
+        host <- io.circe.parser.decode[T.AsRunPlan](hosttext).fold(error => _invalid(error.getMessage), Consequence.success)
+        _ <- if (T.matchesAsRunPlan(observed, host)) Consequence.unit
+          else _invalid("Purpose Test description differs from the independently recorded as-run plan or its invocation, trace and PID")
+      } yield ()
+      case (None, Some(bindingref)) => for {
+        bindingtext <- readtext(bindingref.identity)
+        binding <- _legacy_observation_parser.decode[T.LegacyRun](bindingtext).fold(error => _invalid(error.getMessage), Consequence.success)
+        _ <- if (T.matchesLegacyRun(observed, binding)) Consequence.unit
+          else _invalid("Legacy Purpose Test archived invocation binding differs from its original target, trace or PID")
+        trace <- readtext(observed.traceReference.identity)
+        _ <- if (T.matchesLegacyTrace(observed, trace)) Consequence.unit
+          else _invalid("Legacy Purpose Test trace requires exactly one matching CNCF Started and confirmed Terminal pair")
+      } yield ()
+      case _ => _invalid("Purpose Test observation must supply exactly its policy-specific provenance reference")
+    }
+    purpose = NativeExternalEvidence.purposeTestTerminationPurpose(target)
+    identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+    encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+      purpose.identity, identity, reference.identity, reference.revision, options("issuer"), observed.observer,
+      T.observationBinding(observed), occurred.toString))
+    row = Record.data("id" -> NativeExternalEvidence.recordIdentity(purpose, identity), NativeExternalEvidence.storageField -> encoded)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
 
   private def _standalone_publication_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
     options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))

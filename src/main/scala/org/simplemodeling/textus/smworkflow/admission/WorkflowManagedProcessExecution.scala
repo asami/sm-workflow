@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -285,6 +285,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case GitOperation.CheckSelectedIndex(selection, parent) => git_check_selected_index(target, selection, parent)
       case GitOperation.SelectedIndexChanges(selection, parent) => git_selected_index_changes(target, selection, parent)
       case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
+      case GitOperation.CheckIgnore(selection) => git_check_ignore(target, selection)
       case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
       case GitOperation.PreparePurposeCandidate(id, request) => git_prepare_purpose_candidate(target, id, request)
       case GitOperation.MaterializePurposeCandidate(id, candidate, workspace) => git_materialize_purpose_candidate(target, id, candidate, workspace)

@@ -70,14 +70,46 @@ private[admission] object DelegateTaskTestOnlyRecoveryFixture {
     Files.writeString(root.resolve("flood-enabled"), "SPECIFICATION-OWNED bounded 2 MiB output producer\n")
     Files.createDirectories(root.resolve("capture-root"))
   }
+  def completionPlan(root: Path, git: Json): Json = {
+    import org.goldenport.cncf.processexecution.GitOperationKind
+    def _array_(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
+    def _key_(program: Json): Vector[Json] = Vector("target", "operation", "selectionId").map(name =>
+      program.hcursor.get[Json](name).getOrElse(Json.Null))
+    val target = org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target(
+      root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString)
+    val generated = TypedGitHostPlanFixture.plan(target, kinds = Vector(GitOperationKind.CommitMetadata),
+      goalMessages = Vector("SPEC complete the reviewed recorded Incomplete repair"),
+      goalSelections = Vector(Vector("value.txt")))
+    val required = _array_(generated, "gitPrograms").map { program =>
+      if (!program.hcursor.get[String]("selectionId").contains("goal-step-1")) program else {
+        val operation = GitOperationKind.values.find(_.wireName == program.hcursor.get[String]("operation").toOption.get).get
+        val identity = TypedGitHostPlanFixture.capability(operation, Some("delegate-task"))
+        program.mapObject(_.add("selectionId", "delegate-task".asJson)
+          .add("identity", identity.asJson).add("capability", identity.asJson))
+      }
+    }
+    val existing = _array_(git, "gitPrograms")
+    val programs = existing ++ required.filterNot(program => existing.exists(old => _key_(old) == _key_(program)))
+    val keys = required.map(_key_).toSet
+    val capabilities = programs.filter(program => keys(_key_(program)))
+      .map(_.hcursor.get[Json]("capability").toOption.get).distinct
+    val grants = _array_(git, "grants")
+    val owner = SmWorkflowComponent.componentId.name
+    val admitted = if (grants.exists(_.hcursor.get[String]("componentId").contains(owner))) grants.map { grant =>
+      if (!grant.hcursor.get[String]("componentId").contains(owner)) grant
+      else grant.mapObject(_.add("capabilities", (_array_(grant, "capabilities") ++ capabilities).distinct.asJson))
+    } else grants :+ Json.obj("componentId" -> owner.asJson, "capabilities" -> capabilities.asJson)
+    git.mapObject(_.add("gitPrograms", programs.asJson).add("grants", admitted.asJson))
+  }
   def processPlan(root: Path, git: Json): Json = {
     def _array_(value: Json, name: String) = value.hcursor.get[Vector[Json]](name).toOption.get
+    val completion = completionPlan(root, git)
     // Reuse typed Git authority only; replace the old fixture's SBT workspaces
     // together with its programs so each ordinal remains uniquely declared.
-    val oldtargets = _array_(git, "sbtPrograms").flatMap(_.hcursor.get[String]("target").toOption).toSet
-    val gitonly = git.mapObject(_.add("sbtPrograms", Json.arr())
-      .add("workspaces", Json.fromValues(_array_(git, "workspaces").filterNot(_.hcursor.get[String]("identity").toOption.exists(oldtargets))))
-      .add("workspaceGrants", Json.fromValues(_array_(git, "workspaceGrants").filterNot(_.hcursor.get[String]("workspaceId").toOption.exists(oldtargets)))))
+    val oldtargets = _array_(completion, "sbtPrograms").flatMap(_.hcursor.get[String]("target").toOption).toSet
+    val gitonly = completion.mapObject(_.add("sbtPrograms", Json.arr())
+      .add("workspaces", Json.fromValues(_array_(completion, "workspaces").filterNot(_.hcursor.get[String]("identity").toOption.exists(oldtargets))))
+      .add("workspaceGrants", Json.fromValues(_array_(completion, "workspaceGrants").filterNot(_.hcursor.get[String]("workspaceId").toOption.exists(oldtargets)))))
     val compile = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(gitonly), operation = SbtOperation.Compile)
     val lint = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2), operation = SbtOperation.FixCheck)
     val selected = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(3),
@@ -844,7 +876,8 @@ private[admission] trait NativeDelegateTaskTestOnlyQualification extends AnyWord
     phase match {
       case "prepare-old" => _before(fixture, repair = true)
       case "resume-new" => _resume_recorded_repair(fixture)
-      case _ => fail("Select prepare-old|resume-new")
+      case "complete-new" => _complete_recorded_repair(fixture)
+      case _ => fail("Select prepare-old|resume-new|complete-new")
     }
   }
 
@@ -1023,6 +1056,154 @@ private[admission] trait NativeDelegateTaskTestOnlyQualification extends AnyWord
       .add("finalReadLog", historical.invocation.stdout.toString.asJson)); _save_()
   }
 
+  private def _complete_recorded_repair(fixture: Path): Unit = {
+    Given("the same physical Session after accepted Repair, successful changed-candidate checks and independent Review")
+    val manifestfile = fixture.resolve("fixture.json")
+    var manifest = _read(manifestfile)
+    require(manifest.hcursor.get[Boolean]("recordedIncompleteRepair").contains(true) &&
+      manifest.hcursor.get[Boolean]("repairDirectionEntered").contains(true) &&
+      !manifest.hcursor.get[Boolean]("repairCompleted").contains(true),
+      "Select the original incomplete local completion fixture without replaying any accepted work")
+    val root = Path.of(manifest.hcursor.get[String]("root").toOption.get).toRealPath()
+    root.toString shouldBe manifest.hcursor.get[String]("root").toOption.get
+    val session = manifest.hcursor.get[String]("sessionId").toOption.get
+    val owner = manifest.hcursor.get[String]("componentInstance").toOption.get
+    val old = manifest.hcursor.get[S.State]("sourceState").toOption.get
+    val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(manifest.hcursor.get[Json]("host").toOption.get))
+    val plan = manifest.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption.get
+    host.target.root shouldBe root.resolve("repository").toRealPath().toString
+    manifest.hcursor.downField("repairTarget").get[String]("sessionId").toOption.get shouldBe session
+    manifest.hcursor.downField("repairTarget").get[String]("componentInstance").toOption.get shouldBe owner
+    val configfile = root.resolve(".textus/config.json")
+    val config = _read(configfile)
+    config.hcursor.get[String]("textus.datastore.path") shouldBe manifest.hcursor.get[String]("database")
+    val database = Path.of(manifest.hcursor.get[String]("database").toOption.get)
+    Files.isRegularFile(database) shouldBe true
+    database.toRealPath().toString shouldBe manifest.hcursor.get[String]("database").toOption.get
+    database.startsWith(root) shouldBe true
+    config.hcursor.get[String]("textus.component.file") shouldBe manifest.hcursor.get[String]("newComponent")
+    manifest.hcursor.get[String]("newComponent").toOption.get shouldBe _component.toString
+    val process = parser.parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    val workspace = process.hcursor.get[Vector[Json]]("workspaces").toOption.get
+      .filter(_.hcursor.get[String]("identity").contains(TypedGitHostPlanFixture.workspace))
+    workspace.size shouldBe 1
+    workspace.head.hcursor.get[String]("root").toOption.get shouldBe host.target.root
+    val completedplan = DelegateTaskTestOnlyRecoveryFixture.completionPlan(root, process)
+    Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", completedplan.noSpaces.asJson)).noSpaces)
+    val files = Files.list(root.resolve("logs"))
+    val nextindex = try { import scala.jdk.CollectionConverters.*; files.iterator().asScala
+      .flatMap(_.getFileName.toString.takeWhile(_.isDigit).toIntOption).max + 100 } finally files.close()
+    val scenario = F.reopenInstalledRepository(root, host, plan, nextindex)
+    val commands = Files.readString(root.resolve("sbt-command-lines.txt"))
+    val bodies = Files.readAllLines(root.resolve("selected-body-executions.txt")).size()
+    val fixchecks = Files.readAllLines(root.resolve("fix-check-executions.txt")).size()
+    val capture = old.receipts.last.externalCapture.get
+    val capturefile = root.resolve("capture-root").resolve(capture.path)
+    val capturebytes = Files.readAllBytes(capturefile).toVector
+    val oldreference = take(V.WorkflowRetainedSnapshotReference.createC(take(new org.goldenport.record.io.RecordDecoder()
+      .json(manifest.hcursor.get[Json]("sourceReference").toOption.get.noSpaces))))
+    When("the existing public description selects the actual current frontier and its retained snapshot")
+    val description = _call(scenario, "WorkflowForceClosureService", "describeWorkflowForceClosure",
+      Vector("--input", _json(V.WorkflowForceClosureDescriptionInput("DelegateTask", session))))
+    description.exitCode shouldBe 0
+    val target = take(WorkflowForceClosure.targetC(description.business[V.WorkflowForceClosureView].target))
+    target.family shouldBe "DelegateTask"
+    target.sessionId shouldBe session
+    target.componentInstance shouldBe owner
+    val definition = take(DelegateTaskRuntimeCatalog.loadC())
+    val catalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(definition)))
+    val current = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.decodeC(target.frontier.noSpaces, catalog))
+    current.identity.value shouldBe session
+    current.definition shouldBe definition
+    current.lifecycle shouldBe org.goldenport.cncf.workflow.WorkflowInstancePersistence.Lifecycle.Active
+    current.suspension shouldBe None
+    val (_, snapshot) = _snapshot(scenario, owner, session, current.revision.value)
+    val ready = _state(snapshot.business[V.WorkflowRetainedSnapshotReadResult].material)
+    Then("only the exact reviewed CommitReady candidate qualifies for remaining ordinary local completion")
+    ready.stage shouldBe "CommitReady"
+    ready.commit shouldBe None
+    ready.commitExecution shouldBe None
+    ready.reviewReference should not be empty
+    ready.input shouldBe old.input
+    ready.selected shouldBe old.selected
+    ready.generation shouldBe old.generation + 1
+    ready.automaticCount shouldBe old.automaticCount + 1
+    ready.ordinaryCount shouldBe old.ordinaryCount + 1
+    ready.candidate.get.paths shouldBe Vector("value.txt")
+    ready.candidate.get.head shouldBe old.candidate.get.head
+    ready.candidate.get.tree should not be old.candidate.get.tree
+    Files.readString(root.resolve("repository/value.txt")) shouldBe "expected\n"
+    ready.receipts.map(_.identity) shouldBe Vector("compile", "fix-check", "test-only")
+    ready.receipts.zip(DelegateTaskTestOnlyRecoveryFixture.checks).foreach { (receipt, check) =>
+      receipt.sbt.get.kind shouldBe check.kind
+      receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+      receipt.externalCapture match {
+        case None =>
+          receipt.processObservation should not be empty
+          RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind) shouldBe true
+        case Some(reference) =>
+          val association = reference.association
+          association.component shouldBe owner
+          association.session shouldBe session
+          association.root shouldBe host.target.root
+          association.branch shouldBe "main"
+          association.baseHead shouldBe ready.candidate.get.head
+          association.candidateTree shouldBe ready.candidate.get.tree
+          association.check shouldBe check.identity
+          association.ordinal shouldBe check.ordinal
+          val native = WorkflowSbtCapture.decode(_read(root.resolve("capture-root").resolve(reference.path))
+            .hcursor.get[Json]("process").toOption.get).toOption.get
+          WorkflowSbtCapture.externalMatches(reference, receipt.sbt.get, native) shouldBe true
+          native.termination shouldBe org.goldenport.cncf.processexecution.ProcessExecutionTermination.Exited(0)
+      }
+    }
+    When("separate ordinary Advance performs only the remaining native local commit")
+    var finalstate = ready
+    var remaining = 10
+    var advancelogs = manifest.hcursor.get[Vector[String]]("completionAdvanceLogs").getOrElse(Vector.empty)
+    while (finalstate.commit.isEmpty && remaining > 0) {
+      val advanced = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", session))
+      advancelogs = advancelogs :+ advanced.invocation.stdout.toString
+      withClue("Remaining completion log: " + advanced.invocation.stdout) { advanced.exitCode shouldBe 0 }
+      val view = _view(scenario, advanced)
+      withClue("Unexpected work during commit-only completion: " + view.message) {
+        view.work shouldBe empty
+        view.issuedWorkContext shouldBe empty
+      }
+      finalstate = _state(view.state.get)
+      finalstate.input shouldBe ready.input
+      finalstate.generation shouldBe ready.generation
+      finalstate.automaticCount shouldBe ready.automaticCount
+      finalstate.ordinaryCount shouldBe ready.ordinaryCount
+      finalstate.receipts.asJson shouldBe ready.receipts.asJson
+      remaining -= 1
+    }
+    Then("the actual selected commit preserves prior results, captures, accounting and all earlier logs")
+    val commit = finalstate.commit.get
+    commit.identity shouldBe scenario.candidateHead
+    commit.parent shouldBe scenario.candidateParent
+    commit.parent shouldBe ready.candidate.get.head
+    commit.tree shouldBe ready.candidate.get.tree
+    scenario.candidateSource(commit.tree, "value.txt") shouldBe "expected\n"
+    finalstate.reviewReference shouldBe ready.reviewReference
+    finalstate.input shouldBe old.input
+    finalstate.generation shouldBe old.generation + 1
+    finalstate.automaticCount shouldBe old.automaticCount + 1
+    finalstate.ordinaryCount shouldBe old.ordinaryCount + 1
+    Files.readAllBytes(capturefile).toVector shouldBe capturebytes
+    val historical = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+      Vector("--input", _json(oldreference)))
+    _state(historical.business[V.WorkflowRetainedSnapshotReadResult].material).asJson shouldBe old.asJson
+    Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+    Files.readAllLines(root.resolve("selected-body-executions.txt")).size() shouldBe bodies
+    Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe fixchecks
+    scenario.candidateStatus shouldBe ""
+    manifest = manifest.mapObject(_.add("repairCompleted", Json.True).add("finalState", finalstate.asJson)
+      .add("finalReadLog", historical.invocation.stdout.toString.asJson)
+      .add("completionStartLog", description.invocation.stdout.toString.asJson).add("completionAdvanceLogs", advancelogs.asJson))
+    Files.writeString(manifestfile, manifest.noSpaces)
+  }
+
   protected def qualify_test_only(phase: String, fixture: Path): Unit = {
     require(fixture.isAbsolute && fixture.normalize == fixture && fixture.startsWith(Path.of("target").toAbsolutePath.normalize),
       "Fixture evidence must remain under the absolute ignored repository target")
@@ -1065,7 +1246,7 @@ final class NativeDelegateTaskRecordedIncompleteRepairCliSpec extends NativeDele
   "Installed recorded Incomplete repair" should {
     "preserve one physical Session from OLD capture through NEW ordinary Repair and completion" in {
       Given("the parent-selected installed CAR and one retained fixture directory")
-      val phase = sys.props.get("smworkflow.spec.recordedIncompleteRepairPhase").getOrElse(fail("Select prepare-old|resume-new"))
+      val phase = sys.props.get("smworkflow.spec.recordedIncompleteRepairPhase").getOrElse(fail("Select prepare-old|resume-new|complete-new"))
       val fixture = Path.of(sys.props.get("smworkflow.spec.recordedIncompleteRepairFixture")
         .getOrElse(fail("Select the same absolute ignored fixture directory")))
       When("the selected stage uses the actual installed operations")

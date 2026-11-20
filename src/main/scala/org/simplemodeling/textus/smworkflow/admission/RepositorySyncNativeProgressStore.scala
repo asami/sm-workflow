@@ -17,10 +17,11 @@ import RepositorySyncManagedGitObservation as Git
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
+  val strictPurposeTestEvidence = "strict-as-run-plan"
   final case class Payload(stage: String, root: String,
     before: Git.Observed, indexTree: Option[String] = None, checkpoint: Option[String] = None,
     after: Option[Git.Observed] = None, method: Option[String] = None, mergeHead: Option[String] = None,
@@ -43,7 +44,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None,
     pushObservation: Option[RepositorySyncPushContinuation.GitObservation] = None,
     mergeCheckContinuation: Option[RepositorySyncMergeCheckContinuation.Direction] = None,
-    validationPreparation: Option[RepositorySyncMergeCheckContinuation.PreparationRefusal] = None)
+    validationPreparation: Option[RepositorySyncMergeCheckContinuation.PreparationRefusal] = None,
+    purposeTestEvidenceRequirement: Option[String] = None,
+    reviewSupplemental: Option[RepositorySyncReviewInputContinuation.SupplementalEvidence] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -89,9 +92,11 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       "pushContinuation" -> value.pushContinuation.asJson,
       "pushObservation" -> value.pushObservation.asJson,
       "mergeCheckContinuation" -> value.mergeCheckContinuation.asJson,
-      "validationPreparation" -> value.validationPreparation.asJson
+      "validationPreparation" -> value.validationPreparation.asJson,
+      "purposeTestEvidenceRequirement" -> value.purposeTestEvidenceRequirement.asJson,
+      "reviewSupplemental" -> value.reviewSupplemental.asJson
     )).mapJson(_.mapObject(_.filter {
-      case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposePreparationIntent" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
+      case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposePreparationIntent" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation" | "purposeTestEvidenceRequirement" | "reviewSupplemental", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Payload] = Decoder.instance(cursor => for {
@@ -124,6 +129,13 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       pushobservation <- cursor.get[Option[RepositorySyncPushContinuation.GitObservation]]("pushObservation")
       mergecheckcontinuation <- cursor.get[Option[RepositorySyncMergeCheckContinuation.Direction]]("mergeCheckContinuation")
       validationpreparation <- cursor.get[Option[RepositorySyncMergeCheckContinuation.PreparationRefusal]]("validationPreparation")
+      evidencerequirement <- cursor.get[Option[String]]("purposeTestEvidenceRequirement")
+      reviewsupplemental <- GoalPhaseNativeMetadata.optional[RepositorySyncReviewInputContinuation.SupplementalEvidence](cursor, "reviewSupplemental")
+      _ <- Either.cond(!cursor.downField("purposeTestEvidenceRequirement").focus.exists(_.isNull) &&
+        evidencerequirement.forall(value => value == strictPurposeTestEvidence && stage == "PurposeChecking"), (),
+        DecodingFailure("Invalid direct Purpose Test evidence requirement", cursor.history))
+      _ <- Either.cond(reviewsupplemental.isEmpty || reviewinputs.exists(_.target.supplemental.nonEmpty), (),
+        DecodingFailure("Supplemental review evidence requires its admitted review-input direction", cursor.history))
     } yield Payload(stage = stage, root = root, before = before, indexTree = index, checkpoint = checkpoint,
       after = after, method = method, mergeHead = mergehead, validation = validation, finalTip = finaltip,
       assessment = assessment, repairContext = repaircontext, continuation = continuation, hygiene = hygiene,
@@ -132,7 +144,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       purposePreparation = purposepreparation, purposePreparationIntent = purposepreparationintent,
       purposeMaterialization = purposematerialization, repairBudget = repairbudget, pushContinuation = pushcontinuation,
       pushObservation = pushobservation, mergeCheckContinuation = mergecheckcontinuation,
-      validationPreparation = validationpreparation))
+      validationPreparation = validationpreparation, purposeTestEvidenceRequirement = evidencerequirement,
+      reviewSupplemental = reviewsupplemental))
   }
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "RepositorySyncNativeProgressReceipt"
@@ -288,7 +301,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       // in its original rows and is never a seed for that changed candidate.
       selectedpayload = if (candidateKey(namespace, key.stripPrefix(phasePrefix)).startsWith("repair-") &&
           Set("MaterializingRepair", "PendingMergePrepared")(payload.stage))
-          payload.copy(requiredLint = None, reviewInputs = None, formalFailure = None,
+          payload.copy(requiredLint = None, reviewInputs = None, reviewSupplemental = None, formalFailure = None,
             mergeCheckContinuation = None, validationPreparation = None) else payload
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, reference(key),
         from, from.revision, entry, TypedValue(codec.typeIdentity, selectedpayload.copy(

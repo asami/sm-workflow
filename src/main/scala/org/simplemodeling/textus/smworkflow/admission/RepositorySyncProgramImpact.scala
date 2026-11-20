@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -208,7 +208,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
   final case class Coverage(check: V.Check, affectedPaths: Vector[String], inputPaths: Vector[String], reason: String)
   final case class Prior(session: String, validation: String, closure: String)
   final case class Policy(coverage: Vector[Coverage], fullChecks: Vector[V.Check], fullPaths: Vector[String],
-    reason: String, priorEvidence: Vector[Prior]) {
+    reason: String, priorEvidence: Vector[Prior],
+    postReviewValidation: Option[RepositorySyncPostReviewValidation.Binding] = None) {
     def checks: Vector[V.Check] = (coverage.map(_.check) ++ fullChecks).distinct
   }
   final case class Reuse(check: String, validation: String, closure: String, review: Option[String])
@@ -220,8 +221,15 @@ private[smworkflow] object RepositorySyncProgramImpact {
   given Decoder[Coverage] = deriveDecoder
   given Encoder[Prior] = deriveEncoder
   given Decoder[Prior] = deriveDecoder
-  given Encoder[Policy] = deriveEncoder
-  given Decoder[Policy] = deriveDecoder
+  given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
+    case ("postReviewValidation", value) => !value.isNull
+    case _ => true
+  }))
+  private val _policy_decoder: Decoder[Policy] = deriveDecoder
+  given Decoder[Policy] = Decoder.instance(cursor => for {
+    policy <- _policy_decoder(cursor)
+    binding <- GoalPhaseNativeMetadata.optional[RepositorySyncPostReviewValidation.Binding](cursor, "postReviewValidation")
+  } yield policy.copy(postReviewValidation = binding))
   given Encoder[Reuse] = deriveEncoder
   given Decoder[Reuse] = deriveDecoder
   given Encoder[Selection] = deriveEncoder
@@ -370,11 +378,14 @@ private[smworkflow] object RepositorySyncProgramImpact {
   def covers(paths: Vector[String], path: String): Boolean = paths.exists(p => path == p || path.startsWith(p + "/"))
   def validateC(p: Policy): Consequence[Unit] = if (p != null && p.coverage != null && p.fullChecks != null && (p.coverage.nonEmpty || p.fullChecks.exists(check => check.ordinaryDiscovery || check.metadata.exists(_.query.standardFramework))) &&
       p.coverage.size <= 16 && p.coverage.forall(c => c != null && paths(c.affectedPaths) && paths(c.inputPaths) &&
-        text(c.reason) && c.affectedPaths.forall(covers(c.inputPaths, _)) && p.fullPaths != null && p.fullPaths.forall(covers(c.inputPaths, _))) && p.fullChecks != null && p.fullChecks.nonEmpty &&
+        text(c.reason) && c.affectedPaths.forall(covers(c.inputPaths, _)) && p.fullPaths != null &&
+        (p.fullPaths.forall(covers(c.inputPaths, _)) || (p.postReviewValidation != null && p.postReviewValidation.exists(binding =>
+          RepositorySyncPostReviewValidation.Plan(binding, c.check).valid)))) && p.fullChecks != null && p.fullChecks.nonEmpty &&
       p.fullPaths != null && (p.fullPaths.isEmpty || paths(p.fullPaths)) && text(p.reason) && p.priorEvidence != null && p.priorEvidence.size <= 16 &&
       p.priorEvidence.distinct == p.priorEvidence && p.priorEvidence.forall(s => s != null && text(s.session) &&
         text(s.validation) && text(s.closure) && s.validation.startsWith(s.session + ":ordered-validation:") && s.validation.endsWith(":validation") &&
-        s.closure.startsWith(s.session + ":ordered-step-closure:")))
+        s.closure.startsWith(s.session + ":ordered-step-closure:")) && p.postReviewValidation != null &&
+      p.postReviewValidation.forall(binding => binding != null && binding.valid))
     V.Policy("program-inputs", 1, "required", p.reason, p.checks).validateC
     else N.invalid("program impact requires bounded meaningful consumption/coverage, FULL rationale and native evidence locators")
   def decodeC(value: Json): Consequence[Policy] = value.as[Policy].fold(e => N.invalid(e.message), p => validateC(p).map(_ => p))
