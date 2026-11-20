@@ -8,7 +8,9 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation
 import BoundedWorkRuntime.Payload
+import BoundedWorkRuntime.given
 import StandaloneFixExecution as S
+import S.given
 import DelegateTaskNativeRun as N
 import DelegateTaskScopeCorrection.{Checkpoint, given}
 
@@ -16,7 +18,8 @@ import DelegateTaskScopeCorrection.{Checkpoint, given}
   * selected State and its actual successful/failed/unknown effects are never
   * rewritten. Only this distinct native projection material carries the view.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  *  version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DelegateTaskDeliveryProjection {
@@ -105,6 +108,8 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
       }
       revision <- work.sourceRevision.toLongOption.map(Consequence.success).getOrElse(invalid("invalid source revision"))
       business <- N.loadPayloadC(storage, current.identity.value, revision, core)
+      // The original checkpoint has verified its captures; the issued work and
+      // supersession receipt carry their compact references.
       _ <- if (retained.current == current && receipt.identity.value == old &&
         receipt.nextRevision == entry.revision && receipt.sourceRevision == frontier.revision &&
         receipt.nextRevision == receipt.sourceRevision.next && frontier.revision.value == target.frontierRevision &&
@@ -112,8 +117,8 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
         frontier.history == source.history.take(frontier.history.size) &&
         target.componentInstance == core.component.get.core.instanceId.canonicalKey &&
         target.sessionId == current.identity.value && target.participant == payload.state.participant &&
-        target.oldContinuationId == old && target.issued == wire && target.business == business &&
-        work.session == target.sessionId && work.state == business.state &&
+        target.oldContinuationId == old && target.issued == wire && target.business.asJson == business.asJson &&
+        work.session == target.sessionId && work.state.asJson == business.state.asJson &&
         Set("Implement", "Repair")(work.kind) && work.kind == business.state.stage &&
         business.root == payload.root && business.branch == payload.branch &&
         saved.reference.identity != null && saved.reference.identity.nonEmpty &&

@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 30, 2026
- * @version Nov. 12, 2026
+ *  version Nov. 12, 2026
+ * @version Nov. 21, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -20,6 +21,7 @@ import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import BoundedWorkRuntime.*
 import BoundedWorkRuntime.given
 import StandaloneFixExecution as S
+import S.given
 
 /** Same-purpose inventory correction for pending implementation or repair work.
   * Condition timing remains an initial-implementation selection only.
@@ -163,8 +165,10 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
     implementation = work.kind == "Implement" && payload.state.stage == "Implement"
     repair = work.kind == "Repair" && payload.state.stage == "Repair" && additional.nonEmpty && submission.isEmpty
+    // loadPayloadC has verified the external captures for this checkpoint.
+    // The shared encoding compares the same exact references on both sides.
     _ <- if (work.session == session && (implementation || repair) &&
-        work.state == payload.state && order.request.completionOperation == N.completionOperation &&
+        work.state.asJson == payload.state.asJson && order.request.completionOperation == N.completionOperation &&
         payload.root == h.root && payload.branch == h.branch && payload.state.input.repositoryIdentity == h.repository)
       Consequence.unit else N.invalid("Scope correction requires the same pending implementation or a repair inventory addition without condition timing changes")
     _ <- correctedInputC(payload.state.input, additional, submission)
@@ -342,7 +346,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
                 case Some(_) => N.invalid("Repeated correction differs from its committed target")
                 case None => for {
                   observed <- _observe_c(h, storage, definition, session, old, expected.additionalOwnedPaths, expected.submissionConditions, selected)
-                  _ <- if (expected == observed.target) Consequence.unit else N.invalid("Scope target changed; obtain a current description")
+                  _ <- if (expected.asJson == observed.target.asJson) Consequence.unit else N.invalid("Scope target changed; obtain a current description")
                   _ <- adapter.executeC(ContinuationIdentity(old), observed.current.revision, observed.entityrevision,
                     observed.current, N.history(observed.current, resumeCause + old),
                     TypedValue(checkpointCodec.typeIdentity, Checkpoint(expected, reference)))(using context)
