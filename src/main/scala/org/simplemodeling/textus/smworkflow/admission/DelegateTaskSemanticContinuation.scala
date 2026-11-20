@@ -70,7 +70,7 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
           Vector(target.componentInstance, target.sessionId, target.participant).forall(_exact) &&
           target.frontierRevision > 0 && target.frontier.isObject && covered && direction.participant == current.participant &&
           _exact(direction.rationale) && _valid_reference(direction.reference) &&
-          target.participant == before.participant && target.participant == current.participant && before.input == current.input &&
+          target.participant == before.participant && target.participant == current.participant &&
           before.repairControl == current.repairControl && before.generation == current.generation &&
           before.automaticCount == current.automaticCount && before.ordinaryCount == current.ordinaryCount &&
           before.candidate == current.candidate && before.receipts.asJson == current.receipts.asJson &&
@@ -104,9 +104,12 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
         source.state.repairControl == before.state.repairControl &&
         source.state.generation == before.state.generation && source.state.automaticCount == before.state.automaticCount &&
         source.state.ordinaryCount == before.state.ordinaryCount && (target.source.isEmpty ||
-          (source.state.input == before.state.input && source.state.selected == before.state.selected &&
+          (source.state.selected == before.state.selected &&
             source.state.candidate == before.state.candidate && source.state.receipts.asJson == before.state.receipts.asJson))) Consequence.unit
         else N.invalid("Historical repair policy direction lacks its exact persisted native association")
+      sourcePrefix <- RepositorySyncPurposeContentContinuation.prefixC(current, original.sourceRevision.toString)
+      _ <- _scope_proof_c(storage, current, sourcePrefix, before, source, core, target.frontierRevision)
+      _ <- _scope_proof_c(storage, current, current, before, payload, core, target.frontierRevision)
     } yield ()
 
   private def _decode_target(json: Json): Either[String, Target] = for {
@@ -134,7 +137,7 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
           case Left(error) => Left(error)
           case Right(previous) =>
             if (previous.componentInstance != owner || previous.sessionId != session ||
-              previous.participant != payload.state.participant || previous.business.state.input != payload.state.input ||
+              previous.participant != payload.state.participant ||
               previous.frontierRevision >= frontier || direction.choice != choices.head ||
               !bindingC(owner, previous, direction).isSuccess)
               Left("Semantic continuation ancestry crosses its owner, request, revision or admitted direction")
@@ -142,6 +145,46 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
         }
       }
     _walk_(payload, revision, Vector.empty)
+  }
+
+  /** Replay only authenticated, ordered native scope supersessions within the interval. */
+  private def _scope_proof_c(storage: WorkflowComponentStorage, current: InstanceRecord,
+    interval: InstanceRecord, before: Payload, later: Payload, core: ActionCall.Core,
+    afterRevision: Long): Consequence[Unit] = for {
+    checkpoints <- DelegateTaskDeliveryProjection.checkpointsC(storage, current, interval, later, core, afterRevision)
+    corrections = checkpoints.map(_._1)
+    effective <- corrections.foldLeft(Consequence.success(before.state.input)) { (priorInput, correction) => for {
+      expected <- priorInput
+      _ <- if (correction.target.submissionConditions.isEmpty && correction.target.additionalOwnedPaths.nonEmpty &&
+        correction.target.business.state.input == expected) Consequence.unit
+        else N.invalid("Semantic scope lineage differs from its preceding input or changes condition timing")
+      next <- DelegateTaskDeliveryProjection.correctedC(expected, correction)
+    } yield next }
+    _ <- if (effective == later.state.input) Consequence.unit
+      else N.invalid("Semantic scope differs from its native supersession lineage")
+  } yield ()
+
+  /** Scope changes are authorized only by retained native supersessions between
+    * the original admission and the later semantic frontier. */
+  private def _ancestry_proof_c(storage: WorkflowComponentStorage, current: InstanceRecord,
+    payload: Payload, ancestry: Vector[(Direction, Target)], core: ActionCall.Core): Consequence[Unit] = {
+    ancestry.foldLeft(Consequence.success(payload -> current)) { case (prior, (direction, target)) => for {
+      later <- prior
+      (business, interval) = later
+      catalog <- WorkflowInstanceRecordJsonV1.catalogC(Vector(current.definition))
+      frontier <- WorkflowInstanceRecordJsonV1.decodeC(target.frontier.noSpaces, catalog)
+      _ <- if (frontier.identity == current.identity && frontier.definition == current.definition &&
+        frontier.revision.value == target.frontierRevision && frontier.history == current.history.take(frontier.history.size) &&
+        target.frontierRevision < interval.revision.value) Consequence.unit
+        else N.invalid("Semantic ancestry crosses its native frontier")
+      before <- N.loadPayloadC(storage, current.identity.value, target.frontierRevision, core)
+      admitted <- N.loadPayloadC(storage, current.identity.value, target.frontierRevision + 1, core)
+      _ <- if (before.asJson == target.business.asJson && admitted.asJson == before.copy(
+        state = before.state.copy(stage = target.original.work.kind), delegateSemanticContinuation = Some(direction)).asJson)
+        Consequence.unit else N.invalid("Semantic ancestry lacks its exact native Human admission")
+      _ <- _scope_proof_c(storage, current, interval, before, business, core,
+        target.frontierRevision)
+    } yield target.business -> frontier }.map(_ => ())
   }
 
   def targetC(text: String): Consequence[Target] = (for {
@@ -300,6 +343,7 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
           owner = selected.component.get.core.instanceId.canonicalKey
           requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
           retained <- _ancestry(payload, owner, session, current.revision.value).fold(N.invalid(_), Consequence.success)
+          _ <- _ancestry_proof_c(storage, current, payload, retained, selected)
           previous = requested.flatMap(target => retained.find(_._2.asJson == target.asJson))
           result <- previous match {
             case Some((direction, target)) => input match {

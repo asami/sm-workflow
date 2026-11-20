@@ -68,23 +68,21 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
     }
   }
 
-  // REASON: the existing snapshot owner admits the actual bound Component
-  // before invoking this internal projection; this is its established UoW core.
+  /** Authenticate the actual ordered supersessions in a native history interval. */
   @SuppressWarnings(Array("scalafix:NoOptionGet"))
-  def stateC(storage: WorkflowComponentStorage, current: InstanceRecord, source: InstanceRecord,
-    payload: Payload, core: ActionCall.Core): Consequence[S.State] = for {
+  private[admission] def checkpointsC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    source: InstanceRecord, payload: Payload, core: ActionCall.Core,
+    afterRevision: Long): Consequence[Vector[(Checkpoint, String)]] = for {
     _ <- current.validateC
     _ <- source.validateC
-    _ <- if (current.definition == source.definition && current.identity == source.identity &&
-      source.revision.value <= current.revision.value && source.history == current.history.take(source.history.size) &&
-      payload.state.input.delegation.exists(_.role == "destination") &&
-      Set("ReturnReady", "Returned")(payload.state.stage)) Consequence.unit
-      else invalid("requires an actual same-owner completed destination delivery source prefix")
-    _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
+    _ <- if (current.identity == source.identity && current.definition == source.definition &&
+      source.revision.value <= current.revision.value && source.history == current.history.take(source.history.size))
+      Consequence.unit else invalid("scope lineage crosses its native history prefix")
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, DelegateTaskScopeCorrection.checkpointCodec)
     issued <- storage.bindIssuedC(N.completionOperation, N.inputCodec)
     catalog <- WorkflowInstanceRecordJsonV1.catalogC(Vector(current.definition))
-    entries = source.history.filter(_.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause))
+    entries = source.history.filter(entry => entry.revision.value > afterRevision &&
+      entry.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause))
     retainedCheckpoints <- entries.foldLeft(Consequence.success(Vector.empty[(Checkpoint, String)])) { (prior, entry) => for {
       previous <- prior
       old = entry.causation.value.stripPrefix(DelegateTaskScopeCorrection.resumeCause)
@@ -120,6 +118,22 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
         saved.reference.revision != null && saved.reference.revision.nonEmpty)
         Consequence.unit else invalid("scope receipt crosses its native owner, exact issue, source or adjacent history")
     } yield previous :+ (saved -> receipt.nextRevision.value.toString) }
+  } yield retainedCheckpoints
+
+  // REASON: the existing snapshot owner admits the actual bound Component
+  // before invoking this internal projection; this is its established UoW core.
+  @SuppressWarnings(Array("scalafix:NoOptionGet"))
+  def stateC(storage: WorkflowComponentStorage, current: InstanceRecord, source: InstanceRecord,
+    payload: Payload, core: ActionCall.Core): Consequence[S.State] = for {
+    _ <- current.validateC
+    _ <- source.validateC
+    _ <- if (current.definition == source.definition && current.identity == source.identity &&
+      source.revision.value <= current.revision.value && source.history == current.history.take(source.history.size) &&
+      payload.state.input.delegation.exists(_.role == "destination") &&
+      Set("ReturnReady", "Returned")(payload.state.stage)) Consequence.unit
+      else invalid("requires an actual same-owner completed destination delivery source prefix")
+    _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
+    retainedCheckpoints <- checkpointsC(storage, current, source, payload, core, 0L)
     checkpoints = retainedCheckpoints.map(_._1)
     input <- reconcileC(payload.state.input, checkpoints)
     // A reused Human reference cannot establish an order-preserving extension
