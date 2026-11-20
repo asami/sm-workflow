@@ -201,6 +201,42 @@ B02/B03 compiler and comparison qualification and B04 consumer acceptance keep
 their existing boundaries. Missing producer evidence leaves B01 open without
 requiring whole producer-Phase closure or Core stage C delivery.
 
+### B02/B03 early compiler handoff
+
+SLP-B2 reuses the accepted B01 import/structural evidence from SimpleModeler
+`365814a9` and Cozy `6feac334`, plus the authored-consumer source selection. Cozy's
+16 selected Scala 3.3.8 Compile/Test scopes establish that bounded B01 output
+inventory. They do not establish explicit-null, initialization or warning-policy
+qualification; the full Workflow/FailureModel component-body exclusions remain.
+
+The requester adopted the actual sbt-cozy BUILD-01/02 delivery at
+`c978b1a1ae878edbdc6fa2d588228c6c4ecdf2de` through the retained
+`slpb2-sbt-cozy-adoption-001/response.json` in the current Phase task. Its exact
+settings and evidence are recorded in the
+[consumer integration notes](../notes/phase8.1-producer-deliveries.md#slp-b2-compiler-policy-adoption--2026-11-20).
+Ordinary project-level settings qualify Scala 3.3.8 JVM Compile/Test; no plugin
+implementation or publication is required. The Scala 2.12.20 plugin host keeps
+its existing options. BUILD-03/04 and actual generated consumer qualification
+remain outside this early delivery.
+
+SLP-B2 selects those options in the normal `scalaStrictAuthoring` project. Its
+Compile sources own the actual authored comparison model; Test exclusively owns
+`WorkflowStrictComparisonSpec.scala`, including diagnostic-specific distinct-ID
+rejection and the retained `Vector.contains` limitation. Root aggregates the
+project for ordinary compile/test, and both forms of fix-check compile its Test
+scope and analyze its selected handwritten sources through existing Scalafix.
+The new module uses ordinary ScalaTest discovery; the root's metadata inventory
+and selection keep their existing root-source boundary. There is no root/Test
+classpath dependency and the suite is not also compiled or run by root/Test.
+
+This bounded consumer integration is authored **NOT RUN**. Runtime validation
+must establish the actual Compile/Test options, sources, compiler result and
+single suite execution. Deliberately rule-violating lint inputs and legacy mixed
+application scopes have not been qualified for this policy. B03 cannot imply
+package-wide compatibility; B3 retains the real generated/AI consumer adoption
+work and the prior Workflow/FailureModel exclusions. No live Session or prior
+successful result is changed by this build selection.
+
 All plans preserve current priorities, Goals, Sessions, base, accepted results,
 history, repair counts and unrelated tracked/untracked work. They start no
 implementation, chat dispatch, workflow operation, build, publication, commit or

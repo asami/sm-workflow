@@ -121,9 +121,53 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
   }
 ) }
 
+// A real authoring target, separate from deliberately rule-violating lint inputs
+// and legacy mixed consumer scopes. Compile owns the B02 model; Test owns its
+// existing executable specification exactly once, through ordinary SBT discovery.
+lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/strict-authoring"))
+  .dependsOn(scalaLintRules % ScalafixConfig)
+  .settings(
+    scalaVersion := "3.3.8",
+    scalacOptions ++= Seq(
+      "-language:strictEquality", "-Yexplicit-nulls", "-Ysafe-init",
+      "-Wvalue-discard", "-Wnonunit-statement", "-Wunused:imports,privates,locals",
+      "-unchecked", "-deprecation", "-feature", "-Werror"),
+    semanticdbEnabled := true,
+    libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+    publish / skip := true,
+    Test / unmanagedSourceDirectories := Nil,
+    Test / unmanagedSources := Seq(baseDirectory.value.getParentFile.getParentFile /
+      "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"),
+    scalafixScalaBinaryVersion := "2.13",
+    scalafixConfig := (LocalProject("root") / scalafixConfig).value,
+    sharedScalaLintReporter := (LocalProject("root") / sharedScalaLintReporter).value,
+    Compile / scalafix / unmanagedSources := {
+      val sources = (Compile / unmanagedSources).value
+      sharedScalaLintReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+    },
+    Test / scalafix / unmanagedSources := {
+      val sources = (Test / unmanagedSources).value
+      sharedScalaLintReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+    },
+    Compile / scalafix / managedSources := Nil,
+    Test / scalafix / managedSources := Nil,
+    Compile / scalafix / aggregate := false,
+    Test / scalafix / aggregate := false,
+    sharedScalaLintMain := Def.taskDyn {
+      val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      if (!(Compile / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      else Def.task { requireOnlyLintFindings((Compile / scalafix).toTask(" --check").result.value) }
+    }.value,
+    sharedScalaLintTest := Def.taskDyn {
+      val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      if (!(Test / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      else Def.task { requireOnlyLintFindings((Test / scalafix).toTask(" --check").result.value) }
+    }.value
+  )
+
 lazy val root: Project = project
   .in(file("."))
-  .aggregate(scalaLintRules)
+  .aggregate(scalaLintRules, scalaStrictAuthoring)
   .dependsOn(scalaLintRules % ScalafixConfig)
   .dependsOn(cncfSourceProject.toSeq.map(source => source % "compile->compile;runtime->runtime"): _*)
   .enablePlugins(org.goldenport.cozy.CozyPlugin)
@@ -171,8 +215,11 @@ lazy val root: Project = project
       else Def.task { requireOnlyLintFindings((Test / scalafix).toTask(" --check").result.value) }
     }.value,
     sharedScalaLintCheck := {
+      (scalaStrictAuthoring / Test / compile).value
       sharedScalaLintMain.value
       sharedScalaLintTest.value
+      (scalaStrictAuthoring / sharedScalaLintMain).value
+      (scalaStrictAuthoring / sharedScalaLintTest).value
       sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent")).finish()
     },
     // A present typed input is authoritative. Legacy fixed tasks keep their
@@ -208,6 +255,13 @@ lazy val root: Project = project
       (Compile / packageBin).value
       checkSkillBundleReproducibility.value
       ()
+    },
+    // This one suite belongs exclusively to scalaStrictAuthoring/Test. Root's
+    // canonical metadata inventory and testOnly selection retain their scope.
+    Test / unmanagedSources := {
+      val strictspec = baseDirectory.value /
+        "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"
+      (Test / unmanagedSources).value.filterNot(_ == strictspec)
     },
     Test / compile := {
       val compiled = (Test / compile).value
@@ -392,4 +446,4 @@ lazy val root: Project = project
   .settings(cncfSourceSettings)
 // Semantic rules use the normal compiler/SemanticDB prerequisite in each scope.
 addCommandAlias("fixCheck", if (org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).nonEmpty)
-  "sharedScalaLintCheck" else ";Compile / scalafix --check;Test / scalafix --check")
+  "sharedScalaLintCheck" else ";scalaStrictAuthoring / Test / compile;Compile / scalafix --check;Test / scalafix --check;scalaStrictAuthoring / Compile / scalafix --check;scalaStrictAuthoring / Test / scalafix --check")

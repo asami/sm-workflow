@@ -134,3 +134,79 @@ claimed here. The breaking current keys are `sm-workflow.source.history.style`
 and `sm-workflow.source.history.rule`, with absent-only inheritance and no old-key
 aliases, dual reads or conversion. Already issued work and historical records are
 not renamed. All unqualified A criteria and all B/C acceptance remain open.
+
+## SLP-B2 compiler-policy adoption — 2026-11-20
+
+The actual BUILD-01/02 delivery is requester-adopted from sbt-cozy commit
+`c978b1a1ae878edbdc6fa2d588228c6c4ecdf2de` (validated source tree
+`cfcfaa12c1b0d048af2d8a2d52ff2e1805e3686c`). The current Phase task's retained
+`slpb2-sbt-cozy-adoption-001/response.json` records the attributed attachment;
+its terminal message explicitly supplies no consumer activation/check proof.
+The producer's [exact settings and receipts](/Users/asami/src/dev2026/sbt-cozy/target/sm-workflow/slpb2-compiler-policy-20261120/slpb2-qualified-settings.md)
+and [retained return detail](/Users/asami/src/dev2026/sbt-cozy/target/sm-workflow/slpb2-compiler-policy-20261120/return-detail.json)
+are the evidence inputs, rather than option-name availability alone.
+
+The producer qualified an ordinary isolated Scala 3.3.8 JVM fixture on JDK
+21.0.13.0.3 / fixture sbt 1.11.7. Compile/Test positive cases handle Java nullable
+input and resolve Test's Compile dependency. Both scopes independently reject
+wrong equality/unhandled null, and separately establish diagnostic emission and
+Werror enforcement for safe initialization, discard, nonunit statements, unused
+imports/private/local declarations, unchecked patterns, deprecation and feature
+warnings. Its typed Compile and one-test focused suite exited 0; independent
+review is retained in those receipts. No compatibility exception or plugin
+change was needed for that isolated fixture. The Scala 2.12.20 plugin host is
+separate. This evidence establishes the reusable settings, not this consumer's
+result or the producer's remaining BUILD-03/04 criteria.
+
+The product build now selects all supplied options on `scalaStrictAuthoring`:
+
+```scala
+scalaVersion := "3.3.8"
+scalacOptions ++= Seq(
+  "-language:strictEquality", "-Yexplicit-nulls", "-Ysafe-init",
+  "-Wvalue-discard", "-Wnonunit-statement", "-Wunused:imports,privates,locals",
+  "-unchecked", "-deprecation", "-feature", "-Werror")
+```
+
+Both Compile and Test inherit this project-level policy. Its exact Compile
+source is `scala-lint-rules/strict-authoring/src/main/scala/org/simplemodeling/textus/smworkflow/admission/StrictComparisonExamples.scala`;
+its exact Test source is
+`src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala`.
+The latter is explicitly excluded from root/Test and selected only in this
+module. Its root-only LocalTestDeclaration annotation is removed because the
+module uses normal SBT ScalaTest discovery. Root's existing canonical metadata
+inventory and selection retain the same root boundary; this new suite runs once
+through root `test` aggregation. There is no root/Test dependency or second
+compiler/test runner. Normal fix-check compiles the strict Test scope and sends
+its handwritten sources through the same effective config/reporter and ordinary
+Scalafix, alongside root's existing sources. The rules artifact's Scala 2.13.14
+host and deliberate violating Scala 3 lint inputs retain their own options.
+
+The extracted B02 model retains derived same-ID equality and the explicitly
+value-bounded Revision instance. The same actual suite retains positive direct
+and predicate behavior, diagnostic-specific distinct-ID rejection (direct,
+bounded and higher-order), and successful compilation/false behavior for the
+precompiled Vector.contains gap. Its deliberate mismatched runtime call has a
+single-line NoIncompatibleEquality exception with the documentary reason; all
+other diagnostics remain active. A small Java Properties adapter normalizes
+nullable input to Option[SourceId]; present/empty/absent behavior and unchecked
+nullable-access rejection exercise that foreign boundary under the adopted
+profile. Assertion results in Unit contexts are explicitly consumed, with no
+warning suppression or change to their checked behavior.
+
+Consumer status is **AUTHORED, NOT RUN**. Runtime compile, test and fix-check must
+retain the strict module's actual Compile/Test scalacOptions and sources and
+confirm the suite executes once, alongside the existing selected checks. No
+consumer compatibility exception has been established yet. These bounded sources
+supply no package-wide compatibility claim. Legacy mixed application scopes,
+deliberate violating lint fixtures and real generated outputs remain outside
+this selected target and require their own qualification in B3.
+
+Accepted B1 evidence is reused: SimpleModeler `365814a9` and Cozy `6feac334`
+qualify imports/structural braces in 16 selected Scala 3.3.8 Compile/Test scopes,
+with full Workflow/FailureModel bodies excluded for pre-existing duplicate
+contexts. Their B01 result supplies no B03 warning/null-policy or B04 complete
+consumer proof. Actual generated plus authored consumer adoption remains B3;
+Core stage C and all unqualified criteria retain their existing boundaries.
+No producer source, live Session, historical result, publication, Git history or
+successful effect was changed by this authorship.

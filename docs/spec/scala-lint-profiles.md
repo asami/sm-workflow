@@ -432,6 +432,30 @@ coverage; the import alone is not a claim of maximum overall type strictness.
 Adopt actual qualified settings for subsequent work without a blanket rewrite or
 silently changing current compatibility contracts.
 
+The authored-consumer executable specification is
+[WorkflowStrictComparisonSpec](../../src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala).
+Its two record-shaped ID fixtures derive same-type comparability. Its invariant
+`Revision[Value]` fixture supplies a comparison instance only with
+`CanEqual[Left, Right]` for the stored values. The generic operation retains that
+same bound; it cannot grant cross-ID comparison on its own. These fixtures do not
+change the workflow's existing ID representation or select a domain Eq policy.
+
+Positive behavior covers direct and bounded comparison and `exists`, `find`,
+`filter` and `forall` predicates. Negative snippets require actual comparison
+diagnostics naming both distinct ID types, including inside higher-order
+predicates and through the generic bounded operation. A separate positive
+typecheck and runtime case retains the precompiled `Vector.contains` limitation:
+the incompatible argument still compiles and returns false for these fixtures.
+The collection library's widening signature does not establish application-side
+CanEqual permission. The model is compiled in the ordinary
+`scalaStrictAuthoring / Compile` scope, and this exact specification is selected
+exclusively in its Test scope. Root aggregates that project for compile/test;
+root/Test excludes this one source, so ordinary module discovery executes it
+once without altering root's canonical metadata selection. Both native and
+legacy fix-check compile this strict Test scope and analyze its handwritten
+sources through existing Scalafix. These are authored specifications; native
+validation must establish their actual result on the selected Scala compiler.
+
 #### Prefer the compiler's provided safety features
 
 Actively use the applicable Scala 3 compiler/language facilities before adding
@@ -455,6 +479,20 @@ not a flag's spelling alone, as evidence of support. Keep compiler and lint
 findings attributable without duplicate reporting. Refine the profile when the
 supported compiler changes; experimental or version-specific features require
 their actual compatibility evidence, not blanket activation of unrelated flags.
+
+The adopted BUILD-01/02 selection is sbt-cozy `c978b1a1`, qualified for Scala
+3.3.8 JVM with `-language:strictEquality`, `-Yexplicit-nulls`, `-Ysafe-init`,
+`-Wvalue-discard`, `-Wnonunit-statement`, `-Wunused:imports,privates,locals`,
+`-unchecked`, `-deprecation`, `-feature` and `-Werror`. The product build applies
+all ten options project-wide in `scalaStrictAuthoring`, inherited by Compile and
+Test. Its actual B02 model and specification include a handled Java Properties
+boundary and an unhandled-null compiler rejection. Producer qualification and
+this consumer's pending native result are distinguished in the
+[integration notes](../notes/phase8.1-producer-deliveries.md#slp-b2-compiler-policy-adoption--2026-11-20).
+The selection covers that authoring target; the Scala 2 rule host, deliberate
+violating lint inputs and legacy mixed scopes retain their separate policies.
+B3 still qualifies actual generated/AI consumers; no package-wide compatibility
+or new generated-output result follows from this authored build wiring.
 
 Do not defeat these checks with blanket unsafeNulls imports, unchecked casts,
 indiscriminate `.nn`, universal equality instances or broad warning silencing.
