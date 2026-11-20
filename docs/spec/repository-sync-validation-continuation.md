@@ -559,6 +559,14 @@ recorded separately from an intent whose outcome is uncertain. A failed check,
 drifted candidate or uncertain intent cannot issue a review or silently repeat
 the check. `Defer` leaves the direction unrecorded.
 
+If the latest intent was positively refused before dispatch, ordinary Advance
+can retry that check after requalifying the same candidate, input bytes and
+selected effects under the admitted direction. Each retry has its own intent
+and result linked to the preceding refusal. An Advance never retries a refusal
+it records in that same call. Successful earlier checks are retained, and the
+fresh review refers to the successful attempt. An unmatched intent remains
+uncertain even when an earlier attempt is known not to have started.
+
 After both added validations succeed, the next independent detailed review
 sees the old candidate and original validation together with the newly
 executed `FixCheck` and Git rule observation. The old decision-needed result

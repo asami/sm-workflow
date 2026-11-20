@@ -553,12 +553,21 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     case LintIntent extends SupplementalStep("lint-intent")
     case LintResult extends SupplementalStep("lint-result")
   }
-  private final case class SupplementalProgress(step: SupplementalStep, native: N.Stage)
+  private final case class SupplementalTransition(step: SupplementalStep, retryOf: Option[String] = None)
+  private final case class SupplementalProgress(transition: SupplementalTransition, native: N.Stage,
+    results: Map[SupplementalStep, N.Stage] = Map.empty) {
+    def step: SupplementalStep = transition.step
+
+    def followedBy(next: SupplementalTransition, saved: N.Stage): SupplementalProgress = next.step match {
+      case SupplementalStep.GitResult | SupplementalStep.LintResult =>
+        SupplementalProgress(next, saved, results.updated(next.step, saved))
+      case _ => SupplementalProgress(next, saved, results)
+    }
+  }
   private val _admitted = ProgressionReference("sync.ReviewInputContinuationAdmitted")
-  private val _supplemental_steps = Vector(SupplementalStep.GitIntent, SupplementalStep.GitResult,
-    SupplementalStep.LintIntent, SupplementalStep.LintResult)
-  private def _supplemental_key(target: Target, step: SupplementalStep): String =
-    "review-inputs-" + target.frontierRevision + "-" + step.suffix
+  private def _supplemental_key(target: Target, transition: SupplementalTransition): String =
+    "review-inputs-" + target.frontierRevision + "-" + transition.step.suffix +
+      transition.retryOf.fold("")(revision => "-retry-after-" + revision)
 
   private def _actual_lint(receipt: C.Receipt, plan: P.Plan): Boolean =
     receipt.identity == plan.check.identity && receipt.sbt.exists(_.kind == plan.check.kind) &&
@@ -571,14 +580,36 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
   private def _successful_git(evidence: SupplementalEvidence, plan: P.Plan): Boolean =
     evidence.refusal.isEmpty && evidence.git.exists(_.accepted(plan))
 
+  private def _next_supplemental(progress: SupplementalProgress, plan: P.Plan): Option[SupplementalTransition] = {
+    val evidence = progress.native.payload.reviewSupplemental
+    val refused = evidence.flatMap(_.refusal).exists(_.kind == RefusalKind.NotDispatched)
+    val revision = progress.native.record.revision.value.toString
+    progress.step match {
+      case SupplementalStep.Adopted => Some(SupplementalTransition(SupplementalStep.GitIntent))
+      case SupplementalStep.GitIntent => Some(progress.transition.copy(step = SupplementalStep.GitResult))
+      case SupplementalStep.GitResult if refused => Some(SupplementalTransition(SupplementalStep.GitIntent, Some(revision)))
+      case SupplementalStep.GitResult if evidence.exists(_successful_git(_, plan)) =>
+        Some(SupplementalTransition(SupplementalStep.LintIntent))
+      case SupplementalStep.LintIntent => Some(progress.transition.copy(step = SupplementalStep.LintResult))
+      case SupplementalStep.LintResult if refused => Some(SupplementalTransition(SupplementalStep.LintIntent, Some(revision)))
+      case _ => None
+    }
+  }
+
+  private def _intent_evidence(payload: N.Payload, step: SupplementalStep): Option[SupplementalEvidence] = step match {
+    case SupplementalStep.GitIntent => None
+    case SupplementalStep.LintIntent => payload.reviewSupplemental.map(_.copy(refusal = None))
+    case _ => payload.reviewSupplemental
+  }
+
   private def _supplemental_payload(previous: N.Payload, current: N.Payload, step: SupplementalStep, plan: P.Plan): Boolean = {
     val evidence = current.reviewSupplemental
     val prior = previous.reviewSupplemental
     val valid = step match {
-      case SupplementalStep.GitIntent => evidence.isEmpty
+      case SupplementalStep.GitIntent => evidence == _intent_evidence(previous, step)
       case SupplementalStep.GitResult => evidence.exists(value =>
         value.lint.isEmpty && _matches_outcome(value.git.nonEmpty, value.refusal))
-      case SupplementalStep.LintIntent => evidence == prior && evidence.exists(_successful_git(_, plan))
+      case SupplementalStep.LintIntent => evidence == _intent_evidence(previous, step) && evidence.exists(_successful_git(_, plan))
       case SupplementalStep.LintResult => evidence.exists(value =>
         prior.exists(previous => previous.git == value.git && _successful_git(previous, plan)) &&
           _matches_outcome(value.lint.nonEmpty, value.refusal) && value.lint.forall(_actual_lint(_, plan)))
@@ -592,20 +623,22 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
   private def _supplemental_history_c(store: N.Store, current: InstanceRecord, adoption: N.Stage,
     target: Target, plan: P.Plan): Consequence[SupplementalProgress] = {
     val entries = current.history.drop(adoption.record.history.size).takeWhile(_.currentProgression.contains(_admitted))
-    if (entries.size > _supplemental_steps.size)
-      N.invalid("review-input supplemental history has an unexpected extra effect")
-    else entries.zip(_supplemental_steps).foldLeft(Consequence.success(SupplementalProgress(SupplementalStep.Adopted, adoption))) {
-      case (prior, (entry, step)) =>
-        val key = _supplemental_key(target, step)
-        prior.flatMap { previous => for {
+    val initial = SupplementalProgress(SupplementalTransition(SupplementalStep.Adopted), adoption)
+    entries.foldLeft(Consequence.success(initial)) { (prior, entry) =>
+      prior.flatMap { previous => for {
+          next <- _next_supplemental(previous, plan).map(Consequence.success)
+            .getOrElse(N.invalid("review-input supplemental history has an unexpected extra effect"))
+          key = _supplemental_key(target, next)
+          _ <- if (entry.causation.value == _historyPrefix(store) + key) Consequence.unit
+            else N.invalid("review-input supplemental history does not follow its actual preceding attempt")
           saved <- _load_c(store, key)
           actual <- _prefix_c(current, entry.revision.value.toString)
           _ <- if (saved.record == actual && saved.record.lifecycle == Lifecycle.Active && saved.record.suspension.isEmpty &&
-              entry.causation.value == _historyPrefix(store) + key && saved.record.revision == previous.native.record.revision.next &&
+              saved.record.revision == previous.native.record.revision.next &&
               saved.record.history.dropRight(1) == previous.native.record.history &&
-              _supplemental_payload(previous.native.payload, saved.payload, step, plan)) Consequence.unit
+              _supplemental_payload(previous.native.payload, saved.payload, next.step, plan)) Consequence.unit
             else N.invalid("review-input supplemental receipt crosses its native intent, result, candidate or direction")
-        } yield SupplementalProgress(step, saved) }
+        } yield previous.followedBy(next, saved) }
     }
   }
 
@@ -736,17 +769,18 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     _ <- if (saved.record == current) Consequence.unit else N.invalid("review-input admission is not the actual frontier")
   } yield saved
 
-  private def _result_reference(store: N.Store, current: InstanceRecord, target: Target,
-    step: SupplementalStep): Option[NativeReference] = {
-    val key = _supplemental_key(target, step)
-    current.history.find(_.causation.value == _historyPrefix(store) + key).map(entry =>
-      NativeReference(ContextReference(_identity(store.identity, "", key, store.phase), "1"), entry.revision.value.toString))
-  }
+  private def _result_reference(store: N.Store, progress: SupplementalProgress, step: SupplementalStep): Option[NativeReference] =
+    progress.results.get(step).map { saved =>
+      val record = saved.record
+      val key = record.causation.value.stripPrefix(_historyPrefix(store))
+      NativeReference(ContextReference(_identity(store.identity, "", key, store.phase), "1"), record.revision.value.toString)
+    }
 
   private def _supplemental_status(progress: SupplementalProgress, plan: P.Plan): (String, String) =
     progress.native.payload.reviewSupplemental.flatMap(_.refusal) match {
       case Some(SupplementalRefusal(RefusalKind.NotDispatched, detail)) =>
-        "validation-not-started" -> ("The supplemental check was not dispatched. " + detail)
+        "validation-not-started" -> ("The supplemental check was not dispatched. " + detail +
+          " Once corrected, ordinary Advance can retry the unstarted check on the same candidate.")
       case Some(SupplementalRefusal(RefusalKind.CandidateDrifted, detail)) =>
         "validation-candidate-drifted" -> ("The actual check result is retained and the candidate could not be requalified. " + detail)
       case None => progress.step match {
@@ -777,8 +811,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
         status = _supplemental_status(progress, plan)
         detail = Json.obj("continuationPolicy" -> supplementalPolicy.asJson, "step" -> progress.step.suffix.asJson,
           "nativeRevision" -> current.revision.value.toString.asJson, "plan" -> plan.asJson,
-          "gitResult" -> _result_reference(store, current, direction.target, SupplementalStep.GitResult).asJson,
-          "lintResult" -> _result_reference(store, current, direction.target, SupplementalStep.LintResult).asJson,
+          "gitResult" -> _result_reference(store, progress, SupplementalStep.GitResult).asJson,
+          "lintResult" -> _result_reference(store, progress, SupplementalStep.LintResult).asJson,
           "evidence" -> saved.payload.reviewSupplemental.asJson).dropNullValues
       } yield Some(V.RepositorySyncValidationContinuationDescriptionResult(store.identity, status._1, status._2,
         direction.target.componentInstance, GoalPhaseNativeMetadata.record(detail), Vector.empty,
@@ -786,18 +820,19 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     }
   } yield description
 
-  private def _record_supplemental_c[A](store: N.Store, previous: N.Stage, validation: C.Policy,
-    target: Target, intentstep: SupplementalStep, resultstep: SupplementalStep,
-    observe: => Consequence[P.Attempt[A]], evidence: Option[A] => SupplementalEvidence):
-    Consequence[SupplementalProgress] = for {
-    prepared <- store.saveC(_supplemental_key(target, intentstep), "native-review-supplemental-check-prepared",
-      previous.record, previous.payload)
-    result <- {
+  private def _record_supplemental_c[A](store: N.Store, previous: SupplementalProgress, validation: C.Policy,
+    target: Target, intent: SupplementalTransition, resultstep: SupplementalStep,
+    observe: => Consequence[P.Attempt[A]], evidence: Option[A] => SupplementalEvidence): Consequence[SupplementalProgress] = {
+    val prior = previous.native
+    store.saveC(_supplemental_key(target, intent), "native-review-supplemental-check-prepared",
+      prior.record, prior.payload.copy(reviewSupplemental = _intent_evidence(prior.payload, intent.step))).flatMap { prepared =>
+      val progress = previous.followedBy(intent, prepared)
+      val completed = intent.copy(step = resultstep)
       def _save_(receipt: Option[A], refusal: Option[SupplementalRefusal]): Consequence[SupplementalProgress] =
-        store.saveC(_supplemental_key(target, resultstep), "native-review-supplemental-check-recorded",
+        store.saveC(_supplemental_key(target, completed), "native-review-supplemental-check-recorded",
           prepared.record, prepared.payload.copy(reviewSupplemental = Some(evidence(receipt).copy(refusal = refusal))))
-          .map(saved => SupplementalProgress(resultstep, saved))
-      val qualified = store.acknowledgeC("review-inputs-" + intentstep.suffix)
+          .map(saved => progress.followedBy(completed, saved))
+      val qualified = store.acknowledgeC("review-inputs-" + intent.step.suffix)
         .flatMap(_ => qualifyCurrentC(store, prepared.record, prepared, validation))
       qualified match {
         case Consequence.Failure(conclusion) =>
@@ -811,33 +846,33 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
               case Consequence.Failure(conclusion) =>
                 _save_(Some(actual), Some(SupplementalRefusal(RefusalKind.CandidateDrifted, conclusion.show)))
             }
-          case Consequence.Failure(_) => Consequence.success(SupplementalProgress(intentstep, prepared))
+          case Consequence.Failure(_) => Consequence.success(progress)
         }
       }
     }
-  } yield result
+  }
 
   private def _advance_supplemental_c(store: N.Store, progress: SupplementalProgress, validation: C.Policy, port: R.Port,
-    direction: Direction, plan: P.Plan): Consequence[V.RepositorySyncAdvanceResult] = {
+    direction: Direction, plan: P.Plan, allowretry: Boolean = true): Consequence[V.RepositorySyncAdvanceResult] = {
     val saved = progress.native
     def _wait_ = {
       val (outcome, detail) = _supplemental_status(progress, plan)
       Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity, detail, outcome))
     }
-    progress.step match {
-      case SupplementalStep.Adopted =>
-        _record_supplemental_c[P.GitReceipt](store, saved, validation, direction.target,
-          SupplementalStep.GitIntent, SupplementalStep.GitResult,
-          P.observeGitC(store, plan).map[P.Attempt[P.GitReceipt]](P.Attempt.Observed(_)),
-          receipt => SupplementalEvidence(receipt, None))
-          .flatMap(_advance_supplemental_c(store, _, validation, port, direction, plan))
-      case SupplementalStep.GitResult if saved.payload.reviewSupplemental.exists(_successful_git(_, plan)) =>
+    _next_supplemental(progress, plan).filter(next => next.retryOf.isEmpty || allowretry) match {
+      case Some(intent) if intent.step == SupplementalStep.GitIntent =>
         qualifyCurrentC(store, saved.record, saved, validation).flatMap { _ =>
-          _record_supplemental_c[C.Receipt](store, saved, validation, direction.target,
-            SupplementalStep.LintIntent, SupplementalStep.LintResult, P.observeLintC(store, plan),
+          _record_supplemental_c[P.GitReceipt](store, progress, validation, direction.target,
+            intent, SupplementalStep.GitResult, P.observeGitC(store, plan).map[P.Attempt[P.GitReceipt]](P.Attempt.Observed(_)),
+            receipt => SupplementalEvidence(receipt, None))
+        }.flatMap(_advance_supplemental_c(store, _, validation, port, direction, plan, allowretry = false))
+      case Some(intent) if intent.step == SupplementalStep.LintIntent =>
+        qualifyCurrentC(store, saved.record, saved, validation).flatMap { _ =>
+          _record_supplemental_c[C.Receipt](store, progress, validation, direction.target,
+            intent, SupplementalStep.LintResult, P.observeLintC(store, plan),
             receipt => SupplementalEvidence(saved.payload.reviewSupplemental.flatMap(_.git), receipt))
-        }.flatMap(_advance_supplemental_c(store, _, validation, port, direction, plan))
-      case SupplementalStep.LintResult => _terminal_evidence(progress, plan) match {
+        }.flatMap(_advance_supplemental_c(store, _, validation, port, direction, plan, allowretry = false))
+      case _ => _terminal_evidence(progress, plan) match {
         case None => _wait_
         case Some(evidence) => for {
           _ <- qualifyCurrentC(store, saved.record, saved, validation)
@@ -848,7 +883,6 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
           output <- port.advanceC(store.identity, store.core)
         } yield output
       }
-      case _ => _wait_
     }
   }
 
@@ -869,7 +903,6 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
         adoption <- _authenticate_c(store, current, direction)
         progress <- _supplemental_history_c(store, current, adoption, direction.target, plan)
         _ <- if (progress.native == saved) Consequence.unit else N.invalid("review-input Advance crosses its actual effect frontier")
-        _ <- if (progress.step == SupplementalStep.Adopted) qualifyCurrentC(store, current, saved, validation) else Consequence.unit
         result <- _advance_supplemental_c(store, progress, validation, port, direction, plan)
       } yield result
     }
@@ -878,13 +911,13 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
   def followUpC(store: N.Store, source: N.Stage): Consequence[Vector[String]] = source.payload.reviewInputs match {
     case None => Consequence.success(Vector.empty)
     case Some(direction) => for {
-      _ <- _authenticate_c(store, source.record, direction)
+      adoption <- _authenticate_c(store, source.record, direction)
       original <- _load_c(store, N.candidateKey(direction.target.namespace, "merge-validated"))
       prior <- R.savedOriginalC(store, source.record, original).flatMap(_.map(Consequence.success)
         .getOrElse(N.invalid("review-input follow-up has no original saved decision-needed review")))
       supplemental <- direction.target.supplemental match {
         case None => Consequence.success(Vector.empty[String])
-        case Some(plan) => _supplemental_followup_c(store, source, direction.target, plan)
+        case Some(plan) => _supplemental_followup_c(store, source, adoption, direction.target, plan)
       }
     } yield Vector(
       "Retained prior decision-needed review: " + prior.result.resultReference.identity + " revision=" + prior.result.resultReference.revision +
@@ -900,7 +933,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
         "has no typed accepted subcoverage; its prose grants no path acceptance. A fresh independent detailed result is required.") ++ supplemental
   }
 
-  private def _supplemental_followup_c(store: N.Store, source: N.Stage, target: Target, plan: P.Plan):
+  private def _supplemental_followup_c(store: N.Store, source: N.Stage, adoption: N.Stage, target: Target, plan: P.Plan):
     Consequence[Vector[String]] = for {
     candidate <- store.currentMergeCandidateC(source.record)
     retained <- latestValidatedC(store, source.record, candidate)
@@ -908,9 +941,10 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     evidence <- source.payload.reviewSupplemental.map(Consequence.success).getOrElse(N.invalid("review-input supplemental evidence is absent"))
     git <- evidence.git.map(Consequence.success).getOrElse(N.invalid("review-input supplemental Git receipt is absent"))
     lint <- evidence.lint.map(Consequence.success).getOrElse(N.invalid("review-input supplemental FixCheck receipt is absent"))
-    gitref <- _result_reference(store, source.record, target, SupplementalStep.GitResult)
+    progress <- _supplemental_history_c(store, source.record, adoption, target, plan)
+    gitref <- _result_reference(store, progress, SupplementalStep.GitResult)
       .map(Consequence.success).getOrElse(N.invalid("review-input supplemental Git result reference is absent"))
-    lintref <- _result_reference(store, source.record, target, SupplementalStep.LintResult)
+    lintref <- _result_reference(store, progress, SupplementalStep.LintResult)
       .map(Consequence.success).getOrElse(N.invalid("review-input supplemental FixCheck result reference is absent"))
     rules = git.observations.map(observation => observation.path + " included by " + observation.source.getOrElse("") +
       " line " + observation.line.getOrElse(0) + " pattern " + observation.pattern.getOrElse(""))
