@@ -532,6 +532,40 @@ real repair creates its own candidate and drops the old classification
 direction. This section defines source behavior; validation and installed
 qualification results are recorded separately.
 
+## Post-review supplemental input validation
+
+An existing, unsuspended decision-needed merge with missing coverage can
+describe `sm-workflow.repository-sync-review-input-continuation.v4` when the
+normal `sm-workflow.repository-sync.program-inputs` policy declares a matching
+`postReviewValidation` binding. The binding names `ignoreSelection`,
+`ignoreFile`, `lintInputs`, and `lintCheckIdentity`. The Git selection must be
+an admitted `check-ignore` program for the actual merge workspace and must
+select the same literal paths in order. The additional check is one ordinary
+fixed `FixCheck` on the same repository. Its existing program-impact declaration
+must identify all of the lint inputs it actually consumes. The ignore file is
+covered by the separately observed Git rule, with its actual source, line and
+pattern. Adding either path to the old check coverage cannot substitute for an
+executed supplemental check.
+
+Follow the existing describe and adopt operations, independently provisioning
+the complete target and answer for `AuthorizeAdditionalValidationAndContinueReview`.
+Both original-uncertainty fields are false. Adoption records the direction. A
+subsequent ordinary Advance uses the same candidate, both parents, original
+review, checks and native history. It qualifies the exact declared workspace
+and ordered Git selection before dispatch. It compares the named worktree
+files with their retained candidate blobs before and after each check and
+retains the actual results separately. A known refusal before dispatch is
+recorded separately from an intent whose outcome is uncertain. A failed check,
+drifted candidate or uncertain intent cannot issue a review or silently repeat
+the check. `Defer` leaves the direction unrecorded.
+
+After both added validations succeed, the next independent detailed review
+sees the old candidate and original validation together with the newly
+executed `FixCheck` and Git rule observation. The old decision-needed result
+retains its original meaning. Check success does not authorize the merge or
+push. The classification-only v3 route remains available for its original
+eligibility conditions.
+
 ## Resultless Purpose preparation intent continuation
 
 The existing `describeRepositorySyncPurposePreparationContinuation` and

@@ -231,7 +231,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     target <- discriminator match {
       case `policy` => decodeTarget(wire).map(OriginalTarget(_))
       case RepositorySyncRequiredLintContinuation.policy => RepositorySyncRequiredLintContinuation.decodeTarget(wire).map(RequiredLintTarget(_))
-      case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
+      case RepositorySyncReviewInputContinuation.policy | RepositorySyncReviewInputContinuation.supplementalPolicy =>
+        RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.reconstructionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
@@ -484,6 +485,11 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
         review.map(port => RepositorySyncReviewInputContinuation.describeC(identity, d, definition, core, policy, acknowledge, port))
           .getOrElse(N.invalid("review-input description requires the installed independent review Port"))
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewInputContinuationAdmitted")))
+        RepositorySyncReviewInputContinuation.describeRunningC(session, d, core, acknowledge).flatMap {
+          case Some(value) => Consequence.success(value)
+          case None => _describe_v1_c(identity, d, definition, core, policy, acknowledge)
+        }
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.MergeValidated")))
         RepositorySyncRequiredLintContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else _describe_v1_c(identity, d, definition, core, policy, acknowledge)

@@ -7082,6 +7082,16 @@ on = native-required-lint-pending-prepared
 
 ##### TRANSITION
 
+to = ReviewInputContinuationAdmitted
+on = native-review-supplemental-check-prepared
+
+##### TRANSITION
+
+to = ReviewInputContinuationAdmitted
+on = native-review-supplemental-check-recorded
+
+##### TRANSITION
+
 to = MergeValidated
 on = native-review-inputs-validation-retained
 
@@ -9713,6 +9723,8 @@ Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-
 
 Explicit policy sm-workflow.repository-sync-review-input-continuation.v3 describes only the active unsuspended ReviewDecisionRequired frontier with its actual paired detailed decision-needed result. The corrected normal host document-inputs declaration is a new proposal, never an edit of old validation or review. Bind the Component and Session, pending namespace, original validated and review references/revisions, unchanged parents/tree/index/current observation, old assessment, proposed mapping and complete freshly captured assessment, current fixed selected checks and explicit applicability issues. Return AdoptInputClassificationAndContinueReview and Defer only when old unknown paths are now fully classified with unchanged check applicability. Ineligible descriptions offer Defer only. Previously known consumed/document classifications cannot be demoted or changed. Program-inputs coverage takes consumed precedence even for scripts or skills ending in .md. Binary, unavailable/new unknown, uncovered consumed inputs and real selected execution/input drift remain issues. No successful check or semantic result is invented or replayed. Unknown or malformed v3 refuses without older-decoder fallback.
 
+The explicit sm-workflow.repository-sync-review-input-continuation.v4 target binds the same unchanged candidate and original validation and review. The normal host declares the exact newly consumed inputs, typed Git ignore selection and its expected ignore file, and one appended fixed FixCheck with declared lint inputs. The original checks keep their order and their actual input scopes. Both supplemental obligations must match the candidate and current host plan to offer AuthorizeAdditionalValidationAndContinueReview with Defer. Unresolved obligations offer only passive Defer. A description during supplemental validation reports its retained progress and receipt references with no adoption choices.
+
 For a genuinely new pending merge candidate, current impact-selected checks must include FixCheck before the first SBT effect when merge policy requires lint. An ordinary project declaration applies that requirement to actual Scala paths in the pending merge. Missing required lint refuses before Compile/Test. Document-path classification and unselected host checks leave the requirement in force. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
 
 ##### TYPE
@@ -10018,6 +10030,8 @@ For a configured fixed slot, PurposePrepared materialization first reads the cur
 The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
 
 The explicit v3 review-input branch uses AdoptInputClassificationAndContinueReview or passive Defer, with priorExecutionEnded=false and acceptOriginalUncertainty=false (not applicable). Independent repository-sync-validation-continuation evidence binds the complete current v3 target, choice, rationale, participant, existing reference and Component. After evidence admission reobserve the full target before managed CAS. Adoption stores only ReviewInputContinuationAdmitted through native-review-input-continuation-admitted at review-inputs-REVISION-adopted. Separate normal Advance authenticates the direction and native lineage, reobserves the unchanged candidate/current mapping, and saves a NEW MergeValidated source through native-review-inputs-validation-retained at review-inputs-REVISION-validated. Copy the genuine original validation receipt objects and candidate/checkpoint/required-lint provenance, adding only corrected input and impact assessment. Never reenter check execution. Normal independent detailed review uses the new source revision and continuation identity, retaining the old accepted decision-needed issue/result and its rationale/limitations as context. Keep full original candidate diffs and changed paths; old decision-needed prose supplies no typed accepted path coverage. Request fresh judgment of unresolved coverage without check replay or inferred semantic PASS. An interruption resumes from that revised source. Later real repair creates its own candidate without inheriting the old classification direction. Existing review acceptance, repair, Human decision and authorized convergence remain the owners of later effects; adoption performs none of them.
+
+The v4 review-input branch binds a separate Human direction to the complete actual target and uses false/false lifecycle flags. Adoption retains only the direction. Ordinary Advance records a native intent before the typed Git ignore observation and then before the fixed typed FixCheck. Each attributable result is retained alongside its own adjacent intent. A failed result or an intent with unknown outcome pauses this continuation without replay. Both terminal successes are required for a revised MergeValidated source. It keeps the same candidate, original native check and review provenance, and the additional lint receipt. The separate Git observation and both result references accompany fresh independent detailed review of the full candidate.
 
 ##### TYPE
 
