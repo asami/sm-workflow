@@ -92,6 +92,7 @@ lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."),
 lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(source.toURI))
 lazy val validateCncfSource = taskKey[Unit]("Validate the selected source dependency against the declared CNCF coordinates")
 lazy val validateCncfPublicationClasspath = taskKey[Unit]("Verify the normal attributed source JAR in the application publication closure")
+lazy val strictGeneratedQualification = settingKey[Boolean]("Explicitly qualify fresh B04 generated strict consumers")
 lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatMap { source => Seq(
   libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
   validateCncfSource := {
@@ -122,10 +123,11 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
 ) }
 
 // A real authoring target, separate from deliberately rule-violating lint inputs
-// and legacy mixed consumer scopes. Compile owns the B02 model; Test owns its
-// existing executable specification exactly once, through ordinary SBT discovery.
+// and legacy mixed consumer scopes. Compile owns the B02 model and selected B04
+// generated representatives; Test discovers each consumer specification once.
 lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/strict-authoring"))
   .dependsOn(scalaLintRules % ScalafixConfig)
+  .enablePlugins(org.goldenport.cozy.CozyPlugin)
   .settings(
     scalaVersion := "3.3.8",
     scalacOptions ++= Seq(
@@ -133,11 +135,51 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
       "-Wvalue-discard", "-Wnonunit-statement", "-Wunused:imports,privates,locals",
       "-unchecked", "-deprecation", "-feature", "-Werror"),
     semanticdbEnabled := true,
+    libraryDependencies ++= ProjectYamlBuild.dependencies((LocalProject("root") / cozyProjectMetadata).value)
+      .filterNot(_.organization == "org.scalatest"),
     libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test,
     publish / skip := true,
+    strictGeneratedQualification := {
+      sys.env.get("SM_WORKFLOW_STRICT_GENERATED_QUALIFICATION") match {
+        case Some("true") => true
+        case Some("false") => false
+        case Some(_) => sys.error("SM_WORKFLOW_STRICT_GENERATED_QUALIFICATION must be true or false")
+        case None => cozyProjectConfig.value.boolean("qualification.strict_generated").getOrElse(false)
+      }
+    },
+    cozyGeneratorBackend := "cozy",
+    cozyTargetDir := (Compile / sourceManaged).value / "scala",
+    cozySkipUnchangedGeneration := {
+      if (strictGeneratedQualification.value) false
+      else cozyProjectConfig.value.boolean("generation.skip_unchanged").getOrElse(true)
+    },
+    // Ordinary builds retain B2 without requiring a locally selected generator.
+    // taskDyn keeps cozyGenerate outside the default task graph, even if configured.
+    Compile / sourceGenerators := Seq(Def.taskDyn {
+      if (strictGeneratedQualification.value) {
+        require(cozyDelegateProjectDir.value.nonEmpty,
+          "B04 qualification requires generation.delegate.project_dir selecting the qualified local Cozy project")
+        Def.task {
+          // sbt-cozy validates the selected project and owns generator execution.
+          val generated = cozyGenerate.value
+          val names = Set("CountryCode.scala", "RegionCode.scala")
+          val selected = generated.filter(source => names.contains(source.getName))
+          require(selected.map(_.getName).toSet == names && selected.size == names.size && selected.forall(_.isFile),
+            "B04 requires exactly both generated library value types")
+          selected
+        }
+      } else Def.task { Seq.empty[File] }
+    }.taskValue),
+    // This library fixture has no CNCF ABI resources. The plugin's default
+    // resource generator would otherwise invoke cozyGenerate unconditionally.
+    Compile / resourceGenerators := Nil,
     Test / unmanagedSourceDirectories := Nil,
-    Test / unmanagedSources := Seq(baseDirectory.value.getParentFile.getParentFile /
-      "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"),
+    Test / unmanagedSources := Seq(
+      baseDirectory.value.getParentFile.getParentFile /
+        "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala") ++
+      (if (strictGeneratedQualification.value) Seq(
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/GeneratedStrictComparisonSpec.scala")
+      else Nil),
     scalafixScalaBinaryVersion := "2.13",
     scalafixConfig := (LocalProject("root") / scalafixConfig).value,
     sharedScalaLintReporter := (LocalProject("root") / sharedScalaLintReporter).value,

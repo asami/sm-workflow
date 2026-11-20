@@ -1,0 +1,17 @@
+# VALUE
+
+## CountryCode
+
+### ATTRIBUTE
+
+| name  | type   | multiplicity |
+|-------|--------|--------------|
+| value | string | 1            |
+
+## RegionCode
+
+### ATTRIBUTE
+
+| name  | type   | multiplicity |
+|-------|--------|--------------|
+| value | string | 1            |

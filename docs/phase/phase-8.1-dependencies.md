@@ -237,6 +237,72 @@ package-wide compatibility; B3 retains the real generated/AI consumer adoption
 work and the prior Workflow/FailureModel exclusions. No live Session or prior
 successful result is changed by this build selection.
 
+### B04 generated-consumer activation
+
+The small B3 fixture uses explicitly selected strict-authoring Cozy library generation and
+selects exactly the actual `CountryCode.scala` and `RegionCode.scala` sources.
+The generated-type consumer specification covers same-type equality, cross-type
+direct/predicate rejection and the precompiled contains limitation under the
+unchanged B2 ten-option compiler policy. The prior three-file assertion is
+corrected because `CompositeStateMachineAbi.scala` is emitted by the CNCF branch,
+not this library route. Existing B1 ABI evidence stays with B1. B2 native receipt
+`34c1be2c560461e9905745f2e06dc533:ordered-validation:3611:validation` and accepted
+commit `8502548d` remain the authored-consumer baseline.
+
+The original Cozy activation return records local publication and a successful
+library bridge probe using Cozy `6feac334` with SimpleModeler `365814a9`.
+That Cozy DelegateTask remains at `Human` over the unsupported ABI demand and
+issued no `ReturnReady`; its evidence supplies no fresh CNCF ABI qualification.
+Native B3 compilation then exposed 36 unused-import/private-member errors in
+the two generated values under the unchanged strict compiler options.
+
+The separate bounded SimpleModeler repair returned `ReturnReady` at generation
+2 for `df7d8b5f`, tree `3d518730cbaf7542a159cf9e85dd70f3fc4c9a65`.
+Its native Compile and five focused `Scala3StrictStructureGenerationSpec` tests
+succeeded, independent re-review accepted the repair and local publication
+exited 0. The repair reduces unused emission for plain single-string library
+values while preserving used structured/create-purpose helpers and B1 contracts.
+The requester received the return and selected the task-private Ivy
+`org.simplemodeling:simplemodeler_2.12:1.1.27-SNAPSHOT` JAR. It replaces only
+the old SimpleModeler source classes in the activation classpath, retaining
+Cozy `6feac334` / `org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT` and other entries.
+See the [integration record](../notes/phase8.1-producer-deliveries.md#slp-b3-representative-consumer-preparation--2026-11-20)
+for the artifact digest and retained return/selection evidence.
+
+The prior candidate passed full native compile/test/fix-check in receipt
+`34c1be2c560461e9905745f2e06dc533:ordered-validation:3676:validation`,
+including ten successful strict cases across the generated and authored suites,
+each executed once. Issue-17 retains that result and addresses subsequent use:
+ordinary root builds now default to the seven authored B2 cases without invoking
+the B04 generator, whether a local Cozy selection is present or absent.
+
+Dedicated qualification sets module configuration
+`qualification.strict_generated: true`, or supplies
+`SM_WORKFLOW_STRICT_GENERATED_QUALIFICATION=true` to the selected native program.
+The environment override accepts only literal `true` or `false`; otherwise the
+module Boolean defaults to false. Qualification requires the existing
+`generation.delegate.project_dir` selection and uses sbt-cozy's project
+validation and `--runtime-dev-dir` route. Prepare a real Cozy `6feac334` local
+project whose existing launcher classpath selects the verified SimpleModeler
+`df7d8b5f` / `1.1.27-SNAPSHOT` JAR, with the other activation dependencies
+retained. The [reproduction instructions](../notes/phase8.1-producer-deliveries.md#explicit-generated-qualification-after-issue-17)
+record the exact artifact digest and module configuration; no tracked task-local
+path or alternate resolver is required. Ambient `SBT_COZY_PROJECT_DIR` stays
+absent from the full root CAR build.
+
+Explicit mode bypasses unchanged-generation caching, requires both generated
+files exactly once, and includes the generated Test source once alongside the
+seven authored cases under the same ten flags. The dynamic task branch and
+disabled unused library ABI resource generator prevent default builds from
+triggering qualification. Absent selection or artifacts cannot silently pass
+explicit qualification. Native default compile and explicit fresh generated
+test/fix-check for this issue-17 candidate remain pending, including generated
+inventory/provenance and classpath/options evidence. Compiler compatibility
+requires actual selected diagnostics; no generated warning bypass is assumed.
+Prior B1 evidence remains applicable to its actual source selection. Full
+Workflow/FailureModel bodies, historical settings and Core stage C retain their
+separate boundaries.
+
 All plans preserve current priorities, Goals, Sessions, base, accepted results,
 history, repair counts and unrelated tracked/untracked work. They start no
 implementation, chat dispatch, workflow operation, build, publication, commit or

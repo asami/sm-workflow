@@ -1,0 +1,11 @@
+project:
+  namespace: org.simplemodeling.textus
+  id: ScalaStrictAuthoring
+  kind: library
+  component:
+    version: "0.1.0-SNAPSHOT"
+build:
+  scalaVersion: "3.3.8"
+  cozyVersion: "0.3.3-SNAPSHOT"
+packaging:
+  kind: maven

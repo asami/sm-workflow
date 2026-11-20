@@ -494,6 +494,85 @@ violating lint inputs and legacy mixed scopes retain their separate policies.
 B3 still qualifies actual generated/AI consumers; no package-wide compatibility
 or new generated-output result follows from this authored build wiring.
 
+#### Generated consumer boundary
+
+B04 adds the small `scala-lint-rules/strict-authoring/src/main/cozy/comparison-values.cml`
+fixture to that same target in explicit qualification mode. Its library/Maven project metadata selects
+the ordinary `cozyGenerate` / `sourceGenerators` route (`modeler-scala-value`).
+Compile selects exactly the generated `CountryCode.scala` and
+`RegionCode.scala`; missing or duplicate representatives fail selection. This
+library route emits those two values. The CNCF branch owns
+`CompositeStateMachineAbi.scala`, whose existing B1 evidence stays with B1. Generated files remain managed output, excluded
+from handwritten lint. No source snapshot or replacement implementation is
+checked in. The ten B2 compiler options also apply to these Compile inputs and
+the authored Test consumers, without an authored compatibility exception.
+
+`GeneratedStrictComparisonSpec` consumes the actual two generated library values.
+It checks intended same-type direct/predicate comparisons, compiler rejection
+of cross-value equality/inequality and predicates naming both generated types,
+and the still-successful precompiled `Vector.contains` gap. The unchanged seven
+`WorkflowStrictComparisonSpec` cases retain the authored/bounded/null-boundary
+qualification accepted in B2; the new generated specification is separate.
+
+Native B3 compilation exposed 36 unused-import/private-member errors in those
+two generated values. The selected bounded SimpleModeler repair `df7d8b5f`
+reduces unused emission for plain single-string library values and preserves
+readers used by structured values and create-purpose builders. Its native
+Compile and five focused generator tests succeeded, independent re-review
+accepted the repair and local publication succeeded. The separate SimpleModeler
+return reached `ReturnReady` at generation 2 and was received by the requester.
+These producer results do not establish strict Scala 3 consumer compilation.
+
+The current qualification selects the task-private Ivy
+`org.simplemodeling:simplemodeler_2.12:1.1.27-SNAPSHOT` JAR from that repair,
+replacing only the prior SimpleModeler source classes in the activation
+classpath. Cozy `6feac334` /
+`org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT` and other classpath entries remain
+selected. The [integration record](../notes/phase8.1-producer-deliveries.md#slp-b3-representative-consumer-preparation--2026-11-20)
+identifies the artifact digest and actual returned evidence. The earlier Cozy
+DelegateTask remains at `Human` over its original CNCF-only ABI demand and
+supplied no `ReturnReady`; no fresh CNCF ABI qualification follows.
+
+The prior candidate's full native compile/test/fix-check passed in receipt
+`34c1be2c560461e9905745f2e06dc533:ordered-validation:3676:validation`;
+all ten strict cases succeeded and each suite ran once. Issue-17 preserves that
+evidence while making the generated qualification explicitly selectable.
+
+The module's single `strictGeneratedQualification` Boolean defaults to
+`cozyProjectConfig.boolean("qualification.strict_generated").getOrElse(false)`.
+`SM_WORKFLOW_STRICT_GENERATED_QUALIFICATION` overrides it only with the literal
+value `true` or `false`; invalid supplied values fail build loading. Ordinary
+root compile/test retains the seven B2 authored cases and all ten compiler
+options, skipping all B04 generated work even when a local generator is selected.
+The dynamic source-generator branch omits `cozyGenerate` from the default task
+graph. The module also disables the plugin's unused library ABI resource
+generator, which otherwise invokes generation separately.
+
+Explicit mode requires a selected `cozyDelegateProjectDir`, using existing
+sbt-cozy configuration, project validation and `--runtime-dev-dir` execution.
+It forces `cozySkipUnchangedGeneration` false, independently of local cache
+settings, compiles exactly the two existing generated types and adds the
+generated Test source once to the seven authored cases. Missing selection,
+generation failure or missing/duplicate generated files fails qualification.
+Use module `generation.delegate.project_dir` and
+`qualification.strict_generated: true` in existing Cozy configuration as
+described in the [reproduction instructions](../notes/phase8.1-producer-deliveries.md#explicit-generated-qualification-after-issue-17).
+The prepared real local Cozy `6feac334` project's launcher classpath must select
+the verified published SimpleModeler `df7d8b5f` JAR and matching activation
+dependencies. The integration record retains its SHA-256; the SNAPSHOT version
+alone does not distinguish that artifact. No task-local path is tracked and no
+alternative resolver is added. Root CAR settings remain separate and ambient
+`SBT_COZY_PROJECT_DIR` stays absent. Broader generated-shape or package-wide
+warning compatibility remains unqualified.
+
+Native validation of this issue-17 candidate remains pending. It must cover
+ordinary default compile and explicit fresh generated test/fix-check, retaining
+actual selected sources, compiler/classpath and generation evidence. The existing product-root
+receipt for backend `1.1.26-SNAPSHOT` does not identify this module's fresh
+output. Any compiler-specific exception requires an actual diagnostic and a
+bounded reason. Full Workflow/FailureModel bodies and Core stage C keep their
+separate boundaries.
+
 Do not defeat these checks with blanket unsafeNulls imports, unchecked casts,
 indiscriminate `.nn`, universal equality instances or broad warning silencing.
 Necessary interop exceptions use the existing scoped policy with their reason;
