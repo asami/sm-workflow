@@ -231,3 +231,10 @@ test loop, blanket FULL reruns, new AI gate or extra monitoring is required.
       preserves the declared comparison meaning. Missing Core delivery leaves
       only affected C acceptance open, without blocking independent A/B work,
       changing current Sessions or replaying applicable successful checks.
+
+The [SLP-C2 qualification record](../notes/phase8.1-producer-deliveries.md#slp-c2-bounded-type-and-collection-qualification--2026-11-21)
+maps C02/C03 to the adopted Core revision's actual positive calls, four attributed
+rejections and behavioral cases. It records the declared `Vector[Any]` control,
+linear Eq alternative and untested/domain-intent limits. These items await the
+owning runtime's validation, independent review and acceptance; C04/C05 remain
+SLP-C3 work.

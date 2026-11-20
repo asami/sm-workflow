@@ -478,3 +478,102 @@ generated output or AI instruction is changed. Phase C02/C03 qualification stays
 with SLP-C2; C04/C05 generated/AI adoption and guidance stay with SLP-C3. Runtime
 Phase validation, independent review and acceptance of this record remain
 pending; the existing checklist is unchanged.
+
+## SLP-C2 bounded type and collection qualification — 2026-11-21
+
+C02/C03 consume the seven successful producer cases from the C01 source
+selection above, `goldenport-core` commit
+`e4972601207d4597f0ed3aa77fc0ed62fb286c75`. This qualification compares the
+committed specification with the retained native test-only receipt and its
+`strict-test-stdout.log`; it adds no producer execution. The receipt associates
+one completed suite and seven tests with tree
+`b431c2b2a11946761912472f591b9faaf2efa19e`, exit 0. The log explicitly records
+compilation of the two selected `CollectionStrict` sources under the Scala 3.3.8
+strict options recorded above, then Test compilation and the successful suite.
+This qualifies that bounded API/specification, not all legacy Core sources.
+
+### C02: matching calls and attributed rejections
+
+Table 1 compares the exact positive and negative expressions. Here `values` is
+`Vector(Entity(None, "x")).typeSafe`; `ids` is
+`Vector(Entity(Some(TraceId("major", "minor")), "x")).typeSafe.identifiableBy(optional)`.
+`optional` is the fixture's `Identifiable[Entity, TraceId]`.
+
+Table 1. Receiver and argument type qualification at the selected revision
+
+| Operand form | Matching expression | Incompatible expression and actual diagnostic |
+| --- | --- | --- |
+| Captured element wrapper | `values.containsEq(Entity(None, "x"))` compiles | `values.containsEq("not an Entity")`: `Cannot prove that String =:= org.goldenport.util.TypeSafeCollectionsFixtures.Entity.`, column 42 |
+| Inferred, chained element wrapper | `Vector(Entity(None, "x")).typeSafe.containsEq(Entity(None, "x"))` compiles | `Vector(Entity(None, "x")).typeSafe.containsEq("not an Entity")`: the same `String =:= Entity` diagnostic, column 70 |
+| Captured ID wrapper | `ids.containsId(TraceId("major", "minor"))` compiles | `ids.containsId(SpanId("major", "minor"))`: found `org.goldenport.observation.SpanId`, required `org.goldenport.observation.TraceId`, column 29 |
+| Inferred, chained ID wrapper | `Vector(Entity(Some(TraceId("major", "minor")), "x")).typeSafe.identifiableBy(optional).containsId(TraceId("major", "minor"))` compiles | The same chain ending in `containsId(SpanId("major", "minor"))`: found `SpanId`, required `TraceId`, column 112 |
+
+The positive `typeCheckErrors` block asserts no errors. Each negative block
+asserts exactly one error, its call text, a column within that call and the
+specific type diagnostic above. The stdout prints all four actual diagnostics.
+This attribution distinguishes the intended rejection from an unrelated missing
+import, missing Eq or strict-warning failure.
+
+Matching and mismatching element blocks have `Eq[Any]`, `Eq[Entity | String]`,
+`Eq[UniversalId]`, `Eq[Entity]` and `Eq[TraceId]` in scope; ID-negative blocks
+have the same givens except `Eq[Entity | String]`. The common/generic-parent
+instances coexist with the narrow instances in these tests. Their availability
+does not cause the incompatible argument to widen the captured receiver or ID
+type. These are not parent-only implicit-selection tests, nor an inventory of
+every possible generic Eq derivation.
+
+The deliberate declared-receiver control is exactly
+`val widened: Vector[Any] = Vector(Entity(None, "x"))`, followed by
+`widened.typeSafe.containsEq[Any]("a valid Any")`; it compiles in the positive
+block. Its explicit argument type is `Any`, matching its declared receiver.
+This establishes the boundary between argument-driven widening and a caller
+already choosing a broad contract. It does not demonstrate an inferred
+`containsEq("a valid Any")` on that receiver, a widened ID-relation control,
+or negative calls for every method. The source fixes `findById` to the same
+captured `I`, but its separate negative call is not executed by this suite.
+
+### C03: observed equality, absence and collision behavior
+
+Table 2 maps the behavioral cases to the policy they actually exercise.
+
+Table 2. Behavioral qualification and its limits
+
+| Producer case | Observed result and scope |
+| --- | --- |
+| Supplied string value Eq | Case-insensitive Eq makes `Vector("Alpha").typeSafe.containsEq("ALPHA")` true. ScalaCheck checks reflexivity, symmetry and conditional transitivity for this Eq on generated strings. The empty string Vector reports false for membership. |
+| Explicit nested-array Eq | A caller-supplied `Eq[Array[Array[Int]]]` checks outer length and each row with `sameElements`. Distinct array objects containing `Array(Array(1, 2))` match; `Array(Array(2, 1))` does not. No default deep-array Eq or arbitrary nesting law is established. |
+| Optional identity relation | With TraceId Eq comparing `major` and `minor`, input `Vector(absent, first, conflict, absent, other)` retains `Vector(absent, first, absent, other)`. `first` and `conflict` have equivalent present IDs and different payloads. Lookup returns `Some(first)`, and membership is true. An absent-only input returns `None` for that ID; empty optional-ID input has empty distinct output. |
+| Mandatory identity relation | With the deliberately all-equal `Eq[TraceId]`, differently represented IDs match, lookup returns the first entity and distinct keeps only it. This proves actual ID Eq consumption through `Identified`, independently of the optional relation's representation-based Eq. It does not select all-equal business identity. |
+
+The optional case preserves relative order and every absent-ID occurrence,
+including the repeated reference `absent`. Absence supplies no matchable ID;
+the assertion does not infer that separate unidentified entities are equal.
+First-wins means that the later conflicting payload is discarded, not merged,
+validated or resolved by a business rule. The executable empty cases are value
+membership and optional-ID distinct; empty mandatory lookup and every other
+empty operation are not separately tested.
+
+The source implements value membership and ID lookup as scans using `Eq.eqv`.
+ID distinct scans previously seen IDs and appends representatives in input
+order. This is the explicitly qualified linear-Eq alternative: membership and
+lookup take O(n) Eq comparisons, and distinct takes O(n²) in the worst case,
+with O(n) retained IDs/output. These bounds assume bounded Eq/projection cost;
+they follow from the source, not a performance benchmark. The implementation
+uses no Hash, hashCode, Ordering, Set or Map, so this alternative needs no Eq/hash or
+Eq/Ordering coherence claim. It establishes no custom Eq consumption by ordinary
+Set/Map, sorted collection, grouping API or another collection family.
+
+The property checks concern the supplied string Eq only. They do not prove
+laws for arbitrary caller instances, mutable keys, either identity fixture or
+the nested-array comparator. The API relies on lawful, stable Eq and relation
+behavior for equivalence-based results. The fixtures declare a first-wins
+operation contract; whether a particular consumer intends value membership,
+ID matching, first-wins conflict handling or another policy remains a domain
+question for that consumer. No unresolved producer question is listed in the
+adopted return; no consumer domain policy is inferred from these examples.
+
+C02/C03 now have this bounded qualification record for runtime validation and
+independent review. Checklist acceptance remains with the owning Phase runtime.
+C04/C05 consumer activation and Cozy/AI changes remain SLP-C3. This addition
+changes no build, producer, consumer, live Session, history or repair count and
+requires no new validation machinery or repetition of successful producer checks.
