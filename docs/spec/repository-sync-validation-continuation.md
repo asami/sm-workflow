@@ -4,17 +4,31 @@ Date: 2026-10-26. Contract: RS-VC1.
 
 ## Resultless direct Purpose Test
 
-Policy `sm-workflow.repository-sync-purpose-test-interruption.v1` extends the
-existing describe and adopt operations. Description selects the active,
-unsuspended `PurposeChecking` frontier whose native cause identifies the
-current direct `Test` of that Purpose attempt. The native result key must be
-absent. The original candidate, group, slot, source, cursor, ordered check
+The existing describe and adopt operations support two evidence policies for a
+resultless direct Purpose Test. Description selects the active, unsuspended
+`PurposeChecking` frontier whose native cause identifies the current direct
+`Test` of that Purpose attempt. The native result key must be absent.
+The original candidate, group, slot, source, cursor, ordered check
 selection and original successful receipt references, including index-local
 and typed Compile, must agree with native history. Description and adoption
 read retained state and host configuration without observing live Git or
 reading project validation declarations.
 Saved outcomes, TestOnly or discovery, and structural checks are ineligible.
 Formal failed checks retain their formal continuation.
+
+Omit `purposeTestEvidencePolicy` from
+`describeRepositorySyncValidationContinuation` to use strict policy
+`sm-workflow.repository-sync-purpose-test-interruption.v1` before adoption.
+Use `--purposeTestEvidencePolicy legacy-missing-plan` to select
+`sm-workflow.repository-sync-purpose-test-interruption-legacy.v1` for an
+eligible historical intent. The implicit description reports the retained
+policy after adoption. Unknown selectors, unrelated progressions and explicit
+selectors that differ from the retained policy are refused.
+In both policies, `target.processPlan` is the current resolved safety
+selection. The strict policy independently verifies the historical as-run
+plan against that selection.
+
+### Strict as-run plan evidence
 
 `ContinuePurposeRepairAcceptingUnknown` requires the original participant's
 independent Human direction and two true assertions under the existing
@@ -42,22 +56,74 @@ Preparation encodes supplied material. The independently configured host
 verifies provenance and provisions the termination evidence record under
 the observer's identity.
 
+### Historical intent with no retained as-run plan
+
+Before invoking a new direct Test, the native intent records
+`purposeTestEvidenceRequirement: "strict-as-run-plan"`. This intent is
+eligible only for the strict policy. Ordinary check results omit the field.
+Historical serialization omits the field when absent. An unmarked historical
+intent can qualify for the strict policy with an authentic as-run plan, or for
+explicit legacy recovery when the independent observer verifies that the plan
+was not retained.
+
+`ContinueLegacyPurposeRepairAcceptingUnknown` requires a separate independent
+Human direction for the exact legacy target with both `priorExecutionEnded`
+and `acceptOriginalUncertainty` set to true. As with the strict policy,
+`Defer` requires only the Human direction and appends nothing.
+
+Prepare the legacy observation using family `RepositorySync`, kind
+`purpose-test-legacy-termination`, and schema
+`sm-workflow.repository-sync-purpose-test-legacy-termination.v1`. Its
+independent import uses purpose `repository-sync-purpose-test-legacy-termination`.
+The four distinct execution evidence references identify the observation,
+original invocation, original trace and archived invocation binding. The
+legacy observation supplies the binding as `legacyBindingReference` and
+omits `hostPlanReference`.
+
+The archived invocation binding is a Resource with exact fields
+`sessionId`, `frontierRevision`, `intentReference`, `candidateReference`,
+`invocationReference`, `traceReference`, `operation`, `cliExitCode`, `pid`
+and `originalPlanStatus`. It identifies the same native target, invocation,
+trace and PID as the observation. It records `operation = "advanceRepositorySync"`,
+the original nonzero CLI exit and `originalPlanStatus = "not-retained"`.
+The CLI exit belongs to the invocation. The numeric OS exit belongs to the
+Test Terminal event.
+
+Preparation reads the binding and original trace through the configured CNCF
+Resource policy. The trace uses CNCF SBT progress JSON lines. The selected Test
+workspace and program must have an exact Started and confirmed output-limit
+Terminal for the same positive PID. The selected sequence permits one leading
+Launching event without a PID and zero or more intervening Waiting events with
+that same PID. Terminal must be the last event in that scope. Events from other
+workspaces, programs or operations do not enter the selected sequence.
+Ambiguous, uncertain or mismatching evidence is refused. The independent
+observer verifies the normalized binding against the authentic archived
+original invocation and trace, and verifies the original execution scope and
+plan's absence before the trusted host provisions the observation. Preparation
+derives only metadata and references and stores no raw process output.
+
+### Retention and ordinary repair
+
 One atomic adoption appends `native-purpose-test-interruption-admitted` to
 `PurposeRepairRequired`. It stores the direction with the old effects
 `UNKNOWN` and leaves the old Test intent, missing result, original successful
-prefix and attempt counts intact. An exact repeat is passive. Stale or
-conflicting direction and evidence for another target refuse.
+prefix and attempt counts intact. Both policies use the same adjacent
+direction key. An exact repeat is passive. Stale or conflicting direction and
+evidence for another target refuse.
 
 Separate ordinary Advance reauthenticates the adjacent direction and original
 intent before issuing ordinary Purpose Repair. It checks the current resolved
 host and slot, source HEAD/index/inventory and materialized candidate. The
 current impact branch must select the same ordered checks. FULL uses its
 declared full order and FOCUSED uses the checks covering the actual changes.
-The repair request identifies the interrupted check and its compact proof without
-a synthetic product receipt. Standard Purpose paths, ownership and repair
-budget apply. An accepted Repair creates a distinct candidate and clears the
-marker from its live progress. Its selected checks follow the normal impact
-rules and the original candidate's Test is never replayed.
+The repair request identifies the interrupted check and its compact proof. A
+legacy proof exposes `original_plan_status: "not-retained"` in the retained
+public response. Both proofs
+retain `UNKNOWN` and the original result stays absent. Standard Purpose
+paths, ownership and repair budget apply. An accepted Repair creates a
+distinct candidate and clears the interruption direction from its live
+progress. Its selected checks follow the normal impact rules and the original
+candidate's Test is never replayed.
 
 ## Original validation continuation
 

@@ -19,6 +19,7 @@ import RepositorySyncManagedFetch as F
 import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as C
+import RepositorySyncPurposeTestInterruption as T
 
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
@@ -221,7 +222,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
   }
   final case class PurposeTestInterruptionTarget(value: RepositorySyncPurposeTestInterruption.Target) extends AnyTarget {
     def sessionId: String = value.sessionId
-    def choices: Vector[String] = RepositorySyncPurposeTestInterruption.choices
+    def choices: Vector[String] = T.availableChoices(value)
   }
   /** Dispatch on the explicit discriminator, never on a failed decoder. */
   def decodeAnyTarget(value: Json): Either[String, AnyTarget] = for {
@@ -237,7 +238,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case RepositorySyncPurposeMaterializationContinuation.policy => RepositorySyncPurposeMaterializationContinuation.decodeTarget(wire).map(PurposeMaterializationTarget(_))
-      case RepositorySyncPurposeTestInterruption.policy => RepositorySyncPurposeTestInterruption.decodeTarget(wire).map(PurposeTestInterruptionTarget(_))
+      case T.policy | T.legacyPolicy => T.decodeTarget(wire).map(PurposeTestInterruptionTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
   } yield target
@@ -253,7 +254,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
     case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.decodeAnswer(value)
-    case PurposeTestInterruptionTarget(_) => RepositorySyncPurposeTestInterruption.decodeAnswer(value)
+    case PurposeTestInterruptionTarget(target) => T.decodeAnswer(target, value)
     case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
@@ -456,10 +457,15 @@ private[smworkflow] object RepositorySyncValidationContinuation {
 
   def describeC(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     policy: C.Policy, acknowledge: String => Consequence[Unit],
-    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
-    F.sessionC(identity, d, definition, core).flatMap { session =>
-      if (RepositorySyncPurposeTestInterruption.descriptionFrontier(session.started.current))
-        _describe_interruption_c(session, d, core, acknowledge)
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
+    purposeTestEvidencePolicy: Option[String] = None): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] = for {
+    selectedpolicy <- _purpose_test_policy_c(purposeTestEvidencePolicy)
+    session <- F.sessionC(identity, d, definition, core)
+    result <-
+      if (T.descriptionFrontier(session.started.current))
+        _describe_interruption_c(session, d, core, acknowledge, selectedpolicy)
+      else if (selectedpolicy.nonEmpty)
+        N.invalid("The requested Purpose Test evidence policy requires the exact Purpose Test interruption frontier")
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeMaterializing")))
@@ -481,18 +487,25 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.MergeValidated")))
         RepositorySyncRequiredLintContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else _describe_v1_c(identity, d, definition, core, policy, acknowledge)
-    }
+  } yield result
+
+  private def _purpose_test_policy_c(selector: Option[String]): Consequence[Option[String]] = selector match {
+    case None => Consequence.success(None)
+    case Some(T.legacySelector) => Consequence.success(Some(T.legacyPolicy))
+    case Some(_) => N.invalid("Unrecognized purposeTestEvidencePolicy")
+  }
+
   private def _describe_interruption_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] = {
+    acknowledge: String => Consequence[Unit], selectedpolicy: Option[String]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] = {
     val current = session.started.current
     if (current.currentProgression.contains(ProgressionReference("sync.PurposeChecking")))
-      RepositorySyncPurposeTestInterruption.describeC(session, d, core, acknowledge)
-    else if (RepositorySyncPurposeTestInterruption.descriptionFrontier(current)) for {
+      T.describeC(session, d, core, acknowledge, selectedpolicy.getOrElse(T.policy))
+    else if (T.descriptionFrontier(current)) for {
       store <- N.bindC(session, d, core, acknowledge)
       stage <- store.currentPurposeC(current)
       source <- stage.filter(_.payload.purposes.exists(_.interruption.nonEmpty)).map(Consequence.success)
         .getOrElse(N.invalid("Purpose Test interruption has no retained adopted direction"))
-      result <- RepositorySyncPurposeTestInterruption.describeAdoptedC(store, current, source)
+      result <- T.describeAdoptedC(store, current, source, selectedpolicy)
     } yield result
     else N.invalid("Purpose Test interruption frontier changed; describe the current Session again")
   }
@@ -660,10 +673,13 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("RepositorySyncService") ||
           request.operation != (if (describe) describeOperation else adoptionOperation)) N.invalid("continuation Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, Some(id), None))
-      else adoptionSourceC(request).map(source => Action(request, None, Some(source)))
+      else if (describe) for {
+        id <- NativeWorkflowOperationInput.textC(request, "sessionId")
+        selector <- NativeWorkflowOperationInput.optionalTextC(request, "purposeTestEvidencePolicy")
+      } yield Action(request, Some(id), None, selector)
+      else adoptionSourceC(request).map(source => Action(request, None, Some(source), None))
     private final case class Action(request: Request, identity: Option[String],
-      input: Option[NativeWorkflowResourceInput.Source[Record]]) extends CommandAction {
+      input: Option[NativeWorkflowResourceInput.Source[Record]], selector: Option[String]) extends CommandAction {
       override def commandExecutionMode = CommandExecutionMode.Sync
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
@@ -677,14 +693,18 @@ private[smworkflow] object RepositorySyncValidationContinuation {
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
           selected = core.copy(executionContext = context)
           result <- value match {
-            case None if passive => F.sessionC(session, d, definition, selected).flatMap(saved =>
-              _describe_interruption_c(saved, d, selected, acknowledge)).map(NativeWorkflowOperationOutput.response(_))
+            case None if passive => for {
+              selectedpolicy <- _purpose_test_policy_c(selector)
+              saved <- F.sessionC(session, d, definition, selected)
+              described <- _describe_interruption_c(saved, d, selected, acknowledge, selectedpolicy)
+            } yield NativeWorkflowOperationOutput.response(described)
             case Some(input) if passive => anyTargetC(input.target).flatMap {
               case PurposeTestInterruptionTarget(target) =>
                 RepositorySyncPurposeTestInterruption.adoptC(input, target, d, definition, selected, installation, acknowledge)
               case _ => N.invalid("Purpose Test interruption adoption routing target differs")
             }.map(NativeWorkflowOperationOutput.response(_))
-            case None => describeC(session, d, definition, selected, policy, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
+            case None => describeC(session, d, definition, selected, policy, acknowledge, review, selector)
+              .map(NativeWorkflowOperationOutput.response(_))
             case Some(value) => adoptC(value, d, definition, selected, policy, installation, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
           }
         } yield result

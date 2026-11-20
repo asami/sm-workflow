@@ -309,8 +309,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     val selected = progress.selection.get.checks
     val done = progress.receipts.size - 1
     val prefix = attemptPrefix(progress)
-    def _save_(key: String, stage: String, from: N.Stage, value: P.Progress) = store.saveC(prefix + "-" + key,
-      "purpose-progress", from.record, from.payload.copy(stage = stage, purposes = Some(value)))
+    def _save_(key: String, stage: String, from: N.Stage, value: P.Progress, evidencerequirement: Option[String] = None) =
+      store.saveC(prefix + "-" + key, "purpose-progress", from.record,
+        from.payload.copy(stage = stage, purposes = Some(value), purposeTestEvidenceRequirement = evidencerequirement))
     if (progress.receipts.drop(1).zip(selected).exists((receipt, check) => !C.productSuccessful(receipt, check.kind)))
       return Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
         "The retained actual failed or unknown purpose check requires its owning FIX disposition; no replay or success is inferred", "purpose-check-failed"))
@@ -320,6 +321,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))
       if (check.ordinaryDiscovery && (!reused.contains(check.identity) || forceFresh))
         return _ordinary_c(store, source, slot, check, done, reused, policy, authority, review, finish)
+      val reusable = reused.get(check.identity).filterNot(_ => forceFresh)
       for {
         _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
         _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
@@ -329,11 +331,11 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           expected <- E.executeGitC(scoped, GitOperation.Root, slot.workspace).flatMap(_.valueC)
           _ <- if (actual == expected) Consequence.unit else N.invalid("purpose check workspace does not consume the actual materialized candidate root")
         } yield ())
-        intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress)
+        intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress,
+          Option.when(reusable.isEmpty && RepositorySyncPurposeTestInterruption.direct(check))(N.strictPurposeTestEvidence))
         // Selection-correction additions require a real new typed invocation;
         // historical reuse cannot stand in for the missing TestOnly evidence.
-        receipt <- reused.get(check.identity).filterNot(_ => progress.hostContinuation.exists(direction =>
-          direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))) match {
+        receipt <- reusable match {
           case Some(value) => Consequence.success(value)
           case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)

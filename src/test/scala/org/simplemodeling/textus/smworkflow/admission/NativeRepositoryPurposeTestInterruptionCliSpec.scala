@@ -28,6 +28,8 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     with NativeRepositoryContinuationCliFixture {
   private val _episode = "purposeTestInterruption"
   private val _route = "direct-test"
+  private val _legacy_route = "legacy-direct-test"
+  private val _advance = "advanceRepositorySync"
   private val _host_key = GoalPhaseWholePhaseCandidateRecovery.processPlanKey
   private val _program_key = "sm-workflow.repository-sync.program-inputs"
   private val _checks = Vector(C.Check("purpose-compile", 1, WorkflowSbtValidation.Kind.Compile),
@@ -42,15 +44,20 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     "retain independently observed termination and continue the same Session through ordinary scoped Repair" in {
       Given("an isolated ordinary typed Compile and Test, where the first candidate's real Test emits output beyond both capture and receipt limits")
       val stage = episode_stage(_episode)
-      val reopened = Option.when(stage == "after")(reopen_episode(_episode, _route))
+      val legacy = sys.props.get("smworkflow.spec.purposeTestInterruptionLegacy").contains("true")
+      require(!legacy || (stage != "normal" && sys.props.contains("smworkflow.spec.installedCommand")),
+        "Select the installed before or after stage for a legacy Purpose Test episode")
+      val route = if (legacy) _legacy_route else _route
+      val reopened = Option.when(stage == "after")(reopen_episode(_episode, route))
       val scenario = reopened.fold(_fresh())(_._1)
-      if (stage == "after") _bind_selected_component(scenario)
+      if (stage == "after" || legacy) _bind_selected_component(scenario)
       val session = reopened.fold(start(scenario))(_._2)
 
       When("the original Purpose is checked through ordinary Advance")
-      val failed = Option.when(stage != "after")(_interrupt(scenario, session))
+      val failed = Option.when(stage != "after")(_interrupt(scenario, session, legacy))
       val original = current(scenario, session)
-      val oldprogress = _original_progress(scenario, session, original)
+      val intent = _original_intent(scenario, session, original)
+      val oldprogress = intent.payload.value.purposes.get
       val trace = _trace(scenario)
       val events = _events(trace)
       val started = _test_event(events, "started")
@@ -66,13 +73,25 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
       terminal.hcursor.get[Int]("exitCode").toOption should not be empty
       started.hcursor.get[Long]("pid").toOption shouldBe terminal.hcursor.get[Long]("pid").toOption
       _test_results(scenario, session) shouldBe empty
+      if (legacy) {
+        intent.payload.value.purposeTestEvidenceRequirement shouldBe None
+        _assert_original_plan_absent(scenario)
+        events.filter(_.hcursor.get[String]("state").contains("started"))
+          .map(event => event.hcursor.get[String]("operation").toOption.get ->
+            event.hcursor.get[String]("workspaceId").toOption.get) shouldBe Vector("compile" -> _slot_one, "test" -> _slot_one)
+        reopened.foreach { (_, _, stdout) =>
+          Files.readString(Path.of(_read(_invocation_path(scenario)).hcursor.get[String]("stdout").toOption.get)) shouldBe stdout
+        }
+      }
+      if (stage == "normal") intent.payload.value.purposeTestEvidenceRequirement shouldBe Some("strict-as-run-plan")
       if (stage == "before") {
         When("the old installed command's actual invocation, trace and native Session are retained for the second stage")
-        retain_episode(_episode, _route, scenario, session, failed.get.invocation.stdout)
+        retain_episode(_episode, route, scenario, session, failed.get.invocation.stdout)
         Then("the retained episode still names the original unsettled Test")
         Files.isRegularFile(trace) shouldBe true
+        if (legacy) Files.notExists(_legacy_binding_path(scenario), LinkOption.NOFOLLOW_LINKS) shouldBe true
         current(scenario, session) shouldBe original
-      } else _continue(scenario, session, original, oldprogress, started, terminal)
+      } else _continue(scenario, session, original, oldprogress, started, terminal, legacy, stage == "normal")
     }
   }
 
@@ -87,6 +106,13 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
   private def _repository(scenario: F.Scenario): Path = Path.of(scenario.host.target.root)
   private def _invocation_path(scenario: F.Scenario): Path = scenario.root.resolve("purpose-test-interruption-invocation.json")
   private def _host_plan_path(scenario: F.Scenario): Path = scenario.root.resolve("purpose-test-interruption-host-plan.json")
+  private def _as_run_plan_path(scenario: F.Scenario): Path = scenario.root.resolve("purpose-test-interruption-as-run-plan.json")
+  private def _legacy_binding_path(scenario: F.Scenario): Path = scenario.root.resolve("purpose-test-interruption-legacy-run.json")
+  private def _assert_original_plan_absent(scenario: F.Scenario): Unit = {
+    Files.notExists(_as_run_plan_path(scenario), LinkOption.NOFOLLOW_LINKS) shouldBe true
+    Files.notExists(_host_plan_path(scenario), LinkOption.NOFOLLOW_LINKS) shouldBe true
+  }
+  private def _file_reference(path: Path): ContextReference = ContextReference(path.toUri.toASCIIString, "1")
   private def _trace(scenario: F.Scenario): Path = Path.of(_read(_invocation_path(scenario)).hcursor.get[String]("stderr").toOption.get)
   private def _events(trace: Path): Vector[Json] = Files.readString(trace).linesIterator
     .filter(_.startsWith("[cncf-sbt-event] "))
@@ -99,15 +125,15 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
   }
   private def _test_results(scenario: F.Scenario, session: String) = receipts(scenario, session).filter(receipt =>
     receipt.reference.identity.matches(".*-check-1-result"))
-  private def _original_progress(scenario: F.Scenario, session: String, original: InstanceRecord): P.Progress = {
+  private def _original_intent(scenario: F.Scenario, session: String, original: InstanceRecord) = {
     val intent = receipts(scenario, session).filter(_.next == original)
     intent.size shouldBe 1
     intent.head.reference.identity should endWith("-check-1-intent")
-    intent.head.payload.value.purposes.get
+    intent.head
   }
   private def _bind_selected_component(scenario: F.Scenario): Unit = {
-    val path = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile", fail("Select the new CAR for the after stage")))
-    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path), "Select the actual new absolute CAR")
+    val path = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile", fail("Select the installed CAR for this stage")))
+    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path), "Select the actual absolute CAR for this stage")
     configure(scenario, Map("textus.component.file" -> path.toString))
   }
 
@@ -172,7 +198,7 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     scenario
   }
 
-  private def _interrupt(scenario: F.Scenario, session: String): F.Result = {
+  private def _interrupt(scenario: F.Scenario, session: String, legacy: Boolean): F.Result = {
     _success(advance(scenario, session)).business[V.RepositorySyncAdvanceResult].submitOperation shouldBe
       Some("submitRepositoryPurposeResult")
     val inventory = purpose_inputs(scenario).head
@@ -181,8 +207,8 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     val result = P.Result("resolved", "The selected regular product file is the only Purpose input", Vector(group),
       inventory.files.map(_.path).filterNot(_ == "value.txt"))
     _success(submit_purpose(scenario, session, result)).business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
-    val plan = _plan(scenario)
-    Files.writeString(scenario.root.resolve("purpose-test-interruption-as-run-plan.json"), plan.noSpaces, StandardOpenOption.CREATE_NEW)
+    val plan = Option.when(!legacy)(_plan(scenario))
+    plan.foreach(value => Files.writeString(_as_run_plan_path(scenario), value.noSpaces, StandardOpenOption.CREATE_NEW))
     val failed = advance(scenario, session)
     withClue(failed.boundedDiagnostic) { failed.exitCode should not be 0 }
     failed.boundedDiagnostic.toLowerCase should include("mechanical")
@@ -190,20 +216,21 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     val metadata = Json.obj("sessionId" -> session.asJson, "argv" -> invocation.argv.asJson, "pid" -> invocation.pid.asJson,
       "exitCode" -> failed.exitCode.asJson, "stdout" -> invocation.stdout.toString.asJson, "stderr" -> invocation.stderr.toString.asJson)
     Files.writeString(_invocation_path(scenario), metadata.noSpaces, StandardOpenOption.CREATE_NEW)
-    val pid = _test_event(_events(invocation.stderr), "started").hcursor.get[Long]("pid").toOption.get
-    val archive = T.AsRunPlan(ContextReference(_invocation_path(scenario).toUri.toASCIIString, "1"),
-      ContextReference(invocation.stderr.toUri.toASCIIString, "1"), pid, plan)
-    Files.writeString(_host_plan_path(scenario), archive.asJson.noSpaces, StandardOpenOption.CREATE_NEW)
+    plan.foreach { value =>
+      val pid = _test_event(_events(invocation.stderr), "started").hcursor.get[Long]("pid").toOption.get
+      val archive = T.AsRunPlan(_file_reference(_invocation_path(scenario)), _file_reference(invocation.stderr), pid, value)
+      Files.writeString(_host_plan_path(scenario), archive.asJson.noSpaces, StandardOpenOption.CREATE_NEW)
+    }
     failed
   }
 
   private def _public_reference(value: ContextReference): V.WorkflowArtifactReference =
     V.WorkflowArtifactReference(value.identity, value.revision)
-  private def _prepare_observation(scenario: F.Scenario, described: F.Result, observation: T.Observation): F.Result = {
+  private def _prepare_observation(scenario: F.Scenario, described: F.Result, observation: T.Observation, kind: String): F.Result = {
     val directory = Files.createTempDirectory(scenario.root, "fixture-purpose-termination-")
     val references = observation.references.map(_public_reference)
     val execution = V.WorkflowExecutionEvidence(references, Some(observation.observer), None, None)
-    val input = V.WorkflowEvidencePreparationInput("RepositorySync", T.observationKind,
+    val input = V.WorkflowEvidencePreparationInput("RepositorySync", kind,
       described.invocation.stdout.toUri.toASCIIString, save(directory, "observation.json", observation.asJson.noSpaces),
       save(directory, "reference.json", json(references.head)), save(directory, "execution.json", json(execution)),
       "normal-development-host", "2026-11-20T00:00:00Z", "entity:smworkflow.cli.host_evidence",
@@ -218,19 +245,118 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     }
   }
 
+  private def _describe_interruption(scenario: F.Scenario, session: String, legacy: Boolean): F.Result =
+    if (legacy) scenario.repositoryCall(RepositorySyncValidationContinuation.describeOperation,
+      Vector("--sessionId", session, "--purposeTestEvidencePolicy", "legacy-missing-plan"))
+    else describe(scenario, session)
+
+  private def _legacy_run(scenario: F.Scenario, session: String, original: InstanceRecord, target: T.Target,
+    started: T.Started): T.LegacyRun = {
+    _assert_original_plan_absent(scenario)
+    val invocation = _read(_invocation_path(scenario)).hcursor
+    val argv = invocation.get[Vector[String]]("argv").toOption.get
+    val exitcode = invocation.get[Int]("exitCode").toOption.get
+    invocation.get[String]("sessionId").toOption shouldBe Some(session)
+    argv.count(_.endsWith("." + _advance)) shouldBe 1
+    argv.sliding(2).toVector should contain (Vector("--sessionId", session))
+    exitcode should not be 0
+    val intent = _original_intent(scenario, session, original)
+    val candidate = receipts(scenario, session).filter(_.reference.identity == target.candidateReference.identity)
+    candidate.size shouldBe 1
+    candidate.head.payload.value.stage shouldBe "PurposePrepared"
+    candidate.head.payload.value.purposes.get.candidate.get.commit shouldBe target.candidate.commit
+    candidate.head.next.revision.value.toString shouldBe target.candidateRevision
+    val intentref = ContextReference(intent.reference.identity, intent.reference.revision)
+    val candidateref = ContextReference(candidate.head.reference.identity, candidate.head.reference.revision)
+    val revision = intent.next.revision.value.toString
+    revision shouldBe target.frontierRevision
+    intentref shouldBe target.intentReference
+    candidateref shouldBe target.candidateReference
+    T.LegacyRun(session, revision, intentref, candidateref, _file_reference(_invocation_path(scenario)),
+      _file_reference(_trace(scenario)), _advance, exitcode, started.pid, "not-retained")
+  }
+
+  private def _write_legacy_binding(path: Path, binding: T.LegacyRun): ContextReference = {
+    Files.writeString(path, binding.asJson.noSpaces, StandardOpenOption.CREATE_NEW)
+    _file_reference(path)
+  }
+
+  private def _reject_legacy_crossings(scenario: F.Scenario, described: F.Result, default: F.Result,
+    observation: T.Observation, binding: T.LegacyRun): Unit = {
+    val directory = Files.createTempDirectory(scenario.root, "fixture-crossed-legacy-purpose-test-")
+    val missingtrace = _file_reference(directory.resolve("missing-trace.stderr"))
+    val crossedtrace = _file_reference(described.invocation.stderr)
+    val foreignpid = observation.started.pid + 1
+    Given("copies of the authentic trace with an extra selected Test event and their own matching invocation bindings")
+    val frame = "[cncf-sbt-event] "
+    val original = Files.readString(_trace(scenario)).linesIterator.toVector
+    val started = observation.started.asJson
+    val terminal = observation.terminal.asJson
+    val waiting = started.mapObject(_.add("state", "waiting".asJson).add("pid", foreignpid.asJson))
+    val launching = started.mapObject(_.remove("pid").add("state", "launching".asJson))
+    val interrupted = Vector(("crossed-waiting", started, waiting), ("late-launching", terminal, launching)).map {
+      (name, boundary, event) =>
+        val index = original.indexWhere(line => line.startsWith(frame) && parse(line.stripPrefix(frame)).contains(boundary))
+        index should be >= 0
+        val path = directory.resolve(name + ".stderr")
+        Files.writeString(path, original.patch(index + 1, Vector(frame + event.noSpaces), 0).mkString("\n") + "\n",
+          StandardOpenOption.CREATE_NEW)
+        val trace = _file_reference(path)
+        val reference = _write_legacy_binding(directory.resolve(name + ".json"), binding.copy(traceReference = trace))
+        observation.copy(traceReference = trace, legacyBindingReference = Some(reference))
+    }
+    When("the host imports these independently bound traces")
+    val refusedtraces = interrupted.map(_prepare_observation(scenario, described, _, T.legacyObservationKind))
+    Then("trace validation refuses a different waiting process or a relaunch after termination")
+    refusedtraces.foreach { refused =>
+      refused.exitCode should not be 0
+      Files.readString(refused.invocation.stderr) should include("Legacy Purpose Test trace")
+    }
+    val cases = Vector(
+      ("missing-trace", observation.copy(traceReference = missingtrace), binding.copy(traceReference = missingtrace)),
+      ("crossed-trace", observation.copy(traceReference = crossedtrace), binding.copy(traceReference = crossedtrace)),
+      ("foreign-process", observation.copy(started = observation.started.copy(pid = foreignpid),
+        terminal = observation.terminal.copy(pid = foreignpid)), binding.copy(pid = foreignpid)),
+      ("binding-pid", observation, binding.copy(pid = foreignpid)),
+      ("binding-source", observation, binding.copy(frontierRevision = observation.target.candidateRevision)),
+      ("binding-candidate", observation, binding.copy(candidateReference = binding.intentReference)))
+    cases.foreach { (name, value, run) =>
+      val reference = _write_legacy_binding(directory.resolve(name + ".json"), run)
+      val refused = _prepare_observation(scenario, described, value.copy(legacyBindingReference = Some(reference)), T.legacyObservationKind)
+      withClue(name) { refused.exitCode should not be 0 }
+    }
+    val missingbinding = observation.copy(legacyBindingReference = Some(_file_reference(directory.resolve("missing-binding.json"))))
+    val suppliedplan = observation.copy(hostPlanReference = Some(_file_reference(_host_plan_path(scenario))))
+    Vector(observation.copy(legacyBindingReference = None), missingbinding, suppliedplan).foreach { value =>
+      _prepare_observation(scenario, described, value, T.legacyObservationKind).exitCode should not be 0
+    }
+    _prepare_observation(scenario, described, observation, T.observationKind).exitCode should not be 0
+    _prepare_observation(scenario, default, observation, T.legacyObservationKind).exitCode should not be 0
+    _prepare_observation(scenario, default, observation.copy(schemaVersion = T.observationSchema,
+      target = _target(default), legacyBindingReference = None), T.observationKind).exitCode should not be 0
+  }
+
   private def _continue(scenario: F.Scenario, session: String, original: InstanceRecord, oldprogress: P.Progress,
-    started: Json, terminal: Json): Unit = {
+    started: Json, terminal: Json, legacy: Boolean, strictmarked: Boolean): Unit = {
     val repository = _repository(scenario)
     val head = git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD")
     val index = git(scenario.root, "-C", repository.toString, "write-tree")
     val host = _read(scenario.root.resolve(".textus/config.json")).hcursor.get[String](_host_key).toOption.get
+    val continuationstart = scenario.invocations.size
     Given("the isolated source repository's Git metadata is unavailable during passive recovery")
     val (target, recovered, drift) = _without_source_git(scenario, host) {
-      _adopt_interruption(scenario, session, original, oldprogress, started, terminal, host)
+      _adopt_interruption(scenario, session, original, oldprogress, started, terminal, host, legacy, strictmarked)
     }
     git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe head
     git(scenario.root, "-C", repository.toString, "write-tree") shouldBe index
     _repair_candidate(scenario, session, recovered, oldprogress, target, host, drift)
+    if (legacy) {
+      Then("recovery and ordinary Repair preserve the old episode without replaying its start or checks")
+      val calls = scenario.invocations.drop(continuationstart)
+      calls.flatMap(_.argv).exists(_.endsWith(".startRepositorySync")) shouldBe false
+      calls.flatMap(call => _events(call.stderr)).filter(_.hcursor.get[String]("workspaceId").contains(_slot_one)) shouldBe empty
+      _assert_original_plan_absent(scenario)
+    }
   }
 
   private def _without_source_git[A](scenario: F.Scenario, host: String)(body: => A): A = {
@@ -253,14 +379,34 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
   }
 
   private def _adopt_interruption(scenario: F.Scenario, session: String, original: InstanceRecord, oldprogress: P.Progress,
-    started: Json, terminal: Json, host: String): (T.Target, InstanceRecord, Json) = {
+    started: Json, terminal: Json, host: String, legacy: Boolean, strictmarked: Boolean): (T.Target, InstanceRecord, Json) = {
+    val baseline = receipts(scenario, session).toSet
+    val choice = if (legacy) T.legacyChoice else T.choice
+    val kind = if (legacy) T.legacyObservationKind else T.observationKind
+    val schema = if (legacy) T.legacyObservationSchema else T.observationSchema
+    if (strictmarked) {
+      When("the host asks for missing-plan recovery of a newly retained strict Test intent")
+      val refused = _describe_interruption(scenario, session, legacy = true)
+      Then("the marked intent rejects that route with a conflict")
+      refused.exitCode should not be 0
+      Files.readString(refused.invocation.stderr) should include("status=409")
+      Files.readString(refused.invocation.stderr) should include("requires strict as-run plan evidence")
+      current(scenario, session) shouldBe original
+    }
     When("the public operation describes the unresolved direct Test")
-    val described = _success(describe(scenario, session))
+    val default = _success(describe(scenario, session))
+    val described = if (legacy) _success(_describe_interruption(scenario, session, legacy)) else default
     val description = described.business[V.RepositorySyncValidationContinuationDescriptionResult]
     val target = _target(described)
     Then("it binds the original selected candidate, check, ordered successful receipts and host program")
-    description.choices shouldBe T.choices
+    description.choices shouldBe Vector(choice, "Defer")
+    target.continuationPolicy shouldBe (if (legacy) T.legacyPolicy else T.policy)
+    if (legacy) {
+      default.business[V.RepositorySyncValidationContinuationDescriptionResult].choices shouldBe T.choices
+      _target(default) shouldBe target.copy(continuationPolicy = T.policy)
+    }
     target.check shouldBe _checks.last
+    target.selectedChecks shouldBe _checks
     target.successfulPrefix.map(_.identity) shouldBe oldprogress.receipts.map(_.identity)
     target.candidate.commit shouldBe oldprogress.candidate.get.commit
     target.checkWorkspace shouldBe _slot_one
@@ -269,7 +415,9 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     When("the independently prepared Human defers or attempts repair without a provisioned termination observation")
     val deferred = direction(scenario, session, described, "Defer", false, false)
     _success(adopt(scenario, deferred)).business[V.RepositorySyncValidationContinuationAdoptionResult].outcome shouldBe "deferred"
-    val human = direction(scenario, session, described, T.choice, true, true)
+    current(scenario, session) shouldBe original
+    receipts(scenario, session).toSet shouldBe baseline
+    val human = direction(scenario, session, described, choice, true, true)
     val observationref = ContextReference("fixture-purpose-test-termination-" + session, "1")
     val adoption = human.copy(executionEvidence = human.executionEvidence.copy(
       references = human.executionEvidence.references :+ _public_reference(observationref)))
@@ -278,12 +426,13 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     Then("the Human assertions alone leave the same unresolved native frontier")
     current(scenario, session) shouldBe original
 
-    val observation = T.Observation(T.observationSchema, target, observationref, _observer,
-      ContextReference(_invocation_path(scenario).toUri.toASCIIString, "1"),
-      ContextReference(_trace(scenario).toUri.toASCIIString, "1"),
-      ContextReference(_host_plan_path(scenario).toUri.toASCIIString, "1"),
-      started.as[T.Started].fold(error => fail(error.message), identity),
-      terminal.as[T.Terminal].fold(error => fail(error.message), identity))
+    val startedevent = started.as[T.Started].fold(error => fail(error.message), identity)
+    val terminalevent = terminal.as[T.Terminal].fold(error => fail(error.message), identity)
+    val binding = Option.when(legacy)(_legacy_run(scenario, session, original, target, startedevent))
+    val observation = T.Observation(schema, target, observationref, _observer,
+      _file_reference(_invocation_path(scenario)), _file_reference(_trace(scenario)),
+      Option.when(!legacy)(_file_reference(_host_plan_path(scenario))), startedevent, terminalevent,
+      legacyBindingReference = binding.map(_write_legacy_binding(_legacy_binding_path(scenario), _)))
     When("the host attempts to import live or crossed process and target facts")
     val foreigncheck = target.check.copy(identity = "foreign-test")
     val invalid = Vector(
@@ -291,9 +440,11 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
       observation.copy(terminal = observation.terminal.copy(pid = observation.terminal.pid + 1)),
       observation.copy(target = target.copy(check = foreigncheck, selectedChecks = target.selectedChecks.updated(target.checkIndex, foreigncheck))),
       observation.copy(target = target.copy(candidate = target.candidate.copy(commit = "a" * 40))))
-    invalid.foreach(value => _prepare_observation(scenario, described, value).exitCode should not be 0)
+    invalid.foreach(value => _prepare_observation(scenario, described, value, kind).exitCode should not be 0)
+    binding.foreach(_reject_legacy_crossings(scenario, described, default, observation, _))
     Then("passive preparation refuses the altered observations without adopting anything")
     current(scenario, session) shouldBe original
+    receipts(scenario, session).toSet shouldBe baseline
 
     val originalplan = parse(host).fold(error => fail(error.message), identity)
     val drift = originalplan.mapObject(fields => fields.add("sbtPrograms", fields("sbtPrograms").get.mapArray(_.map { program =>
@@ -303,24 +454,33 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     })))
     When("the same program and workspace are described after a launch-plan option changes")
     configure(scenario, Map(_host_key -> drift.noSpaces))
-    val changed = _success(describe(scenario, session))
+    val changed = _success(_describe_interruption(scenario, session, legacy))
     val changedtarget = _target(changed)
     changedtarget.programIdentity shouldBe target.programIdentity
     changedtarget.checkWorkspace shouldBe target.checkWorkspace
     changedtarget.processPlan should not be target.processPlan
-    val crossed = _prepare_observation(scenario, changed, observation.copy(target = changedtarget))
-    Then("the original invocation's independently archived plan refuses that new target")
-    crossed.exitCode should not be 0
-    Files.readString(crossed.invocation.stderr) should include("independently recorded as-run plan")
+    if (!legacy) {
+      val crossed = _prepare_observation(scenario, changed, observation.copy(target = changedtarget), kind)
+      Then("the original invocation's independently archived plan refuses that new target")
+      crossed.exitCode should not be 0
+      Files.readString(crossed.invocation.stderr) should include("independently recorded as-run plan")
+    }
     current(scenario, session) shouldBe original
 
     When("the host restores its original plan and separately provisions the observation")
     configure(scenario, Map(_host_key -> host))
-    scenario.selectPreparedImport(_success(_prepare_observation(scenario, described, observation)))
+    scenario.selectPreparedImport(_success(_prepare_observation(scenario, described, observation, kind)))
+    if (legacy) {
+      adopt(scenario, adoption.copy(target = default.business[V.RepositorySyncValidationContinuationDescriptionResult].target)).exitCode should not be 0
+      adopt(scenario, adoption.copy(choice = T.choice)).exitCode should not be 0
+      adopt(scenario, adoption.copy(priorExecutionEnded = false)).exitCode should not be 0
+      adopt(scenario, adoption.copy(acceptOriginalUncertainty = false)).exitCode should not be 0
+    }
     configure(scenario, Map(_host_key -> drift.noSpaces))
     adopt(scenario, adoption).exitCode should not be 0
     Then("a changed host cannot admit the observed prior invocation")
     current(scenario, session) shouldBe original
+    receipts(scenario, session).toSet shouldBe baseline
 
     When("the original host is restored and the independent pair is adopted from a Resource while source Git is still unavailable")
     configure(scenario, Map(_host_key -> host))
@@ -330,15 +490,21 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     Then("exact repeat and description are passive and only one direction retains original UNKNOWN effects")
     admitted.business[V.RepositorySyncValidationContinuationAdoptionResult].outcome shouldBe "adopted"
     _success(adopt(scenario, adoption)).business[V.RepositorySyncValidationContinuationAdoptionResult].outcome shouldBe "already-adopted"
-    _success(describe(scenario, session)).business[V.RepositorySyncValidationContinuationDescriptionResult].outcome shouldBe "already-adopted"
+    val repeated = _success(describe(scenario, session))
+    repeated.business[V.RepositorySyncValidationContinuationDescriptionResult].outcome shouldBe "already-adopted"
+    _target(repeated) shouldBe target
     val recovered = current(scenario, session)
     recovered.history.dropRight(1) shouldBe original.history
     recovered.currentProgression.map(_.value) shouldBe Some("sync.PurposeRepairRequired")
     recovered.suspension shouldBe None
-    val retained = receipts(scenario, session).filter(_.next == recovered)
+    val (retained, history) = receipts(scenario, session).partition(_.next == recovered)
     retained.size shouldBe 1
+    history.toSet shouldBe baseline
     val progress = retained.head.payload.value.purposes.get
-    progress.interruption.get.originalEffects shouldBe "UNKNOWN"
+    val retaineddirection = progress.interruption.get
+    retaineddirection.originalEffects shouldBe "UNKNOWN"
+    retaineddirection.observation.schemaVersion shouldBe schema
+    retaineddirection.observation shouldBe observation
     progress.copy(interruption = None) shouldBe oldprogress
     _test_results(scenario, session) shouldBe empty
     (target, recovered, drift)
@@ -359,7 +525,8 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     result.submitOperation shouldBe Some("submitNativeMergeRepair")
     result.repair shouldBe None
     val retainedwork = result.retainedWork.getOrElse(fail("The issued Repair has no retained work reference"))
-    val detail = _success(scenario.readRetainedWork(retainedwork)).businessBounded[V.WorkflowRetainedWorkReadResult]
+    val retaineddetail = _success(scenario.readRetainedWork(retainedwork))
+    val detail = retaineddetail.businessBounded[V.WorkflowRetainedWorkReadResult]
     detail.availability shouldBe "available"
     val full = take(V.RepositorySyncAdvanceResult.createC(detail.response))
     full.issuedWorkContext shouldBe result.issuedWorkContext
@@ -372,6 +539,9 @@ final class NativeRepositoryPurposeTestInterruptionCliSpec extends AnyWordSpec w
     val proof = take(full.controlSummary.get.toJsonStringC)
     proof should include("UNKNOWN")
     proof should include(target.intentReference.identity)
+    val provenance = _read(retaineddetail.invocation.stdout).hcursor.downField("response")
+      .downField("control_summary").downField("purpose_test_interruption").downField("original_plan_status").focus
+    provenance shouldBe Option.when(target.continuationPolicy == T.legacyPolicy)("not-retained".asJson)
     _events(issued.invocation.stderr) shouldBe empty
     _test_results(scenario, session) shouldBe empty
 
