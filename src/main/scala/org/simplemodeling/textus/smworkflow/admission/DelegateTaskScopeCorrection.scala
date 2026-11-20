@@ -227,7 +227,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
         original.revision.value < current.revision.value && original.history == current.history.take(original.history.size))
       Consequence.unit else N.invalid("Validation scope lineage crosses the original native frontier")
     business <- N.loadPayloadC(storage, target.sessionId, target.frontierRevision, core)
-    _ <- if (business == target.business) Consequence.unit
+    _ <- if (business.asJson == target.business.asJson) Consequence.unit
       else N.invalid("Validation scope lineage differs from the original native checkpoint")
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
     issued <- storage.bindIssuedC(N.completionOperation, N.inputCodec)
@@ -260,7 +260,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
           current.history.find(_.revision == entry.revision).contains(entry) &&
           correction.componentInstance == target.componentInstance && correction.sessionId == target.sessionId &&
           correction.participant == target.participant && correction.oldContinuationId == old && correction.issued == wire &&
-          checkpoint == correction.business && work.session == target.sessionId && work.state == checkpoint.state &&
+          checkpoint.asJson == correction.business.asJson && work.session == target.sessionId && work.state.asJson == checkpoint.state.asJson &&
           Set("Implement", "Repair")(work.kind) && work.kind == checkpoint.state.stage &&
           checkpoint.validationContinuation.contains(direction) && checkpoint.state.input == expected &&
           checkpoint.root == target.business.root && checkpoint.branch == target.business.branch &&

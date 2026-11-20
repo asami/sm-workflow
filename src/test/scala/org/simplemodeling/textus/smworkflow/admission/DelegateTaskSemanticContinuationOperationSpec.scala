@@ -478,7 +478,11 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
         new org.goldenport.record.io.RecordDecoder().json(Files.readString(path))))))
     } else None
     val collectedtarget = collecteddirection.map(direction => _take(R.targetC(direction.target)))
-    _with_runtime_(root, "TaskSemantic", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
+    val trendHost = ThreeWorkflowNormalHostFixture.definition(root)
+    val scopedTrendHost = trendHost.copy(goal = trendHost.goal.copy(
+      candidatePaths = Vector("docs/phase.md", "docs/trend-extra.md")))
+    _with_runtime_(root, "TaskSemantic", if (installed.isEmpty) Some(scopedTrendHost) else None,
+      hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def _call_[A: ValueReader](operation: String, properties: List[Property], arguments: Vector[String],
         control: Boolean = false, service: String = "DelegateTaskService"): A =
         if (installed.nonEmpty) _take(summon[ValueReader[A]].readC(_installed_(service, operation, arguments)))
@@ -558,7 +562,8 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
         prepare { setup => for {
           definition <- DelegateTaskRuntimeCatalog.loadC()
           host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
-            "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+            "sm-workflow", root.resolve("repository").toString, "main",
+            if (installed.isEmpty) scopedTrendHost.goal.candidatePaths else Vector("docs/phase.md"), Vector.empty,
             None, None, None, None, None)
           context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(retainedsession))
           selected = setup.core.copy(executionContext = context)
@@ -655,7 +660,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           .outcome shouldBe "resumed-awaiting-advance"
         When("a separate ordinary Advance issues the next work from that retained admission")
         val issued = _advance_()
-        val repair = _detail_(issued.retainedWork.get)
+        var repair = _detail_(issued.retainedWork.get)
         val repairjson = io.circe.parser.parse(_take(repair.work.get.toJsonStringC)).toOption.get
         val repairwork = GoalPhaseNativeMetadata.normalizePublicJson(repairjson).toOption.get.as[S.Work].toOption.get
         Then("the observed work is Repair retaining the covered trend, failed receipt and earlier direction")
@@ -665,6 +670,32 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           repairwork.state.receipts.head.externalCapture should not be empty
           repairwork.state.receipts.head.processObservation shouldBe None
         } else repairwork.state.receipts.head.stdout should include ("SPEC fixture-owned")
+        if (installed.isEmpty) {
+          Given("a native path addition covered by the retained active repair-policy direction")
+          val query = V.DelegateTaskScopeCorrectionDescriptionInput(retainedsession,
+            repair.issuedWorkContext.get.continuationId, Vector("docs/trend-extra.md"), Vector.empty)
+          val description = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
+            List(Property("input", query, None)), Vector.empty)
+          val correction = V.DelegateTaskScopeCorrectionInput(retainedsession, query.oldContinuationId,
+            description.target, "SPEC-trend-scope-selection", "participant", "SPEC-trend-scope-key",
+            V.WorkflowArtifactReference("SPEC-trend-scope-human", "1"))
+          val options = Map("input" -> "input", "selection-id" -> correction.selectionId,
+            "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> correction.idempotencyKey,
+            "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+          val selection = _take(org.simplemodeling.textus.smworkflow.preparation.NativeDelegateTaskScopeCorrectionInput
+            .prepareC(options, _ => correction.toRecord().toJsonStringC))
+          val row = selection.getVector("datastore").get.head.asInstanceOf[Record]
+            .getVector("records").get.head.asInstanceOf[Record]
+          prepare(_.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id"))))
+          val corrected = _call_[V.DelegateTaskScopeCorrectionView]("correctDelegateTaskScope",
+            List(Property("inputResource", _file_("trend-scope-correction", correction), None)), Vector.empty)
+          corrected.outcome shouldBe "corrected-awaiting-advance"
+          repair = _detail_(_advance_().retainedWork.get)
+          val scopedJson = io.circe.parser.parse(_take(repair.work.get.toJsonStringC)).toOption.get
+          val scopedWork = GoalPhaseNativeMetadata.normalizePublicJson(scopedJson).toOption.get.as[S.Work].toOption.get
+          scopedWork.state.input.ownedPaths shouldBe repairwork.state.input.ownedPaths :+ "docs/trend-extra.md"
+          scopedWork.state.copy(input = repairwork.state.input) shouldBe repairwork.state
+        }
         val unresolved = V.DelegateTaskWorkResult("decision-needed", "SPEC later supplier needs an actual result", Vector.empty,
           NonEmptyVector.of(V.DelegateTaskCondition("objective", false, "SPEC pending supplier"),
             V.DelegateTaskCondition("delivery", false, "SPEC pending supplier")), Vector("SPEC later supplier result is required"), None, None)
@@ -910,7 +941,10 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,
       "direct-instruction", Vector.empty, contract, Vector.empty)
-    _with_runtime_(root, "TaskSemantic", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
+    val originalHost = ThreeWorkflowNormalHostFixture.definition(root)
+    val expandedHost = originalHost.copy(goal = originalHost.goal.copy(
+      candidatePaths = Vector("docs/phase.md", "docs/extra.md", "docs/other.md")))
+    _with_runtime_(root, "TaskSemantic", Some(expandedHost), hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def _encoded_(value: org.goldenport.record.RecordPresentable): String = _take(value.toRecord().toJsonStringC)
       def _call_[A: ValueReader](name: String, input: org.goldenport.record.RecordPresentable,
         service: String = "DelegateTaskService"): A = read_value[A](_take(owner.executeOperationResponseInContext(
@@ -929,13 +963,27 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           Property("input", input, None), Property("selectionId", "SPEC-selection", None),
           Property("participant", "participant", None), Property("idempotencyKey", "SPEC-start", None))), actor)))
       val session = started.sessionId
+      Given("a distinct SPEC Session started while the selected worktree is clean")
+      val foreignInput = input.copy(requestIdentity = "SPEC-foreign-scope-session")
+      val foreignSelection = _take(NativeDelegateTaskStartInput.prepareC(Map("input" -> "input",
+        "selection-id" -> "SPEC-foreign-selection", "participant" -> "participant", "origin" -> "ExplicitHuman",
+        "idempotency-key" -> "SPEC-foreign-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection"),
+        _ => foreignInput.toRecord().toJsonStringC))
+      val foreignRow = foreignSelection.getVector("datastore").get.head.asInstanceOf[Record]
+        .getVector("records").get.head.asInstanceOf[Record]
+      prepare(_.createC("goal_selection", foreignRow.getString("id").get, foreignRow.removeKeys(Set("id"))))
+      val foreignStarted = read_value[V.DelegateTaskView](_take(owner.executeOperationResponseInContext(Request.of(
+        component = component.name, service = "DelegateTaskService", operation = "startDelegateTask", properties = List(
+          Property("input", foreignInput, None), Property("selectionId", "SPEC-foreign-selection", None),
+          Property("participant", "participant", None), Property("idempotencyKey", "SPEC-foreign-start", None))), actor)))
+      foreignStarted.sessionId should not be session
       def _checkpoint_(change: Option[BoundedWorkRuntime.Payload => BoundedWorkRuntime.Payload] = None):
           (InstanceRecord, BoundedWorkRuntime.Payload) = {
         var result = Option.empty[(InstanceRecord, BoundedWorkRuntime.Payload)]
         prepare { setup => for {
           definition <- DelegateTaskRuntimeCatalog.loadC()
           host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
-            "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty, None, None, None, None, None)
+            "sm-workflow", root.resolve("repository").toString, "main", expandedHost.goal.candidatePaths, Vector.empty, None, None, None, None, None)
           context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
           selected = setup.core.copy(executionContext = context)
           store <- DelegateTaskNativeRun.storageC(host, definition, selected)
@@ -959,7 +1007,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       prepare { setup => for {
         definition <- DelegateTaskRuntimeCatalog.loadC()
         host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
-          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty, None, None, None, None, None)
+          "sm-workflow", root.resolve("repository").toString, "main", expandedHost.goal.candidatePaths, Vector.empty, None, None, None, None, None)
         context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
         selected = setup.core.copy(executionContext = context)
         store <- DelegateTaskNativeRun.storageC(host, definition, selected)
@@ -1081,8 +1129,8 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       val admittedrevision = _checkpoint_()._1.revision
       _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", answer).outcome shouldBe "already-resumed"
       _checkpoint_()._1.revision shouldBe admittedrevision
-      val issued = _advance_()
-      val successor = _work_(_detail_(issued))
+      var issued = _advance_()
+      var successor = _work_(_detail_(issued))
       Then("the same Task retains Incomplete diagnostics and unchanged counters without another check")
       successor.session shouldBe session
       successor.kind shouldBe "Repair"
@@ -1090,6 +1138,51 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       _advance_().retainedWork shouldBe issued.retainedWork
       _checkpoint_()._2.delegateRepairContinuation shouldBe original.delegateRepairContinuation
       Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      Given("an admitted path addition while the recorded Incomplete repair direction remains active")
+      val incompleteIssue = _detail_(issued)
+      val incompleteQuery = V.DelegateTaskScopeCorrectionDescriptionInput(session,
+        incompleteIssue.issuedWorkContext.get.continuationId, Vector("docs/extra.md"), Vector.empty)
+      val incompleteDescription = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection", incompleteQuery)
+      val incompleteCorrection = V.DelegateTaskScopeCorrectionInput(session, incompleteQuery.oldContinuationId,
+        incompleteDescription.target, "SPEC-incomplete-scope-selection", "participant", "SPEC-incomplete-scope-key",
+        V.WorkflowArtifactReference("SPEC-incomplete-scope-human", "1"))
+      val incompleteOptions = Map("input" -> "input", "selection-id" -> incompleteCorrection.selectionId,
+        "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> incompleteCorrection.idempotencyKey,
+        "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+      val incompleteSelection = _take(org.simplemodeling.textus.smworkflow.preparation.NativeDelegateTaskScopeCorrectionInput
+        .prepareC(incompleteOptions, _ => incompleteCorrection.toRecord().toJsonStringC))
+      val incompleteRow = incompleteSelection.getVector("datastore").get.head.asInstanceOf[Record]
+        .getVector("records").get.head.asInstanceOf[Record]
+      prepare(_.createC("goal_selection", incompleteRow.getString("id").get, incompleteRow.removeKeys(Set("id"))))
+      val incompleteFile = root.resolve("SPEC-incomplete-scope-correction.json")
+      Files.writeString(incompleteFile, _encoded_(incompleteCorrection))
+      _take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+        service = "DelegateTaskService", operation = "correctDelegateTaskScope",
+        properties = List(Property("inputResource", incompleteFile.toUri.toASCIIString, None))), actor))
+      Files.writeString(root.resolve("repository/docs/extra.md"), "SPEC admitted incomplete repair scope\n")
+      val correctedIncomplete = _detail_(_advance_())
+      val correctedWork = _work_(correctedIncomplete)
+      correctedWork.state.input.ownedPaths shouldBe successor.state.input.ownedPaths :+ "docs/extra.md"
+      val secondReference = V.WorkflowArtifactReference("SPEC-incomplete-second-decision", "1")
+      _take(owner.executeOperationResponseInContext(Request.of(component = component.name, service = "DelegateTaskService",
+        operation = "submitDelegateTaskWorkResult", properties = List(Property("sessionId", session, None),
+          Property("issuedWorkContext", correctedIncomplete.issuedWorkContext.get, None), Property("result", decision, None),
+          Property("resultReference", secondReference, None),
+          Property("executionEvidence", execution.copy(references = Vector(secondReference)), None))), actor))
+      _advance_().kind shouldBe "Human"
+      val secondDescription = _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("describeDelegateTaskSemanticContinuation",
+        V.DelegateTaskSemanticContinuationDescriptionInput(session))
+      val secondTarget = _take(R.targetC(secondDescription.target))
+      secondTarget.business.delegateRepairContinuation shouldBe original.delegateRepairContinuation
+      secondTarget.business.state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+      secondTarget.business.state.input shouldBe correctedWork.state.input
+      val secondAnswer = answer.copy(target = secondDescription.target,
+        reference = V.WorkflowArtifactReference("SPEC-incomplete-second-human", "1"))
+      _provision_("incomplete-second", "semantic-continuation", secondDescription, secondAnswer, secondAnswer.reference)
+      _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", secondAnswer).outcome shouldBe "resumed-awaiting-advance"
+      issued = _advance_()
+      successor = _work_(_detail_(issued))
+      successor.state shouldBe secondTarget.business.state.copy(stage = "Repair")
       Given("a normal completed Repair followed by a new scoped candidate and a fixture-owned formal Failed check")
       val completionreference = V.WorkflowArtifactReference("SPEC-incomplete-repair-completed", "1")
       val required = successor.state.input.submissionConditions.getOrElse(successor.state.input.conditions).toSet
@@ -1128,8 +1221,58 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
             WorkflowSbtValidation.Outcome.Failed, None, None)))
         payload.copy(state = _take(S.observedC(_take(S.intentC(captured)), failed)))
       })
-      val laterrepair = _detail_(_advance_())
+      val oldIssue = _advance_()
+      val oldRepair = _detail_(oldIssue)
+      val oldWork = _work_(oldRepair)
+      val correctionQuery = V.DelegateTaskScopeCorrectionDescriptionInput(session,
+        oldRepair.issuedWorkContext.get.continuationId, Vector("docs/other.md"), Vector.empty)
+      val correctionDescription = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection", correctionQuery)
+      val correction = V.DelegateTaskScopeCorrectionInput(session, correctionQuery.oldContinuationId,
+        correctionDescription.target, "SPEC-scope-selection", "participant", "SPEC-scope-key",
+        V.WorkflowArtifactReference("SPEC-scope-human", "1"))
+      val options = Map("input" -> "input", "selection-id" -> correction.selectionId,
+        "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> correction.idempotencyKey,
+        "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+      val selection = _take(org.simplemodeling.textus.smworkflow.preparation.NativeDelegateTaskScopeCorrectionInput
+        .prepareC(options, _ => correction.toRecord().toJsonStringC))
+      val row = selection.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+      prepare(_.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id"))))
+      val correctionFile = root.resolve("SPEC-scope-correction.json")
+      Files.writeString(correctionFile, _encoded_(correction))
+      val corrected = read_value[V.DelegateTaskScopeCorrectionView](_take(owner.executeOperationResponseInContext(
+        Request.of(component = component.name, service = "DelegateTaskService", operation = "correctDelegateTaskScope",
+          properties = List(Property("inputResource", correctionFile.toUri.toASCIIString, None))), actor)))
+      corrected.outcome shouldBe "corrected-awaiting-advance"
+      Files.writeString(root.resolve("repository/docs/other.md"), "SPEC admitted repair inventory\n")
+      val correctedIssue = _advance_()
+      val laterrepair = _detail_(correctedIssue)
       val laterwork = _work_(laterrepair)
+      laterrepair.issuedWorkContext.get.continuationId should not be oldRepair.issuedWorkContext.get.continuationId
+      laterwork.state.input.ownedPaths shouldBe oldWork.state.input.ownedPaths :+ "docs/other.md"
+      laterwork.state.input.sourceReferences shouldBe oldWork.state.input.sourceReferences :+
+        ContextReference(correction.reference.identity, correction.reference.revision)
+      laterwork.state.copy(input = oldWork.state.input) shouldBe oldWork.state
+      Given("a distinct SPEC Session and the first Session's genuine retained supersession")
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", expandedHost.goal.candidatePaths,
+          Vector.empty, None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        instances <- store.bindInstancesC()(using context)
+        source <- instances.loadC(InstanceIdentity(session))(using context).flatMap(
+          _.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC source Session absent")))
+        foreign <- instances.loadC(InstanceIdentity(foreignStarted.sessionId))(using context).flatMap(
+          _.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC foreign Session absent")))
+        payload <- DelegateTaskNativeRun.retainedPayloadC(store, session, selected)
+        genuine <- DelegateTaskDeliveryProjection.checkpointsC(store, source, source, payload, selected, 0L)
+        _ = {
+          genuine.map(_._1.target.oldContinuationId) should contain (oldRepair.issuedWorkContext.get.continuationId)
+          DelegateTaskDeliveryProjection.checkpointsC(store, foreign, source, payload, selected, 0L).isSuccess shouldBe false
+        }
+      } yield () }
       laterwork.kind shouldBe "Repair"
       laterwork.state.generation shouldBe original.state.generation + 1
       laterwork.state.automaticCount shouldBe original.state.automaticCount + 1
@@ -1144,6 +1287,22 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           Property("resultReference", laterreference, None),
           Property("executionEvidence", execution.copy(references = Vector(laterreference)), None))), actor))
       _advance_().kind shouldBe "Human"
+      val stoppedAfterCorrection = _checkpoint_()._2
+      Given("unrecorded scope and a foreign historical direction")
+      val forgedInputs = Vector(
+        stoppedAfterCorrection.copy(state = stoppedAfterCorrection.state.copy(input =
+          stoppedAfterCorrection.state.input.copy(ownedPaths = stoppedAfterCorrection.state.input.ownedPaths :+ "docs/unadmitted.md"))),
+        stoppedAfterCorrection.copy(delegateSemanticContinuation = stoppedAfterCorrection.delegateSemanticContinuation.map { prior =>
+          val target = _take(R.targetC(prior.target.noSpaces))
+          prior.copy(target = target.copy(sessionId = "SPEC-foreign-session").asJson)
+        }))
+      forgedInputs.foreach { forged =>
+        _checkpoint_(Some(_ => forged))
+        owner.executeOperationResponseInContext(Request.of(component = component.name, service = "DelegateTaskService",
+          operation = "describeDelegateTaskSemanticContinuation", properties = List(Property("input",
+            V.DelegateTaskSemanticContinuationDescriptionInput(session), None))), actor).isSuccess shouldBe false
+        _checkpoint_(Some(_ => stoppedAfterCorrection))
+      }
       val laterdescription = _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("describeDelegateTaskSemanticContinuation",
         V.DelegateTaskSemanticContinuationDescriptionInput(session))
       val latertarget = _take(R.targetC(laterdescription.target))
@@ -1151,12 +1310,21 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       latertarget.original.resultReference shouldBe ContextReference(laterreference.identity, laterreference.revision)
       latertarget.business.delegateRepairContinuation shouldBe original.delegateRepairContinuation
       latertarget.business.state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+      latertarget.business.delegateSemanticContinuation shouldBe stoppedAfterCorrection.delegateSemanticContinuation
+      latertarget.business.state.input shouldBe laterwork.state.input
+      _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", answer).outcome shouldBe "already-resumed"
       latertarget.business.state.generation shouldBe original.state.generation + 1
       val lateranswer = answer.copy(target = laterdescription.target, reference = V.WorkflowArtifactReference("SPEC-later-semantic-human", "1"))
       _provision_("later-semantic", "semantic-continuation", laterdescription, lateranswer, lateranswer.reference)
       _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", lateranswer).outcome shouldBe "resumed-awaiting-advance"
       _checkpoint_()._2.delegateRepairContinuation shouldBe original.delegateRepairContinuation
-      _work_(_detail_(_advance_())).state.generation shouldBe original.state.generation + 1
+      val finalIssue = _advance_()
+      val finalWork = _work_(_detail_(finalIssue))
+      finalWork.state shouldBe latertarget.business.state.copy(stage = "Repair")
+      finalWork.state.generation shouldBe original.state.generation + 1
+      _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", answer).outcome shouldBe "already-resumed"
+      _call_[V.DelegateTaskSemanticContinuationDescriptionResult]("resumeDelegateTaskSemanticContinuation", lateranswer).outcome shouldBe "already-resumed"
+      _advance_().retainedWork shouldBe finalIssue.retainedWork
       Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
     }
   }

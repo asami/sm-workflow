@@ -55,6 +55,17 @@ final class DelegateTaskDeliveryProjectionSpec extends AnyWordSpec with Matchers
         state = state.copy(input = input.copy(checks = Vector("different"))))))
       DelegateTaskDeliveryProjection.reconcileC(corrected, Vector(changed)).isSuccess shouldBe false
     }
+    "require every ordered correction when reconciling a chained inventory" in {
+      val first = take(DelegateTaskDeliveryProjection.correctedC(input, checkpoint))
+      val second = checkpoint.copy(target = checkpoint.target.copy(oldContinuationId = "second-issue",
+        business = checkpoint.target.business.copy(state = state.copy(input = first)),
+        additionalOwnedPaths = Vector("src/test/scala/OtherSpec.scala")),
+        reference = ContextReference("specification-second-correction", "1"))
+      val finalInput = take(DelegateTaskDeliveryProjection.correctedC(first, second))
+      take(DelegateTaskDeliveryProjection.reconcileC(finalInput, Vector(checkpoint, second))) shouldBe finalInput
+      DelegateTaskDeliveryProjection.reconcileC(finalInput, Vector(second, checkpoint)).isSuccess shouldBe false
+      DelegateTaskDeliveryProjection.reconcileC(finalInput, Vector(checkpoint)).isSuccess shouldBe false
+    }
     "identify a reused source by its native receipt while reconciling inventory" in {
       val reused = checkpoint.copy(reference = source)
       val actual = input.copy(ownedPaths = input.ownedPaths ++ reused.target.additionalOwnedPaths)

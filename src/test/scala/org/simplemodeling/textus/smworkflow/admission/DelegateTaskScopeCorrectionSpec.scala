@@ -83,7 +83,8 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       }
     }
 
-    def _repair_scope_(external: Boolean): Unit = {
+    def _repair_scope_(externalExitCode: Option[Int]): Unit = {
+      val external = externalExitCode.nonEmpty
       Given("a SPECIFICATION-OWNED destination with retained check evidence and a native pending Repair")
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "repair-").toRealPath()
       val capture = root.resolve("capture/validation/focused.json")
@@ -123,24 +124,30 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
           observed <- call.observeC()
           failed = org.simplemodeling.textus.smworkflow.admission.RepositorySyncNativeMergeValidation.Receipt(
             "focused", "exited", Some(1), "SPECIFICATION-OWNED retained check failure", "")
-          receipts <- if (external) {
-            val association = WorkflowSbtCapture.Association(call.core.component.get.core.instanceId.canonicalKey,
-              started.sessionId, current.revision.value, payload.state.participant, "focused", 2,
-              payload.root, payload.branch, observed.head, observed.tree)
-            val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly,
-              WorkflowSbtValidation.Outcome.Succeeded,
-              Some(WorkflowSbtValidation.Selection(Vector("example.FixtureSpec"), 1, 1L)), None)
-            val bytes = "SPECIFICATION-OWNED successful TestOnly evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
-            val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0),
-              ProcessExecutionCapture(bytes, bytes.size.toLong, false), ProcessExecutionCapture(Vector.empty, 0L, false),
-              Vector.empty, 1L, "specification-focused")
-            WorkflowSbtCapture.archiveC(call.core, "sm-workflow-validation-artifacts", "validation/focused.json",
-              association, facts, process, ResourceReadLimits(WorkflowSbtCapture.maximumArtifactBytes)).map { reference =>
-              Vector(RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0),
-                WorkflowSbtCapture.text(process.stdout).value, "", Some(facts), Some(process), None, Some(reference)))
-            }
-          } else Consequence.success(Vector(failed))
-          finding = if (external) "review:retained-finding" else "check:focused:failed"
+          context <- NativeWorkflowSessionInput.contextC(call.executionContext, Some(started.sessionId))
+          selected = call.core.copy(executionContext = context)
+          receipts <- externalExitCode match {
+            case Some(exitCode) =>
+              val association = WorkflowSbtCapture.Association(call.core.component.get.core.instanceId.canonicalKey,
+                started.sessionId, current.revision.value, payload.state.participant, "focused", 2,
+                payload.root, payload.branch, observed.head, observed.tree)
+              val success = exitCode == 0
+              val outcome = if (success) WorkflowSbtValidation.Outcome.Succeeded else WorkflowSbtValidation.Outcome.Failed
+              val selection = Option.when(success)(WorkflowSbtValidation.Selection(Vector("example.FixtureSpec"), 1, 1L))
+              val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly, outcome, selection, None)
+              val status = if (success) "successful" else "failed"
+              val bytes = s"SPECIFICATION-OWNED $status TestOnly evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+              val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(exitCode),
+                ProcessExecutionCapture(bytes, bytes.size.toLong, false), ProcessExecutionCapture(Vector.empty, 0L, false),
+                Vector.empty, 1L, "specification-focused")
+              WorkflowSbtCapture.archiveC(selected, "sm-workflow-validation-artifacts", "validation/focused.json",
+                association, facts, process, ResourceReadLimits(WorkflowSbtCapture.maximumArtifactBytes)).map { reference =>
+                Vector(RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(exitCode),
+                  WorkflowSbtCapture.text(process.stdout).value, "", Some(facts), Some(process), None, Some(reference)))
+              }
+            case None => Consequence.success(Vector(failed))
+          }
+          finding = if (externalExitCode.contains(0)) "review:retained-finding" else "check:focused:failed"
           repair = payload.state.copy(stage = "Repair", generation = 3, automaticCount = 2, ordinaryCount = 1,
             candidate = Some(S.Candidate(observed.head, observed.tree, Vector("src/test/scala/Repair.scala"), "fixture candidate")),
             receipts = receipts, semanticReference = Some(ContextReference("retained-implementation", "1")),
@@ -166,7 +173,10 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         _advance_().issuedWorkContext shouldBe old.issuedWorkContext
         if (external) {
           val reference = before.receipts.head.externalCapture.get
-          reference.exitCode shouldBe Some(0)
+          reference.exitCode shouldBe externalExitCode
+          reference.workspace shouldBe "sm-workflow-validation-artifacts"
+          reference.association.session shouldBe started.sessionId
+          reference.association.check shouldBe "focused"
           When("the external file is absent or contradicts the retained TestOnly reference")
           val bytes = Files.readAllBytes(capture)
           Files.delete(capture)
@@ -233,6 +243,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         after.input.sourceReferences should contain(ContextReference(correction.reference.identity, correction.reference.revision))
         after.input.sourceReferences shouldBe before.input.sourceReferences
         after.copy(input = before.input) shouldBe before
+        after.receipts.head.externalCapture shouldBe before.receipts.head.externalCapture
         after.automaticCount shouldBe 2
         after.ordinaryCount shouldBe 1
         after.repairControl.selectedLimit shouldBe 10
@@ -322,11 +333,15 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
     }
 
     "add same-purpose repair inventory while retaining failed checks and the existing repair allowance" in {
-      _repair_scope_(false)
+      _repair_scope_(None)
     }
 
     "add same-purpose repair inventory with retained successful TestOnly evidence stored in a File" in {
-      _repair_scope_(true)
+      _repair_scope_(Some(0))
+    }
+
+    "add same-purpose repair inventory with retained failed TestOnly evidence stored in a File" in {
+      _repair_scope_(Some(1))
     }
 
     "retain immutable issued work and partial source, admit the exact correction, and continue without executing checks" in {
