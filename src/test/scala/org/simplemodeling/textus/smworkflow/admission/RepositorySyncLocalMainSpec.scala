@@ -1,13 +1,16 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 21, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
 import java.nio.file.{Files, Path}
-import org.goldenport.cncf.processexecution.{GitBranchName, GitObjectId, GitOperation, GitWorktree}
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
+import org.goldenport.cncf.processexecution.{GitBranchName, GitObjectId, GitOperation, GitWorktree, SbtOperation}
+import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowMechanicalTransition}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -17,6 +20,8 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import SplitPhaseExplicitPartitionFixture.take
+import RepositorySyncNativeMergeValidation as C
+import RepositorySyncProgramImpact as P
 
 /** Every repository and effect is specification-owned and local. Remote means
   * the isolated bare fixture, never a live GitHub endpoint or another checkout.
@@ -27,6 +32,42 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
   private val sourceWorkspace = "sm-workflow-repository"
   private val mainWorkspace = "canonical-main"
   private def cloneScenario(scenario: String): Boolean = scenario.startsWith("Clone")
+  private def _regression(scenario: String): Boolean = scenario.startsWith("Regression")
+  private val _shared_source = "src/main/java/Shared.java"
+  private val _left_source = "src/main/java/Left.java"
+  private val _right_source = "src/main/java/Right.java"
+  private val _compile = C.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+  private val _left_test = C.Check("left-test", 2, WorkflowSbtValidation.Kind.Test)
+  private val _right_test = C.Check("right-test", 3, WorkflowSbtValidation.Kind.Test)
+  private val _shared_test = C.Check("shared-test", 4, WorkflowSbtValidation.Kind.Test)
+  private val _full_test = C.Check("ordinary-full", 5, WorkflowSbtValidation.Kind.Test)
+  private def _impact_policy: P.Policy = {
+    val broad = Vector("build.sbt", "project")
+    val sources = Vector(_shared_source, _left_source, _right_source)
+    P.Policy(Vector(
+      P.Coverage(_compile, sources, Vector("src", "value.txt") ++ broad, "Compile every contributed source"),
+      P.Coverage(_left_test, Vector(_shared_source, _left_source), Vector(_shared_source, _left_source) ++ broad,
+        "Left behavior consumes local and shared inputs"),
+      P.Coverage(_right_test, Vector(_right_source), Vector(_right_source) ++ broad, "Right behavior consumes remote input"),
+      P.Coverage(_shared_test, Vector(_shared_source), sources ++ broad, "Shared behavior also consumes either side's source")),
+      Vector(_compile, _full_test), broad, "Ordinary FULL covers broad and undeclared behavior", Vector.empty)
+  }
+
+  override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
+    super._prepare_sbt_build_(root, scenario)
+    if (_regression(scenario)) {
+      val build = root.resolve("repository/build.sbt")
+      Files.writeString(build, Files.readString(build) + "\nGlobal / onLoad := {\n" +
+        "  val original = (Global / onLoad).value\n  state => {\n    val loaded = original(state)\n" +
+        "    IO.append(file(" + root.resolve("selected-launches.txt").toString.asJson.noSpaces +
+        "), state.remainingCommands.map(_.commandLine).mkString(\"|\") + \"\\n\")\n    loaded\n  }\n}\n")
+      val product = root.resolve("repository/src/test/scala/ProductCheck.scala")
+      Files.writeString(product, Files.readString(product).replace("println(\"PRODUCT_CHECK_PASSED\")",
+        "val source = java.nio.file.Files.readString(root.resolve(\"src/main/java/Shared.java\"))\n" +
+        "    assert(!source.contains(\"<<<<<<<\") && source.contains(\"int value\"), \"integrated source is required\")\n" +
+        "    println(\"PRODUCT_CHECK_PASSED\")"))
+    }
+  }
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     Files.createDirectories(root.resolve("work"))
     if (scenario.startsWith("Batch")) Files.createDirectories(root.resolve("work-two"))
@@ -78,9 +119,26 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
             grant.mapObject(row => row.add("capabilities", row("capabilities").get.mapArray(_ :+ "separate-main-git".asJson)))
           else grant))))
     }
-    Phase69ConfiguredRepositoryFixture.withInitializationSources(reconciled)
+    val executable = if (!_regression(scenario)) reconciled else {
+      val plans = Vector(TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable,
+        Vector(1), operation = SbtOperation.Compile), TypedSbtHostPlanFixture.plan(root,
+        TypedSbtHostPlanFixture.normalExecutable, Vector(2, 3, 4, 5)))
+      def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
+      val programs = plans.flatMap(_array_(_, "sbtPrograms"))
+      val added = plans.flatMap(_array_(_, "workspaces"))
+      val identities = added.map(_.hcursor.get[String]("identity").toOption.get).toSet
+      reconciled.mapObject(fields => fields.add("sbtPrograms", programs.asJson)
+        .add("workspaces", (_array_(reconciled, "workspaces").filterNot(row =>
+          identities(row.hcursor.get[String]("identity").toOption.get)) ++ added).asJson)
+        .add("workspaceGrants", (_array_(reconciled, "workspaceGrants").filterNot(row =>
+          identities(row.hcursor.get[String]("workspaceId").toOption.get)) ++ plans.flatMap(_array_(_, "workspaceGrants"))).asJson)
+        .add("grants", fields("grants").get.mapArray(_.map(grant => grant.mapObject(g =>
+          g.add("capabilities", g("capabilities").get.mapArray(_ ++ programs.map(_.hcursor.get[Json]("capability").toOption.get))))))))
+    }
+    Phase69ConfiguredRepositoryFixture.withInitializationSources(executable)
   }
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {
+    if (_regression(scenario)) return _regression_commands(root, scenario)
     def commit(path: Path, message: String) = Vector("-C", path.toString, "-c", "user.name=Fixture",
       "-c", "user.email=fixture@example.invalid", "commit", "-m", message)
     val checkout = if (cloneScenario(scenario)) Vector(
@@ -103,6 +161,7 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
       Vector("-C", root.resolve("work-two").toString, "add", "--", "docs/two.md"), commit(root.resolve("work-two"), "second contribution"))
   }
   override protected def _setup_files_(root: Path, scenario: String, index: Int): Unit = {
+    if (_regression(scenario)) { _regression_files(root, scenario, index); return }
     val file = (index - (if (cloneScenario(scenario)) 1 else 0)) match {
       case 5 => Some(root.resolve("work/docs/work.md") -> "accepted work contribution\n")
       case 7 => Some(root.resolve("repository/docs/main.md") -> "preserved main-only contribution\n")
@@ -116,7 +175,228 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
     "documentPaths" -> Vector("docs").asJson, "consumedPaths" -> Vector("build.sbt", "src", "project").asJson,
     "reason" -> "SPECIFICATION-OWNED ordinary documents; build and executable inputs remain consumed".asJson).noSpaces)
 
+  private def _regression_commands(root: Path, scenario: String): Vector[Vector[String]] = {
+    val repository = root.resolve("repository")
+    val work = root.resolve("work")
+    val peer = root.resolve("peer")
+    val remote = root.resolve("upstream.git")
+    def _commit_(directory: Path, message: String): Vector[String] = Vector("-C", directory.toString,
+      "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", message)
+    Vector(Vector("init", "--bare", "--initial-branch=main", remote.toString),
+      Vector("init", "--initial-branch=main", repository.toString),
+      Vector("-C", repository.toString, "add", "--", _shared_source, "docs/shared.md"),
+      _commit_(repository, "base product"), Vector("-C", repository.toString, "push", remote.toString, "HEAD:refs/heads/main"),
+      Vector("-C", repository.toString, "worktree", "add", "-b", "contribution", work.toString, "main"),
+      Vector("-C", work.toString, "add", "--all"), _commit_(work, "local source contribution"),
+      Vector("-C", repository.toString, "add", "--", "docs/shared.md"), _commit_(repository, "canonical document contribution"),
+      Vector("clone", "--no-local", remote.toString, peer.toString),
+      Vector("-C", peer.toString, "add", "--all"), _commit_(peer, "remote source contribution"),
+      Vector("-C", peer.toString, "push", remote.toString, "HEAD:refs/heads/main"))
+  }
+
+  private def _regression_files(root: Path, scenario: String, index: Int): Unit = {
+    def _write_(directory: String, path: String, content: String): Unit = {
+      val file = root.resolve(directory).resolve(path)
+      Files.createDirectories(file.getParent)
+      Files.writeString(file, content)
+    }
+    if (index == 2) {
+      _write_("repository", _shared_source, "public final class Shared { public static int value() { return 1; } }\n")
+      _write_("repository", "docs/shared.md", "base document\n")
+    }
+    if (index == 6) {
+      if (scenario != "RegressionDisjoint")
+        _write_("work", _shared_source, "public final class Shared { public static int value() { return 2; } }\n")
+      _write_("work", "docs/work.md", "retained contribution document\n")
+      if (scenario == "RegressionDisjoint") _write_("work", _left_source, "public final class Left {}\n")
+    }
+    if (index == 8) _write_("repository", "docs/shared.md", "canonical document\n")
+    if (index == 11) {
+      if (scenario == "RegressionDisjoint") {
+        _write_("peer", _right_source, "public final class Right {}\n")
+        _write_("peer", "docs/shared.md", "remote document\n")
+      } else {
+        if (scenario == "RegressionSameTree") {
+          _write_("peer", "docs/shared.md", "remote document\n")
+          _write_("peer", "docs/work.md", "retained contribution document\n")
+        } else _write_("peer", _shared_source, "public final class Shared { public static int value() { return 3; } }\n")
+      }
+    }
+  }
+
+  private def _stage_c(call: Setup, session: String, key: String): Consequence[RepositorySyncNativeProgressStore.Stage] = {
+    for {
+      definition <- RepositorySyncDefinitionBinding.bindC
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(definition), _collection_("instances"), _collection_("continuations"))
+      reader <- storage.bindMechanicalC(RepositorySyncManagedFetch.advanceOperation, RepositorySyncNativeProgressStore.codec)
+      value <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(session + ":native-" + key, "1"))(using call.core.executionContext)
+        .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Missing actual fixture stage " + key)))
+    } yield RepositorySyncNativeProgressStore.Stage(value.receipt.next, value.receipt.payload.value)
+  }
+
   "Native canonical main integration" should {
+    for (scenario <- Vector("RegressionOverlap", "RegressionDisjoint", "RegressionSameTree")) {
+      s"validate both contributed input frontiers and retain independent review through $scenario aggregate convergence" in {
+        Given("isolated local and remote source contributions with a real remote conflict and declared bounded checks")
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/local-main-spec").toAbsolutePath), scenario + "-")
+        val parameters = documents ++ Map(P.declaration.name -> _impact_policy.asJson.noSpaces,
+          RepositorySyncDirectoryList.declaration.name -> Vector(root.resolve("work").toString).asJson.noSpaces)
+        _with_runtime_(root, scenario, hostParameters = parameters) { (owner, component, actor, prepare) =>
+          prepare(_.setupC(_setup_commands_(root, scenario).size, scenario = scenario))
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+            read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+              service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+          val input = Record.data("syncMode" -> "FULL_STATE", "mainIntegration" -> "local-first")
+          When("the normal aggregate integrates the local hop before exposing the actual remote conflict")
+          var batch = _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.syncOperation,
+            List(Property("input", input, None)))
+          val batchid = batch.sessionId
+          val session = batch.repositories.head.sessionId
+          val identity = InstanceIdentity(session)
+          def _collect_(): V.RepositoryDirectoryBatchResult = _invoke_[V.RepositoryDirectoryBatchResult](
+            RepositorySyncDirectoryList.syncOperation, List(Property("sessionId", batchid, None), Property("input", input, None)))
+          def _until_request_(): Unit = {
+            var attempts = 0
+            while (!batch.repositories.exists(_.kind == "Request") && batch.outcome != "Completed" && attempts < 8) {
+              batch = _collect_()
+              attempts += 1
+            }
+            withClue(s"Fixture $root aggregate member=${batch.repositories.head}: ") {
+              batch.repositories.head.kind shouldBe "Request"
+            }
+          }
+          def _launches_(): Vector[String] = if (Files.exists(root.resolve("selected-launches.txt")))
+            Files.readString(root.resolve("selected-launches.txt")).linesIterator.toVector else Vector.empty
+          Then("the remote conflict waits after one local compile and its directly affected registered tests")
+          withClue(s"Fixture $root aggregate member=${batch.repositories.head}: ") {
+            batch.repositories.head.kind shouldBe "Wait"
+            batch.repositories.head.condition shouldBe Some("MergeConflicted")
+          }
+          var local = Option.empty[RepositorySyncNativeProgressStore.Stage]
+          prepare(call => _stage_c(call, session, "local-main-local-merge-validated").map { value =>
+            local = Some(value)
+            value.payload.validation.get.selected shouldBe (if (scenario == "RegressionDisjoint")
+              Vector(_compile, _left_test) else Vector(_compile, _left_test, _shared_test))
+            C.successful(value.payload.validation.get.receipts, selected = value.payload.validation.get.selected) shouldBe true
+            ()
+          })
+          _launches_().size shouldBe (if (scenario == "RegressionDisjoint") 2 else 3)
+          Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe
+            (if (scenario == "RegressionDisjoint") 1 else 2)
+          When("one ordinary advance on the same child issues its captured conflict work")
+          val conflictrequest = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync",
+            NativeWorkflowOperationInputFixture.advance(session))
+          Then("the child issues work for the actual conflicting path and its two versions")
+          withClue(s"Fixture $root child conflict response=$conflictrequest: ") {
+            conflictrequest.kind shouldBe "Request"
+            conflictrequest.conflict should not be empty
+          }
+          var conflict = Option.empty[WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]]
+          prepare(_.repositoryWorkC(identity, RepositorySyncNativeConflictContinuation.completionOperation,
+            RepositorySyncConflictSemantic.inputCodec).map(value => { conflict = Some(value); () }))
+          val order = conflict.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request
+          val captured = order.input.get.value
+          captured.conflicts.map(_.path) shouldBe Vector(if (scenario == "RegressionOverlap") _shared_source else "docs/shared.md")
+          captured.conflicts.head.local.text should not be captured.conflicts.head.remote.text
+          val resolution = if (scenario == "RegressionDisjoint") "canonical and remote documents integrated\n"
+            else if (scenario == "RegressionSameTree") "canonical document\n"
+            else "public final class Shared { public static int value() { return 4; } }\n"
+          val reference = ContextReference("spec-local-first-resolution", captured.conflictRevision)
+          val answer = ContinuationResult(conflict.get.handle, order.runId, order.continuationId, order.expectedRevision,
+            order.context.snapshot, TypedValue(RepositorySyncConflictSemantic.resultCodec.typeIdentity,
+              RepositorySyncConflictSemantic.Result("resolved", captured.conflicts.map(value =>
+                RepositorySyncConflictSemantic.Resolution(value.identity, resolution)), "Integrate the isolated fixture contributions")),
+            reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-conflict-worker")))
+          When("the assigned conflict is completed and the normal aggregate validates the resolved remote frontier")
+          _invoke_[V.RepositorySyncConflictSubmissionResult]("submitRepositorySyncWorkResult",
+            take(NativeWorkflowOperationInputFixture.submissionC(answer))).accepted shouldBe true
+          batch = _collect_()
+          _until_request_()
+          Then("the remote frontier launches only applicable product checks and retains its own structural checks")
+          var remote = Option.empty[RepositorySyncNativeProgressStore.Stage]
+          prepare(call => for {
+            value <- _stage_c(call, session, "local-main-remote-merge-validated")
+            current <- call.currentC(identity)
+          } yield {
+            remote = Some(value)
+            val state = value.payload.validation.get
+            state.selected shouldBe (if (scenario == "RegressionDisjoint")
+              Vector(_compile, _left_test, _right_test, _shared_test) else Vector(_compile, _left_test, _shared_test))
+            state.receipts.take(2).map(_.identity) shouldBe Vector("index-local", "index-remote")
+            C.successful(state.receipts, selected = state.selected) shouldBe true
+            current.history.count(_.causation.value.contains("local-main-remote-validation-result-0")) shouldBe 1
+            current.history.count(_.causation.value.contains("local-main-remote-validation-result-1")) shouldBe 1
+            current.history.exists(_.currentProgression.exists(_.value == "sync.NativePushPreparing")) shouldBe false
+            if (scenario == "RegressionSameTree") {
+              value.payload.indexTree shouldBe local.get.payload.indexTree
+              state.receipts.drop(2) shouldBe local.get.payload.validation.get.receipts.drop(2)
+              state.impact.get.reused.map(_.validation).distinct shouldBe
+                Vector(session + ":native-local-main-local-merge-validated")
+              state.impact.get.reused.map(_.closure).distinct shouldBe Vector(session + ":native-local-main-local-commit-observed")
+              state.impact.get.reused.flatMap(_.review) shouldBe empty
+            } else {
+              state.impact.get.reused shouldBe empty
+              value.payload.indexTree should not be local.get.payload.indexTree
+            }
+            ()
+          })
+          val expected = if (scenario == "RegressionSameTree") 3 else 6
+          _launches_().size shouldBe expected
+          Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe
+            (if (scenario == "RegressionSameTree") 2 else 4)
+          val launches = _launches_()
+          _collect_().repositories.head.kind shouldBe "Request"
+          _launches_() shouldBe launches
+          var review = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
+          prepare(_.repositoryWorkC(identity, RepositorySyncNativeMergeReviewContinuation.completionOperation,
+            RepositorySyncNativeMergeReview.inputCodec).map(value => { review = Some(value); () }))
+          val assigned = review.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request
+          assigned.input.get.value.indexTree shouldBe remote.get.payload.indexTree.get
+          assigned.input.get.value.judgmentMode shouldBe "detailed-review"
+          assigned.input.get.value.remoteDiff should include(if (scenario == "RegressionDisjoint") "Left.java" else "Shared.java")
+          val reviewref = ContextReference("spec-remote-independent-review", "1")
+          val reviewed = ContinuationResult(review.get.handle, assigned.runId, assigned.continuationId, assigned.expectedRevision,
+            assigned.context.snapshot, TypedValue(RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
+              RepositorySyncNativeMergeReview.Result("accept", "Independent examination of both actual remote merge diffs", Vector.empty)),
+            reviewref, Vector.empty, ExecutionEvidence(Vector(reviewref), Some("specification-independent-remote-judge")))
+          When("the separately admitted remote review accepts the complete resolved candidate")
+          prepare(_.reviewEvidenceC(assigned.input.get.value, reviewed))
+          _invoke_[V.RepositorySyncNativeMergeReviewSubmissionResult]("submitNativeMergeReview",
+            take(NativeWorkflowOperationInputFixture.submissionC(reviewed))).accepted shouldBe true
+          batch = _collect_()
+          var attempts = 0
+          while (batch.outcome != "Completed" && attempts < 8) { batch = _collect_(); attempts += 1 }
+          Then("convergence pushes once after independent review without replaying the checked product programs")
+          batch.outcome shouldBe "Completed"
+          _launches_() shouldBe launches
+          prepare(_.currentC(identity).map { current =>
+            current.history.count(_.currentProgression.exists(_.value == "sync.NativePushPreparing")) shouldBe 1
+            ()
+          })
+        }
+      }
+    }
+
+    "select ordinary FULL when remote inputs are broad unknown or lack complete compile and test coverage" in {
+      Given("declared bounded compile and test scopes and ordinary FULL without HEAVY")
+      def _inputs_(consumed: Vector[String], unknown: Vector[String] = Vector.empty) =
+        RepositorySyncDocumentInputs.Assessment(consumed ++ unknown, consumed, unknown, Vector.empty, "Fixture input classification")
+      val cases = Vector(_impact_policy -> _inputs_(Vector("build.sbt")),
+        _impact_policy -> _inputs_(Vector.empty, Vector("unknown/behavior.conf")),
+        _impact_policy.copy(coverage = _impact_policy.coverage.filterNot(_.check == _right_test)) -> _inputs_(Vector(_right_source)),
+        _impact_policy.copy(coverage = _impact_policy.coverage.filterNot(_.check == _compile)) -> _inputs_(Vector(_shared_source)))
+      When("the remote hop selects coverage for each uncertain or incompletely covered frontier")
+      val selections = cases.map((policy, inputs) => P.selectRemote(policy, inputs))
+      Then("each selection retains configured ordinary FULL checks and an explicit reason")
+      selections.foreach { selected =>
+        selected.depth shouldBe "FULL"
+        selected.checks shouldBe Vector(_compile, _full_test)
+        selected.reason should include("FULL")
+        selected.checks.exists(_.identity.contains("HEAVY")) shouldBe false
+      }
+    }
+
     "refuse a mapped main with unrelated observed history before any synchronization mutation" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/local-main-spec").toAbsolutePath), "unrelated-clone-")
       val parameters = documents + (RepositorySyncLocalMain.mappings.name -> Map(sourceWorkspace -> mainWorkspace).asJson.noSpaces)

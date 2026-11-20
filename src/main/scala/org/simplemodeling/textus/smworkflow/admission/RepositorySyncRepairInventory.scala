@@ -14,7 +14,7 @@ import RepositorySyncNativeProgressStore as N
 
 /** Runtime-qualified existing file inventory, independent of lifecycle consent.
   * @since Nov. 3, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncRepairInventory {
   val policy = "sm-workflow.repository-sync-repair-inventory.v2"
@@ -102,7 +102,7 @@ private[smworkflow] object RepositorySyncRepairInventory {
       Consequence.unit else N.invalid("automatic inventory requires concrete sorted existing paths, causal rationale and the same FULL_STATE failed check")
     _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
     tree <- GitObjectId.parseC(source.basis.input.indexTree)
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    target <- RepositorySyncFileEffect.targetC(source.store.core)
     selectionpaths = (source.basis.input.changedPaths ++ paths).distinct.sorted
     entries <- paths.foldLeft(Consequence.success(Vector.empty[Entry])) { case (prior, name) => for {
       values <- prior
@@ -117,7 +117,7 @@ private[smworkflow] object RepositorySyncRepairInventory {
           text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes)) Consequence.unit
         else N.invalid("automatic inventory candidate must contain complete ordinary UTF-8 text: " + name)
       path <- WorkspaceFilePath.parseC(name)
-      actual <- WorkflowFileExecution.readTextC(source.store.core, FileTarget(workspace), path)
+      actual <- WorkflowFileExecution.readTextC(source.store.core, target, path)
       _ <- if (actual.text.exists(text => !text.contains('\u0000') &&
           java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(text)) && actual.text == blob.text) Consequence.unit
         else N.invalid("automatic inventory workspace must be the existing ordinary candidate file: " + name)
@@ -142,7 +142,7 @@ private[smworkflow] object RepositorySyncRepairInventory {
     overlaps = RepositorySyncPurposeOwnership.assigned(snapshot.progress, paths)
     candidate = snapshot.progress.candidate.get
     tree <- GitObjectId.parseC(candidate.tree)
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    target <- RepositorySyncFileEffect.targetC(source.store.core)
     captured <- paths.zipWithIndex.foldLeft(Consequence.success(Vector.empty[(Entry, String)])) { case (prior, (name, ordinal)) => for {
       values <- prior
       path <- GitPath.parseC(name)
@@ -158,7 +158,7 @@ private[smworkflow] object RepositorySyncRepairInventory {
         .map(Consequence.success).getOrElse(N.invalid("Purpose inventory requires complete ordinary UTF-8 candidate text: " + name))
       _ <- if (source.basis.input.changedPaths.contains(name)) Consequence.unit else for {
         file <- WorkspaceFilePath.parseC(name)
-        actual <- WorkflowFileExecution.readTextC(source.store.core, FileTarget(workspace), file)
+        actual <- WorkflowFileExecution.readTextC(source.store.core, target, file)
         expected = if (overlaps.exists(_.content.exists(_.path == name)))
           RepositorySyncPurposeOwnership.expected(snapshot.progress, name).flatMap(_.text) else Some(text)
         _ <- if (expected.exists(RepositorySyncPurposeOwnership.ordinary) && actual.text == expected) Consequence.unit

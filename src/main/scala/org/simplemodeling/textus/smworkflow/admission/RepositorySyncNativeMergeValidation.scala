@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -243,28 +243,66 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else N.invalid("validation requires the genuine selected pending merge")
     inputs <- if (store.declaration.runtimeCleanSync) RepositorySyncDocumentInputs.captureC(store, pending).map(Some(_))
       else Consequence.success(None)
-    setup <- inputs.fold(Consequence.success(Option.empty[String]))(mergeSetupReasonC(store, pending, policy, _, namespace))
+    prepared <- inputs.fold(Consequence.success((Option.empty[RepositorySyncProgramImpact.Selection],
+      Map.empty[String, Receipt])))(_impact_c(store, pending, policy, _, namespace))
+    setup <- inputs.fold(Consequence.success(Option.empty[String]))(
+      _setup_reason_for_selection(store, pending, policy, _, namespace, prepared._1))
     result <- if (setup.nonEmpty)
       Consequence.success(pending)
     else for {
-    prepared <- if (inputs.forall(_.documentOnly)) Consequence.success(
-      (Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
-      else policy.impact match {
-        // The admitted supplement must execute its missing lint. It does not
-        // borrow an unrelated prior check through program-impact reuse.
-        case Some(impact) if pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty ||
-            pending.payload.mergeCheckContinuation.nonEmpty =>
-          RepositorySyncProgramImpact.validateC(impact).map(_ =>
-            (Some(RepositorySyncProgramImpact.select(impact, inputs.get)), Map.empty[String, Receipt]))
-        case Some(impact) => RepositorySyncProgramImpact.prepareC(store, pending, inputs.get, impact)
-          .map((selection, receipts) => (Some(selection), receipts))
-        case None => N.invalid("program/unknown consumed inputs require impact-selected validation; consumed=" +
-          inputs.get.consumedPaths.mkString(",") + "; unknown=" + inputs.get.unknownPaths.mkString(","))
-      }
     selected <- _selected_c(store, pending, policy, merge = true, namespace = namespace, inputs = inputs,
       impact = prepared._1, reused = prepared._2)
     } yield selected
   } yield result
+
+  private def _impact_c(store: N.Store, pending: N.Stage, policy: Policy,
+    inputs: RepositorySyncDocumentInputs.Assessment, namespace: String):
+      Consequence[(Option[RepositorySyncProgramImpact.Selection], Map[String, Receipt])] = {
+    val eligible = store.declaration.runtimeCleanSync && namespace.isEmpty && store.namespace.isEmpty &&
+      pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty &&
+      pending.payload.mergeCheckContinuation.isEmpty && pending.payload.repairContext.isEmpty &&
+      pending.payload.continuation.isEmpty && pending.payload.pushContinuation.isEmpty
+    val supplement = pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty ||
+      pending.payload.mergeCheckContinuation.nonEmpty
+    def _native_(selection: RepositorySyncProgramImpact.Selection): Boolean = selection.reused.exists(reuse =>
+      reuse.validation.startsWith(store.identity + ":native-local-main-local-") &&
+        reuse.closure == store.identity + ":native-local-main-local-commit-observed")
+    for {
+      first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
+      retained = first.flatMap(_.payload.validation).flatMap(_.impact)
+      prior <- if (eligible && retained.forall(_native_)) policy.impact match {
+        case Some(value) => RepositorySyncProgramImpact.reuseLocalC(store, pending, policy, value)
+        case None => Consequence.success(None)
+      } else Consequence.success(None)
+      local = prior.filter(value => !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
+        value._1.checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      _ <- if (retained.exists(_native_) && !local.exists(value => retained.exists(old =>
+          old.checks == value._1.checks && old.reused == value._1.reused)))
+        N.invalid("Retained local-hop reuse no longer matches its actual checked references and selected plan") else Consequence.unit
+      result <- retained match {
+        case Some(value) if !_native_(value) && value.reused.nonEmpty => policy.impact match {
+          case Some(current) => RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get,
+            current, value.copy(reused = Vector.empty)).flatMap { (selected, receipts) =>
+              if (selected.reused == value.reused) Consequence.success((Some(value), receipts))
+              else N.invalid("Retained prior reuse no longer matches its actual evidence references")
+            }
+          case None => N.invalid("Retained prior reuse has no current impact policy")
+        }
+        case Some(value) if !_native_(value) => Consequence.success((Some(value), Map.empty[String, Receipt]))
+        case _ if local.nonEmpty => Consequence.success((Some(retained.getOrElse(local.get._1)), local.get._2))
+        case _ if inputs.documentOnly => Consequence.success((Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
+        case _ => policy.impact match {
+          case Some(value) if supplement || policy.setupRequired.nonEmpty ||
+              RepositorySyncProgramImpact.selectForStore(store, value, inputs).checks.exists(_.setupRequired.nonEmpty) =>
+            RepositorySyncProgramImpact.validateC(value).map(_ =>
+            (Some(RepositorySyncProgramImpact.selectForStore(store, value, inputs)), Map.empty[String, Receipt]))
+          case Some(value) => RepositorySyncProgramImpact.prepareC(store, pending, inputs, value)
+            .map((selection, receipts) => (Some(selection), receipts))
+          case None => Consequence.success((Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
+        }
+      }
+    } yield result
+  }
 
   private[admission] def setupReason(policy: Policy, inputs: RepositorySyncDocumentInputs.Assessment): Option[String] =
     if (inputs.documentOnly) None
@@ -278,12 +316,22 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     })
 
   private[admission] def mergeSetupReasonC(store: N.Store, pending: N.Stage, policy: Policy,
-    inputs: RepositorySyncDocumentInputs.Assessment, namespace: String): Consequence[Option[String]] = {
-    val setup = setupReason(policy, inputs)
+    inputs: RepositorySyncDocumentInputs.Assessment, namespace: String): Consequence[Option[String]] =
+    _impact_c(store, pending, policy, inputs, namespace).flatMap { (selection, _) =>
+      _setup_reason_for_selection(store, pending, policy, inputs, namespace, selection)
+    }
+
+  private def _setup_reason_for_selection(store: N.Store, pending: N.Stage, policy: Policy,
+    inputs: RepositorySyncDocumentInputs.Assessment, namespace: String,
+    selection: Option[RepositorySyncProgramImpact.Selection]): Consequence[Option[String]] = {
+    val setup = if (inputs.documentOnly) None else policy.setupRequired.orElse(selection match {
+      case Some(value) => Option.when(value.checks.exists(_.setupRequired.nonEmpty))(
+        value.checks.flatMap(_.setupRequired).mkString("; "))
+      case None => setupReason(policy, inputs)
+    })
     if (setup.nonEmpty || !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
         pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty ||
-        pending.payload.mergeCheckContinuation.nonEmpty || (!inputs.documentOnly && policy.impact.exists(impact =>
-          RepositorySyncProgramImpact.select(impact, inputs).checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))))
+        pending.payload.mergeCheckContinuation.nonEmpty || selection.exists(_.checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)))
       Consequence.success(setup)
     else store.loadC(N.candidateKey(namespace, "validation-intent-0")).map(first => Option.when(first.isEmpty)(
       "ValidationSetupRequired: the pending merge policy requires a selected FixCheck. " +
@@ -398,7 +446,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
           case (None, None) => for {
             intent <- store.loadC(N.candidateKey(namespace, "validation-intent-" + index))
             saved <- intent match {
-              case Some(value) if check.ordinaryDiscovery => RepositorySyncProgramImpact.executeOrdinaryC(store, pending, value, check, index, namespace)
+              case Some(value) if check.ordinaryDiscovery && !reused.contains(check.identity) =>
+                RepositorySyncProgramImpact.executeOrdinaryC(store, pending, value, check, index, namespace)
               case Some(value) => Consequence.success(value)
               case None => for {
                 _ <- preconditionsC(store, pending)
@@ -406,7 +455,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                 state = selection.copy(receipts = receipts)
                 prepared <- store.saveC(N.candidateKey(namespace, "validation-intent-" + index), "native-check-prepared", current.record,
                   pending.payload.copy(stage = checking, validation = Some(state)))
-                recorded <- if (check.ordinaryDiscovery) RepositorySyncProgramImpact.executeOrdinaryC(store, pending, prepared, check, index, namespace)
+                recorded <- if (check.ordinaryDiscovery && !reused.contains(check.identity))
+                  RepositorySyncProgramImpact.executeOrdinaryC(store, pending, prepared, check, index, namespace)
                   else for {
                 _ <- store.acknowledgeC("merge-check-prepared:" + check.identity)
                 observed <- if (index < structural) for {

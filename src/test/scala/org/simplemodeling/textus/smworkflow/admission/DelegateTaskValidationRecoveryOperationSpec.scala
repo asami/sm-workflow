@@ -18,7 +18,7 @@ import DelegateTaskValidationRecovery.given
 
 /** Managed validation recovery and retained-capture qualification.
   * @since   Nov. 12, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -286,7 +286,8 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
       val buildFile = root.resolve("repository/build.sbt")
       val build = Files.readString(buildFile).replace(root.resolve("sbt-executions.txt").toString,
         root.resolve("sbt-launches.txt").toString)
-      Files.writeString(buildFile, build + "\nTest / test := (Test / runMain).toTask(\" ProductCheck\").value\n")
+      Files.writeString(buildFile, build +
+        "\nTest / run / fork := true\nTest / test := (Test / runMain).toTask(\" ProductCheck\").value\n")
       Files.writeString(root.resolve("SPEC-review-fixture"), "SPECIFICATION-OWNED review qualification\n")
       if (delivery) Files.writeString(root.resolve("SPEC-delivery-fixture"), "SPEC requires actual managed Compile\n")
       val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),

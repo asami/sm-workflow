@@ -22,7 +22,7 @@ import RepositorySyncRepairBudgetContinuation as B
   * proposal admission; explicit Advance owns fixed effects and fresh review.
   * @since   Oct. 15, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
@@ -230,7 +230,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       for {
         _ <- selectedpolicy.validateC
         _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
-        target <- WorkspaceId.parseC("sm-workflow-repository").map(FileTarget.apply)
+        target <- RepositorySyncFileEffect.targetC(source.store.core)
         paths <- source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted
           .foldLeft(Consequence.success(Vector.empty[String])) { (prior, name) => for {
             values <- prior

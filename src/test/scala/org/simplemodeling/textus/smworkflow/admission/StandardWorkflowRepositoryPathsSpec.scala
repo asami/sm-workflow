@@ -9,7 +9,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Authored typed history predicates only; no repository operation, native
   * adoption, independent evidence or conflict-path observation is performed.
   * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -34,6 +34,23 @@ final class StandardWorkflowRepositoryPathsSpec extends AnyWordSpec with Matcher
     _entry(5, "NativePushFailed"), _entry(6, "PushContinuationAdmitted"), _entry(7, "MergeConflicted"))
 
   "CB-ID11-01 RepositorySync review path lineage" should {
+    "select review paths only from the current local-first hop" in {
+      Given("a completed local review followed by a remote-hop transition and a failed remote check")
+      val remote = _entry(5, "BoundaryAssessment")
+        .copy(causation = CausationReference("repository-local-main-phase:remote"))
+      val history = _old_history.take(2) ++ Vector(remote, _entry(6, "ValidationRepairRequired"))
+      val fresh = _boundary("session:native-review:7", 8)
+      val crossed = _boundary("session:native-review:3", 7)
+      When("the runtime selects paths before and after the first actual remote candidate review")
+      val pending = StandardWorkflowRuntime.repositoryReviewBoundary(_record(history), None)
+      val selected = StandardWorkflowRuntime.repositoryReviewBoundary(
+        _record(history ++ Vector(_entry(7, "MergeValidated", Some(crossed)),
+          _entry(8, "MergeValidated", Some(fresh)))), None)
+      Then("the local review cannot mask either the failed remote candidate inventory or the remote review")
+      pending shouldBe None
+      selected shouldBe Some(fresh)
+    }
+
     "leave fresh merge conflicts to current path observation when only the pre-adoption review exists" in {
       Given("an old candidate review followed by push failure, a separate push adoption and a fresh merge conflict")
       val current = _record(_old_history)

@@ -391,6 +391,15 @@ Consequence error is not evidence that an old process never started. Historical
 missing results remain UNKNOWN. A genuine returned nonzero process receipt
 continues through the existing formal-failure and repair routes.
 
+A retained typed SBT timeout is also eligible. Its target identifies the
+original result frontier and the failed check's intent. The successful
+prefix excludes the timeout. Adoption confirms the end of that invocation
+and acknowledges that the interrupted run produced no final test verdict.
+Advance executes the timed-out check once under the admitted current host
+plan. On the local-main hop the new attempt stays in the same participant and
+phase as the retained candidate. Both the original timeout and the successful
+prefix remain in native history.
+
 The complete canonical target binds Component, original Start participant and
 context, Session, repository root and endpoint, current native frontier revision
 and causation, actual historical source namespace, complete candidate and intent

@@ -25,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -463,17 +463,18 @@ private[smworkflow] object StandardWorkflowRuntime {
       _repair_budget_paths_c(purposestore, session) else Consequence.success(normalpaths)
   } yield composed
 
-  /** An authenticated push adoption starts a fresh integration lineage. Earlier
-    * reviews retain their evidence but cannot supply the new conflict paths. */
+  /** Each local-main hop and authenticated push adoption starts a fresh
+    * integration lineage. Earlier reviews cannot supply its conflict paths. */
   private[admission] def repositoryReviewBoundary(current: InstanceRecord,
     afterRevision: Option[Long]): Option[SuspensionBoundary] = {
     val identity = current.identity.value
-    current.history.reverseIterator.filter(entry => afterRevision.forall(entry.revision.value > _))
+    val history = RepositorySyncLocalMain.phaseHistory(current)
+    history.reverseIterator.filter(entry => afterRevision.forall(entry.revision.value > _))
       .flatMap(_.suspension).find { value =>
         val name = value.continuationIdentity.value
         val prefix = Vector(identity + ":native-review:", identity + ":native-triage:").find(name.startsWith)
         val revision = prefix.map(name.stripPrefix).filter(_.matches("[1-9][0-9]*")).flatMap(_.toLongOption)
-        revision.exists(source => afterRevision.forall(source > _) && current.history.exists(entry =>
+        revision.exists(source => afterRevision.forall(source > _) && history.exists(entry =>
           entry.revision.value == source && entry.currentProgression.exists(_.value == "sync.MergeValidated")))
       }
   }

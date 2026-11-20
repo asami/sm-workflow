@@ -66,6 +66,10 @@ private[admission] object RepositorySyncMergeCheckContinuationFixture {
       publicReference, true, true, execution)
 }
 
+/** Executable specification of same-Session pending merge validation.
+  * @since   Nov.  4, 2026
+  * @version Nov. 21, 2026
+  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncMergeCheckContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -308,6 +312,33 @@ final class RepositorySyncMergeCheckContinuationSpec extends AnyWordSpec with Ma
       RepositorySyncFormalFailureContinuation.completeFailure(payload.validation.get.receipts.last, checks.head) shouldBe true
       C.mayRunCheck(payload, 3, merge = true) shouldBe false
       M.validPrefix(payload.validation.get.receipts, checks) shouldBe false
+    }
+
+    "separate a confirmed deadline from missing or unknown execution on a local-main hop" in {
+      Given("the exact selected Compile and its authored typed deadline result")
+      val empty = ProcessExecutionCapture(Vector.empty, 0, false)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.TimedOut, empty, empty, Vector.empty, 1, "fixture-compile")
+      val operation = SbtExecutionAttempt.Observed(SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC(refusal.workspaceId))), SbtOperation.Compile, process))
+      val receipt = take(C.productAttemptPayloadC(intent, checks.head, operation)).validation.get.receipts.last
+      val phase = "local-main-local"
+      val resultkey = N.candidateKey(sourceNamespace, "validation-result-2")
+      val timeout = target.copy(frontierRevision = "26", frontierCause = "native-repository:session:" + phase + "-" + resultkey,
+        candidateReference = ContextReference("session:native-" + phase + "-" + candidateKey, "1"),
+        intentReference = ContextReference("session:native-" + phase + "-" + intentKey, "1"),
+        timedOut = true, phase = Some(phase))
+      When("the recorded timeout and its continuation are interpreted")
+      Then("the unsuccessful attempt stays outside the successful prefix and needs a distinct continuation")
+      M.recordedTimeout(checks.head, receipt) shouldBe true
+      M.recordedTimeout(checks.head, receipt.copy(processObservation = None)) shouldBe false
+      M.recordedTimeout(checks.head, receipt.copy(processObservation =
+        Some(process.copy(termination = ProcessExecutionTermination.TerminationUnconfirmed)))) shouldBe false
+      M.validPrefix(prefix :+ receipt, checks) shouldBe false
+      M.decodeTarget(timeout.asJson) shouldBe Right(timeout)
+      M.decodeTarget(timeout.copy(phase = None).asJson).isLeft shouldBe true
+      M.bindingC(timeout.componentInstance, timeout, M.choices.head, answer.rationale,
+        context.participantIdentity, reference, ended = true, accepted = true).isSuccess shouldBe true
+      M.bindingC(timeout.componentInstance, timeout, M.choices.head, answer.rationale,
+        context.participantIdentity, reference, ended = true, accepted = false).isSuccess shouldBe false
     }
   }
 

@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.config.{ComponentConfigurationDecoder, ComponentConfigurationKey}
 import org.goldenport.cncf.processexecution.{SbtExecutionAttempt, SbtOperation}
+import org.goldenport.cncf.processexecution.ProcessExecutionTermination
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.configuration.ConfigurationValue
@@ -25,7 +26,7 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
   * missing results remain UNKNOWN; typed preparation refusals remain refusals.
   * No adoption or source preparation performs a Git mutation or executes SBT.
   * @since   Nov.  4, 2026
-  * @version Nov. 20, 2026
+ * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncMergeCheckContinuation {
   val policy = "sm-workflow.repository-sync-merge-check-continuation.v1"
@@ -37,6 +38,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     "attest priorExecutionEnded=true and acceptOriginalUncertainty=true for this exact target. Adoption records " +
     "direction only. Separate ordinary Advance prepares the same candidate and executes unfinished checks, then " +
     "normal independent review and convergence under the original push allowance. Defer writes nothing."
+  private val _timeout_message = "The selected check ended at its execution deadline. The original timeout and successful prefix remain in history. " +
+    "Authorize one new attempt of the timed-out check through ordinary Advance. Defer writes nothing."
 
   final case class PreparationRefusal(workspaceId: String, kind: WorkflowSbtValidation.Kind, diagnostic: String)
   object PreparationRefusal {
@@ -75,7 +78,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     candidatePayload: Json, intentKey: String, intentRevision: String, intentReference: ContextReference,
     intentPayload: Json, checkIndex: Int, check: C.Check, selectedChecks: Vector[C.Check],
     successfulPrefix: Vector[C.Receipt], validationPolicy: C.Policy, actual: G.Native, indexTree: String,
-    processPlan: Json, pushDirection: Option[P.Direction], preparationRefusal: Option[PreparationRefusal], continuationPolicy: String)
+    processPlan: Json, pushDirection: Option[P.Direction], preparationRefusal: Option[PreparationRefusal], continuationPolicy: String,
+    timedOut: Boolean = false, phase: Option[String] = None)
   object Target {
     given Encoder[Target] = Encoder.instance(value => canonical(Json.obj(
       "componentInstance" -> value.componentInstance.asJson, "sessionId" -> value.sessionId.asJson,
@@ -90,7 +94,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       "validationPolicy" -> value.validationPolicy.asJson, "actual" -> value.actual.asJson,
       "indexTree" -> value.indexTree.asJson, "processPlan" -> value.processPlan,
       "pushDirection" -> value.pushDirection.asJson, "preparationRefusal" -> value.preparationRefusal.asJson,
-      "continuationPolicy" -> value.continuationPolicy.asJson)).mapObject(_.add("candidatePayload", value.candidatePayload)
+      "continuationPolicy" -> value.continuationPolicy.asJson,
+      "timedOut" -> Option.when(value.timedOut)(true).asJson, "phase" -> value.phase.asJson)).mapObject(_.add("candidatePayload", value.candidatePayload)
         .add("intentPayload", value.intentPayload).add("processPlan", value.processPlan)))
     private val _raw: Decoder[Target] = Decoder.instance(c => for {
       componentinstance <- c.get[String]("componentInstance")
@@ -120,10 +125,13 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       pushdirection <- c.get[Option[P.Direction]]("pushDirection")
       preparationrefusal <- c.get[Option[PreparationRefusal]]("preparationRefusal")
       continuationpolicy <- c.get[String]("continuationPolicy")
+      timedout <- c.getOrElse[Boolean]("timedOut")(false)
+      phase <- c.get[Option[String]]("phase")
     } yield Target(componentinstance, sessionid, context, root, endpoint, frontierrevision, frontiercause,
       sourcenamespace, candidatekey, candidaterevision, candidatereference, candidatepayload,
       intentkey, intentrevision, intentreference, intentpayload, checkindex, check, selectedchecks,
-      successfulprefix, validationpolicy, actual, indextree, processplan, pushdirection, preparationrefusal, continuationpolicy))
+      successfulprefix, validationpolicy, actual, indextree, processplan, pushdirection, preparationrefusal, continuationpolicy,
+      timedout, phase))
     given Decoder[Target] = Decoder.instance(c => for {
       restored <- _restore(c.value).left.map(DecodingFailure(_, c.history))
       value <- _raw.decodeJson(restored)
@@ -175,7 +183,14 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
   def adoptionKey(target: Target): String = namespace(target) + "-adopted"
   private def _frontier_key(target: Target): String = N.candidateKey(target.sourceNamespace,
     if (target.preparationRefusal.nonEmpty) "validation-preparation-rejected-" + target.checkIndex
+    else if (target.timedOut) "validation-result-" + target.checkIndex
     else "validation-intent-" + target.checkIndex)
+  private def _phase_key(phase: Option[String], key: String): String = phase.fold(key)(_ + "-" + key)
+  private[admission] def recordedTimeout(check: C.Check, receipt: C.Receipt): Boolean =
+    receipt.identity == check.identity && receipt.termination == "timed-out" && receipt.exitCode.isEmpty &&
+      receipt.sbt.exists(facts => facts.kind == check.kind && facts.outcome == WorkflowSbtValidation.Outcome.Incomplete &&
+        receipt.processObservation.exists(process =>
+          process.termination == ProcessExecutionTermination.TimedOut && WorkflowSbtCapture.valid(process, facts)))
   def validPrefix(receipts: Vector[C.Receipt], checks: Vector[C.Check]): Boolean =
     receipts != null && receipts.forall(_ != null) && checks != null && checks.forall(_ != null) && receipts.size <= checks.size + 2 &&
       receipts.map(_.identity) == (Vector("index-local", "index-remote") ++ checks.map(_.identity)).take(receipts.size) &&
@@ -187,8 +202,10 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     t.candidateRevision.toLong < t.intentRevision.toLong && t.intentRevision.toLong <= t.frontierRevision.toLong &&
     t.candidateKey == N.candidateKey(t.sourceNamespace, "pending-merge") &&
     t.intentKey == N.candidateKey(t.sourceNamespace, "validation-intent-" + t.checkIndex) &&
-    t.candidateReference == _reference(t.sessionId, t.candidateKey) && t.intentReference == _reference(t.sessionId, t.intentKey) &&
-    t.frontierCause == "native-repository:" + t.sessionId + ":" + _frontier_key(t) &&
+    t.phase != null && t.phase.forall(Set("local-main-local", "local-main-remote")) &&
+    t.candidateReference == _reference(t.sessionId, _phase_key(t.phase, t.candidateKey)) &&
+    t.intentReference == _reference(t.sessionId, _phase_key(t.phase, t.intentKey)) &&
+    t.frontierCause == "native-repository:" + t.sessionId + ":" + _phase_key(t.phase, _frontier_key(t)) &&
     t.selectedChecks != null && t.checkIndex >= 0 &&
     (Vector(C.Check("index-local", 0), C.Check("index-remote", 0)) ++ t.selectedChecks).lift(t.checkIndex).contains(t.check) &&
     t.successfulPrefix != null && t.successfulPrefix.size == t.checkIndex && validPrefix(t.successfulPrefix, t.selectedChecks) &&
@@ -202,7 +219,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       d.asJson.as[P.Direction].isRight) && t.preparationRefusal != null &&
     t.preparationRefusal.forall(p => validPreparation(p) && t.checkIndex >= 2 && p.kind == t.check.kind &&
       p.workspaceId == t.check.workspaceIdentity) &&
-    t.frontierRevision.toLong == t.intentRevision.toLong + (if (t.preparationRefusal.nonEmpty) 1 else 0) &&
+    (!t.timedOut || (t.preparationRefusal.isEmpty && t.checkIndex >= 2)) &&
+    t.frontierRevision.toLong == t.intentRevision.toLong + (if (t.preparationRefusal.nonEmpty || t.timedOut) 1 else 0) &&
     t.continuationPolicy == policy && (for {
       candidate <- N.codec.decode(t.candidatePayload)
       intent <- N.codec.decode(t.intentPayload)
@@ -238,7 +256,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     reference: ContextReference, ended: Boolean, accepted: Boolean): Consequence[Json] =
     if (!validTarget(target) || component != target.componentInstance || participant != target.context.participantIdentity ||
         !choices.contains(choice) || !ordinary(rationale) || reference == null || !exact(reference.identity) || !exact(reference.revision) ||
-        (choice != "Defer" && (!ended || !accepted))) N.invalid("merge check direction requires exact original authority and explicit Human assertions")
+        (choice != "Defer" && (!ended || !accepted)))
+      N.invalid("merge check direction requires exact original authority and explicit Human assertions")
     else Consequence.success(Json.obj("componentInstance" -> component.asJson,
       "repositoryValidationContinuation" -> Json.obj("target" -> target.asJson,
         "answer" -> Json.obj("choice" -> choice.asJson, "rationale" -> rationale.asJson,
@@ -286,6 +305,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
   private def _authenticate_c(store: N.Store, current: InstanceRecord, target: Target): Consequence[(N.Stage, N.Stage, N.Stage)] = for {
     _ <- if (validTarget(target) && target.componentInstance == store.core.component.get.core.instanceId.canonicalKey &&
         target.sessionId == store.identity && target.context == store.context && target.root == store.original.repositoryRoot &&
+        target.phase == store.phase &&
         target.endpoint == store.declaration.target.endpoint && store.declaration.input.repositoryIdentity == store.context.repositoryIdentity &&
         store.declaration.input.localBranch == store.context.localBranch && store.declaration.input.trackingRemote == store.context.trackingRemote &&
         store.declaration.input.trackingBranch == store.context.trackingBranch && store.declaration.input.remoteEndpointIdentity == store.context.remoteEndpointIdentity &&
@@ -303,13 +323,19 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     _ <- if (frontier.record == before && before.lifecycle == Lifecycle.Active && before.suspension.isEmpty &&
         before.causation.value == target.frontierCause && candidate.record.revision.value.toString == target.candidateRevision &&
         intent.record.revision.value.toString == target.intentRevision && N.codec.encode(candidate.payload) == target.candidatePayload &&
-        N.codec.encode(intent.payload) == target.intentPayload && result.isEmpty &&
-        (target.preparationRefusal match {
+        N.codec.encode(intent.payload) == target.intentPayload &&
+        (if (target.timedOut) result.contains(frontier) && frontier.record.revision == intent.record.revision.next &&
+          frontier.record.history.dropRight(1) == intent.record.history && frontier.payload.validation.exists { state =>
+            state.receipts.lastOption.exists(receipt => recordedTimeout(target.check, receipt)) &&
+              frontier.payload == intent.payload.copy(validation = intent.payload.validation.map(_.copy(
+                receipts = target.successfulPrefix ++ state.receipts.lastOption.toVector)))
+          }
+        else result.isEmpty && (target.preparationRefusal match {
           case None => frontier == intent
           case Some(refusal) => frontier.record.revision == intent.record.revision.next &&
             frontier.record.history.dropRight(1) == intent.record.history && frontier.payload == intent.payload.copy(
               stage = "ValidationPreparationRejected", validationPreparation = Some(refusal))
-        })) Consequence.unit else N.invalid("merge check source, original result absence or typed refusal is crossed")
+        }))) Consequence.unit else N.invalid("merge check source, original result or typed refusal is crossed")
     selected <- store.scoped("").currentMergeCandidateC(before)
     _ <- if (selected.pending == candidate && selected.namespace == target.sourceNamespace) Consequence.unit
       else N.invalid("merge check source is not the actual historical candidate")
@@ -336,13 +362,16 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     current = session.started.current
     _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty && current.currentProgression.exists(p =>
         Set("sync.ValidationChecking", "sync.ValidationPreparationRejected")(p.value))) Consequence.unit
-      else N.invalid("merge check continuation requires an active unsuspended resultless check or actual typed preparation refusal")
+      else N.invalid("merge check continuation requires an active unsuspended resultless check, typed timeout or typed preparation refusal")
     store <- N.bindC(session, d, core, acknowledge)
     candidate <- store.currentMergeCandidateC(current)
     prefix = "native-repository:" + identity + ":"
     frontier <- _load_c(store, current.causation.value.stripPrefix(prefix))
     state <- frontier.payload.validation.map(Consequence.success).getOrElse(N.invalid("merge check frontier has no actual selected state"))
-    index = state.receipts.size
+    timedout = state.selected.lift(state.receipts.size - 3).exists(check =>
+      state.receipts.lastOption.exists(receipt => recordedTimeout(check, receipt)))
+    succeeded = if (timedout) state.receipts.dropRight(1) else state.receipts
+    index = succeeded.size
     check <- (Vector(C.Check("index-local", 0), C.Check("index-remote", 0)) ++ state.selected).lift(index)
       .map(Consequence.success).getOrElse(N.invalid("merge check frontier has no missing selected check"))
     intentkey = N.candidateKey(candidate.namespace, "validation-intent-" + index)
@@ -355,10 +384,10 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     candidatekey = N.candidateKey(candidate.namespace, "pending-merge")
     target = Target(core.component.get.core.instanceId.canonicalKey, identity, session.context, store.original.repositoryRoot,
       d.target.endpoint, current.revision.value.toString, current.causation.value, candidate.namespace, candidatekey,
-      candidate.pending.record.revision.value.toString, _reference(identity, candidatekey), N.codec.encode(candidate.pending.payload),
-      intentkey, intent.record.revision.value.toString, _reference(identity, intentkey), N.codec.encode(intent.payload), index, check,
-      state.selected, state.receipts, validation, actual, tree, plan, candidate.pending.payload.pushContinuation,
-      frontier.payload.validationPreparation, policy)
+      candidate.pending.record.revision.value.toString, _reference(identity, store.key(candidatekey)), N.codec.encode(candidate.pending.payload),
+      intentkey, intent.record.revision.value.toString, _reference(identity, store.key(intentkey)), N.codec.encode(intent.payload), index, check,
+      state.selected, succeeded, validation, actual, tree, plan, candidate.pending.payload.pushContinuation,
+      frontier.payload.validationPreparation, policy, timedout, store.phase)
     authenticated <- _authenticate_c(store, current, target)
   } yield Source(session, store, authenticated._1, authenticated._2, authenticated._3, target)
   def selectedC(store: N.Store, current: InstanceRecord): Consequence[Option[Saved]] =
@@ -371,7 +400,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
         direction <- saved.payload.mergeCheckContinuation.map(Consequence.success).getOrElse(N.invalid("merge check adoption direction is absent"))
         _ <- direction.asJson.as[Direction].fold(e => N.invalid(e.message), _ => Consequence.unit)
         source <- _authenticate_c(store, current, direction.target)
-        _ <- if (key == adoptionKey(direction.target) && saved.record == prefix && prefix.revision == source._3.record.revision.next &&
+        _ <- if (key == store.key(adoptionKey(direction.target)) && saved.record == prefix && prefix.revision == source._3.record.revision.next &&
             prefix.history.dropRight(1) == source._3.record.history && prefix.lifecycle == Lifecycle.Active && prefix.suspension.isEmpty &&
             saved.payload == source._3.payload.copy(stage = "MergeCheckContinuationAdmitted", mergeCheckContinuation = Some(direction)))
           Consequence.unit else N.invalid("merge check adoption is not its exact adjacent native direction")
@@ -380,7 +409,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
   def describeC(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     validation: C.Policy, acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
     sourceC(identity, d, definition, core, validation, acknowledge).map(source =>
-      V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", message,
+      V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", if (source.target.timedOut) _timeout_message else message,
         source.target.componentInstance, targetRecord(source.target), choices, RepositorySyncValidationContinuation.adoptionOperation))
   def adoptC(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration, definition: DefinitionBinding,
     core: ActionCall.Core, validation: C.Policy, installation: RepositorySyncValidationContinuation.Installation,
@@ -412,7 +441,8 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
             actual.frontier.payload.copy(stage = "MergeCheckContinuationAdmitted", mergeCheckContinuation = Some(direction))).map(_ => "adopted")
       } yield result
     }
-  } yield V.RepositorySyncValidationContinuationAdoptionResult(input.sessionId, outcome != "deferred", outcome, message)
+  } yield V.RepositorySyncValidationContinuationAdoptionResult(input.sessionId, outcome != "deferred", outcome,
+    if (target.timedOut) _timeout_message else message)
   def requireCurrentContextC(store: N.Store, target: Target, validation: C.Policy): Consequence[Unit] = for {
     actual <- G.inspectC(store.core)
     _ <- store.scopeC(actual.observed)

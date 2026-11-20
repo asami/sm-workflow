@@ -21,7 +21,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov. 19, 2026
+ *  version Nov. 19, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -201,10 +202,10 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
         .find(_.name == "RepositorySyncService").get.operations.operations.toVector
         .map(operation => operation.name -> operation).toMap
-      Then("description retains sessionId and adoption retains the structured input or Resource alternatives")
+      Then("description retains the session and optional evidence policy and adoption keeps both input formats")
       val describe = deferred(RepositorySyncValidationContinuation.describeOperation)
       val adopt = deferred(RepositorySyncValidationContinuation.adoptionOperation)
-      describe.specification.request.parameters.map(_.name) shouldBe List("sessionId")
+      describe.specification.request.parameters.map(_.name) shouldBe List("sessionId", "purposeTestEvidencePolicy")
       adopt.specification.request.parameters.map(_.name) shouldBe List("input", "inputResource")
       Vector(describe, adopt).foreach { operation =>
         operation.specification.request shouldBe generated(operation.name).specification.request

@@ -163,6 +163,29 @@ and unknown native checks retain their existing FIX and no-blind-replay routes.
 See the [S3 source/evidence note](../notes/phase-6.9-s3-program-impact.md) for
 configuration, authored specifications and remaining qualification limits.
 
+### Validation after local-first integration
+
+The remote merge uses the candidate staged after Git integration or conflict
+resolution. Its differences from both parents identify the combined change and
+the scope of semantic review. For a change to program inputs, the focused
+selection covers compilation and the declared tests for those inputs, including
+tests that consume changed shared inputs. Broad inputs and incomplete focused
+coverage select ordinary FULL. HEAVY remains a separate operation.
+
+The Workflow can reuse successful checks from the preceding canonical local
+integration in the same Session when the selected checks still apply. The
+comparison is between the tree those checks validated and the new staged tree.
+Equal trees establish equal versioned inputs. For different trees, every changed
+entry must be established as outside the declared validation inputs. This keeps
+source, tests, build and dependency configuration, generators, submodule changes
+and unknown inputs in scope. The existing validation record identifies the
+selection reason and the native records that supplied the reused results.
+
+The remote merge still checks its index against both parents and follows its own
+document, overlap and conflict review. The ordinary commit and push gates use
+that remote merge's structural and review results together with its applicable
+product validation.
+
 ## S5 completed effects and same-Session delivery
 
 Integration now loads its original `integration-intent` before any Git operation.

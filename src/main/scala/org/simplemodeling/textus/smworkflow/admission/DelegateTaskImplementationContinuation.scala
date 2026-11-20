@@ -11,6 +11,8 @@ import StandaloneFixExecution as S
 /** Rebind only the unissued Implement following a managed scope correction.
   * The ordinary mechanical checkpoint retains the prior execution base in
   * history; it does not alter the adopted business input or repository.
+  * @since   Nov. 20, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object DelegateTaskImplementationContinuation {
   private def invalid[A](message: String): Consequence[A] =
@@ -28,6 +30,23 @@ private[smworkflow] object DelegateTaskImplementationContinuation {
     walk(Vector(head), Set.empty)
   }
 
+  def withoutExecutionEvidence(payload: Payload): Boolean = {
+    val state = payload.state
+    state.candidate.isEmpty && state.receipts.isEmpty && state.pendingCheck.isEmpty &&
+      state.reviewReference.isEmpty && state.priorReview.isEmpty &&
+      state.priorReviewCandidate.isEmpty && state.commit.isEmpty && state.commitExecution.isEmpty &&
+      payload.records.isEmpty && payload.candidateContinuation.isEmpty && payload.validationContinuation.isEmpty
+  }
+
+  def matchesOriginal(reference: org.goldenport.cncf.workflow.ContextReference,
+    direction: DelegateTaskSemanticContinuation.Direction, target: DelegateTaskSemanticContinuation.Target,
+    original: DelegateTaskSemanticContinuation.Original, owner: String, session: String): Boolean =
+    direction.choice == "ContinueAfterDependencyResolution" && target.componentInstance == owner &&
+      target.sessionId == session && target.original.continuationId == original.continuationId &&
+      target.original.sourceRevision == original.sourceRevision &&
+      target.original.resultReference == original.resultReference &&
+      target.business.state.semanticReference.contains(reference) && original.resultReference == reference
+
   def advanceC(owner: BoundedWorkNativeRun, host: Host, storage: WorkflowComponentStorage,
     current: InstanceRecord, payload: Payload, core: ActionCall.Core): Consequence[InstanceRecord] = {
     val state = payload.state
@@ -36,11 +55,19 @@ private[smworkflow] object DelegateTaskImplementationContinuation {
     if (!corrected || state.stage != "Implement" || !state.input.delegation.exists(_.role == "destination"))
       Consequence.success(current)
     else for {
-      _ <- if (state.candidate.isEmpty && state.receipts.isEmpty && state.pendingCheck.isEmpty &&
-        state.semanticReference.isEmpty && state.reviewReference.isEmpty && state.priorReview.isEmpty &&
-        state.priorReviewCandidate.isEmpty && state.commit.isEmpty && state.commitExecution.isEmpty &&
-        payload.records.isEmpty && payload.candidateContinuation.isEmpty && payload.validationContinuation.isEmpty)
+      _ <- if (withoutExecutionEvidence(payload))
         Consequence.unit else invalid("implementation already has candidate or execution evidence")
+      _ <- (state.semanticReference, payload.delegateSemanticContinuation) match {
+        case (None, None) => Consequence.unit
+        case (Some(reference), Some(direction)) => for {
+          target <- DelegateTaskSemanticContinuation.targetC(direction.target.noSpaces)
+          original <- DelegateTaskSemanticContinuation.originalC(storage, current, core)
+          _ <- if (matchesOriginal(reference, direction, target, original,
+            core.component.get.core.instanceId.canonicalKey, current.identity.value))
+            Consequence.unit else invalid("retained semantic reference does not match the admitted original completion")
+        } yield ()
+        case _ => invalid("retained semantic reference and continuation do not match")
+      }
       _ <- S.inputC(state.input)
       _ <- if (payload.root == host.root && payload.branch == host.branch &&
         state.input.ownedPaths.forall(path => host.paths.contains(path) && S.permitted(path, state.input))) Consequence.unit
