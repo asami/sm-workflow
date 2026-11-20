@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 20, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -113,6 +113,58 @@ private[smworkflow] object RepositorySyncLocalMain {
     val start = current.history.reverse.find(_.causation.value.startsWith("repository-local-main-phase:"))
       .map(_.revision.value).getOrElse(0L)
     current.history.filter(_.revision.value >= start)
+  }
+
+  final case class CheckedLocal(source: RepositorySyncNativeProgressStore.Stage,
+    checked: RepositorySyncNativeProgressStore.Stage, validation: String, closure: String)
+
+  /** Only the accepted local hop in this Session's actual history can supply
+    * receipts to its remote successor. A locator alone is never evidence.
+    */
+  def checkedLocalC(store: RepositorySyncNativeProgressStore.Store,
+    pending: RepositorySyncNativeProgressStore.Stage,
+    policy: RepositorySyncNativeMergeValidation.Policy): Consequence[Option[CheckedLocal]] = {
+    val selected = store.declaration.hop.filter(hop => hop.cursor.phase == "remote" &&
+      hop.cursor.localTip.contains(pending.payload.before.head))
+    selected match {
+      case None => Consequence.success(None)
+      case Some(hop) =>
+        val localstore = store.withDeclaration(store.declaration.copy(hop = Some(hop.copy(
+          cursor = hop.cursor.copy(phase = "local"))))).scoped("")
+        def _precedes_(before: InstanceRecord, after: InstanceRecord): Boolean =
+          before.identity == after.identity && before.revision.value < after.revision.value &&
+            after.history.take(before.history.size) == before.history
+        localstore.loadC("commit-observed").flatMap {
+          case Some(observed) if observed.payload.stage == "NativeCommitObserved" &&
+              observed.payload.finalTip == hop.cursor.localTip &&
+              observed.payload.after.exists(after => hop.cursor.localTip.contains(after.head)) &&
+              _precedes_(observed.record, pending.record) &&
+              pending.record.history.exists(entry => entry.causation.value == "repository-local-main-phase:remote" &&
+                entry.revision.value > observed.record.revision.value) &&
+              phaseHistory(observed.record).exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))) =>
+            for {
+              actual <- RepositorySyncPurposeContentContinuation.prefixC(pending.record, observed.record.revision.value.toString)
+              _ <- if (actual == observed.record) Consequence.unit else invalid("LocalCheckedCommitCrossesHistory")
+              candidate <- localstore.currentMergeCandidateC(observed.record)
+              checked <- localstore.loadC(RepositorySyncNativeProgressStore.candidateKey(candidate.namespace, "merge-validated"))
+              result <- checked match {
+                case Some(value) if value.payload.stage == "MergeValidated" &&
+                    _precedes_(candidate.pending.record, value.record) && _precedes_(value.record, observed.record) &&
+                    observed.payload.indexTree == candidate.pending.payload.indexTree &&
+                    observed.payload.after.exists(after => candidate.pending.payload.indexTree.contains(after.tree)) &&
+                    RepositorySyncNativeMergeValidation.completedC(value, candidate.pending, policy, merge = true).isSuccess =>
+                  RepositorySyncPurposeContentContinuation.prefixC(observed.record, value.record.revision.value.toString).flatMap { prefix =>
+                    if (prefix == value.record) Consequence.success(Some(CheckedLocal(candidate.pending, value,
+                      localstore.reference(RepositorySyncNativeProgressStore.candidateKey(candidate.namespace, "merge-validated")).identity,
+                      localstore.reference("commit-observed").identity)))
+                    else invalid("LocalCheckedValidationCrossesHistory")
+                  }
+                case _ => Consequence.success(None)
+              }
+            } yield result
+          case _ => Consequence.success(None)
+        }
+    }
   }
   def sourceReadyC(store: RepositorySyncNativeProgressStore.Store, current: InstanceRecord,
     observed: RepositorySyncManagedGitObservation.Observed): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {

@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 20, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -397,10 +397,75 @@ private[smworkflow] object RepositorySyncProgramImpact {
     Selection(if (full) "FULL" else "FOCUSED", reason, selected, Vector.empty)
   }
 
+  /** The remote hop integrates contributions from both parents. Every affected
+    * input needs declared compile and test coverage, including shared consumers.
+    */
+  def selectRemote(p: Policy, inputs: RepositorySyncDocumentInputs.Assessment): Selection = {
+    val ordinary = select(p, inputs)
+    val affected = (inputs.consumedPaths ++ inputs.unknownPaths).distinct.sorted
+    val matching = p.coverage.filter(c => affected.exists(covers(c.affectedPaths, _)) ||
+      affected.exists(covers(c.inputPaths, _)))
+    def _test_(check: V.Check): Boolean = check.kind == WorkflowSbtValidation.Kind.Test ||
+      check.kind == WorkflowSbtValidation.Kind.TestOnly
+    val missing = affected.filter(path =>
+      !matching.exists(c => c.check.kind == WorkflowSbtValidation.Kind.Compile && covers(c.affectedPaths, path)) ||
+        !matching.exists(c => _test_(c.check) && covers(c.affectedPaths, path)))
+    if (ordinary.depth == "FULL" || inputs.unknownPaths.nonEmpty || missing.nonEmpty)
+      Selection("FULL", ordinary.reason + "; remote ordinary FULL: unknown inputs=" + inputs.unknownPaths.mkString(",") +
+        "; missing compile/test coverage=" + missing.mkString(","), p.fullChecks, Vector.empty)
+    else ordinary.copy(checks = matching.map(_.check).distinct.sortBy(_.ordinal),
+      reason = ordinary.reason + "; remote compile/test and shared-consumer coverage")
+  }
+
+  def selectForStore(store: N.Store, p: Policy, inputs: RepositorySyncDocumentInputs.Assessment): Selection =
+    if (store.declaration.hop.exists(_.cursor.phase == "remote")) selectRemote(p, inputs) else select(p, inputs)
+
+  /** Native local-hop reuse preserves the original product observations. Current
+    * structural checks and semantic review still belong to the remote candidate.
+    */
+  def reuseLocalC(store: N.Store, pending: N.Stage, policy: V.Policy,
+    p: Policy): Consequence[Option[(Selection, Map[String, V.Receipt])]] =
+    RepositorySyncLocalMain.checkedLocalC(store, pending, policy).flatMap {
+      case None => Consequence.success(None)
+      case Some(prior) =>
+        val state = prior.checked.payload.validation.get
+        val plan = for {
+          inputs <- state.inputs
+          impact <- state.impact
+          current = selectRemote(p, inputs)
+          if impact.checks == current.checks && state.selected == current.checks && current.checks.nonEmpty &&
+            state.selected.forall(check => belongs(check, p.checks)) &&
+            ((state.selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
+              state.selected.exists(check => check.kind == WorkflowSbtValidation.Kind.Test ||
+                check.kind == WorkflowSbtValidation.Kind.TestOnly)) ||
+              state.selected.exists(check => check.ordinaryDiscovery && state.receipts.exists(receipt =>
+                receipt.identity == check.identity && receipt.group.exists(_.successful)))) &&
+            state.receipts.drop(2).zip(state.selected).forall((receipt, check) =>
+              receipt.externalCapture.isEmpty && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))
+        } yield impact
+        plan match {
+          case None => Consequence.success(None)
+          case Some(current) => for {
+            oldtree <- GitObjectId.parseC(prior.source.payload.indexTree.get)
+            newtree <- GitObjectId.parseC(pending.payload.indexTree.get)
+            delta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(oldtree, newtree)).flatMap(_.valueC)
+            assessment <- RepositorySyncDocumentInputs.assessChangesC(delta, store.declaration.documentInputs, blob =>
+              WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.BlobContent(blob))
+                .map(_.valueC.toOption.map(_.text.nonEmpty)))
+            equivalent = assessment.documentOnly && assessment.binaryPaths.isEmpty && !assessment.submoduleChanges &&
+              !delta.exists(change => covers(p.fullPaths ++ p.coverage.flatMap(_.inputPaths), change.path.value))
+            _ <- V.preconditionsC(store, pending)
+          } yield Option.when(equivalent)((current.copy(reason =
+            "REUSED: successful actual local-hop checks; checked validation inputs are unchanged; " + current.reason,
+            reused = state.selected.map(check => Reuse(check.identity, prior.validation, prior.closure, None))),
+            state.receipts.drop(2).map(receipt => receipt.identity -> receipt).toMap))
+        }
+    }
+
   def prepareC(store: N.Store, pending: N.Stage, inputs: RepositorySyncDocumentInputs.Assessment,
     p: Policy): Consequence[(Selection, Map[String, V.Receipt])] = for {
     _ <- validateC(p)
-    selection = select(p, inputs)
+    selection = selectForStore(store, p, inputs)
     _ <- if (selection.checks.nonEmpty) Consequence.unit else N.invalid("changed program inputs have no selected coverage")
     result <- reuseForTreeC(store, pending.payload.indexTree.get, p, selection)
     _ <- V.preconditionsC(store, pending)
