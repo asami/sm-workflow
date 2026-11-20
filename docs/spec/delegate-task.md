@@ -317,7 +317,11 @@ Requester `adopt` attaches the returned result and attributable artifact selecti
 only. `describeDelegateTaskAdoption` exposes the exact current Component instance,
 Session, source revision, participant and returned target. The ordinary evidence
 preparation route accepts family `DelegateTask`, kind `adoption`, that description
-and the proposed observation. Its passive projection must be independently
+and the proposed observation. The public Operation compares the issuing
+Subsystem's runtime name with its effective issuer declaration and the
+presented issuer before producing its passive projection. A mismatch reports
+the conflicting issuer values and leaves the requester Session unchanged.
+The resulting projection must be independently
 admitted by the existing configured host-evidence owner under
 `delegate-task-requester-artifact-adoption`; caller JSON alone is insufficient.
 Admission binds the current target, received source commit, exact coordinates,

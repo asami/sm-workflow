@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.data.NonEmptyVector
 import io.circe.{Json, parser}
 import io.circe.syntax.*
+import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.processexecution.*
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -23,6 +24,8 @@ import DelegateTaskValidationRecovery.given
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Matchers with org.scalatest.GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
+  override protected def subsystemName: String = "sm-workflow"
+
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val git = super.process_plan(root, if (Files.exists(root.resolve("SPEC-test-only-recovery"))) "Goal" else scenario, goal)
     if (Files.exists(root.resolve("SPEC-test-only-recovery"))) return DelegateTaskTestOnlyRecoveryFixture.processPlan(root, git)
@@ -824,30 +827,69 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
             }
           } yield () }
         }
-        val context = take(summon[org.goldenport.convert.ValueReader[V.DelegateTaskAdoptionContext]].readC(
+        val issuerkey = NativeExternalEvidence.prefix + "issuer"
+        currentParameters += issuerkey -> subsystemName
+        def _describe_adoption_() = take(summon[org.goldenport.convert.ValueReader[V.DelegateTaskAdoptionContext]].readC(
           publicCall("DelegateTaskDeliveryService", "describeDelegateTaskAdoption", List(Property("sessionId", requester.sessionId, None)),
             Vector("--sessionId", requester.sessionId))))
+        val context = _describe_adoption_()
         val selection = Record.data("sourceCommit" -> producer.commit.get.identity, "coordinates" -> Vector.empty[String],
           "selectionReference" -> Record.data("identity" -> "SPEC-selection", "revision" -> "1"),
           "consumerCheckReferences" -> Vector.empty[Record])
         val adopt = observation("adopt", selection = Some(selection))
         val execution = V.WorkflowExecutionEvidence(Vector(adopt.sourceReference), Some("participant"), None, None)
         var occurred = ""
-        _with_runtime_(root, "Equal", Some(host), currentParameters, componentInstance = "default") { (_, _, _, provision) =>
+        var actualissuer = ""
+        _with_runtime_(root, "Equal", Some(host), currentParameters, componentInstance = "default") { (owner, _, _, provision) =>
+          actualissuer = owner.name
           provision { setup => occurred = setup.executionContext.clock.instant().minusSeconds(1).toString; Consequence.unit }
         }
         val prep = V.WorkflowEvidencePreparationInput("DelegateTask", "adoption", write("SPEC-adoption-context.json", context),
           write("SPEC-adoption-input.json", adopt), write("SPEC-adoption-reference.json", adopt.sourceReference),
-          write("SPEC-adoption-execution.json", execution), "normal-development-host", occurred,
+          write("SPEC-adoption-execution.json", execution), actualissuer, occurred,
           "entity:smworkflow.cli.host_evidence", None)
+        if (installed.isEmpty) {
+          def _refused_preparation_(parameters: Map[String, String], value: V.WorkflowEvidencePreparationInput): String = {
+            var diagnostic = ""
+            _with_runtime_(root, "Equal", Some(host), parameters, componentInstance = "default") { (owner, component, actor, _) =>
+              val response = owner.executeOperationResponseInContext(Request.of(component = component.name,
+                service = "NativeWorkflowPreparationService", operation = "prepareEvidence",
+                properties = List(Property("input", value, None))), actor)
+              response.isSuccess shouldBe false
+              diagnostic = response.toString
+            }
+            diagnostic
+          }
+          Given("the received requester result on a Subsystem whose effective declaration permits issuer sm-workflow")
+          When("public preparation is called with the presented issuer normal-development-host")
+          val wronginput = prep.copy(issuer = "normal-development-host")
+          val diagnostic = _refused_preparation_(currentParameters, wronginput)
+          Then("the evidence preparation is refused with an issuer diagnostic and the requester revision is retained")
+          diagnostic should include ("DelegateTask adoption issuer mismatch")
+          diagnostic should include ("presented issuer 'normal-development-host'")
+          diagnostic should include ("issuing Subsystem 'sm-workflow'")
+          _describe_adoption_().sourceRevision shouldBe context.sourceRevision
+          refused(currentParameters, adopt)
+
+          When("the presented issuer copies a declaration that differs from the actual Subsystem")
+          val copied = _refused_preparation_(currentParameters.updated(issuerkey, wronginput.issuer), wronginput)
+          Then("the Operation reports the mismatch between the Subsystem and the effective declaration")
+          copied should include ("issuing Subsystem 'sm-workflow'")
+          copied should include ("deployment declares 'normal-development-host'")
+          _describe_adoption_().sourceRevision shouldBe context.sourceRevision
+        }
+        When("the same requester Session prepares evidence with the actual issuer and the host imports it")
         val preparedAdoption = publicCall("NativeWorkflowPreparationService", "prepareEvidence",
           List(Property("input", prep, None), Property("preparationFormat", "legacy-full", None)),
           Vector("--input", json(prep), "--preparationFormat", "legacy-full"))
-        val row = preparedAdoption.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
-        _with_runtime_(root, "Equal", Some(host), currentParameters, componentInstance = "default") { (_, _, _, provision) =>
-          provision(_.createC("host_evidence", row.getString("id").get, row.removeKeys(Set("id"))))
-        }
-        observe(adopt).kind shouldBe "Terminal"
+        refused(currentParameters, adopt)
+        val importdir = Files.createDirectories(root.resolve(StartupImport.defaultDataDirName))
+        val importfile = Files.writeString(importdir.resolve("SPEC-adoption.json"), take(preparedAdoption.toJsonStringC))
+        val adopted = try observe(adopt) finally Files.delete(importfile)
+        Then("the original Session reaches its adopted terminal state without replaying destination checks")
+        adopted.sessionId shouldBe requester.sessionId
+        adopted.kind shouldBe "Terminal"
+        adopted.state.flatMap(_.getString("stage")) shouldBe Some("Adopted")
         advanceFull(requester.sessionId).kind shouldBe "Terminal"
         Files.readString(root.resolve("sbt-executions.txt")) shouldBe countBefore
         Files.readString(root.resolve("sbt-launches.txt")) shouldBe launchesAtReturn

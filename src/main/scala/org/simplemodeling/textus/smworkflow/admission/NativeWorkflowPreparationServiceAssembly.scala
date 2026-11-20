@@ -18,7 +18,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 18, 2026
+  *  version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
@@ -126,7 +127,8 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
           "execution-evidence" -> input.executionEvidence,
           "issuer" -> input.issuer,
           "occurred-at" -> input.occurredAt,
-          "collection" -> input.collection) ++ input.participant.map(value => "participant" -> value), reader)),
+          "collection" -> input.collection) ++ input.participant.map(value => "participant" -> value), reader),
+        _admit_evidence_preparation_c),
       new BoundOperation[V.WorkflowCallerExecutionPrepareInput](_declared.PrepareExecutionOperation,
         (input, reader) => NativeCallerExecutionInput.prepareC(input, reader).map(_.toRecord())),
       new BoundOperation[V.WorkflowCallerExecutionRecordInput](_declared.RecordExecutionOperation,
@@ -137,8 +139,23 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
         (input, reader) => NativeCallerInformation.recordC(input, reader).map(_.toRecord()))
     )))
 
+  private def _admit_evidence_preparation_c(input: V.WorkflowEvidencePreparationInput, core: ActionCall.Core): Consequence[Unit] =
+    if (input.family != "DelegateTask" || input.kind != "adoption") Consequence.unit
+    else for {
+      host <- core.component.flatMap(_.subsystem).map(Consequence.success)
+        .getOrElse(Consequence.configurationInvalid("DelegateTask adoption requires the issuing Subsystem"))
+      declared <- NativeExternalEvidence.declaredIssuerC(host.configuration)
+      _ <- if (host.name != declared)
+        Consequence.securityPermissionDenied(s"DelegateTask adoption issuer mismatch: issuing Subsystem '${host.name}', deployment declares '$declared'")
+      else if (input.issuer != host.name)
+        Consequence.securityPermissionDenied(s"DelegateTask adoption issuer mismatch: presented issuer '${input.issuer}', issuing Subsystem '${host.name}'")
+      else Consequence.unit
+    } yield ()
+
   private final class BoundOperation[A: ValueReader](original: spec.OperationDefinition,
-    prepare: (A, Reader) => Consequence[Record]) extends spec.OperationDefinition {
+    prepare: (A, Reader) => Consequence[Record],
+    admit: (A, ActionCall.Core) => Consequence[Unit] = (_: A, _: ActionCall.Core) => Consequence.unit)
+      extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(original)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains(_declared.name) || request.operation != original.name)
@@ -149,7 +166,7 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
         format <- NativeWorkflowOperationInput.optionalTextC(request, "preparationFormat")
         _ <- if (format.forall(Set("compact", "legacy-full"))) Consequence.unit
           else Consequence.stateConflict("Preparation preparationFormat requires compact or explicit legacy-full")
-      } yield BoundAction(request, input, record, original.name, format.contains("legacy-full"), prepare)
+      } yield BoundAction(request, input, record, original.name, format.contains("legacy-full"), prepare, admit)
   }
 
   private object SemanticResultProjectionOperation extends spec.OperationDefinition {
@@ -199,15 +216,18 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
   }
 
   private final case class BoundAction[A](request: Request, input: A, inputRecord: Record,
-    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record]) extends CommandAction {
+    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record],
+    admit: (A, ActionCall.Core) => Consequence[Unit]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
-    def createCall(core: ActionCall.Core): ActionCall = BoundCall(core, input, inputRecord, operation, legacyFull, prepare)
+    def createCall(core: ActionCall.Core): ActionCall = BoundCall(core, input, inputRecord, operation, legacyFull, prepare, admit)
   }
 
   private final case class BoundCall[A](core: ActionCall.Core, input: A, inputRecord: Record,
-    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record]) extends ProcedureActionCall {
+    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record],
+    admit: (A, ActionCall.Core) => Consequence[Unit]) extends ProcedureActionCall {
     private var reads = Map.empty[String, String]
     def execute(): Consequence[OperationResponse] = for {
+      _ <- admit(input, core)
       prepared <- prepare(input, _read_c)
       selected <- if (!legacyFull && prepared.getAny("datastore").nonEmpty)
         WorkflowPreparedImport.retainC(core, operation, inputRecord, prepared, reads)

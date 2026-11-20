@@ -21,7 +21,8 @@ import RepositorySyncPurposeTestInterruption as T
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 20, 2026
+  *  version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -123,13 +124,16 @@ private[smworkflow] object NativeExternalEvidence {
     else for {
       store <- stringC(host, "store-name")
       collection <- stringC(host, "record-collection")
-      issuer <- stringC(host, "issuer")
+      issuer <- declaredIssuerC(host)
       _ <- if (ComponentDataStore.Request.forComponent(SmWorkflowComponent.componentId, store).normalizedName == store)
         Consequence.unit else Consequence.configurationInvalid("Native host evidence store is not canonical")
       id <- EntityCollectionId.parse(collection)
       _ <- if (id.print == collection) Consequence.unit
         else Consequence.configurationInvalid("Native host evidence collection is not canonical")
     } yield Declaration(store, DataStore.CollectionId.EntityStore(id), issuer)
+
+  def declaredIssuerC(host: ResolvedConfiguration): Consequence[String] =
+    stringC(host, "issuer")
 
   def bindC(host: ResolvedConfiguration, workflow: GoalPhaseRuntimeParameters.Persistence): Consequence[Reader] = for {
     declaration <- decodeDeclarationC(host)
