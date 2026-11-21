@@ -77,3 +77,7 @@ Phase 26 is the functional prerequisite. Do not alter the previously selected st
 ## Scheduling decision — 2026-11-22
 
 Adopted order: Phase 24 -> 28 -> 18 -> 23 -> 26 -> **27** -> 22 -> 17 -> 21 -> 15 -> 14. Phase 27 follows actual Phase 26 common Server/multi-CLI interoperability, not a speculative early Phase 27.1 split. Phase 25 remains deferred; qualify concrete required API/provider prerequisites without assuming its completion. Preserve existing scope, evidence and no-unapproved-paid-overage policy. No Session starts.
+
+## Adopted prerequisite update — 2026-11-22
+
+Phase 27 follows **Phase 25 -> Phase 26** after Phase 23. Use the verified generic task/provider interface and common Server/multi-CLI route as available, while preserving distinct execution and billing/allowance identities. The adopted full order is 24 -> 28 -> 18 -> 23 -> 25 -> 26 -> 27 -> 22 -> 17 -> 21 -> 15 -> 14. This supersedes older scheduling-only notes; no Session starts.
