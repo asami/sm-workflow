@@ -12,6 +12,7 @@ Reduce AI calls, repair latency and unnecessary edits by applying proven program
 
 ## Delivery
 - D1 Inventory actual Scala 2.12/3 compiler diagnostics, Metals/LSP code actions, Scalafix/Scalafmt and current scala-lint/car-lint integration. Measure baseline error categories and costs. Do not assume every diagnostic has a safe code action.
+- D1a Define optional Metals usage in each project's `project.yaml` (enabled/disabled, executable or server configuration, timeout and resource limits). Default disabled unless explicitly configured; validate schema and configuration, and gracefully fall back to non-Metals diagnostics when unavailable. Never launch a server merely because it is installed.
 - D2 Implement a typed diagnostic -> candidate patch -> validation adapter. Select only unambiguous, semantics-preserving and explicitly allowlisted fixes; check revision, workspace scope and overlapping edits; fail closed on ambiguity.
 - D3 Deliver useful deterministic fixes for imports, formatting, safe syntax/API migrations and other verified compile-error/hygiene categories. Integrate existing Scalafix/Scalafmt where compatible. Preserve original diagnostic and patch provenance.
 - D4 Strengthen scala-lint/car-lint warnings as Bad Smell candidates. A warning is resolved by a code fix or justified source-local annotation that the linter itself validates. Detect invalid, stale and unnecessary annotations. Do not automatically insert a justification annotation: AI/human judgement is required for acceptance.
@@ -19,6 +20,7 @@ Reduce AI calls, repair latency and unnecessary edits by applying proven program
 - D6 Record deterministic fix success, failure, time and avoided AI calls as measured observations; compare with baseline without fabricated savings. Qualify representative Scala 2.12/3 cases and independent review.
 
 ## Boundaries
+- Metals is an optional per-project tool, not a global prerequisite. Start and stop its process within approved workspace capabilities, bound initialization and requests, and record whether code actions were actually available.
 - No blanket automatic type casts, stub insertion, arbitrary method rename, suppression annotations, or speculative refactors.
 - Linter ownership retains rule/fix definitions; sm-workflow orchestrates, validates and admits patches. Producer changes require their own ownership and acceptance.
 - 512 KiB source-size hygiene is a configurable warning policy, not permission to truncate or rewrite source automatically.
