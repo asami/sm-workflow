@@ -8,16 +8,17 @@ The user selected this **execution order** after the currently running Phases 7 
 2. **Phase 28** — deterministic compiler/lint auto-fix.
 3. **Phase 18** — tool-neutral validation and Flutter integration.
 4. **Phase 23** — strategic Phase convergence.
-5. **Phase 25** — generic textus-ai Task API and provider expansion.
-6. **Phase 26** — common Server and multi-CLI interoperability.
-7. **Phase 27** — AI Capability Pool and surplus-allowance cost optimization.
-8. **Phase 22** — runtime stabilization and difficult continuations.
-9. **Phase 17** — Task and Standalone Fix extensions.
-10. **Phase 21** — recursive repository catch-up.
-11. **Phase 15** — development workspace operations.
-12. **Phase 14** — development investigation.
+5. **Phase 29** — Scala lint quality and Bad Smell analysis.
+6. **Phase 25** — generic textus-ai Task API and provider expansion.
+7. **Phase 26** — common Server and multi-CLI interoperability.
+8. **Phase 27** — AI Capability Pool and surplus-allowance cost optimization.
+9. **Phase 22** — runtime stabilization and difficult continuations.
+10. **Phase 17** — Task and Standalone Fix extensions.
+11. **Phase 21** — recursive repository catch-up.
+12. **Phase 15** — development workspace operations.
+13. **Phase 14** — development investigation.
 
-**Deferred:** Phases 10, 19, 13, 20 and 16. Phase 25 is now deliberately scheduled before Phase 26 to provide the reusable task/provider contract for common Server and CLI integration; Phase 27 follows both. Phases 7 and 9 remain in execution as last reported. Scheduling only: no Phase/Session starts, no existing evidence or acceptance is changed. Preserve normal ownership and concrete prerequisites.
+**Deferred:** Phases 10, 19, 13, 20 and 16. Phase 29 follows Phase 23 and precedes Phase 25 for Scala lint strengthening. Phase 25 is deliberately scheduled before Phase 26 to provide the reusable task/provider contract for common Server and CLI integration; Phase 27 follows both. Phases 7 and 9 remain in execution as last reported. Scheduling only: no Phase/Session starts, no existing evidence or acceptance is changed. Preserve normal ownership and concrete prerequisites.
 
 Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
 **stabilization -> remaining [Phase 7](phase-7.md) ->
