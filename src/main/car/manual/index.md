@@ -391,16 +391,34 @@ separate evidence; no production or real stopped-Session acceptance is claimed.
 
 The optional configured `ManagedDevelopmentService` exposes
 `publishDevelopmentArtifact`, `selectDevelopmentArtifact`,
-`compileDevelopmentConsumer` and `readDevelopmentArtifactStatus` through the
-normal CLI/MCP path. Input selects a declared edge, request, publication and
-immutable selection. Publication and consumer compilation use CNCF typed SBT
-and granted workspaces; selection/status never build the producer. Explicit
-consumer plugin opt-in is required. A publication is not consumer verification,
-and unknown effects are not automatically replayed. The initial route supports
-one ordinary JVM or Scala-cross library. Remaining overlay lifecycle, managed
-worktree acquisition, generation and parallel Goal continuation are pending
-Phase 7 work. See the authored development-artifact-overlay specification for
-host policy, plugin opt-in and actual supported boundaries.
+`compileDevelopmentConsumer`, `verifyDevelopmentArtifact`,
+`detachDevelopmentArtifact`, `pruneDevelopmentArtifact` and
+`readDevelopmentArtifactStatus` through the normal CLI/MCP path. Input selects
+a declared edge, request, publication and immutable selection; optional
+`publicationEdge` explicitly shares a matching declared producer with another
+consumer. Publication and verification use CNCF typed SBT and granted workspaces.
+An optional edge batch configures multiple literal producer projects and separate
+consumer and Cozy/Modeler generator mappings. Actual completed batches, Compile
+resolution and generation observations are required for verified use.
+
+Update and rollback use explicit immutable selections and fresh invocations.
+Detach compiles without scoped input and retains the prior selection; it clears
+only that expected active selection after success and preserves a concurrent
+switch. Select input `retain: true` explicitly pins its selection; `false`
+unpins it, and omission creates no pin. Detach preserves pins. These operations
+start fresh processes; they do not mutate an existing JVM.
+
+Prune deletes only a new native publication's exact owned artifact files through
+CNCF FileDelete. Owner Component records protect active, pinned and in-flight
+dependency closures and reserve permanent unavailability before deletion.
+`prune-unavailable` covers protected, legacy, malformed and unknown inventories;
+partial/uncertain attempts retain their actual per-file outcomes and never replay.
+Status includes current protection and bounded prune progress. Directories,
+publication claims, source worktrees and shared caches remain intact. Unknown
+effects never rerun automatically. The P7-B consumer source and
+specifications require native validation and review; no Phase acceptance is
+claimed. See [Development artifact overlay](../../../../docs/spec/development-artifact-overlay.md)
+for configuration, opt-in and the remaining original obligations.
 
 ### Start intent and managed preparation
 

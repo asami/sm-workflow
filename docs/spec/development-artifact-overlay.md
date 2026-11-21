@@ -478,3 +478,164 @@ the later ordered Steps. The executable specification is
 `org.simplemodeling.textus.smworkflow.admission.Phase7ManagedDevelopmentSpec`;
 its authored scenarios require runtime execution and independent review before
 acceptance. No result in this document claims those checks have run.
+
+## P7-B consumer connection (2026-11-21; unvalidated)
+
+The adopted producer is sbt-cozy `0.1.18-SNAPSHOT`, canonical source commit
+`04f521f3002cdc5a2c2e7c1d11cb2971d821eda8`. Its requester adoption records
+producer delivery and artifact selection, separately from sm-workflow checks.
+The changes described here require native validation and independent review.
+They do not complete P7-B or any Phase acceptance checkbox.
+
+A configured edge can add an optional `batch` object. Its `modules` list names
+literal SBT project IDs and their ordinary exact `requested` coordinates.
+`consumerModules` identifies the selected consumer graph. The optional
+`generator` contains `cozyVersion`, `modelerVersion` and `modules`, all ordinary
+coordinates drawn from the same declared batch. For example:
+
+```json
+{
+  "modules": [
+    {"project":"cozy","requested":{"organization":"org.simplemodeling","module":"cozy_2.12","version":"0.3.3-SNAPSHOT"}},
+    {"project":"modeler","requested":{"organization":"org.simplemodeling","module":"simplemodeler_2.12","version":"1.1.26-SNAPSHOT"}},
+    {"project":"cncf","requested":{"organization":"org.goldenport","module":"goldenport-cncf_3","version":"0.5.6-SNAPSHOT"}}
+  ],
+  "consumerModules": [
+    {"organization":"org.goldenport","module":"goldenport-cncf_3","version":"0.5.6-SNAPSHOT"}
+  ],
+  "generator": {
+    "cozyVersion":"0.3.3-SNAPSHOT",
+    "modelerVersion":"1.1.26-SNAPSHOT",
+    "modules": [
+      {"organization":"org.simplemodeling","module":"cozy_2.12","version":"0.3.3-SNAPSHOT"},
+      {"organization":"org.simplemodeling","module":"simplemodeler_2.12","version":"1.1.26-SNAPSHOT"}
+    ]
+  }
+}
+```
+
+Project and module identities must be unique, the edge's primary `requested`
+coordinate must be a consumer member, and both explicit generator roots must
+agree with their configured base versions. This configuration grants no new
+workspace or execution authority. Native publication emits the existing CNCF
+scoped SBT envelope with nested `sbt-cozy.development-artifact.v2` and declared
+`producers`. It retains the entire v2 batch completion, v3 artifact inventory,
+member controls and actual producer report. A partial batch or mismatched
+report cannot create a selectable native publication. The adapter validates
+actual files and the complete direct/transitive graph on consumption.
+
+Consumer input has separate runtime `mappings` and `generator.mappings`.
+The adopted adapter resolves and launches the generator's Scala 2.12 graph in a
+fresh child JVM independently of the consumer's Scala 3 graph. Native verified
+status additionally requires actual Compile resolution for every configured
+runtime member, successful generation, Scala product inventory, the adapter's
+SBT producer resolution and child observations, matching Cozy/Modeler base
+versions and actual private root CodeSource paths. Process exit alone cannot
+establish this outcome. Full resolver/child reconciliation remains the adopted
+adapter's responsibility; sm-workflow does not invent a second resolver.
+
+Two registered consumer edges can share a completed producer publication by
+explicitly supplying optional `publicationEdge` in the command input. That
+named configured edge must have the same provider, repository binding, primary
+coordinate and complete batch configuration. Each consumer keeps its own
+selection and execution records. No implicit cross-edge/latest discovery occurs.
+
+`verifyDevelopmentArtifact` uses the same retained Compile attempt as
+`compileDevelopmentConsumer`. Update selects a new immutable selection identity
+pointing to the completed B publication; rollback explicitly selects the exact
+retained A publication. Each new execution gets a fresh input and typed SBT
+invocation. Existing input files and chosen dependency sets are never rewritten.
+`detachDevelopmentArtifact` requires the existing immutable selection, invokes
+ordinary typed Compile without scoped input, and retains the prior selection
+and actual process outcome. Status can report its retained `detached` outcome.
+Detach does not delete artifacts, erase selection history or certify a change to
+an already-running SBT/Cozy JVM. Generation/classpath changes take effect through
+these new invocations; in-process mutation is not supported.
+
+`selectDevelopmentArtifact` also maintains one current active selection per
+configured consumer edge. Optional `retain: true` explicitly pins that immutable
+selection; `retain: false` removes its pin. Omission does not create or remove a
+pin. To release a historical pin, explicitly select it with `retain: false`, then
+detach it or select another publication. Successful detach clears only its
+expected active selection, preserving a newer concurrent switch and all pins.
+Historical publication/selection facts remain immutable.
+
+`pruneDevelopmentArtifact` uses the adopted CNCF `UnitOfWorkOp.FileDelete` on
+literal owner-workspace filenames. Only newly admitted native publications have
+a safe prune inventory. Coordinates, standard JAR/classifier/extension filenames,
+Ivy descriptors and v1/v2/v3 completion markers are derived from the configured
+logical repository. Retained absolute paths and actual completion metadata must
+agree with that derivation; they cannot choose deletion targets. Source checkouts,
+empty directories, persistent coordinate/batch claims, staging and shared caches
+are not deletion candidates. No coordinate can be republished after pruning.
+
+Owner-scoped Component records retain a contiguous immutable protection history.
+A transition creates the next unique revision and requires exact readback.
+Current lookup probes the contiguous sequence exponentially and then by binary
+search, with logarithmic reads and constant stack usage. After a failed Create,
+only a different valid immutable successor at that exact revision permits a
+bounded no-effect transition retry; missing or equal-byte readback stays
+ambiguous and fails closed. No compile/delete effect is retried. This
+coordinates current selection, pins, native publication admission, in-flight use
+and prune reservation across participating processes. It does not hold a lock
+while SBT runs or serialize independent builds. Only exhaustion of the positive
+Long revision range prevents a further append; existing status remains readable.
+
+Producer and consumer use is acquired before SBT. An actual observed exit or
+proven unstarted execution releases it; unconfirmed termination/interruption
+retains it across restart. Active/pinned/in-use publications protect their
+development dependency closure. An admitted dependent publication also prevents
+deleting its dependency before that dependent is pruned. Unknown, foreign or
+dangling closures refuse cleanup. Legacy publications and selections remain
+readable/usable, but do not acquire destructive eligibility; an active or running
+legacy selection with unknown closure conservatively prevents cleanup.
+
+Prune checks the current protections and exact live inventory before reserving
+the publication as unavailable. New selection/use then refuses it. Before every
+FileDelete occurrence it durably records a pending outcome, then retains actual
+`Deleted`, `Absent`, `Conflict` or `Failed`. Uncertain acquisition/termination is
+retained as `Unknown`. Conflict/failure stops the remaining files. Interruption,
+partial completion and unsuccessful progress retention remain unavailable across
+restart; no successful or unknown delete is replayed. A repeated request returns
+its retained result. A different request cannot restart that publication's prune.
+Status exposes the bounded inventory, actual progress and current active/pinned/
+in-flight protection. `pruned` requires all listed FileDelete results to be
+Deleted/Absent; `prune-unavailable`, `prune-incomplete` and `unknown` certify no
+such completion. CNCF's cooperative path/identity checks remain its documented
+boundary, not an OS transaction against arbitrary external writers.
+
+The authored `Phase7ManagedDevelopmentSpec` covers typed lifecycle replay,
+explicit publication sharing, incomplete/conflicting batch refusal and a native
+private batch -> real Cozy/Modeler generation -> real CNCF consumer route with
+A/B/A, a second consumer, ordinary detach, real owned batch pruning and shared Ivy
+observations. The native fixture also withholds a third member's declared POM
+after earlier members stage, and supplies conflicting Cozy-to-Modeler dependency
+metadata; both must fail without selectable completion or ordinary fallback.
+The generated-API negative uses the same Logical UI CML and actual
+selected generator output as the positive arm. A separate fixture compiler,
+without the root's products or selected runtime, resolves pinned CNCF 0.5.2 and
+must report the generated filename and missing GeneratedLogicalUiAbi symbol.
+The unchanged build's explicit selection alone activates this old-runtime arm;
+the normal compatible arm retains actual selected classpath evidence. It uses no
+handwritten generated Scala or machine-specific cache pathname. Actual fixture
+execution, integrated transitive/conflict/partial-batch qualification, real
+cross-process qualification, running-process refresh qualification and independent
+review remain separate runtime/Phase acceptance obligations. No test execution or
+acceptance is claimed here.
+
+Batch consumer reports are Workflow artifacts. Their complete identity bytes are
+read through the owner workspace's File UoW with the existing
+`workflow.artifact.max-bytes` project budget (64 MiB by default), decoded strictly
+as UTF-8 and parsed with duplicate JSON keys rejected. The complete report passes
+the same selected-coordinate and generator-origin validation before any evidence
+is reduced. An unavailable, oversized or invalid report remains unverified.
+Single-publication consumer behavior retains its existing report contract.
+
+For batch results, persisted verification/status evidence retains the actual
+consumer resolution, generator observations (including code origins, versions and
+classpath), generated product inventory and each producer's run reference and
+report-row count. It does not repeat the large raw producer resolution rows.
+`resolution.rawReport` binds the unchanged full report by logical `workspace`,
+`path`, exact `byteCount` and `sha256`; this reference grants no new file access.
+Detailed producer resolution remains in that original report. This is an authored
+repair; fresh runtime validation and independent acceptance remain required.

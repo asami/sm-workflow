@@ -1091,6 +1091,27 @@
           "kind": "COMMAND",
           "input": "ReadDevelopmentArtifactStatusInput",
           "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "verifyDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "VerifyDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "detachDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "DetachDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "pruneDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "PruneDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
         }
       ],
       "types": [
@@ -9438,6 +9459,18 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "publicationEdge",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retain",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Public selectors narrow configured edges; they grant no paths, tasks or argv.
   * @since   Nov. 12, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentService {
@@ -21,7 +21,10 @@ private[smworkflow] object ManagedDevelopmentService {
     "publish" -> declared.PublishDevelopmentArtifactOperation,
     "select" -> declared.SelectDevelopmentArtifactOperation,
     "compile" -> declared.CompileDevelopmentConsumerOperation,
-    "status" -> declared.ReadDevelopmentArtifactStatusOperation)
+    "status" -> declared.ReadDevelopmentArtifactStatusOperation,
+    "verify" -> declared.VerifyDevelopmentArtifactOperation,
+    "detach" -> declared.DetachDevelopmentArtifactOperation,
+    "prune" -> declared.PruneDevelopmentArtifactOperation)
   def bind(policy: Option[ManagedDevelopmentRuntime.Policy], native: Option[ProviderPhaseDelivery.Storage] = None, mainRoute: Option[String] = None): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(declared, spec.OperationDefinitionGroup(
       NonEmptyVector.fromVectorUnsafe(operations.map { (kind, operation) => new Operation(kind, operation, policy, native, mainRoute) })))
@@ -35,7 +38,7 @@ private[smworkflow] object ManagedDevelopmentService {
       else NativeWorkflowOperationInput.recordC(request, "input").flatMap { record =>
         if (!DevelopmentOperationalView.uniqueFields(record) ||
           !Set("edgeIdentity", "requestIdentity", "publication", "selection").subsetOf(record.fields.map(_.key).toSet) ||
-          !record.fields.map(_.key).toSet.subsetOf(Set("edgeIdentity", "requestIdentity", "publication", "selection", "providerPhase", "synchronization")))
+          !record.fields.map(_.key).toSet.subsetOf(Set("edgeIdentity", "requestIdentity", "publication", "selection", "providerPhase", "synchronization", "publicationEdge", "retain")))
           ManagedDevelopment.invalid("duplicate or undeclared input fields")
         else DevelopmentOperationalView.json(record).as[ManagedDevelopment.Input]
           .fold(e => ManagedDevelopment.invalid(e.message), input => Consequence.success(Call(request, kind, input, policy, native, mainRoute)))
