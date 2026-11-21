@@ -4,7 +4,7 @@ Status: planned; no acceptance evidence yet.
 Plan: [Phase 28](phase-28.md)
 
 - [ ] P28-01: Inventory compiler diagnostics, LSP actions and Scala 2.12/3 tool compatibility.
-- [ ] P28-01a: `project.yaml` Metals configuration schema, opt-in/default-off, bounded lifecycle and unavailable-server fallback tests.
+- [ ] P28-01a: `project.yaml` Metals configuration schema, default-on/explicit opt-out, bounded lifecycle and unavailable-server fallback tests.
 - [ ] P28-02: Baseline existing AI repair and lint outcomes with attributable metrics.
 - [ ] P28-03: Typed deterministic patch contract, ambiguity checks and workspace authorization.
 - [ ] P28-04: Verified compiler-error fixes with real integration evidence.
