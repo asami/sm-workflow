@@ -20,7 +20,7 @@ import WorkflowManagementReconstruction as M
 
 /** Thin native adapter for correcting an unstarted request's derived policy.
   * The native bounded owner retains all prior checkpoints and owns Advance.
-  * @since Nov. 19, 2026
+  * @since   Nov. 19, 2026
   * @version Nov. 19, 2026
   */
 private[smworkflow] object DelegateTaskRequestReconstruction {

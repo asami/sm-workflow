@@ -474,9 +474,10 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                     case Some(actual) => Consequence.success(prepared.payload.copy(validation = Some(state.copy(receipts = receipts :+ actual))))
                     case None if merge && check.invocation.nonEmpty => RepositorySyncProgramImpact.operationC(check)
                       .flatMap(E.validationOperationAttemptC(store.core, _)).flatMap(productAttemptPayloadC(prepared.payload, check, _))
-                    case None if merge => E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, check.workspace)
+                    case None if merge => E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, check.workspace,
+                      lintBase = Some(pending.payload.before.head))
                       .flatMap(productAttemptPayloadC(prepared.payload, check, _))
-                    case None => E.repositoryValidationC(store.core, check.ordinal, check.kind)
+                    case None => E.repositoryValidationC(store.core, check.ordinal, check.kind, lintBase = Some(pending.payload.before.head))
                       .flatMap(sbtReceiptC(check.identity, check.kind, _))
                       .map(receipt => prepared.payload.copy(validation = Some(state.copy(receipts = receipts :+ receipt))))
                   }

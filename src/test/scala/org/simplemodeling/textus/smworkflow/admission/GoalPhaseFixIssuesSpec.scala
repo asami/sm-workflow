@@ -17,7 +17,8 @@ import RepositorySyncNativeMergeValidation as R
 
 /** Pure business examples use actual-shaped receipts, never genuine host acts.
   * @since   Oct. 18, 2026
- * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -105,7 +106,7 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
         state.copy(issues = Vector(issue.copy(source = "UNKNOWN"))), state.copy(issues = Vector(issue.copy(status = "FIXED"))),
         state.copy(issues = Vector(issue.copy(identity = "x" * 4097))),
         state.copy(issues = Vector(issue.copy(summary = "bad\u0000value"))),
-        state.copy(issues = Vector(issue.copy(summary = "\ud800"))), state.copy(issues = Vector.fill(16385)(issue)),
+        state.copy(issues = Vector(issue.copy(summary = 0xd800.toChar.toString))), state.copy(issues = Vector.fill(16385)(issue)),
         state.copy(history = Vector.fill(65537)(state.history.head)))
       val publicvalue = _take(publicStateC(Some(state))).get
       When("strict model and DTO admission consume each malformed value")

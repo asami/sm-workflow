@@ -27,6 +27,7 @@ cml:
 
 validation:
   fixCheck: true
+  sharedScalaLint: true
 
 publication:
   source_manifest:

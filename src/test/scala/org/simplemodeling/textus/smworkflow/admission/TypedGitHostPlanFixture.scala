@@ -66,7 +66,7 @@ private[admission] object TypedGitHostPlanFixture {
     }
     val selectedkinds = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll,
       GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges,
-      GitOperationKind.TreeEntries)
+      GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore)
     val readkinds = if (goalMessages.isEmpty) Vector.empty else Vector(GitOperationKind.BlobContent, GitOperationKind.TreeChanges)
     val git = (kinds ++ readkinds).distinct.filterNot(selectedkinds)
       .filter(kind => commitIdentity || !identitykinds(kind)).map(kind => declaration(kind)) ++

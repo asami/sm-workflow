@@ -1119,7 +1119,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       val invalid = Vector(good.copy(identity = " "), good.copy(identity = "bad\tidentity"),
         good.copy(revision = "bad\nrevision"),
         good.copy(reason = " "), good.copy(reason = "bad\u0000reason"),
-        good.copy(reason = "\ud800"), good.copy(plan = _raw.copy(steps = Vector.empty)),
+        good.copy(reason = 0xd800.toChar.toString), good.copy(plan = _raw.copy(steps = Vector.empty)),
         good.copy(plan = captured.plan))
       val capturedwire = captured.asJson
       val badcaptured = Vector("proposal", "plan").flatMap { name =>

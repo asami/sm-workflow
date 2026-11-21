@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** All Human and transport facts here are SPECIFICATION-OWNED; no actual
   * consumer dispatch or destination program is executed by this specification.
-  * @since Nov. 19, 2026
+  * @since   Nov. 19, 2026
   * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

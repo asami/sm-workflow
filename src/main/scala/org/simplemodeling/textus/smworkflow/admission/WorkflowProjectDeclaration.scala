@@ -12,11 +12,12 @@ import org.goldenport.record.io.RecordDecoder
 /** Read ordinary project declarations through the owning runtime's resource reader.
   * Optional discovery grants no file access and never executes a build definition.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowProjectDeclaration {
-  final case class Project(inputs: Vector[String], documents: Vector[String], reason: String, providesFixCheck: Boolean)
+  final case class Project(inputs: Vector[String], documents: Vector[String], reason: String, providesFixCheck: Boolean,
+    sharedScalaLint: Boolean = false)
   final case class ReadFailure(path: Path, cause: Conclusion) {
     def diagnostic: String =
       s"Could not read project declaration $path (${cause.show})"
@@ -39,7 +40,8 @@ private[smworkflow] object WorkflowProjectDeclaration {
         if (sourceUnknown) None else Some(Project(selected, documents,
           "Existing build.sbt project; conventional source/build inputs and declared CML source; " +
             "unmapped inputs require FULL coverage, not an inferred no-change result",
-          value.hcursor.downField("validation").get[Boolean]("fixCheck").contains(true)))
+          value.hcursor.downField("validation").get[Boolean]("fixCheck").contains(true),
+          value.hcursor.downField("validation").get[Boolean]("sharedScalaLint").contains(true)))
       })
     }
 

@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
  * records reuse the qualified CNCF GitExecutionSpec producer examples.
  * @since   Oct.  6, 2026
  *  version Oct. 24, 2026
- * @version Nov.  3, 2026
+ * @version Nov. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -46,7 +46,7 @@ final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Given
         result.copy(resolutions = result.resolutions.updated(32, result.resolutions.head)),
         result.copy(resolutions = result.resolutions.updated(32, S.Resolution("foreign", "text"))),
         result.copy(resolutions = result.resolutions.updated(32, S.Resolution("conflict-33", "\u0000"))),
-        result.copy(resolutions = result.resolutions.updated(32, S.Resolution("conflict-33", "\ud800"))))
+        result.copy(resolutions = result.resolutions.updated(32, S.Resolution("conflict-33", 0xd800.toChar.toString))))
       When("semantic admission consumes the complete inventory and malformed alternatives")
       val admitted = S.admitC(request, result, policy)
       val refused = malformed.map(S.admitC(request, _, policy)) ++ Vector(
@@ -107,7 +107,7 @@ final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Given
       S.admitC(request, large, policy).isSuccess shouldBe true
       S.resultCodec.decode(S.resultCodec.encode(large)) shouldBe Right(large)
       S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", "\u0000"))), policy).isSuccess shouldBe false
-      S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", "\ud800"))), policy).isSuccess shouldBe false
+      S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", 0xd800.toChar.toString))), policy).isSuccess shouldBe false
       S.admitC(request, result.copy(decision = "decision-needed", resolutions = Vector.empty), policy).isSuccess shouldBe true
       S.admitC(request, result.copy(decision = "decision-needed"), policy).isSuccess shouldBe false
       S.admitC(request, result, I.noSemanticPaths).isSuccess shouldBe false

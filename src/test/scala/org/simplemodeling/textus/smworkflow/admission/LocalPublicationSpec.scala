@@ -26,8 +26,7 @@ import LocalPublication.*
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  1, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 18, 2026
+ * @version Nov. 18, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.generic.auto.*
@@ -340,7 +344,7 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
     "reject malformed or duplicated qualified baselines and invalid retained projections before deriving root expectations" in {
       Given("an ordinary candidate baseline and malformed clean-file or ownership observations")
       val f = RepositorySyncPurposeRepairScopeFixture
-      val nonordinary = Vector("binary\u0000text", "\ud800")
+      val nonordinary = Vector("binary\u0000text", 0xd800.toChar.toString)
       val malformed = Vector(f.baseline.copy(path = "../outside.scala"), f.baseline.copy(indexCode = "M"),
         f.baseline.copy(worktreeCode = "M"), f.baseline.copy(unexamined = Some("unavailable")),
         f.baseline.copy(original = None), f.baseline.copy(indexed = Some("different indexed text")),

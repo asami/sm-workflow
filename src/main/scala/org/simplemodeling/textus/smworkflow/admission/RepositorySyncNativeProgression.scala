@@ -14,7 +14,7 @@ import RepositorySyncNativeProgressStore.*
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {

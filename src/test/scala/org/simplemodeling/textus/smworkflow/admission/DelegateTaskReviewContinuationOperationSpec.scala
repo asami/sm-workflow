@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 18, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 19, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 

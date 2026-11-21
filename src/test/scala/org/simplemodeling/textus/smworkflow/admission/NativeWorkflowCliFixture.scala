@@ -241,24 +241,32 @@ private[admission] object NativeWorkflowCliFixture {
     def enablePreparedImportRetention(): Unit = {
       val config = root.resolve(".textus/config.json")
       val current = parse(Files.readString(config)).fold(error => throw new AssertionError(error.message), identity)
-      if (current.hcursor.downField(CommonEvidence.declaration.name).focus.isEmpty) {
-        val workspace = "prepared-imports"
+      val workspace = "prepared-imports"
+      val collection = ThreeWorkflowNormalHostFixture.collection("prepared_imports")
+      val policy = Json.obj("schemaVersion" -> Json.fromString(CommonEvidence.schemaVersion),
+        "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection),
+        "hostIdentity" -> Json.fromString("normal-cli-prepared-import-host"),
+        "workspaceIdentity" -> Json.fromString(workspace), "directory" -> Json.fromString("templates"))
+      val existing = current.hcursor.downField(CommonEvidence.declaration.name).focus
+      // A specialized build plan may replace the process plan after this
+      // declaration was installed. Restore only this helper's own grants;
+      // a separately configured CommonEvidence policy remains untouched.
+      if (existing.isEmpty || existing.contains(Json.fromString(policy.noSpaces))) {
         val directory = Files.createDirectories(root.resolve("prepared-import-files"))
-        val collection = ThreeWorkflowNormalHostFixture.collection("prepared_imports")
-        val policy = Json.obj("schemaVersion" -> Json.fromString(CommonEvidence.schemaVersion),
-          "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection),
-          "hostIdentity" -> Json.fromString("normal-cli-prepared-import-host"),
-          "workspaceIdentity" -> Json.fromString(workspace), "directory" -> Json.fromString("templates"))
         def configured(name: String): Json = parse(current.hcursor.get[String](name).toOption.get)
           .fold(error => throw new AssertionError(error.message), identity)
+        def including(values: Json, entry: Json): Json = {
+          val entries = values.asArray.get
+          Json.fromValues(if (entries.contains(entry)) entries else entries :+ entry)
+        }
         val storage = configured("textus.subsystem.storage.plan").mapObject(fields => fields.add("records",
-          Json.fromValues(fields("records").get.asArray.get :+ Json.obj(
+          including(fields("records").get, Json.obj(
             "componentId" -> Json.fromString(_component), "storeName" -> Json.fromString("workflow"),
             "collection" -> Json.fromString(collection)))))
         val process = configured("textus.subsystem.process-execution.plan").mapObject { fields =>
-          fields.add("workspaces", Json.fromValues(fields("workspaces").get.asArray.get :+ Json.obj(
+          fields.add("workspaces", including(fields("workspaces").get, Json.obj(
             "identity" -> Json.fromString(workspace), "root" -> Json.fromString(directory.toString))))
-            .add("workspaceGrants", Json.fromValues(fields("workspaceGrants").get.asArray.get :+ Json.obj(
+            .add("workspaceGrants", including(fields("workspaceGrants").get, Json.obj(
               "componentId" -> Json.fromString(_component), "workspaceId" -> Json.fromString(workspace),
               "access" -> Json.fromString("manage"))))
         }
@@ -351,6 +359,53 @@ private[admission] object NativeWorkflowCliFixture {
     def call(mode: String, operation: String, parameters: Vector[String]): Result =
       _run(_operation_argv(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
+    /** Select the exact public service through the same launcher and retained
+      * invocation sequence; GoalPhase's convenience call remains unqualified. */
+    def callService(service: String, operation: String, parameters: Vector[String]): Result = {
+      require(Set("NativeWorkflowPreparationService", "DelegateTaskService", "DelegateTaskDeliveryService",
+        "WorkflowRetainedWorkService")(service), "Select one declared fixture service")
+      _run(_operation_argv("command", s"$_component.$service.$operation") ++ parameters ++ _output)
+    }
+
+    /** Read only the exact public references returned by this invocation. A
+      * compact control is never treated as a complete issued Work request. */
+    def readGoalPhaseResult(result: Result): V.GoalPhaseAdvanceResult = {
+      require(_sequence.contains(result.invocation), "Read this scenario's actual invocation")
+      val control = result.business[V.GoalPhaseAdvanceResult]
+      val work = control.retainedWork match {
+        case None => control.toRecord()
+        case Some(reference) =>
+          val retained = readRetainedWork(reference).business[V.WorkflowRetainedWorkReadResult]
+          require(retained.availability == "available" && retained.reference == reference,
+            "Read the exact available public Work reference")
+          require(reference.sessionId == control.submitSessionId.getOrElse(control.sessionId),
+            "Retained Work belongs to the actual completion Session")
+          val detail = _take(V.GoalPhaseAdvanceResult.createC(retained.response), "Public GoalPhase Work detail")
+          require(detail.sessionId == control.sessionId && detail.kind == control.kind &&
+            detail.submitOperation == control.submitOperation && detail.submitSessionId == control.submitSessionId &&
+            detail.resultType == control.resultType && detail.issuedWorkContext == control.issuedWorkContext &&
+            detail.repairProgress == control.repairProgress, "Retained Work must preserve immutable control and context")
+          detail.issuedWorkContext.foreach { context =>
+            require(context.runId == reference.sessionId && context.continuationId == reference.identity &&
+              context.expectedRevision == reference.revision &&
+              context.completionOperation.getString("operation").contains(reference.completionOperation),
+              "Retained Work must match its issued continuation and completion operation")
+          }
+          retained.response
+      }
+      val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
+        val retained = readRetainedSnapshot(field.reference).business[V.WorkflowRetainedSnapshotReadResult]
+        require(retained.availability == "available" && retained.reference == field.reference,
+          "Read the exact available public snapshot reference")
+        val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName)).getOrElse(org.goldenport.record.Record.empty)
+        val material = org.goldenport.record.Record.createFull(retained.material.fields
+          .filterNot(value => overlay.getAny(value.key).nonEmpty).map(value => value.key -> value.value.single)) ++ overlay
+        org.goldenport.record.Record.createFull(prior.fields.filterNot(_.key == field.fieldName)
+          .map(value => value.key -> value.value.single)) ++ org.goldenport.record.Record.data(field.fieldName -> material)
+      }
+      _take(V.GoalPhaseAdvanceResult.createC(complete), "Complete public GoalPhase result")
+    }
+
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
       installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None,
@@ -705,7 +760,7 @@ private[admission] object NativeWorkflowCliFixture {
       catch { case NonFatal(error) => _stop(process, terminationgracemillis); throw error }
       (process, invocation)
     }
-    private def _run(argv: Vector[String], installations: Option[Path] = None,
+    private[NativeWorkflowCliFixture] def _run(argv: Vector[String], installations: Option[Path] = None,
       wait: Option[InstalledCallWait] = None): Result = {
       val bound = wait.fold(TimeUnit.SECONDS.toNanos(if (_primary_generation) 1500 else if (_sbt_repair.nonEmpty) 240 else 60))(
         selected => Math.multiplyExact(selected.completionTimeoutMillis, 1000000L))
@@ -813,7 +868,7 @@ private[admission] object NativeWorkflowCliFixture {
 
     /** Fixed setup only, before Start; this cannot accept or rewrite Workflow work. */
     private[NativeWorkflowCliFixture] def _prepare_authoring_build(cml: Boolean = false, lint: Boolean = false,
-      discoverAllTests: Boolean = false): Unit = {
+      discoverAllTests: Boolean = false, lintcheckcommand: String = "Compile / scalafix --check"): Unit = {
       TypedSbtHostPlanFixture.buildAuthoring(root, cml, discoverAllTests)
       if (lint) {
         val repository = Path.of(host.target.root)
@@ -822,7 +877,7 @@ private[admission] object NativeWorkflowCliFixture {
         Files.createDirectories(repository.resolve("src/main/scala-generated"))
         Files.writeString(repository.resolve("src/main/scala-generated/GeneratedFinalizer.scala"),
           "final class GeneratedFinalizer { override protected def finalize(): Unit = () }\n")
-        Files.writeString(repository.resolve("build.sbt"), "\nCompile / unmanagedSourceDirectories := (Compile / unmanagedSourceDirectories).value.filterNot(_.getName == \"scala-generated\")\nCompile / managedSources += baseDirectory.value / \"src/main/scala-generated/GeneratedFinalizer.scala\"\nCompile / scalafix / unmanagedSources := (Compile / unmanagedSources).value\nCompile / scalafix / managedSources := Nil\naddCommandAlias(\"fixCheck\", \"Compile / scalafix --check\")\n", java.nio.file.StandardOpenOption.APPEND)
+        Files.writeString(repository.resolve("build.sbt"), "\nCompile / unmanagedSourceDirectories := (Compile / unmanagedSourceDirectories).value.filterNot(_.getName == \"scala-generated\")\nCompile / managedSources += baseDirectory.value / \"src/main/scala-generated/GeneratedFinalizer.scala\"\nCompile / scalafix / unmanagedSources := (Compile / unmanagedSources).value\nCompile / scalafix / managedSources := Nil\naddCommandAlias(\"fixCheck\", " + Json.fromString(lintcheckcommand).noSpaces + ")\n", java.nio.file.StandardOpenOption.APPEND)
       }
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
@@ -1131,8 +1186,8 @@ private[admission] object NativeWorkflowCliFixture {
     val configfile = scenario.root.resolve(".textus/config.json")
     val config = parse(Files.readString(configfile)).toOption.get
     Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
-      .add("sm-workflow.source-history.style", Json.fromString("goldenport"))
-      .add("sm-workflow.source-history.rule", rule)).noSpaces)
+      .add("sm-workflow.source.history.style", Json.fromString("goldenport"))
+      .add("sm-workflow.source.history.rule", rule)).noSpaces)
     if (directoryowners) scenario.prepareReleaseDirectoryBaseline()
     scenario
   }
@@ -1794,7 +1849,8 @@ private[admission] object NativeWorkflowCliFixture {
     */
   def freshStepAssessment(name: String, executable: Path,
     overridePolicy: Option[GoalPhaseStepAssessment.Policy] = None, lint: Boolean = false,
-    repairLimit: Option[Int] = None, discoverAllTests: Boolean = false, focusedFirst: Boolean = false): Scenario = {
+    repairLimit: Option[Int] = None, discoverAllTests: Boolean = false, focusedFirst: Boolean = false,
+    lintCheckCommand: String = "Compile / scalafix --check"): Scenario = {
     require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
     require(repairLimit.forall(n => n >= 0 && n <= 64), "Select the fresh fixture Plan's bounded repair limit")
     val initial = fresh(name)
@@ -1834,7 +1890,115 @@ private[admission] object NativeWorkflowCliFixture {
       .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))) {
         case (values, (key, value)) => values.add(key, Json.fromString(value))
       }).noSpaces)
-    scenario._prepare_authoring_build(lint = lint, discoverAllTests = discoverAllTests)
+    scenario._prepare_authoring_build(lint = lint, discoverAllTests = discoverAllTests, lintcheckcommand = lintCheckCommand)
+    scenario
+  }
+
+  /** CML inputs-only variant; actual external authoring and ordinary generation remain separate. */
+  val sharedLintInitialSource = "package org.simplemodeling.textus.smworkflow.p62authored\n" +
+    "object LineWriter { def render(value: String): String = value.reverse + \"\\n\" }\n" +
+    "object ExistingPartial { def unsafe(value: Option[Int]): Int = value.get }\n"
+
+  /** Fixed setup of one tiny shared-profile consumer before Start. The normal
+    * selected build owns compiler/Scalafix execution; no workflow facts are
+    * seeded and no local publication is simulated by this fixture.
+    */
+  def freshSharedScalaLint(name: String, executable: Path): Scenario = {
+    val policy = GoalPhaseStepAssessment.Policy("shared-lint-code", "code", "conditional", "required", "off",
+      Vector.empty, "conditional")
+    // Select the sole fixCheck alias during setup so the Compile-only default
+    // cannot bypass sharedMain/sharedTest and their findings-only handling.
+    val scenario = freshStepAssessment(name, executable, Some(policy), lint = true, repairLimit = Some(3),
+      lintCheckCommand = "sharedCheck")
+    val repository = Path.of(scenario.host.target.root)
+    val properties = new java.util.Properties()
+    val input = getClass.getResourceAsStream("/phase81-scala-lint.properties")
+    require(input != null, "Prepare the normal independent rule artifact input")
+    try properties.load(input) finally input.close()
+    val artifact = properties.getProperty("ruleArtifact")
+    require(artifact != null && Files.isRegularFile(Path.of(java.net.URI.create(artifact))), "Actual rules package is absent")
+    Files.delete(repository.resolve(".scalafix.conf"))
+    Vector("ScalaLintInput.scala", "ScalaLintDelta.scala", "ScalaLintAdmission.scala").foreach { name =>
+      Files.copy(Path.of("project").resolve(name).toAbsolutePath, repository.resolve("project").resolve(name))
+    }
+    Files.writeString(repository.resolve("project/plugins.sbt"),
+      "\nlibraryDependencies += \"com.typesafe\" % \"config\" % \"1.4.3\"\n" +
+        "libraryDependencies += \"org.scalameta\" %% \"scalameta\" % \"4.9.3\"\n", StandardOpenOption.APPEND)
+    val library = "src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala"
+    Files.writeString(repository.resolve(library), sharedLintInitialSource)
+    Files.writeString(repository.resolve("src/main/scala-generated/GeneratedPartial.scala"),
+      "object GeneratedPartial { def unsafe(value: Option[Int]): Int = value.get }\n")
+    val build = """
+      |semanticdbEnabled := true
+      |scalafixScalaBinaryVersion := "2.13"
+      |// The pinned plugin resolves scalafixDependencies as coordinates, dropping
+      |// ModuleID.from URLs. The tool's internal dependency classpath accepts
+      |// this actual local package, without publication or repository adoption.
+      |ScalafixConfig / internalDependencyClasspath += Attributed.blank(new java.io.File(java.net.URI.create(__RULE_ARTIFACT__)))
+      |libraryDependencies += "com.typesafe" % "config" % "1.4.3" % ScalafixConfig
+      |Compile / managedSources += baseDirectory.value / "src/main/scala-generated/GeneratedPartial.scala"
+      |lazy val sharedReporter = settingKey[Option[org.simplemodeling.scalalint.ScalaLintAdmission.Reporter]]("Actual selected lint reporter")
+      |lazy val sharedMain = taskKey[Unit]("Actual Compile lint")
+      |lazy val sharedTest = taskKey[Unit]("Actual Test lint")
+      |lazy val sharedCheck = taskKey[Unit]("Actual affected lint admission")
+      |sharedReporter := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map(input =>
+      |  new org.simplemodeling.scalalint.ScalaLintAdmission.Reporter(baseDirectory.value.toPath, input, text => System.out.println(text)))
+      |ThisBuild / scalafixCallback := (LocalRootProject / sharedReporter).value
+      |  .getOrElse((ThisBuild / scalafixCallback).value)
+      |Compile / scalafix / unmanagedSources := {
+      |  val sources = (Compile / unmanagedSources).value
+      |  sharedReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+      |}
+      |Compile / scalafix / managedSources := Nil
+      |Test / scalafix / unmanagedSources := {
+      |  val sources = (Test / unmanagedSources).value
+      |  sharedReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+      |}
+      |Test / scalafix / managedSources := Nil
+      |def requireLintOnly(result: Result[Unit]): Unit = result match {
+      |  case Value(_) => ()
+      |  case Inc(failure) =>
+      |    val exceptions = Incomplete.allExceptions(failure)
+      |    if (exceptions.isEmpty || !exceptions.forall {
+      |      case error: _root_.scalafix.sbt.ScalafixFailed => error.errors.nonEmpty && error.errors.forall(_ == _root_.scalafix.interfaces.ScalafixError.LinterError)
+      |      case _ => false
+      |    }) throw failure
+      |}
+      |sharedMain := Def.taskDyn {
+      |  val selected = sharedReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      |  if (!(Compile / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      |  else Def.task { requireLintOnly((Compile / scalafix).toTask(" --check").result.value) }
+      |}.value
+      |sharedTest := Def.taskDyn {
+      |  val selected = sharedReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      |  if (!(Test / unmanagedSources).value.exists(selected.selected)) Def.task { () }
+      |  else Def.task { requireLintOnly((Test / scalafix).toTask(" --check").result.value) }
+      |}.value
+      |sharedCheck := { sharedMain.value; sharedTest.value; sharedReporter.value.get.finish() }
+      |scalafixConfig := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map { input =>
+      |  val destination = target.value / "scala-lint" / "actual.conf"
+      |  IO.write(destination, input.json, java.nio.charset.StandardCharsets.UTF_8)
+      |  destination
+      |}
+      |""".stripMargin.replace("__RULE_ARTIFACT__", Json.fromString(artifact).noSpaces)
+    Files.writeString(repository.resolve("build.sbt"), build, StandardOpenOption.APPEND)
+    val configuration = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configuration)).toOption.get
+    val plan = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      .mapObject(fields => fields.add("sbtPrograms", fields("sbtPrograms").get.mapArray(_.map { program =>
+        if (program.hcursor.get[String]("operation").contains("fix-check")) program.mapObject(_.add("lintInput", Json.True))
+        else program
+      })))
+    Files.writeString(configuration, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(plan.noSpaces))
+      .add("sm-workflow.source.style", Json.fromString("goldenport"))
+      .add("sm-workflow.source.history.style", Json.fromString("none"))).noSpaces)
+    val git = Vector("/usr/bin/git", "-C", repository.toString)
+    Vector(Vector("add", "--", ".scalafix.conf", "build.sbt", "project", library, "src/main/scala-generated"),
+      Vector("-c", "user.name=Native Workflow Fixture", "-c", "user.email=native-workflow@example.invalid",
+        "commit", "--no-verify", "--no-gpg-sign", "-m", "Configure exact shared lint consumer baseline")).foreach { command =>
+      val result = scenario._run(git ++ command)
+      require(result.exitCode == 0, result.invocation.logs)
+    }
     scenario
   }
 
@@ -2151,8 +2315,8 @@ private[admission] object NativeWorkflowCliFixture {
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     val history = plan.identity == "native-primary-generation-history-plan" &&
       host.goal.candidatePaths == Vector("src/main") &&
-      config.hcursor.get[String]("sm-workflow.source-history.style").toOption.contains("goldenport") &&
-      config.hcursor.get[Json]("sm-workflow.source-history.rule").toOption.contains(PrimaryGenerationHistorySpecificationFixture.rule)
+      config.hcursor.get[String]("sm-workflow.source.history.style").toOption.contains("goldenport") &&
+      config.hcursor.get[Json]("sm-workflow.source.history.rule").toOption.contains(PrimaryGenerationHistorySpecificationFixture.rule)
     val exactsource = plan.identity == "native-primary-generation-plan" &&
       host.goal.candidatePaths == Vector("src/main/cozy/generation.cml")
     val checks = Vector(GoalPhaseNativeValidation.Check("primary-compile", 14, WorkflowSbtValidation.Kind.Compile),

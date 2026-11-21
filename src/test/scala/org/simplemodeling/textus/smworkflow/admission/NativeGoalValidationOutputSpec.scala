@@ -19,8 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public projection of actual retained validation facts, without runtime effects.
   * @since   Oct. 16, 2026
   *  version Oct. 25, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -87,7 +86,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       check.exitCode shouldBe Some(7)
       check.stdout shouldBe _stdout
       check.stderr shouldBe _stderr
-      check.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test", "failed", None, None))
+      check.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test", "failed", None, None, None))
       actual.submitOperation shouldBe None
       actual.submitSessionId shouldBe None
       actual.resultType shouldBe None
@@ -148,7 +147,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       check.exitCode shouldBe None
       check.stdout shouldBe _stdout
       check.stderr shouldBe _stderr
-      check.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test-only", "incomplete", None, None))
+      check.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test-only", "incomplete", None, None, None))
       actual.work shouldBe None
       actual.outcome shouldBe None
     }
@@ -173,7 +172,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
         view.selectedChecks.map(c => (c.identity, c.kind)) shouldBe Vector("ordinary" -> "test", "focused" -> "test-only")
       }
       views.map(_.checks.map(_.identity)) shouldBe Vector(Vector.empty, Vector("ordinary"))
-      views(1).checks.head.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test", "succeeded", None, None))
+      views(1).checks.head.sbt shouldBe Some(V.WorkflowSbtValidationFacts("test", "succeeded", None, None, None))
       views(1).checks.head.stdout shouldBe _stdout
       views(1).checks.head.stderr shouldBe _stderr
     }
@@ -284,7 +283,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
 
       Then("both outputs agree on canonical facts and preserve numeric counts and raw output without acceptance")
       val expected = V.WorkflowSbtValidationFacts("test-only", "succeeded",
-        Some(V.WorkflowSbtTestSelection(_classes, 2, tests)), None)
+        Some(V.WorkflowSbtTestSelection(_classes, 2, tests)), None, None)
       receipt.sbt shouldBe Some(Facts(Kind.TestOnly, Outcome.Succeeded, Some(Selection(_classes, 2, tests)), None))
       validation.validation.get.outcome shouldBe Some("passed")
       validation.validation.get.checks.head.sbt shouldBe Some(expected)

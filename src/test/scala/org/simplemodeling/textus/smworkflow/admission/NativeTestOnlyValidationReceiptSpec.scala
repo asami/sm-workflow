@@ -23,7 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Current-schema compatibility and actual selected facts, without runtime effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -222,7 +223,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       V.sbtReceiptC("focused", Kind.Compile, _result(0, ordinary, ordinary)).isSuccess shouldBe false
 
       Given("stored typed output with a NUL or an unpaired UTF-16 surrogate")
-      val invalidtext = Vector("bad\u0000text", "bad\ud800text")
+      val invalidtext = Vector("bad\u0000text", ("bad" + 0xd800.toChar.toString + "text"))
       When("the product gate and Goal payload decoder inspect either stored stream")
       val receipts = invalidtext.flatMap(text => Vector(_receipt(kind = Kind.Test).copy(stdout = text, processObservation = None),
         _receipt(kind = Kind.Test).copy(stderr = text, processObservation = None)))

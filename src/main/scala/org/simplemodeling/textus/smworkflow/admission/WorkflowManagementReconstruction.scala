@@ -5,7 +5,7 @@ import org.goldenport.cncf.workflow.ContextReference
 
 /** Shared interpretation of owner-supplied reconstruction facts. Native family
   * adapters retain provenance, immutable contracts and persistence ownership.
-  * @since Nov. 19, 2026
+  * @since   Nov. 19, 2026
   * @version Nov. 19, 2026
   */
 private[smworkflow] object WorkflowManagementReconstruction {

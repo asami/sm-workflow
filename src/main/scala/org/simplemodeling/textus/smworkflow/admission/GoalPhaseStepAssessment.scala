@@ -11,7 +11,7 @@ import GoalPhaseNativeValidation as N
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {

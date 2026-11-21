@@ -21,7 +21,7 @@ import RepositorySyncNativeProgressStore as N
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {

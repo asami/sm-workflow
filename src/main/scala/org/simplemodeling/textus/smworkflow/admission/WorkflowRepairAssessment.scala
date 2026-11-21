@@ -6,7 +6,7 @@ import org.goldenport.cncf.processexecution.SbtTestReassessment
 /** Shared evidence gate for a bounded repair and a formal Phase Step.
   * This selects no command, grants no authority and creates no review waiver.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowRepairAssessment {

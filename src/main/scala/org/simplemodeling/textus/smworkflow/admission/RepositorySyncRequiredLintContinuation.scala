@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * Original receipts keep their own native provenance; they are never rerun or
   * written as executions in the fresh candidate namespace.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncRequiredLintContinuation {

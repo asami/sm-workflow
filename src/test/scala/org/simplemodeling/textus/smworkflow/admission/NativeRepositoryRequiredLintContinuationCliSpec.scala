@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * checks in four tiny repositories. Proposals, lifecycle answers and independent
   * review are specification-owned data, never live provider acceptance.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -18,7 +18,7 @@ import GoalPhasePlanRevision as R
 
 /** Automatic inventory under the retained original-purpose execution. A decoded
   * proposal is data; only the native issue/completion walker constructs Source.
-  * @since   Nov. 3, 2026
+  * @since   Nov.  3, 2026
   * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */

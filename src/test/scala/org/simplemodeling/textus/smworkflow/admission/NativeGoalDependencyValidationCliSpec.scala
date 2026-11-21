@@ -5199,8 +5199,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
 }
 
 /** One normal installed initial-source scenario, with fixture-owned evidence.
-  * @since   Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * Fixture introduced Nov. 5, 2026; updated Nov. 8, 2026.
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover

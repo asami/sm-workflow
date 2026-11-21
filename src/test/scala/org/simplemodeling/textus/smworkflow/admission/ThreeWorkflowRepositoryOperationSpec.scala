@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -427,8 +427,19 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |config:
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin)
+    // Runtime configuration belongs to this fixture; the operator's HOME may
+    // still configure a different installed runtime. Keep repository discovery
+    // available for the explicitly selected installed-bootstrap scenarios.
     Files.writeString(directory.resolve("test.yaml"),
       """kind: test-descriptor
+        |home:
+        |  mode: isolated
+        |  path: test-home
+        |  inherit:
+        |    runtime: false
+        |    repositories: true
+        |    credentials: false
+        |    local-data: false
         |execution:
         |  profile: controlled
         |  key: direct-repository-spec

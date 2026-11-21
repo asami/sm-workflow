@@ -11,8 +11,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanDirectionA
 
 /** Closed answer interpretation; generated payload compatibility is not consent.
   *
-  * @since Oct.  4, 2026
-  * @version Oct. 24, 2026
+  * @since   Oct.  4, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -102,7 +103,7 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
       }
       "refuse malformed references, invalid UTF-8 values and malformed complete payloads" in {
         Given("canonical-reference violations and payloads without the declared answer structure")
-        val invalid = Vector(null, "", " padded", "trailing ", "line\nbreak", "\uD800")
+        val invalid = Vector(null, "", " padded", "trailing ", "line\nbreak", 0xd800.toChar.toString)
         val references = invalid.flatMap(value => Vector(S.ContextReference(value, "1"), S.ContextReference("resolution", value)))
         references.foreach { reference =>
           When("the unsupported resolution reference is encoded")

@@ -279,7 +279,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
 
   /** Reuse the existing ordinary runtime declaration, not another sync-only test catalogue. */
   def ordinaryPolicyC(parameters: ComponentInitializationParameters, root: String, plan: Json,
-    providesFixCheck: Boolean): Consequence[Option[Policy]] = {
+    providesFixCheck: Boolean, sharedScalaLint: Boolean = false): Consequence[Option[Policy]] = {
     val workspaces = plan.hcursor.get[Vector[Json]]("workspaces").toOption.getOrElse(Vector.empty)
       .filter(_.hcursor.get[String]("root").contains(root)).flatMap(_.hcursor.get[String]("identity").toOption).toSet
     val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.getOrElse(Vector.empty)
@@ -293,7 +293,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
         val full = V.Check("ordinary-project-full", 1, WorkflowSbtValidation.Kind.TestOnly,
           workspace = Some(workspace), ordinaryDiscovery = true)
         val lint = programs.filter(program => program.hcursor.get[String]("target").contains(workspace) &&
-          program.hcursor.get[String]("operation").contains("fix-check"))
+          program.hcursor.get[String]("operation").contains("fix-check") &&
+          (!sharedScalaLint || program.hcursor.get[Boolean]("lintInput").contains(true)))
         val checks = Vector(full) ++ Option.when(providesFixCheck && lint.size == 1)(V.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck,
           workspace = Some(workspace))).toVector
         val policy = Policy(Vector.empty, checks, Vector.empty,

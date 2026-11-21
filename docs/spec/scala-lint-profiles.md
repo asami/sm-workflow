@@ -1,6 +1,12 @@
 # Shared Scala lint profiles
 
-Status: approved development direction, not implemented by this document.
+Status: approved development direction. SLP-1/SLP-2's bounded rule-module delivery
+was locally accepted with native validation and independent review at `0c300ad9`.
+Its rules and supported analysis boundaries are described in
+[the shared rule module](../../scala-lint-rules/README.md). SLP-3's key migration,
+resolution data and consumer assertions are authored, pending native qualification.
+Application runtime integration and full A/B/C acceptance remain open; source
+authorship is not their acceptance.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
 in the [Phase 8.1 dependency plan](../phase/phase-8.1-dependencies.md).
@@ -83,8 +89,11 @@ were produced. Historical readability is not an old-key execution path. Do not
 rewrite live Sessions or replay successful work for this rename. Before adoption,
 qualify the new runtime and resolved settings together; issue subsequent work with
 new keys through the supported configuration route. Already issued execution and
-its retained results remain unchanged. This document specifies a planned contract;
-current `WorkflowSourceHistoryParameters` still implements the old history-only keys.
+its retained results remain unchanged. The SLP-3 source candidate migrates the
+current resolver and history adapter to the new keys and rejects old-only and
+mixed old/new execution configuration with replacement guidance. It introduces
+no alias, dual read, automatic conversion or historical-result rewrite. Native
+qualification and actual runtime/settings adoption remain outstanding.
 
 ## Resolution semantics
 
@@ -93,9 +102,13 @@ current `WorkflowSourceHistoryParameters` still implements the old history-only 
   rule; omission never disables an inherited rule.
 - Later layers override individual configuration leaves. Arrays other than rule
   membership replace the earlier value unless that setting defines other semantics.
-- Represent explicit rule removal as a documented sm-workflow resolution directive,
-  separated from Scalafix settings and removed before rendering its configuration.
-  Do not claim that stock Scalafix performs this layered merge automatically.
+- The optional project directive `sm-workflow.scala-lint.remove-rules = [NoOptionGet]`
+  removes exact rule IDs after all baseline/team/history/project additions.
+  Deduplicate removals; unknown IDs, non-string/null entries, malformed lists and
+  blank or padded IDs are errors. Strip this directive before rendering Scalafix
+  configuration. Stock Scalafix does not perform this layered merge automatically.
+- Reject source/history selector and history-rule keys in project `.scalafix.conf`;
+  those choices belong to CNCF `ExecutionContext.resolvedParameters`.
 - Preserve standard Scalafix diagnostic settings and scoped suppressions. A rule's
   removal and a diagnostic suppression are distinct, visible effective settings.
 - Missing project configuration uses shared defaults. Malformed selected configuration
@@ -109,7 +122,16 @@ Resolve and retain effective configuration for the issued validation. Configurat
 changes apply to subsequently issued validation; do not mutate an executing request
 or reinterpret previous successful results. Use existing evidence/result retention
 for profile identities/versions, effective configuration reference and relevant
-overrides/removals. No hashes, approval registry or additional AI call is required.
+overrides/removals. The authored resolver exposes `Effective.removedRules`,
+`projectOverrideKeys` (project leaf keys excluding the removal directive), and
+immutable `snapshot: Config` data. Its schemaVersion is
+`sm-workflow.scala-lint-effective.v1`; fields are sourceStyle, historyStyle,
+profiles, rules, removedRules, projectOverrideKeys and configuration. Resolving
+again after a file change produces a new value while the earlier snapshot stays
+unchanged. Missing optional project configuration is `None`; a selected invalid
+file fails rather than becoming absent. No hashes, approval registry or additional
+AI call is required. This is an A02/A06/A08 data foundation; retaining the snapshot
+with the actual native Action and full A08/A15 settings adoption remain SLP-4 work.
 
 ## Initial baseline safety rule: Option.get
 
@@ -410,6 +432,30 @@ coverage; the import alone is not a claim of maximum overall type strictness.
 Adopt actual qualified settings for subsequent work without a blanket rewrite or
 silently changing current compatibility contracts.
 
+The authored-consumer executable specification is
+[WorkflowStrictComparisonSpec](../../src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala).
+Its two record-shaped ID fixtures derive same-type comparability. Its invariant
+`Revision[Value]` fixture supplies a comparison instance only with
+`CanEqual[Left, Right]` for the stored values. The generic operation retains that
+same bound; it cannot grant cross-ID comparison on its own. These fixtures do not
+change the workflow's existing ID representation or select a domain Eq policy.
+
+Positive behavior covers direct and bounded comparison and `exists`, `find`,
+`filter` and `forall` predicates. Negative snippets require actual comparison
+diagnostics naming both distinct ID types, including inside higher-order
+predicates and through the generic bounded operation. A separate positive
+typecheck and runtime case retains the precompiled `Vector.contains` limitation:
+the incompatible argument still compiles and returns false for these fixtures.
+The collection library's widening signature does not establish application-side
+CanEqual permission. The model is compiled in the ordinary
+`scalaStrictAuthoring / Compile` scope, and this exact specification is selected
+exclusively in its Test scope. Root aggregates that project for compile/test;
+root/Test excludes this one source, so ordinary module discovery executes it
+once without altering root's canonical metadata selection. Both native and
+legacy fix-check compile this strict Test scope and analyze its handwritten
+sources through existing Scalafix. These are authored specifications; native
+validation must establish their actual result on the selected Scala compiler.
+
 #### Prefer the compiler's provided safety features
 
 Actively use the applicable Scala 3 compiler/language facilities before adding
@@ -434,6 +480,99 @@ findings attributable without duplicate reporting. Refine the profile when the
 supported compiler changes; experimental or version-specific features require
 their actual compatibility evidence, not blanket activation of unrelated flags.
 
+The adopted BUILD-01/02 selection is sbt-cozy `c978b1a1`, qualified for Scala
+3.3.8 JVM with `-language:strictEquality`, `-Yexplicit-nulls`, `-Ysafe-init`,
+`-Wvalue-discard`, `-Wnonunit-statement`, `-Wunused:imports,privates,locals`,
+`-unchecked`, `-deprecation`, `-feature` and `-Werror`. The product build applies
+all ten options project-wide in `scalaStrictAuthoring`, inherited by Compile and
+Test. Its actual B02 model and specification include a handled Java Properties
+boundary and an unhandled-null compiler rejection. Producer qualification and
+this consumer's pending native result are distinguished in the
+[integration notes](../notes/phase8.1-producer-deliveries.md#slp-b2-compiler-policy-adoption--2026-11-20).
+The selection covers that authoring target; the Scala 2 rule host, deliberate
+violating lint inputs and legacy mixed scopes retain their separate policies.
+B3 still qualifies actual generated/AI consumers; no package-wide compatibility
+or new generated-output result follows from this authored build wiring.
+
+#### Generated consumer boundary
+
+B04 adds the small `scala-lint-rules/strict-authoring/src/main/cozy/comparison-values.cml`
+fixture to that same target in explicit qualification mode. Its library/Maven project metadata selects
+the ordinary `cozyGenerate` / `sourceGenerators` route (`modeler-scala-value`).
+Compile selects exactly the generated `CountryCode.scala` and
+`RegionCode.scala`; missing or duplicate representatives fail selection. This
+library route emits those two values. The CNCF branch owns
+`CompositeStateMachineAbi.scala`, whose existing B1 evidence stays with B1. Generated files remain managed output, excluded
+from handwritten lint. No source snapshot or replacement implementation is
+checked in. The ten B2 compiler options also apply to these Compile inputs and
+the authored Test consumers, without an authored compatibility exception.
+
+`GeneratedStrictComparisonSpec` consumes the actual two generated library values.
+It checks intended same-type direct/predicate comparisons, compiler rejection
+of cross-value equality/inequality and predicates naming both generated types,
+and the still-successful precompiled `Vector.contains` gap. The unchanged seven
+`WorkflowStrictComparisonSpec` cases retain the authored/bounded/null-boundary
+qualification accepted in B2; the new generated specification is separate.
+
+Native B3 compilation exposed 36 unused-import/private-member errors in those
+two generated values. The selected bounded SimpleModeler repair `df7d8b5f`
+reduces unused emission for plain single-string library values and preserves
+readers used by structured values and create-purpose builders. Its native
+Compile and five focused generator tests succeeded, independent re-review
+accepted the repair and local publication succeeded. The separate SimpleModeler
+return reached `ReturnReady` at generation 2 and was received by the requester.
+These producer results do not establish strict Scala 3 consumer compilation.
+
+The current qualification selects the task-private Ivy
+`org.simplemodeling:simplemodeler_2.12:1.1.27-SNAPSHOT` JAR from that repair,
+replacing only the prior SimpleModeler source classes in the activation
+classpath. Cozy `6feac334` /
+`org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT` and other classpath entries remain
+selected. The [integration record](../notes/phase8.1-producer-deliveries.md#slp-b3-representative-consumer-preparation--2026-11-20)
+identifies the artifact digest and actual returned evidence. The earlier Cozy
+DelegateTask remains at `Human` over its original CNCF-only ABI demand and
+supplied no `ReturnReady`; no fresh CNCF ABI qualification follows.
+
+The prior candidate's full native compile/test/fix-check passed in receipt
+`34c1be2c560461e9905745f2e06dc533:ordered-validation:3676:validation`;
+all ten strict cases succeeded and each suite ran once. Issue-17 preserves that
+evidence while making the generated qualification explicitly selectable.
+
+The module's single `strictGeneratedQualification` Boolean defaults to
+`cozyProjectConfig.boolean("qualification.strict_generated").getOrElse(false)`.
+`SM_WORKFLOW_STRICT_GENERATED_QUALIFICATION` overrides it only with the literal
+value `true` or `false`; invalid supplied values fail build loading. Ordinary
+root compile/test retains the seven B2 authored cases and all ten compiler
+options, skipping all B04 generated work even when a local generator is selected.
+The dynamic source-generator branch omits `cozyGenerate` from the default task
+graph. The module also disables the plugin's unused library ABI resource
+generator, which otherwise invokes generation separately.
+
+Explicit mode requires a selected `cozyDelegateProjectDir`, using existing
+sbt-cozy configuration, project validation and `--runtime-dev-dir` execution.
+It forces `cozySkipUnchangedGeneration` false, independently of local cache
+settings, compiles exactly the two existing generated types and adds the
+generated Test source once to the seven authored cases. Missing selection,
+generation failure or missing/duplicate generated files fails qualification.
+Use module `generation.delegate.project_dir` and
+`qualification.strict_generated: true` in existing Cozy configuration as
+described in the [reproduction instructions](../notes/phase8.1-producer-deliveries.md#explicit-generated-qualification-after-issue-17).
+The prepared real local Cozy `6feac334` project's launcher classpath must select
+the verified published SimpleModeler `df7d8b5f` JAR and matching activation
+dependencies. The integration record retains its SHA-256; the SNAPSHOT version
+alone does not distinguish that artifact. No task-local path is tracked and no
+alternative resolver is added. Root CAR settings remain separate and ambient
+`SBT_COZY_PROJECT_DIR` stays absent. Broader generated-shape or package-wide
+warning compatibility remains unqualified.
+
+Native validation of this issue-17 candidate remains pending. It must cover
+ordinary default compile and explicit fresh generated test/fix-check, retaining
+actual selected sources, compiler/classpath and generation evidence. The existing product-root
+receipt for backend `1.1.26-SNAPSHOT` does not identify this module's fresh
+output. Any compiler-specific exception requires an actual diagnostic and a
+bounded reason. Full Workflow/FailureModel bodies and Core stage C keep their
+separate boundaries.
+
 Do not defeat these checks with blanket unsafeNulls imports, unchecked casts,
 indiscriminate `.nn`, universal equality instances or broad warning silencing.
 Necessary interop exceptions use the existing scoped policy with their reason;
@@ -450,9 +589,13 @@ and [initialization checking](https://docs.scala-lang.org/scala3/reference/other
 Subphase 8.1-C consumes a bounded goldenport-core delivery. Reuse existing Cats Eq
 and Identified/Identifiable abstractions where suitable, adding distinct domain
 identity semantics only where required. Give new standard-collection extensions
-distinct names; containsEq, containsId, findById and distinctById are examples,
-not finalized or already available API names. Existing collection members are
-not changed by importing extensions.
+distinct names. The adopted Core source `e4972601207d4597f0ed3aa77fc0ed62fb286c75`
+delivers `org.goldenport.util.TypeSafeCollections.*`: immutable
+`Vector[A].typeSafe.containsEq[B]` requires `Eq[A]` and `B =:= A`.
+Explicit `identifiedBy` / `identifiableBy` captures `I <: UniversalId` before
+`containsId`, `findById` or `distinctById`. These are finalized for that selected
+source revision; consumer binary availability and compilation are separate
+evidence. Existing collection members are not changed by importing extensions.
 
 Fix the element/ID type from the receiver and its declared identity relation;
 an argument must not widen it to a common parent/Any just to make a call compile.
@@ -473,6 +616,28 @@ code. Lint recommends/requires the actual available safe API only after delivery
 and adoption; do not emit calls to nonexistent extensions or auto-rewrite general
 contains to a business-ID operation. Stage 1/2 can advance independently of an
 unavailable Core delivery; only affected Stage 3 acceptance remains open.
+
+The [strict collection authoring guidance](../rules/strict-scala3-authoring.md)
+records the selected API, value/identity decision and missing-binary behavior.
+The explicit strict-module C qualification compiles authored consumers and the
+actual Cozy `dd1b826e` logical-action compiler/ABI. Select adopted generated
+output with `qualification.core_generated_source_dir` or
+`SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR`; the build verifies the two
+accepted source hashes and stages unchanged managed sources. Producer selection
+uses the admitted workflow fixture and generation JVM property
+`-Dcozy.generation.logical-action-membership=core-c3`; only affected C acceptance
+requires this output and the accepted Core binary. Producer mode is never
+inferred from the consumer version or substituted silently. Ordinary defaults
+remain usable without local qualification inputs.
+
+When B04 generation is also selected, authored calls over actual generated
+CountryCode/RegionCode and their companion Eq instances join the same module.
+The logical-action compiler supplies actual generated API call sites; its
+consumer specification checks selection order, unique required actions and
+duplicate/unknown selection behavior. Producer strict qualification is retained
+separately from the pending consumer native compilation, applicable handwritten
+lint and behavioral results. Managed output remains outside handwritten lint;
+producer ownership and its existing generated-output qualification are preserved.
 
 All stages reuse existing validation, independent review where required and
 normal publication/consumer verification. No second review/test loop, runtime
@@ -506,6 +671,19 @@ Keep lint detection separate from rewriting. Findings use the existing FIX and
 re-validation path; no extra mandatory AI review is introduced. Use standard
 Scalafix `@SuppressWarnings` / `scalafix:ok` and a reason for intentional exceptions
 under existing decision policy, without a new annotation or exception registry.
+For example, use a preceding reason comment rather than a custom inline grammar:
+
+```scala
+// REASON: the caller guarantees this optional value is present at this boundary.
+@SuppressWarnings(Array("scalafix:NoOptionGet"))
+def assumed(value: Option[Int]): Int = value.get
+```
+
+The exception remains specific to that rule and definition. The SLP-3 compiled
+consumer fixture requires NoTryGet inside the same definition and NoOptionGet
+outside it to remain visible through Scalafix's public entry. These new assertions
+await native qualification; source authorship does not complete A06 or runtime
+admission. No blanket Test exemption follows from this example.
 
 Analyze full syntax context of changed files and attribute blocking findings to
 new/affected scope. Report unrelated pre-existing violations separately; do not
@@ -524,3 +702,39 @@ applicable convention violations. Reuse retained history-check evidence where
 appropriate rather than adding a duplicate history-normalization pass. Profiles
 control acceptance, not automatic identifier rewriting; original history dates
 and records remain intact. See the [Phase 8.1 ledger](../phase/phase-8.1-checklist.md).
+
+
+## SLP-4 authored native/build binding
+
+The bounded CNCF SLP-EXEC producer capability is delivered at `bf1de998`. Its
+fixed FixCheck opt-in `lintInput: true` admits an already resolved
+`SbtLintInput(identity, revision, configJson)` and retains actual admitted input.
+The consumer build decodes `cncf.sbt.lint.input` and applies effective JSON
+without ambient fallback. `validation.sharedScalaLint: true` advertises the
+source build contract; it requires an existing trusted input-enabled host
+capability and creates no grant. Absence of that capability is setup failure,
+not proof of activation. Legacy captured work/results retain their meaning.
+
+The authored input captures profile/configuration provenance plus finite ranges
+from existing typed native `PendingDiff` at the unchanged Step or cumulative
+Phase base. Only changed handwritten Compile/Test files enter check-only
+Scalafix; generated source stays excluded. The pinned public reporter parses
+full source context and conservatively expands changes to enclosing declarations
+or types. Header/parameter/type/field changes expand to the enclosing type;
+imports expand to the source. Typed-body edits wholly below the header expand to
+the method. Mixed header/body lines use the conservative type/source range.
+This bounded policy does not infer arbitrary cross-file semantic impact.
+
+Affected errors block ordinary admission/FIX. Outside-scope diagnostics are
+reported separately with age UNKNOWN; out-of-diff never proves old debt. Only
+the engine's typed LinterError can be classified this way; unavailable analysis,
+parser/configuration errors and other failures remain failures. Reports omit
+source snippets and retain redacted rule/path/range/disposition information.
+Explicit file includes use normal Resource authorization; URL/classpath includes,
+quoted Git paths, binary deltas and changed Scala paths without textual hunks
+are explicit unsupported cases. No empty/clean fallback is supplied.
+
+These changes and paired connected fixtures are authored **NOT RUN**. They do
+not close A09/A10/A15, install a runtime or admit a requester result. Current
+source/producer/derived-delivery limits are recorded in the existing
+[bounded integration notes](../notes/phase8.1-producer-deliveries.md).

@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Small isolated normal host, actual native Operations, ordinary Compile/Test
   * and Git closure. All semantic/review/closure inputs are specification-owned.
   * The same scenario uses the selected installed command without source fallback.
-  * @since   Nov. 3, 2026
+  * @since   Nov.  3, 2026
   * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */

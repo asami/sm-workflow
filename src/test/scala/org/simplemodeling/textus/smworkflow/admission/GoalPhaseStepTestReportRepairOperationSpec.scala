@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * executable deliberately emits fixture INVALID reports; it runs no tests
   * and provides no successful selected-test or genuine Human evidence.
   * @since   Oct. 27, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -141,16 +141,27 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
       var source = Option.empty[A.Source]
       var issued = Option.empty[V.GoalPhaseAdvanceResult]
       var preserved = Option.empty[Json]
+      var interruptions = Vector.empty[(String, Consequence[Unit])]
       val stop: String => Consequence[Unit] = point =>
-        if (point == "goal-checks-admitted") Consequence.stateConflict("Fixture interruption after durable failed validation")
-        else Consequence.unit
+        if (point == "goal-checks-admitted") {
+          val failure = Consequence.stateConflict[Unit]("Fixture interruption after durable failed validation")
+          interruptions = interruptions :+ (point -> failure)
+          failure
+        } else Consequence.unit
       withRecoveryEpisode(root, initialize = true, acknowledgement = Some(stop)) { e =>
         identity = e.start().sessionId
         val implementation = e.advance(identity)
         implementation.work.get.kind shouldBe "ImplementStep"
         e.submitImplementation(implementation).accepted shouldBe true
         When("native validation durably records the report and fixture acknowledgement interrupts response collection")
-        e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(identity)).isSuccess shouldBe false
+        val interrupted = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(identity))
+        interrupted.isSuccess shouldBe false
+        // acknowledgeC exposes the canonical stage wrapper, while the actual
+        // callback result establishes the injected interruption's source.
+        interrupted.toString should include("GoalPhase validation acknowledgement interrupted; retained intent is not replayed: goal-checks-admitted")
+        interruptions.map(_._1) shouldBe Vector("goal-checks-admitted")
+        interruptions.head._2.isSuccess shouldBe false
+        interruptions.head._2.toString should include("Fixture interruption after durable failed validation")
         Then("the original failed validation and exact native candidate are retained")
         val decision = e.current(identity)
         decision.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))

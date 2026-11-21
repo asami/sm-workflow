@@ -424,7 +424,7 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       N.referenceValid(reference) shouldBe true
       decoded shouldBe Right(transported)
       N.hostIdentityValid(identity) shouldBe false
-      Vector(null, "", "bad\u0000identity", "bad\nidentity", "\ud800").foreach { invalid =>
+      Vector(null, "", "bad\u0000identity", "bad\nidentity", 0xd800.toChar.toString).foreach { invalid =>
         N.runtimeIdentityValid(invalid) shouldBe false
       }
       N.validateRetainedC(Vector(check), checks.updated(0, transported), batches).isSuccess shouldBe false

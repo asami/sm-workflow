@@ -237,7 +237,35 @@ Qualify the producer and caller together with two newly issued Requests:
 
 ## Completion
 
+Current completion disposition (2026-11-21): **OPEN**. The
+[integrated checklist disposition](phase-8.1-checklist.md#integrated-abc-disposition--2026-11-21)
+preserves accepted A/B and C1/C2 Steps and records C3's authored consumer/guidance
+and adopted Cozy generated compiler/ABI. The selected producer output emits the
+accepted Core API at all three String membership sites; source hashes bind it to
+the delivered fixture/mode. Clean-source Core local publication is reported,
+while actual resolved consumer artifact identity, strict compilation, behavioral
+specifications and applicable handwritten lint remain native validation
+obligations. C05 guidance includes available APIs and explicit output/binary
+selection and awaits independent review. Producer success does not substitute
+for these consumer checks; Phase 8.1 remains OPEN with no new checklist acceptance.
+
 Close only with actual results for all required checklist items and recorded dispositions
 for any explicitly relocated work. Publish an English completion record describing
 configuration selection, rule coverage, preserved history behavior, validation and
 consumer adoption. Plan edits alone do not satisfy delivery or close Phase 8.1.
+
+<!-- sm-workflow completion 34c1be2c560461e9905745f2e06dc533 phase phase-8.1 -->
+Accepted phase phase-8.1.
+Evidence: 34c1be2c560461e9905745f2e06dc533:ordered-validation:3841:validation
+Evidence: file:///Users/asami/src/dev2026/sm-workflow/target/worktrees/phase81-shared-scala-lint/target/sm-workflow/tasks/phase81-main-20261119-01a0f928/p81-phase-review-result-3849-corrected.json
+Phase source accepted; normal local record/commit closure follows. No later synchronization outcome is inferred.
+Source revision: de73d27c0f97142e780c2c72500fda3cf8999b7d/94ffc1e8f917c5a5fc5f88787543fad17745d6da. Source physical lines: start=280387; end=291658; net=11271. Cohort phase-8.1-shared-scala-lint-20261119:Classification(CODING,COMPLEX,ENGINEERING,LARGE,None) (Step, class=Classification(CODING,COMPLEX,ENGINEERING,LARGE,None), source=94ffc1e8f917c5a5fc5f88787543fad17745d6da, window=2026-11-18T20:06:05.645878Z..2026-11-21T01:14:01.581078Z): eventual=10/10 (1); first-pass=0/10 (unavailable); unknown first-pass=3; pending=0; outcomes=(accepted,10); profiles=standard@1,standard@1/standard-2026-11-01; mixed=SLP-3. SLP-1 completion-ms=unavailable elapsed-ms=unavailable; SLP-2 completion-ms=unavailable elapsed-ms=unavailable; SLP-3 completion-ms=unavailable elapsed-ms=unavailable; SLP-4 completion-ms=unavailable elapsed-ms=unavailable; SLP-B1 completion-ms=unavailable elapsed-ms=unavailable; SLP-B2 completion-ms=unavailable elapsed-ms=unavailable; SLP-B3 completion-ms=unavailable elapsed-ms=unavailable; SLP-C1 completion-ms=unavailable elapsed-ms=unavailable; SLP-C2 completion-ms=unavailable elapsed-ms=unavailable; SLP-C3 completion-ms=unavailable elapsed-ms=unavailable. codex tokens=unavailable unavailable; local tokens=unavailable unavailable. Ordinary-work observations do not establish model causality; missing resources are unavailable; First-pass history is incomplete; rate unavailable Issued profiles=standard@1. codex tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable. local tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable
+Profile standard@1; mapping=unknown@unknown; logical dispatch=legacy; configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=unknown@unknown; logical dispatch=legacy; configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=caller-standard@standard-2026-11-01; logical dispatch=Capture(standard-2026-11-01,difficult,Vector(difficult, hardest),DELEGATED,None,HashMap(sol-medium -> difficult, ordinary -> difficult, small -> sol-medium, difficult -> hardest, mechanical -> small)); configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=caller-standard@standard-2026-11-01; logical dispatch=Capture(standard-2026-11-01,difficult,Vector(difficult, hardest),DELEGATED,None,HashMap(sol-medium -> difficult, ordinary -> difficult, small -> sol-medium, difficult -> hardest, mechanical -> small)); configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=caller-standard@standard-2026-11-01; logical dispatch=Capture(standard-2026-11-01,difficult,Vector(difficult, hardest),DELEGATED,None,HashMap(sol-medium -> difficult, ordinary -> difficult, small -> sol-medium, difficult -> hardest, mechanical -> small)); configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+
+No benchmark or model-causality claim. Missing original endpoints, usage, timestamps and launch observations remain unavailable.
+
+Local record/commit closure is runtime-owned; later publication, return and synchronization outcomes are recorded separately.

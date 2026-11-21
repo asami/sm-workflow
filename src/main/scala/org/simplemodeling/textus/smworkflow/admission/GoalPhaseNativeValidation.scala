@@ -29,7 +29,7 @@ import GoalPhaseCanonicalCheckConsumption as Q
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -656,7 +656,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
             store.requested.exists(_.metadata.exists(_.buildCheckIdentity.contains(selected.identity))))
           E.discoveryBuildAttemptC(store.core, "sm-workflow-repository-validation-" + selected.ordinal)
           else if (selected.operation.isEmpty) _workspace_c(selected, store.initial)
-          .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace))
+          .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace,
+            lintBase = Some(if (store.whole) store.controller.base.head else store.base.head)))
           else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _)),
         payload => store.evidenceC(payload).map(_ => ()))
     }}

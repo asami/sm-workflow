@@ -868,7 +868,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- probeRecoveryFileC(core, name)
         _ <- freshC(payload, core)
         savedIntent <- saveC(h, store, record, executing, core)
-        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = estimate)
+        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind,
+          estimate = estimate, lintBase = Some(payload.baseHead))
         response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
       } yield response
       case "Inspect" => for {
@@ -961,7 +962,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
             case None => Consequence.unit
           }
           savedIntent <- saveC(h, store, record, executing, core)
-          actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate))
+          actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate), lintBase = Some(payload.baseHead))
           response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
         } yield response
       } yield response

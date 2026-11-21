@@ -16,8 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real public Operations with standard composition and no per-run impact JSON.
   * The isolated product has Java source and two actually declared SBT checks.
   * @since   Nov.  9, 2026
-  *  version Nov.  9, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

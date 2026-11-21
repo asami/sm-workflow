@@ -199,8 +199,18 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
 
   def retainedInputC(storage: WorkflowComponentStorage, current: InstanceRecord,
     core: ActionCall.Core): Consequence[S.Input] = _checkpoint_c(storage, current, core).flatMap { saved =>
-    correctedInputC(saved.target.business.state.input, saved.target.additionalOwnedPaths, saved.target.submissionConditions)
+    projectedInputC(saved)
   }
+
+  /** Same projection for host composition and ordinary continuation. The
+    * recorded original input is never replaced or stripped of provenance.
+    */
+  private[admission] def projectedInputC(saved: Checkpoint): Consequence[S.Input] =
+    correctedInputC(saved.target.business.state.input, saved.target.additionalOwnedPaths, saved.target.submissionConditions)
+      .map { input =>
+        if (preserveOriginalSources || saved.target.additionalOwnedPaths.isEmpty || input.sourceReferences.contains(saved.reference)) input
+        else input.copy(sourceReferences = input.sourceReferences :+ saved.reference)
+      }
 
   /** Prove the legacy GoalTask input through actual managed supersessions.
     * Only the already loaded native history supplies receipt addresses. A later
@@ -275,12 +285,11 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
     saved <- _checkpoint_c(storage, current, core)
     _ <- GoalPhaseParticipantAdmission.admitC(saved.target.participant, core.executionContext)
-    input <- correctedInputC(saved.target.business.state.input, saved.target.additionalOwnedPaths, saved.target.submissionConditions)
+    input <- projectedInputC(saved)
     _ <- if (input.ownedPaths.forall(h.paths.contains)) Consequence.unit else N.invalid("Corrected host ownership changed")
     original = saved.target.business
     // Preserve base, generation, repair counts, results and old source references.
-    state = original.state.copy(input = if (!preserveOriginalSources && saved.target.additionalOwnedPaths.nonEmpty) input.copy(sourceReferences =
-      (input.sourceReferences :+ saved.reference).distinct) else input,
+    state = original.state.copy(input = input,
       evidenceReferences = if (!preserveOriginalSources && saved.target.submissionConditions.nonEmpty)
         (original.state.evidenceReferences :+ saved.reference).distinct else original.state.evidenceReferences)
     unrelated = original.unrelated.map(_.filterNot(path => S.owned(path.path, saved.target.additionalOwnedPaths) &&

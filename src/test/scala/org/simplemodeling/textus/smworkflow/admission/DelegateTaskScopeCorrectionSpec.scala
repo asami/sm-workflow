@@ -225,22 +225,43 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         _import_selection_(take(NativeDelegateTaskScopeCorrectionInput.prepareC(options ++ Map(
           "selection-id" -> correction.selectionId, "idempotency-key" -> correction.idempotencyKey),
           _ => correction.toRecord().toJsonStringC)))
+        before.input.sourceReferences should contain (ContextReference(correction.reference.identity, correction.reference.revision))
         val correctionfile = root.resolve("repair-inventory.json")
         Files.writeString(correctionfile, take(correction.toRecord().toJsonStringC))
         When("the correction is applied and normal Advance issues the successor Repair")
         val corrected = _value_[V.DelegateTaskScopeCorrectionView]("correctDelegateTaskScope",
           List(Property("inputResource", correctionfile.toUri.toASCIIString, None)))
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          instances <- store.bindInstancesC()(using call.core.executionContext)
+          current <- instances.loadC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture correction is absent")))
+          selected <- DelegateTaskScopeCorrection.retainedInputC(store, current, call.core)
+          _ = selected.sourceReferences shouldBe before.input.sourceReferences
+        } yield () }
         val next = _advance_()
         val after = _state(next)
         Then("the same Session preserves its original repair state and adds only the selected inventory and provenance")
         corrected.outcome shouldBe "corrected-awaiting-advance"
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          selected <- DelegateTaskNativeRun.retainedInputC(store, started.sessionId, call.core)
+          _ = selected.sourceReferences shouldBe before.input.sourceReferences
+        } yield () }
         next.sessionId shouldBe old.sessionId
         next.work.get.getString("kind") shouldBe Some("Repair")
         next.issuedWorkContext.get.continuationId should not be continuation
         after.input.ownedPaths shouldBe before.input.ownedPaths ++ _added
         after.input.conditions shouldBe before.input.conditions
         after.input.submissionConditions shouldBe before.input.submissionConditions
-        after.input.sourceReferences should contain(ContextReference(correction.reference.identity, correction.reference.revision))
         after.input.sourceReferences shouldBe before.input.sourceReferences
         after.copy(input = before.input) shouldBe before
         after.receipts.head.externalCapture shouldBe before.receipts.head.externalCapture
@@ -483,6 +504,43 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         val submitted = _call_("submitDelegateTaskWorkResult", properties :+ Property("issuedWorkContext", next.issuedWorkContext.get, None))
         Then("only that current submission is retained without executing SBT")
         submitted.isSuccess shouldBe true
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+        Given("a SPECIFICATION-OWNED legacy delivery shape with the genuine scope receipt but omitted derived reference")
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          instances <- store.bindInstancesC()(using call.core.executionContext)
+          current <- instances.loadC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture Session is absent")))
+          original <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, _work(next).sourceRevision.toLong, call.core)
+          // This shape establishes no successful validation, commit or actual
+          // delivery. Requester admission must still reject its missing facts.
+          legacy = original.copy(state = original.state.copy(stage = "ReturnReady",
+            input = original.state.input.copy(sourceReferences = before.input.sourceReferences)))
+          saved <- DelegateTaskNativeRun.saveC(h, store, current, legacy, call.core)
+          raw = WorkflowRetainedSnapshot.Reference(WorkflowRetainedSnapshot.schema,
+            call.core.component.get.core.instanceId.canonicalKey, "DelegateTaskWorkflow", definition.workflowRevision.value,
+            started.sessionId, started.sessionId + ":standalone-state:" + saved.revision.value, "1",
+            saved.revision.value.toString, "bounded-state", "json")
+          literal <- WorkflowRetainedSnapshot.readC(raw, call.core)
+          derived = raw.copy(materialKind = DelegateTaskDeliveryProjection.materialKind)
+          projection <- WorkflowRetainedSnapshot.readC(derived, call.core)
+          repeated <- WorkflowRetainedSnapshot.readC(derived, call.core)
+          restored <- WorkflowRetainedSnapshot.readC(raw, call.core)
+          decoded <- GoalPhaseNativeMetadata.normalizePublicJson(projection).flatMap(_.as[S.State].left.map(_.message))
+            .fold(Consequence.stateConflict(_), Consequence.success)
+          _ = restored shouldBe literal
+          _ = repeated shouldBe projection
+          _ = decoded shouldBe legacy.state.copy(input = after.input)
+          _ = DelegateTask.returnedC(before.input.copy(delegation = before.input.delegation.map(_.copy(role = "requester"))), projection).isSuccess shouldBe false
+          _ = WorkflowRetainedSnapshot.readC(derived.copy(componentInstance = "foreign-component"), call.core).isSuccess shouldBe false
+          _ = WorkflowRetainedSnapshot.readC(derived.copy(instanceRevision = "1"), call.core).isSuccess shouldBe false
+          last <- instances.loadC(saved.identity)(using call.core.executionContext)
+          _ = last shouldBe Some(saved)
+        } yield () }
         Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
       }
     }

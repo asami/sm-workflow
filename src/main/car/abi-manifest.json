@@ -765,6 +765,20 @@
         },
         {
           "service": "DelegateTaskService",
+          "name": "describeDelegateTaskRequestReconstruction",
+          "kind": "COMMAND",
+          "input": "DelegateTaskRequestReconstructionDescriptionInput",
+          "output": "DelegateTaskRequestReconstructionDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "reconstructDelegateTaskRequest",
+          "kind": "COMMAND",
+          "input": "DelegateTaskRequestReconstructionInput",
+          "output": "DelegateTaskRequestReconstructionDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
           "name": "resolveDelegateTaskDiagnosticInformation",
           "kind": "COMMAND",
           "input": "GoalPhaseDiagnosticInformationInput",
@@ -1168,78 +1182,43 @@
           "kind": "COMMAND",
           "input": "DelegateTaskValidationRecoveryInput",
           "output": "DelegateTaskValidationRecoveryView"
-        },
-        {
-          "service": "DelegateTaskService",
-          "name": "describeDelegateTaskRequestReconstruction",
-          "kind": "COMMAND",
-          "input": "DelegateTaskRequestReconstructionDescriptionInput",
-          "output": "DelegateTaskRequestReconstructionDescriptionResult"
-        },
-        {
-          "service": "DelegateTaskService",
-          "name": "reconstructDelegateTaskRequest",
-          "kind": "COMMAND",
-          "input": "DelegateTaskRequestReconstructionInput",
-          "output": "DelegateTaskRequestReconstructionDescriptionResult"
         }
       ],
       "types": [
         {
-          "name": "DelegateTaskRequestReconstructionDescriptionInput",
-          "kind": "value",
-          "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true }
-          ]
-        },
-        {
-          "name": "DelegateTaskRequestReconstructionDescriptionResult",
-          "kind": "value",
-          "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "outcome", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "message", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "target", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "choices", "type": "string", "multiplicity": "*", "required": false },
-            { "name": "issues", "type": "string", "multiplicity": "*", "required": false }
-          ]
-        },
-        {
-          "name": "DelegateTaskIntakeObservation",
-          "kind": "value",
-          "fields": [
-            { "name": "destinationIdentity", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "notificationStatus", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "intakeStatus", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "handlerStatus", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "destinationSessionId", "type": "string", "multiplicity": "?", "required": false },
-            { "name": "sourceReferences", "type": "WorkflowArtifactReference", "multiplicity": "+", "required": true }
-          ]
-        },
-        {
-          "name": "DelegateTaskRequestReconstructionInput",
-          "kind": "value",
-          "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "target", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "checks", "type": "string", "multiplicity": "+", "required": true },
-            { "name": "scalaLint", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "choice", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "rationale", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "participant", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "reference", "type": "WorkflowArtifactReference", "multiplicity": "1", "required": true },
-            { "name": "observation", "type": "DelegateTaskIntakeObservation", "multiplicity": "1", "required": true }
-          ]
-        },
-        {
           "name": "LocalPublicationRecoveryInput",
           "kind": "value",
           "fields": [
-            { "name": "requestIdentity", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "targetIdentity", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "successorIdentity", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "explicit", "type": "boolean", "multiplicity": "1", "required": true },
-            { "name": "answer", "type": "Record", "multiplicity": "?", "required": false }
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "targetIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "successorIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "explicit",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "answer",
+              "type": "Record",
+              "multiplicity": "?",
+              "required": false
+            }
           ]
         },
         {
@@ -7586,6 +7565,162 @@
             {
               "name": "sessionId",
               "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskRequestReconstructionDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskRequestReconstructionDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "issues",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskIntakeObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "destinationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "notificationStatus",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "intakeStatus",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "handlerStatus",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskRequestReconstructionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "scalaLint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observation",
+              "type": "DelegateTaskIntakeObservation",
               "multiplicity": "1",
               "required": true
             }

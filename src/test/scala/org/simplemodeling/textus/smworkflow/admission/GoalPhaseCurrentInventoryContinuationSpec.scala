@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
-  * @since   Nov. 3, 2026
+  * @since   Nov.  3, 2026
   * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */

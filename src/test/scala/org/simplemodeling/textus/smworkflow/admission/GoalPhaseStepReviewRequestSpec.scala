@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Public native transition and reopen evidence; no fabricated native records.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -80,7 +80,7 @@ private[smworkflow] trait GoalPhaseStepReviewRequestBehavior extends AnyWordSpec
           target.copy(candidate = target.candidate.copy(tree = "f" * 40)),
           target.copy(plan = target.plan.copy(revision = "foreign-plan")), target.copy(completed = Vector.empty))
         val crossedresults = crossed.map(value => e.call(R.requestOperation, input.get.copy(target = R.targetRecord(value)).toRecord()))
-        val reasonresults = Vector("", "   ", "control\u0000payload", "\ud800").map(reason =>
+        val reasonresults = Vector("", "   ", "control\u0000payload", 0xd800.toChar.toString).map(reason =>
           e.call(R.requestOperation, input.get.copy(reason = reason).toRecord()))
         R.validReason("x" * 65537) shouldBe true
         val extra = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("verdict", Json.fromString("accept"))))

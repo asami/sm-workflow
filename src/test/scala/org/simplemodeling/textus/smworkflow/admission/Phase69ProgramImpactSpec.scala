@@ -20,8 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Step acceptance establishes test inputs, never production AI/reviewer proof.
   * Failed/unknown observations and original review references remain distinct.
   * @since   Oct. 28, 2026
-  *  version Oct. 28, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

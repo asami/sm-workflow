@@ -1,6 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.context.ExecutionContext
@@ -8,13 +10,14 @@ import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolution, ConfigurationTrace,
   ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.Property
+import org.simplemodeling.scalalint.ScalaLintProfiles
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /** Per-call parameter composition contract; normal CLI syntax belongs to C2.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -51,6 +54,25 @@ final class WorkflowSourceHistoryParametersSpec extends AnyWordSpec with Matcher
   }
 
   "Source-history resolved parameters" should {
+    "consume the shipped goldenport example through canonical resolved parameters" in {
+      Given("the actual source-history configuration example used by the provider CLI fixture")
+      val raw = Files.readString(Path.of("examples/source-history/goldenport-config.json"), UTF_8)
+      val example = io.circe.parser.parse(raw).fold(error => fail(error.message), identity)
+      val entries = example.asObject.get.toVector
+      entries.map(_._1).toSet shouldBe Set(styleKey, ruleKey)
+      val parameters = _common(entries.map { (key, value) => key -> _value(value) }*)
+      When("the existing history parameter API consumes the example unchanged")
+      val selected = _take(resolveC(parameters))
+      Then("it selects goldenport with the complete original rule data and only canonical key access")
+      selected shouldBe Selection("goldenport", Some(WorkflowSourceHistoryRule.Rule(
+        "sm-workflow.source-history-rule.v1", "goldenport-source-history-v1", "goldenport", "scala-block-history-v1",
+        Vector("src/main/scala", "src/test/scala"), Vector("scala"),
+        Vector("generated", "vendor", "target", "sample", "samples"),
+        Tags("@since", "@version", "version", "@author"), "MMM. ppd, uuuu", "en-US", "month",
+        true, true, WorkflowSourceHistoryRule.Header("/**", " * ", " */"))))
+      parameters.usedEntries.map(_.key) shouldBe Vector(styleKey, ruleKey)
+    }
+
     "default absent style to none without accessing an invalid or missing rule" in {
       Given("common configuration with no canonical style and missing or invalid rule data")
       val absent = _common()
@@ -189,6 +211,71 @@ final class WorkflowSourceHistoryParametersSpec extends AnyWordSpec with Matcher
       Then("the absent canonical style defaults to none without reading aliases")
       selected shouldBe Selection("none", None)
       parameters.usedEntries shouldBe empty
+    }
+
+    "resolve inherited and explicit history through real CNCF per-key precedence in all six cases" in {
+      Given("a component source conflict, a valid common external rule and optional operation history")
+      val sourceKey = WorkflowScalaLintParameters.sourceKey
+      val cases = Vector(
+        ("none", None, "none"), ("none", Some("none"), "none"),
+        ("none", Some("goldenport"), "goldenport"),
+        ("goldenport", None, "goldenport"), ("goldenport", Some("none"), "none"),
+        ("goldenport", Some("goldenport"), "goldenport"))
+      cases.foreach { (source, history, expected) =>
+        val common = _common(ruleKey -> _value(_document))
+        val componentValues = Map(sourceKey -> StringValue(if (source == "none") "goldenport" else "none")) ++
+          history.map(v => styleKey -> StringValue(if (v == "none") "goldenport" else "none"))
+        val component = ResolvedParameters.fromComponentConfiguration(Configuration(componentValues), "history-test", Some(common))
+        val properties = Vector(Property(sourceKey, source, None)) ++ history.map(v => Property(styleKey, v, None))
+        val parameters = _operation(component, properties*)
+        When("history selection consumes each key from CNCF before applying inheritance")
+        val selected = _take(resolveC(parameters))
+        Then("only effective goldenport reads the common rule and source conflicts do not override explicit history")
+        selected.style shouldBe expected
+        selected.rule.map(_.identity) shouldBe Option.when(expected == "goldenport")("resolved-external-history-v1")
+        common.usedEntries.map(_.key) shouldBe (if (expected == "goldenport") Vector(ruleKey) else Vector.empty)
+        parameters.usedEntries.find(_.key == sourceKey).get.source shouldBe ResolvedParameter.Source.Operation("property")
+        history.foreach { _ =>
+          parameters.usedEntries.find(_.key == styleKey).get.source shouldBe ResolvedParameter.Source.Operation("property")
+        }
+      }
+    }
+
+    "reject obsolete style and rule keys even when history is effectively disabled" in {
+      Given("old-only and mixed configurations, including explicitly null obsolete entries")
+      ScalaLintProfiles.obsoleteHistoryKeys.foreach { (old, replacement) =>
+        Vector(StringValue("none"), NullValue).foreach { value =>
+          Vector(_common(old -> value), _common(old -> value, styleKey -> StringValue("none"),
+            ruleKey -> StringValue("{invalid"))).foreach { parameters =>
+            When("the history adapter applies the shared obsolete-key guard")
+            val result = resolveC(parameters)
+            Then("it fails with a replacement diagnostic before accessing the current rule")
+            result shouldBe a[Consequence.Failure[?]]
+            result.toString should include (old)
+            result.toString should include (replacement)
+            parameters.usedEntries.map(_.key) should not contain ruleKey
+          }
+        }
+      }
+    }
+
+    "read historical raw configuration as data without activating obsolete parameters" in {
+      Given("an immutable captured JSON payload containing the previous configuration spelling")
+      val raw = Json.obj("parameters" -> Json.obj(
+        "sm-workflow.source-history.style" -> Json.fromString("goldenport"),
+        "sm-workflow.source-history.rule" -> _document)).noSpaces
+      When("the historical payload is parsed and its retained rule decoded independently of current admission")
+      val captured = io.circe.parser.parse(raw).toOption.get
+      val retained = captured.hcursor.downField("parameters").focus.get
+      val rule = _take(WorkflowSourceHistoryRule.decodeC(
+        retained.hcursor.downField("sm-workflow.source-history.rule").focus.get))
+      Then("the original keys and rule schema remain readable while current configuration rejects those keys")
+      captured.noSpaces shouldBe raw
+      rule.identity shouldBe "resolved-external-history-v1"
+      rule.schemaVersion shouldBe "sm-workflow.source-history-rule.v1"
+      val active = _common(retained.asObject.get.toVector.map { (key, value) => key -> _value(value) }*)
+      resolveC(active) shouldBe a[Consequence.Failure[?]]
+      captured.noSpaces shouldBe raw
     }
 
     "reject missing context or resolved-parameter authority" in {

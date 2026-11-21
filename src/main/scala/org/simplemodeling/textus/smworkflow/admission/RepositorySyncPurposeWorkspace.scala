@@ -18,8 +18,7 @@ import WorkflowManagedProcessExecution as E
 /** Logical Session candidate selection and actual native materialization facts.
   * CNCF owns allocation, paths, executable admission and scoped reacquisition.
   * @since   Nov. 12, 2026
-  *  version Nov. 12, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncPurposeWorkspace {
   final case class Materialization(source: String, destination: String, candidate: String,

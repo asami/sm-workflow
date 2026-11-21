@@ -596,7 +596,9 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == DelegateTaskRequestReconstruction.reconstructOperation)
+    if (request.service.contains("DelegateTaskDeliveryService") && request.operation == "observeDelegateTaskDelivery")
+      DelegateTaskDeliveryService.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == DelegateTaskRequestReconstruction.reconstructOperation)
       DelegateTaskRequestReconstruction.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "describeDelegateTaskValidationRecovery") DelegateTaskValidationRecovery.descriptionForCallC(request, core).map(_.sessionId)

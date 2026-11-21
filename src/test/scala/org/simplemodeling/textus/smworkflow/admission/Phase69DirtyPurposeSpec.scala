@@ -21,8 +21,7 @@ import RepositorySyncPurpose as P
 /** Real repositories and public standard Operations consume genuine issued
   * purpose contexts. Authored fixtures are distinct from installed evidence.
   * @since   Oct. 28, 2026
-  *  version Nov.  3, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -131,7 +130,7 @@ final class Phase69DirtyPurposeSpec extends AnyWordSpec with Matchers with Given
       restored shouldBe request
       restored.files.head.unexamined shouldBe diagnostic
       Vector(file.copy(worktree = None), file.copy(worktree = Some("\u0000")),
-        file.copy(original = Some("\ud800")), file.copy(indexed = Some("\u0000")),
+        file.copy(original = Some(0xd800.toChar.toString)), file.copy(indexed = Some("\u0000")),
         file.copy(unexamined = Some("binary or unavailable native blob remains unexamined")),
         file.copy(unexamined = Some("nonordinary worktree text remains unexamined")),
         file.copy(unexamined = Some("unknown diagnostic"))).foreach { invalid =>

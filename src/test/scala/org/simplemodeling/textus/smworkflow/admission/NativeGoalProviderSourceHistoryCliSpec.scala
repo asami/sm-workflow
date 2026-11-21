@@ -18,7 +18,8 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary commands surround genuine external semantic implementation.
   * Supplied observations check coherence; the parent establishes actual provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -80,7 +81,7 @@ final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matc
       val scenario = F.fresh("provider-source-history", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable),
         classifiedSbtRepair = true, sourceHistory = true, mappedExecution = Some(mapping -> origin))
       val fragment = _read(Path.of("examples/source-history/goldenport-config.json"))
-      fragment.asObject.get.keys.toSet shouldBe Set("sm-workflow.source-history.style", "sm-workflow.source-history.rule")
+      fragment.asObject.get.keys.toSet shouldBe Set("sm-workflow.source.history.style", "sm-workflow.source.history.rule")
       val configfile = scenario.root.resolve(".textus/config.json")
       val current = _read(configfile)
       Files.writeString(configfile, current.mapObject(fields => fragment.asObject.get.toVector.foldLeft(fields) {

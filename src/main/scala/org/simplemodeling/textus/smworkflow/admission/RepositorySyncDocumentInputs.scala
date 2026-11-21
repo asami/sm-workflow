@@ -12,7 +12,7 @@ import RepositorySyncNativeProgressStore as N
   * Actual native parent/index deltas decide applicability. Neither docs/ nor a
   * changed commit is a no-program-change certificate or a fresh PASS receipt.
   * @since   Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object RepositorySyncDocumentInputs {
   final case class Policy(documentPaths: Vector[String], consumedPaths: Vector[String], reason: String)

@@ -47,7 +47,7 @@ private[admission] object PrimaryGenerationHistorySpecificationFixture extends N
   * The locator is caller-owned routing, never native state or consumer authority.
   * All publication/check effects use the normal installed CLI and typed UoW.
   * @since   Nov.  6, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -427,8 +427,8 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
       "collection" -> collection.asJson)).asJson))
     val policy = Json.obj("storeName" -> "workflow".asJson, "collection" -> collection.asJson,
       "targets" -> Vector(_publication).asJson)
-    val historyconfig = if (history) config.mapObject(_.add("sm-workflow.source-history.style", "goldenport".asJson)
-      .add("sm-workflow.source-history.rule", PrimaryGenerationHistorySpecificationFixture.rule)) else config
+    val historyconfig = if (history) config.mapObject(_.add("sm-workflow.source.history.style", "goldenport".asJson)
+      .add("sm-workflow.source.history.rule", PrimaryGenerationHistorySpecificationFixture.rule)) else config
     Files.writeString(path, historyconfig.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
       .add("textus.assembly.descriptor", root.resolve(".textus/assembly.yaml").toString.asJson)
       .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)

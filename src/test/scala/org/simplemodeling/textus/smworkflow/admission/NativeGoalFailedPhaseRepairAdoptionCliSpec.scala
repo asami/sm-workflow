@@ -29,7 +29,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * drives the same public Operations through the actual installed executable.
   * Fixture evidence asserts no production Human provenance.
   * @since   Oct. 23, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -456,7 +457,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       correctivehistory.get.step shouldBe _step
       correctivehistory.get.path shouldBe _product
       correctivehistory.get.style shouldBe "goldenport"
-      correctivehistory.get.providerIdentity shouldBe historysettings("sm-workflow.source-history.rule").get.hcursor.get[String]("identity").toOption.get
+      correctivehistory.get.providerIdentity shouldBe historysettings("sm-workflow.source.history.rule").get.hcursor.get[String]("identity").toOption.get
       correctivehistory.get.outcome shouldBe Some("updated")
       review.work.get.kind shouldBe "ReviewStep"
       review.work.get.stepIdentity shouldBe Some(_step)

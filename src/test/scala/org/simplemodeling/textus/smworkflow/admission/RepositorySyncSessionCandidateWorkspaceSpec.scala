@@ -30,7 +30,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real local candidates use host V7 admission or V8 initialization and native UoW effects.
   * These isolated fixtures do not qualify an installed consumer configuration.
   * @since   Nov. 12, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 19, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
