@@ -1071,3 +1071,87 @@ A as ready. Registered specifications now include the connected public route,
 canonical-check misbinding, selected-B failure and negative consumer/source
 cases. These additions are authored source, not executed verification or
 independent review evidence. The original 44 Phase conditions remain in force.
+
+## P7-D current driver and closure evidence — 2026-11-21
+
+The issued P7-D ImplementStep is continuation
+`14fad7b7a87c61d8d8f2eeb432a65fb4:ordered-implementation:2370`, revision 2371,
+Plan 2. Its accepted prefix is P7-A `4f9c659f`, P7-C `b4db3ca8`, P7-DD
+`1895af77`, P7-B `372efcfa`. All 44 adopted conditions are still Phase-scoped;
+an empty Step condition report is not their acceptance.
+
+P7-D authors a bounded connection from the existing development edges into the
+normal directory-list owner: captured provider-first order, native child
+results, unfinished-provider consumer gating and explicit unknown consumer-input
+applicability. The consumer remains unstarted even when provider trees match,
+because artifact selection may differ. Historical unbound batches keep their
+ordinary behavior. The [dependency gate contract](../spec/repository-sync-local-main-integration.md#p7-d-selected-workspace-dependency-gate--2026-11-21)
+names the missing cross-repository validation subject. It is not replaced by
+input ordering, three physical directories or successful producer checks.
+
+| Original scenario | Current P7-D evidence obligation |
+| --- | --- |
+| 1. All unchanged | New registered equal-provider native scenario retains missing consumer-input applicability. Ordinary unbound equality already has its separate native evidence. |
+| 2. Root program change | Existing per-repository program-impact specifications remain applicable only at their original subject; integrated workspace result remains owed. |
+| 3 and 6. Selected dependency changes, root unchanged | Native gate retains actual provider results and leaves consumer unstarted; affected consumer validation subject and results are still missing. |
+| 4. Two independent dependency changes | Provider scheduling can retain independent pending results; actual concurrent metadata-selected checks followed by root validation are not qualified. |
+| 5. Required dependency failure | Focused gate cases preserve failed/nonterminal/unknown provider distinctions and prevent consumer Start. Actual multi-repository failed FULL integration remains owed. |
+| 7. Fetch without incorporation | Reuse the original native policy/specification subject; no precautionary FULL may be inferred from fetch or Git classification alone. |
+| 8. Conflict | New registered real-Git conflict arm retains the native conflict work, an independent provider result and the unstarted consumer. Execution/review remain required. |
+| 9. Native SBT concurrency | No product-wide lock is added; actual overlapping provider checks in the related-workspace driver remain owed. |
+
+Existing two-lane `Phase7ManagedDevelopmentSpec` exercises different scoped
+publications and failed-consumer/reconnection isolation. Its connected A/B route
+returns the exact original A Request after explicit selection and consumer
+compilation. These distinct cases do not establish two simultaneous managed
+A/B worker dispatches, runtime waiting without parent inference, or an ended-turn
+automatic Goal reactivation. Retain that P7-PARALLEL/P7-DD-09 qualification gap.
+Fresh invocation/generator processes likewise do not establish refresh of an
+already-running external SBT/Cozy process (P7-DAO-A05).
+
+No meaningful Phase completion record may claim these gaps resolved. First
+obtain real driver results with registered resources, actual affected metadata
+membership, dependency failure/order/concurrency and consumer input evidence.
+Then obtain attributable CNCF owner Phase101 **full** acceptance/closure,
+including its nine resource/workspace requirements and named driver worktrees.
+The source documentation's planned status is not a native completion receipt.
+Finally perform Phase7's own required checks, integrated independent review and
+ordinary native closure. Preserve every earlier failure, UNKNOWN, review,
+Session, accepted result and repair count through that sequence. P7-B's scoped
+FileDelete delivery is usable dependency evidence at its own subject and does
+not substitute for CNCF Phase101 closure.
+
+## P7-D consumer-input/concurrency repair status — 2026-11-21
+
+RepairStep `ordered-repair:2430`, expected revision2431, retains original
+issues19/20, Session14fad7b7a87c61d8d8f2eeb432a65fb4 and Plan2. The source
+repair adds an actual existing immutable consumer-input observation, retained
+before/after applicability, scoped check binding and impact-selected native
+Integrated validation. It removes the unconditional dependency refusal for
+known inputs; missing/multiple envelopes and unsupported localProject execution
+remain explicit unknowns. Equal Git alone is never input equality.
+
+Per-child native Job intents and actual results replace the one-at-a-time
+aggregate relation for related batches. Multi-worker engines can launch a ready
+wave before foreground collection; the installed one-worker default retains
+synchronous execution. The formally adopted CNCF delivery at canonical commit
+`bcc3a50dcbab4c5df6eea2b20dbe522bc335b0f7` supplies the trusted bounded
+`textus.job.scheduler.worker-count` setting and scoped consumer TestCompile /
+TestOnly. The resumed source repair at `ordered-repair:2434`, revision2435,
+joins each confirmed Job even after another submit/wait becomes unconfirmed,
+collects available later success/failure receipts, and retains uncertainty
+without replay. Actual overlapping checks on the configured consumer host and
+mixed-outcome qualification remain runtime-owned requirements.
+
+See the [current repair contract](../spec/repository-sync-local-main-integration.md#p7-d-consumer-input-continuation-repair--2026-11-21).
+No source-only repair closes the nine-scenario driver, any of the44 Phase
+conditions, CNCF101, independent integrated review or native Phase closure.
+
+The earlier Compile-only CNCF admission and absent worker setting were producer
+dependency gaps; their formal delivery is attached to the existing consumer
+Session. Discovery and metadata-selected tests retain the exact same scoped
+input under Component, build-Manage, owner-ReadOnly and operation-specific grants.
+Consumer activation and fresh tests are still required; producer delivery alone
+does not qualify the repaired consumer or close issue19/20. Explicit Git-only
+edges may accompany one selected scoped-consumption edge; multiple independent
+consumer envelopes and localProject execution remain outside the adapter.

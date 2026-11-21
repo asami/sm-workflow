@@ -12,7 +12,7 @@ import RepositorySyncNativeProgressStore as N
   * Actual native parent/index deltas decide applicability. Neither docs/ nor a
   * changed commit is a no-program-change certificate or a fresh PASS receipt.
   * @since   Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncDocumentInputs {
   final case class Policy(documentPaths: Vector[String], consumedPaths: Vector[String], reason: String)
@@ -62,6 +62,31 @@ private[smworkflow] object RepositorySyncDocumentInputs {
 
   def captureC(store: N.Store, source: N.Stage): Consequence[Assessment] =
     captureC(store, source, store.declaration.documentInputs)
+
+  /** Nonmerge related-workspace candidate: compare actual before/after trees,
+    * then add exact changed external envelopes. Git equality alone cannot erase
+    * a selected dependency change. Host document scopes do not hide consumption. */
+  def captureIntegratedC(store: N.Store, source: N.Stage): Consequence[Assessment] = for {
+    _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, source)
+    before <- GitObjectId.parseC(source.payload.before.tree)
+    after <- source.payload.indexTree.map(GitObjectId.parseC).getOrElse(invalid("integrated index tree is unavailable"))
+    delta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
+    changed = delta.map(_.path.value).distinct.sorted
+    policy = store.declaration.documentInputs
+    external = RepositorySyncConsumedInputs.changes(store.core)
+    consumed = changed.filter(p => policy.exists(v => contains(v.consumedPaths, p))) ++ external
+    unknown = changed.filter(p => !policy.exists(v => contains(v.documentPaths, p) || contains(v.consumedPaths, p))) ++
+      delta.filter(c => !Set("000000", "100644", "100755")(c.oldMode) || !Set("000000", "100644", "100755")(c.newMode)).map(_.path.value)
+    blobs <- delta.flatMap(c => c.oldBlob.toVector ++ c.newBlob.toVector).distinct
+      .foldLeft(Consequence.success(Map.empty[String, Option[Boolean]])) { (prior, blob) => for {
+        values <- prior
+        actual <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.BlobContent(blob))
+      } yield values.updated(blob.value, actual.valueC.toOption.map(_.text.nonEmpty)) }
+    binary = delta.filter(c => (c.oldBlob.toVector ++ c.newBlob.toVector).exists(b => blobs.get(b.value).contains(Some(false)))).map(_.path.value)
+    unavailable = delta.filter(c => (c.oldBlob.toVector ++ c.newBlob.toVector).exists(b => blobs.get(b.value).flatten.isEmpty)).map(_.path.value)
+    _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, source)
+  } yield Assessment((changed ++ external).distinct.sorted, consumed.distinct.sorted, (unknown ++ unavailable).distinct.sorted, binary.distinct.sorted,
+    "Actual related integration tree delta and frozen immutable consumer input comparison")
 
   /** Observe a proposed host mapping without changing any retained assessment. */
   def captureC(store: N.Store, source: N.Stage, policy: Option[Policy]): Consequence[Assessment] = for {

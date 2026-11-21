@@ -9,7 +9,7 @@ import org.goldenport.configuration.ConfigurationValue
   * This is a selection of existing CNCF resources, not another workspace profile,
   * synchronization workflow, source acquisition or producer build/publication.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 21, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRepositorySync {
@@ -47,6 +47,35 @@ private[smworkflow] object ManagedDevelopmentRepositorySync {
         } yield Some(member)
       } yield selected
     }
+
+  /** Reuse the admitted edge graph for selected consumers.
+    * A batch never discovers or incorporates an unselected checkout. */
+  def orderC(policy: Option[ManagedDevelopmentRuntime.Policy], members: Vector[RepositorySyncDirectoryList.Member]):
+      Consequence[(Vector[RepositorySyncDirectoryList.Member], Map[String, Vector[String]])] = {
+    val selected = members.map(m => m.workspace -> m).toMap
+    val edges = policy.toVector.flatMap(_.definition.edges).filter(e => selected.contains(e.consumer.workspace))
+    for {
+      _ <- policy.fold(Consequence.unit)(p => ManagedDevelopment.validateC(p.definition))
+      _ <- if (edges.forall(e => selected.contains(e.provider.workspace))) Consequence.unit
+        else invalid("selected consumer requires its explicitly registered provider in the directory selection")
+      _ <- if (edges.forall(e => selected(e.provider.workspace).repositoryIdentity == e.provider.repository &&
+          selected(e.consumer.workspace).repositoryIdentity == e.consumer.repository)) Consequence.unit
+        else invalid("selected edge endpoint differs from its native repository binding")
+      dependencies = edges.groupBy(e => selected(e.consumer.workspace).sessionId).map { (consumer, incoming) =>
+        consumer -> incoming.map(e => selected(e.provider.workspace).sessionId).distinct }
+      ordered <- {
+        @scala.annotation.tailrec
+        def loop(done: Vector[RepositorySyncDirectoryList.Member], remaining: Vector[RepositorySyncDirectoryList.Member]):
+            Consequence[Vector[RepositorySyncDirectoryList.Member]] = {
+          val ready = remaining.filter(m => dependencies.getOrElse(m.sessionId, Vector.empty).forall(id => done.exists(_.sessionId == id)))
+          if (remaining.isEmpty) Consequence.success(done)
+          else if (ready.isEmpty) invalid("selected workspace dependencies contain a cycle")
+          else loop(done ++ ready, remaining.filterNot(ready.contains))
+        }
+        loop(Vector.empty, members)
+      }
+    } yield ordered -> dependencies
+  }
 
   private def oneC[A](values: Vector[A], message: String): Consequence[A] =
     if (values.size == 1) Consequence.success(values.head) else invalid(message)

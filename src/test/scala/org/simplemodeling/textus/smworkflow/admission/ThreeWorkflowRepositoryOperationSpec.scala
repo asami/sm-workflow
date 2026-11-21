@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -351,6 +351,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   }
   protected def local_subject_capabilities: Vector[String] = Vector("user")
   protected def standard_runtime: Boolean = false
+  /** Only an explicit fixture override enables the configured shared scheduler. */
+  protected def realtime_scheduler: Boolean = false
 
   protected final case class InstalledBootstrapSelection(component: Path)
 
@@ -407,8 +409,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |config:
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin)
-    Files.writeString(directory.resolve("test.yaml"),
-      """kind: test-descriptor
+    val testDescriptor = """kind: test-descriptor
         |execution:
         |  profile: controlled
         |  key: direct-repository-spec
@@ -424,7 +425,13 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |    mode: manual
         |  ordering:
         |    mode: deterministic
-        |""".stripMargin)
+        |""".stripMargin
+    Files.writeString(directory.resolve("test.yaml"), if (!realtime_scheduler) testDescriptor else
+      testDescriptor.replace("profile: controlled", "profile: seeded")
+        .replace("mode: manual\n    start-at: '2026-10-07T00:00:00Z'", "mode: system")
+        .replace("mode: deterministic", "mode: production")
+        .replace("scheduler:\n    mode: manual", "scheduler:\n    mode: realtime")
+        .replace("ordering:\n    mode: production", "ordering:\n    mode: concurrent"))
     val runtime = new CncfRuntime()
     val installedargs = installedBootstrap.toVector.flatMap(value => Vector("--no-default-components",
       s"--component-file=${value.component}"))

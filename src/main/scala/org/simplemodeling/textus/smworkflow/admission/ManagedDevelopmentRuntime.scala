@@ -32,7 +32,8 @@ import ManagedDevelopment.*
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
   final case class Policy(storeName: String, collection: String, definition: Definition,
-    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None, delivery: Option[Vector[DependencyDevelopmentDelivery.Binding]] = None)
+    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None, delivery: Option[Vector[DependencyDevelopmentDelivery.Binding]] = None,
+    repositorySyncInputs: Option[Vector[Input]] = None)
   val declaration = ComponentParameterKey.optional("sm-workflow.managed-development",
     ComponentParameterDecoder[Policy] {
       case ConfigurationValue.StringValue(text) => io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text)
@@ -40,6 +41,9 @@ private[smworkflow] object ManagedDevelopmentRuntime {
           validateC(p.definition).flatMap(_ => if (p.storeName.nonEmpty && EntityCollectionId.parse(p.collection).isSuccess &&
             p.repositorySyncEdge != null && p.repositorySyncEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
             p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
+            p.repositorySyncInputs != null && p.repositorySyncInputs.forall(inputs => inputs != null && inputs.size <= 128 &&
+              inputs.forall(i => i != null && p.definition.edges.exists(_.identity == i.edgeIdentity)) &&
+              inputs.map(_.edgeIdentity).distinct.size == inputs.size) &&
             DependencyDevelopmentDelivery.validateC(p.definition, p.delivery).isSuccess)
             Consequence.success(p) else Consequence.configurationInvalid("Managed development requires its granted Component collection")))
       case _ => Consequence.configurationInvalid("Managed development requires a structured JSON declaration")
@@ -75,6 +79,28 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     roots <- rootsC(core)
     source <- new NativePort(core, policy, roots).consumerSourceC(edge)
   } yield source
+
+  /** Read an existing admitted consumer invocation. This never creates input,
+    * selects an artifact, builds a provider, or treats protection as selection. */
+  def repositorySyncInputC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[RepositorySyncConsumedInputs.Subject] = for {
+    roots <- rootsC(core)
+    edge <- edgeC(policy.definition, input)
+    _ <- if (edge.localProject.isEmpty) Consequence.unit else invalid("RepositorySync localProject has no admitted scoped SBT execution adapter")
+    port = new NativePort(core, policy, roots)
+    selection <- ManagedDevelopment.selectionC(policy.definition, edge, input, port)
+    owner <- roots.get(policy.definition.ownerWorkspace).map(Consequence.success).getOrElse(invalid("input owner workspace is unavailable"))
+    build <- roots.get(edge.consumer.workspace).map(Consequence.success).getOrElse(invalid("consumer workspace is unavailable"))
+    _ <- ownedInventoryC(policy.definition, selection.publication, owner)
+    path = "inputs/" + edge.identity + "/consumer/" + input.requestIdentity + "/input.json"
+    target <- WorkspaceId.parseC(policy.definition.ownerWorkspace).map(FileTarget.apply)
+    file <- WorkspaceFilePath.parseC(path)
+    actual <- WorkflowFileExecution.readTextC(core, target, file)
+    text <- actual.text.map(Consequence.success).getOrElse(invalid("existing consumer input is unavailable"))
+    envelope <- io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text).fold(e => invalid(e.message), Consequence.success)
+    expected = executionInput(policy.definition, edge, input, owner, build, Some(selection.publication),
+      Path.of(owner).resolve("inputs/" + edge.identity + "/consumer/" + input.requestIdentity + "/result.json").toString)
+    _ <- if (envelope == expected) Consequence.unit else invalid("existing consumer input differs from its admitted immutable selection/build/owner")
+  } yield RepositorySyncConsumedInputs.Subject(policy.definition, input, selection.publication, path, envelope)
 
   private def rootsC(core: ActionCall.Core): Consequence[Map[String, String]] = for {
     text <- core.executionContext.resolvedParameters.get("textus.subsystem.process-execution.plan")

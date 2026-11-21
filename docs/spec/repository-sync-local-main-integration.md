@@ -233,3 +233,134 @@ new behavior; the default does not silently retarget active work.
 Related contracts: [single-repository orchestration](repository-sync-runtime-orchestration.md),
 [directory-list synchronization](repository-sync-directory-list.md), and
 [Phase 8 uncommitted policy](../phase/phase-8.md#repository-synchronization-uncommitted-change-policy-2026-11-08).
+
+## P7-D selected workspace dependency gate — 2026-11-21
+
+A configured `sm-workflow.repository-sync.directories` batch now consumes the
+existing `sm-workflow.managed-development.definition.edges` for selected
+consumers. Each consumer's provider must also be explicitly selected and match
+its CNCF workspace/repository binding. Runtime adds no checkout, source-project
+binding or artifact publication. Missing endpoints, crossed identities and
+cycles retain `ConfigurationRequired` before child execution. A provider-only
+batch keeps its ordinary single-source purpose.
+
+For a new related batch, runtime captures the resolved member identities and
+provider-before-consumer dependency relation in the existing native batch
+record. Directory order does not supply dependency order. Independent ready
+providers retain their own native Sessions and continue past another provider's
+normal Request/Wait/Human outcome. Unknown execution remains indeterminate.
+Recollection preserves terminal results and pending work; it does not restart a
+child or replace the captured relation with today's configuration. Historical
+batches without that relation keep their original ordinary behavior.
+
+The current connection is a **dependency gate**, not the complete Phase 7
+workspace driver. A provider that has not converged leaves its consumer in
+`notStarted` with `DependencyValidationPending`. Even converged providers leave
+`DependencyIntegrationApplicabilityUnknown` before consumer Start: neither equal
+nor changed provider Git trees establish which immutable publication/localProject
+inputs the consumer actually uses or which checks cover them. Provider trees
+are native observations only. Documentation-only source movement and unchanged
+selected JARs must not be relabeled as changed consumed dependency inputs;
+changed selection with identical Git source must not be missed either.
+
+The aggregate remains `AttentionRequired` and its existing `configuration`
+diagnostic names the consumer and actual provider Sessions. Other eligible
+selected sources can progress. Supplying normal validation bindings alone does
+not discharge this integration wait. No successful check, automatic FULL,
+producer build, scoped publication or push authority is inferred.
+
+The missing native subject is precise: `startRepositorySync` accepts a
+repository identity and `FULL_STATE`, while the child owner derives validation
+from that repository's own Git candidate. It has no admitted business input for
+**consumer candidate plus frozen selected dependency/overlay context, with
+attributable provider results and before/after consumed-input applicability**.
+`RepositorySyncProgramImpact.selectBuiltC` already discovers and binds ordinary
+FULL membership after a real managed build; it does not provide that absent
+cross-repository subject. The remaining composition must pass such a subject to
+the existing validation owner, preserve actual invocation/results and order the
+consumer after successful required provider checks. It must then qualify two
+independent provider checks without product-wide SBT serialization. This source
+slice supplies neither an invented validation call nor driver acceptance.
+
+## P7-D consumer-input continuation repair — 2026-11-21
+
+The authored repair replaces the unconditional consumer applicability refusal
+when the owner can observe a genuine existing immutable consumer input. The
+optional `repositorySyncInputs` in the existing managed-development declaration
+names existing `ManagedDevelopment.Input` records. It creates no publication,
+selection, graph or source checkout. Each named invocation must already have
+its admitted selection and exact native consumer envelope at
+`inputs/<edge>/consumer/<requestIdentity>/input.json`. The envelope must match
+its registered build workspace/root, owner, scope, publication and selection.
+Active/pinned protection is not an input selector.
+
+A new batch retains the actual input before any provider work and again after
+its required providers converge. Historical missing snapshots stay unknown.
+Definitions/endpoints must agree with the captured member; the input mapping
+may select a different already-admitted immutable invocation. At present, one
+existing scoped envelope per consumer build is supported. Multiple independent
+envelopes and `localProject` execution have no admitted adapter and retain an
+explicit applicability diagnostic rather than guessing or falling back.
+
+For a known unchanged input and unchanged source candidate, native clean
+integration runs structural Git checks without precautionary product checks.
+A changed scoped dependency input is assessed even if the root tree is equal.
+The existing ordinary program-impact/metadata owner selects actual required
+checks; missing coverage remains a setup failure. Actual nonmerge source deltas
+likewise use document/consumed-input classification in a related batch. An
+unconsumed documentation edit does not require FULL merely because a provider
+tree changed. Discovery and every consumer check receive the same exact scoped
+input; validation workspace aliases cannot redirect that immutable build.
+Receipt applicability includes the full consumed subject. External-input work
+does not borrow a tree-only prior PASS. Ordinary unbound synchronization keeps
+its previous clean policy.
+
+Ready graph children now have separate native ActionTask/UoW jobs with retained
+submission intent, confirmed Job ID and actual business results. A configured
+multi-worker native engine admits all ready children before their foreground
+owner awaits exact jobs; consumers wait for required converged provider results.
+No live custom ActionTask is deliberately detached at CLI return. Missing Job
+identity, missing result, interrupted wait or submission uncertainty retains
+UNKNOWN and cannot resubmit. Every confirmed Job is joined independently even
+when another submission or wait is unconfirmed. Later success and failure
+receipts are collected before foreground return; an incomplete wait remains
+uncertain and does not discard independent results. A subsequent invocation of
+the same Indeterminate aggregate can observe its retained confirmed IDs without
+starting a replacement Job. This is exact-ID observation, not interrupted-effect
+replay or a durable custom-task restoration contract.
+
+The single-worker default uses native synchronous submission to avoid waiting
+behind its own scheduler worker. That default does not establish provider
+overlap. CNCF delivery `P7-D-CNCF-SCOPED-VALIDATION-JOB-CAPACITY-01`, canonical
+commit `bcc3a50dcbab4c5df6eea2b20dbe522bc335b0f7`, supplies the normal trusted
+configuration key `textus.job.scheduler.worker-count` (1..64, default 1).
+Explicitly select 2 for an outer foreground invocation on the intended realtime
+host; a parent already occupying a worker requires at least 3 for two parallel
+children. Capacity is fixed at shared-engine construction. Manual scheduling
+retains effective capacity 1 and does not start workers automatically. This
+source contract does not change the current host configuration or establish
+observed consumer overlap.
+
+These are authored repair behavior and limitations, not new check or review
+receipts. Whole-workspace driver acceptance, actual overlapping typed check
+observations, CNCF101 full closure and Phase7 acceptance remain outstanding.
+
+The same adopted CNCF delivery admits consumer `SbtScopedInput` for Compile,
+TestCompile discovery and metadata-selected TestOnly. Discovery sets
+`validationDiscovery = true`; selected tests carry their admitted
+`validationBatch` and the same immutable scoped input. The executing Component
+needs Manage on the exact consumer build workspace, ReadOnly on the selection
+owner workspace, and the independent operation-specific SBT capabilities plus
+the discovery/mode bindings. ScopedPublish still requires its distinct producer
+operation and Manage on its owner. Missing authority is an admission failure;
+the consumer never drops the scoped input or falls back to baseline dependencies.
+Validation aliases must name the selected consumer workspace rather than another
+workspace covering a similar path. Exact-envelope checks and full-subject receipt
+applicability remain in force.
+
+The retained dependency delivery is source/API/publication evidence. Actual
+consumer scoped discovery/TestOnly, dependency-aware integration, independent
+provider overlap and mixed terminal/uncertain outcomes still require fresh
+runtime-owned qualification. Explicit Git-only edges may accompany the one
+selected scoped-consumption edge; multiple independent consumer envelopes and
+localProject execution remain outside the adapter.

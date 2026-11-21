@@ -639,3 +639,48 @@ report-row count. It does not repeat the large raw producer resolution rows.
 `path`, exact `byteCount` and `sha256`; this reference grants no new file access.
 Detailed producer resolution remains in that original report. This is an authored
 repair; fresh runtime validation and independent acceptance remain required.
+
+## P7-D supported use and qualification limits — 2026-11-21
+
+Use the normal `ManagedDevelopmentService` operation and its explicit configured
+edge/publication/selection. The existing owner records and actual result are the
+source of status; the operation name or successful producer exit is insufficient.
+
+| Operation | Supported interpretation |
+| --- | --- |
+| `publishDevelopmentArtifact` | Provider-owned scoped publication; only complete admitted outputs become selectable. It does not install a shared CLI. |
+| `selectDevelopmentArtifact` | Select an exact immutable publication for this consumer; `selected-unverified` still requires affected consumer checks. |
+| `readDevelopmentArtifactStatus` | Read retained publication, selection, protection and actual execution/prune outcomes; preserve failed/unknown/unverified distinctions. |
+| `verifyDevelopmentArtifact` | Execute the selected consumer Compile/generation route and retain actual resolution; publication alone proves no compatibility. |
+| `detachDevelopmentArtifact` | Invoke the ordinary consumer route with no selected overlay, retaining history and actual outcome. |
+| `pruneDevelopmentArtifact` | Delete only admitted unprotected owner inventory through FileDelete; unknown/partial/conflicting effects remain unavailable and are not replayed. |
+
+For update and rollback, select distinct immutable identities referring to the
+new or retained publication and invoke verification again. Each authored native
+execution starts a fresh typed SBT process and, for batch generation, a fresh
+generator child JVM. This supplies process replacement for those invocations.
+The adapter does not mutate or reload an SBT shell/Cozy JVM that was already
+running independently. No actual supported stop/restart/reattach observation for
+such a persistent process is supplied by the current P7-B/P7-D evidence.
+Consequently the original running-process part of P7-DAO-A05 remains a Phase
+qualification gap; new one-shot processes alone do not establish it.
+
+The original 44 Phase conditions remain unchanged. Accepted Step reviews and
+checks apply to their named source/artifact subjects. They establish no whole
+Phase acceptance, cross-process qualification or CNCF Phase101 closure. Ordinary
+no-input resolution, explicit one-time build opt-in, exact selected-coordinate
+reports, unchanged shared Ivy artifacts and incompatible generated API diagnostics
+must retain their own actual evidence on the integrated candidate.
+
+P7-D's subsequent authored consumer-input repair reads the exact existing
+immutable consumer invocation rather than interpreting active/pinned protection
+as a selection. A known changed envelope reaches native impact-selected
+validation with the same scoped SBT input, including when the consumer tree is
+unchanged. The [current contract](repository-sync-local-main-integration.md#p7-d-consumer-input-continuation-repair--2026-11-21)
+describes the one-envelope scope, unsupported localProject case, native child
+job lifetime and adopted scoped-validation/worker-capacity dependency. The
+consumer requires exact build-Manage, owner-ReadOnly and operation-specific
+permissions. Confirmed child Jobs are joined and available receipts collected
+even after another attempt becomes uncertain. Actual configured-host overlap
+and scoped consumer checks remain runtime-owned qualification; these source
+changes do not promote earlier evidence to whole-Phase acceptance.

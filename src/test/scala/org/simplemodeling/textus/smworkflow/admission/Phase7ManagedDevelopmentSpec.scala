@@ -316,6 +316,174 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
       SyncFixture.exercise(root)
     }
 
+    "order selected workspace sources from the admitted edges and reject crossed endpoints and cycles" in {
+      def member(component: GoalPhaseDependencyScope.Component, session: String) = RepositorySyncDirectoryList.Member(
+        component.repository, component.workspace, "/fixture/" + session, "work/" + session, "origin", "release", "configured", session)
+      val a = member(edge.consumer, "a")
+      val b = member(edge.provider, "b")
+      val c = member(edge.provider.copy(identity = "org.example.SecondProvider", repository = "second-provider", workspace = "second-provider"), "c")
+      val second = edge.copy(identity = "consumer-second", provider = edge.provider.copy(identity = "org.example.SecondProvider",
+        repository = c.repositoryIdentity, workspace = c.workspace))
+      val selected = policy.copy(definition = definition.copy(edges = Vector(edge, second)))
+      val (ordered, dependencies) = take(ManagedDevelopmentRepositorySync.orderC(Some(selected), Vector(a, c, b)))
+      ordered.map(_.sessionId) shouldBe Vector("c", "b", "a")
+      dependencies shouldBe Map("a" -> Vector("b", "c"))
+      take(ManagedDevelopmentRepositorySync.orderC(None, Vector(a, c, b)))._1 shouldBe Vector(a, c, b)
+      take(ManagedDevelopmentRepositorySync.orderC(Some(selected), Vector(b)))._2 shouldBe Map.empty
+      ManagedDevelopmentRepositorySync.orderC(Some(selected), Vector(a)).isSuccess shouldBe false
+      ManagedDevelopmentRepositorySync.orderC(Some(selected), Vector(a, b.copy(repositoryIdentity = "foreign"))).isSuccess shouldBe false
+      val reverse = edge.copy(identity = "reverse", provider = edge.consumer, consumer = edge.provider)
+      ManagedDevelopmentRepositorySync.orderC(Some(policy.copy(definition = definition.copy(edges = Vector(edge, reverse)))), Vector(a, b)).isSuccess shouldBe false
+    }
+
+    "retain dependency waits failures and unknown applicability without blocking an unrelated selected lane" in {
+      val a = RepositorySyncDirectoryList.Member("consumer", "a", "/fixture/a", "work/a", "origin", "release", "configured", "a")
+      val independent = a.copy(repositoryIdentity = "independent", workspace = "other", sessionId = "other")
+      val before = "b" * 40
+      val provider = RepositorySyncDirectoryList.Result("provider", "b", "b", "Terminal", "converged", None, Some("8"), Some("a" * 40), Some(before))
+      val state = RepositorySyncDirectoryList.Payload("participant", Vector(a, independent), Vector(provider), "AttentionRequired", None,
+        dependencies = Map("a" -> Vector("b")), sourceTrees = Map("b" -> before))
+      RepositorySyncDirectoryList.dependencyBlock(state, a).get should include("DependencyIntegrationApplicabilityUnknown")
+      for ((kind, outcome) <- Vector("Wait" -> "unfinished", "Request" -> "unfinished", "Human" -> "unfinished", "Terminal" -> "failed", "Indeterminate" -> "indeterminate")) {
+        val pending = state.copy(results = Vector(provider.copy(kind = kind, outcome = outcome)))
+        RepositorySyncDirectoryList.dependencyBlock(pending, a).get should include("DependencyValidationPending")
+        RepositorySyncDirectoryList.dependencyBlock(pending, independent) shouldBe None
+        RepositorySyncDirectoryList.payloadCodec.decode(RepositorySyncDirectoryList.payloadCodec.encode(pending)) shouldBe Right(pending)
+      }
+      val moved = state.copy(results = Vector(provider.copy(tree = Some("c" * 40))))
+      RepositorySyncDirectoryList.dependencyBlock(moved, a).get should include("DependencyIntegrationApplicabilityUnknown")
+      RepositorySyncDirectoryList.dependencyBlock(state.copy(sourceTrees = Map.empty), a).get should include("ApplicabilityUnknown")
+      val legacy = RepositorySyncDirectoryList.payloadCodec.encode(state.copy(dependencies = Map.empty, sourceTrees = Map.empty))
+      legacy.asObject.get.keys.toSet should not contain "dependencies"
+      RepositorySyncDirectoryList.payloadCodec.decode(legacy) shouldBe Right(state.copy(dependencies = Map.empty, sourceTrees = Map.empty))
+      RepositorySyncDirectoryList.payloadCodec.decode(legacy.mapObject(_.add("dependencies", Json.Null))).isLeft shouldBe true
+    }
+
+    "admit a consumer only with known immutable consumed inputs and bind receipts to the full subject" in {
+      val memory = new Memory
+      run("publish", memory).status shouldBe "published"
+      val publication = memory.rows(ManagedDevelopment.key(definition, edge, "publication", input.publication)).as[Publication].toOption.get
+      val selected = input.copy(requestIdentity = "existing-consumer", selection = "selected-consumer")
+      val path = "inputs/" + edge.identity + "/consumer/" + selected.requestIdentity + "/input.json"
+      val envelope = ManagedDevelopmentRuntime.executionInput(definition, edge, selected, "/owner", "/consumer", Some(publication), "/owner/result.json")
+      val subject = RepositorySyncConsumedInputs.Subject(definition, selected, publication, path, envelope)
+      val before = RepositorySyncConsumedInputs.Observation(Vector(subject), None)
+      val unchanged = RepositorySyncConsumedInputs.Change(before, Some(before))
+      unchanged.known shouldBe true
+      unchanged.changed shouldBe false
+      val switched = unchanged.copy(after = Some(before.copy(subjects = Vector(subject.copy(input = selected.copy(selection = "different"))))))
+      switched.known shouldBe true
+      switched.changed shouldBe true
+      val a = RepositorySyncDirectoryList.Member(edge.consumer.repository, edge.consumer.workspace, "/consumer", "work/a", "origin", "release", "configured", "a")
+      val b = a.copy(repositoryIdentity = edge.provider.repository, workspace = edge.provider.workspace, root = "/provider", sessionId = "b")
+      val result = RepositorySyncDirectoryList.Result(b.repositoryIdentity, b.workspace, b.sessionId, "Terminal", "converged", None, Some("8"), Some("a" * 40), Some("b" * 40))
+      val state = RepositorySyncDirectoryList.Payload("participant", Vector(b, a), Vector(result), "Ready", None,
+        dependencies = Map(a.sessionId -> Vector(b.sessionId)), consumerInputs = Map(a.sessionId -> unchanged))
+      RepositorySyncDirectoryList.dependencyBlock(state, a) shouldBe None
+      RepositorySyncDirectoryList.dependencyBlock(state.copy(consumerInputs = Map(a.sessionId -> switched)), a) shouldBe None
+      RepositorySyncDirectoryList.dependencyBlock(state.copy(results = Vector(result.copy(outcome = "failed"))), a).get should include("DependencyValidationPending")
+      RepositorySyncDirectoryList.dependencyBlock(state.copy(consumerInputs = Map(a.sessionId -> unchanged.copy(after = None))), a).get should include("ApplicabilityUnknown")
+      RepositorySyncDirectoryList.payloadCodec.decode(RepositorySyncDirectoryList.payloadCodec.encode(state)) shouldBe Right(state)
+      val policy = RepositorySyncNativeMergeValidation.Policy("related", 1, "explicit-no-product-tests", "known unchanged consumption", Vector.empty,
+        dependencyInputs = Some(envelope))
+      val receipt = RepositorySyncNativeMergeValidation.State(policy.mode, policy.reason, Vector.empty, "8", Vector.empty, dependencyInputs = Some(envelope))
+      RepositorySyncNativeMergeValidation.applies(receipt, policy) shouldBe true
+      RepositorySyncNativeMergeValidation.applies(receipt, policy.copy(dependencyInputs = Some(Json.obj("different" -> true.asJson)))) shouldBe false
+      RepositorySyncNativeMergeValidation.applies(receipt, policy.copy(dependencyInputs = None)) shouldBe false
+    }
+
+    for (scenario <- Vector("Equal", "ChangedDependency", "Conflict")) {
+      s"retain the real registered workspace $scenario outcome without claiming driver acceptance" in {
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "workspace-").toRealPath()
+        WorkspaceSyncFixture.exercise(root, scenario)
+      }
+    }
+
+    for (failedProvider <- Vector(false, true)) {
+      s"collect overlapping native provider checks and ${if (failedProvider) "block" else "validate"} the scoped consumer" in {
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+          "native-workspace-products-").toRealPath()
+        WorkspaceProductFixture.exercise(root, failedProvider)
+      }
+    }
+
+    "admit only the actual nonmerge structural prefix and exact scoped attempt across all outcomes" in {
+      import org.goldenport.cncf.processexecution.*
+      import org.goldenport.cncf.workspace.{WorkspaceId, WorkspaceRelativePath}
+      val fixture = RepositorySyncMergeCheckContinuationFixture
+      val check = fixture.checks.head
+      val workspace = take(WorkspaceId.parseC(check.workspaceIdentity))
+      val target = SbtTarget(workspace, scopedInput = Some(SbtScopedInput(SmWorkflowComponent.componentId, workspace,
+        take(WorkspaceId.parseC("development-artifacts")), "qualified-scope", "qualified-selection",
+        take(WorkspaceRelativePath.parseC("inputs/qualified/input.json")), None)))
+      val state = fixture.state.copy(receipts = fixture.prefix.take(1))
+      val prepared = fixture.intent.copy(stage = "IntegrationValidationChecking", mergeHead = None,
+        validation = Some(state), method = Some("fast-forward"))
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), empty, empty, Vector.empty, 1L, "authored-native-shape")
+      val observed = SbtExecutionAttempt.Observed(SbtExecutionResult(target, SbtOperation.Compile, process))
+      val recorded = take(RepositorySyncNativeMergeValidation.productAttemptPayloadC(prepared, check, observed, target))
+      recorded.validation.get.receipts.take(1) shouldBe state.receipts
+      recorded.validation.get.receipts.last.exitCode shouldBe Some(7)
+      recorded.validation.get.receipts.last.processObservation shouldBe Some(process)
+      val conclusion = Consequence.stateConflict[Unit]("authored typed preparation rejection") match {
+        case Consequence.Failure(value) => value
+        case _ => fail("Expected a diagnostic conclusion")
+      }
+      val rejection = SbtExecutionAttempt.AdmissionRejected(target, SbtOperation.Compile, conclusion)
+      val refused = take(RepositorySyncNativeMergeValidation.productAttemptPayloadC(prepared, check, rejection, target))
+      refused.stage shouldBe "ValidationPreparationRejected"
+      refused.validation shouldBe prepared.validation
+      refused.validationPreparation.get.diagnostic shouldBe conclusion.show
+      RepositorySyncNativeMergeValidation.mayRunCheck(refused, 1, merge = false) shouldBe false
+      val uncertain = SbtExecutionAttempt.Uncertain(target, SbtOperation.Compile, conclusion)
+      val crossed = target.copy(scopedInput = target.scopedInput.map(_.copy(selection = "crossed-selection")))
+      Vector(SbtExecutionAttempt.Observed(SbtExecutionResult(crossed, SbtOperation.Compile, process)),
+        SbtExecutionAttempt.AdmissionRejected(crossed, SbtOperation.Compile, conclusion),
+        SbtExecutionAttempt.Uncertain(crossed, SbtOperation.Compile, conclusion), uncertain).foreach { actual =>
+        RepositorySyncNativeMergeValidation.productAttemptPayloadC(prepared, check, actual, target).isSuccess shouldBe false
+      }
+      RepositorySyncNativeMergeValidation.productAttemptPayloadC(prepared.copy(validation = Some(state.copy(
+        receipts = fixture.prefix))), check, observed, target).isSuccess shouldBe false
+      RepositorySyncNativeMergeValidation.productAttemptPayloadC(prepared.copy(validation = Some(state.copy(
+        receipts = state.receipts.map(_.copy(exitCode = Some(1)))))), check, observed, target).isSuccess shouldBe false
+      prepared.validation.get.receipts shouldBe fixture.prefix.take(1)
+    }
+
+    "join every confirmed native child after submission uncertainty and retain later mixed receipts" in {
+      import org.goldenport.cncf.job.{JobId, JobResult}
+      import org.goldenport.protocol.operation.OperationResponse
+      val members = Vector("unconfirmed", "first", "second", "third").map(id =>
+        RepositorySyncDirectoryList.Member(id, id, "/fixture/" + id, "main", "origin", "main", "configured", id))
+      val success = JobResult.Success(OperationResponse.Scalar("actual independent success"))
+      val failure = JobResult.Failure(org.goldenport.Conclusion.simple("actual independent failure"))
+      val ids = Vector("first", "second", "third").map(id => id -> JobId.generate()).toMap
+      val attempts = members.map(member => member.sessionId -> RepositorySyncDirectoryList.Attempt(
+        ids.get(member.sessionId).map(_.value), true, None)).toMap
+      val existing = RepositorySyncDirectoryList.Result("earlier", "earlier", "earlier", "Terminal", "converged",
+        None, Some("8"), Some("a" * 40), Some("b" * 40))
+      for (stage <- Vector("AttentionRequired", "Indeterminate")) {
+        Given("three confirmed child IDs, one unconfirmed submission and an earlier retained result")
+        val payload = RepositorySyncDirectoryList.Payload("participant", members, Vector(existing), stage, None, attempts = attempts)
+        val waited = scala.collection.mutable.ArrayBuffer.empty[String]
+        When("the first exact wait is unconfirmed but later independent Jobs actually terminate")
+        val joined = take(RepositorySyncDirectoryList.joinConfirmedC(payload, job => {
+          waited += job.value
+          if (job.value == ids("first").value) Consequence.stateConflict("wait interrupted before a result was observed")
+          else if (job.value == ids("second").value) Consequence.success(success)
+          else if (job.value == ids("third").value) Consequence.success(failure)
+          else fail("Unconfirmed submission must never be replayed or awaited: " + job.value)
+        }))
+        Then("both later receipts survive and every confirmed Job has had its own foreground wait")
+        waited.toVector shouldBe Vector("first", "second", "third").map(ids(_).value)
+        joined.results shouldBe Map("second" -> success, "third" -> failure)
+        joined.diagnostics.size shouldBe 1
+        joined.diagnostics.head should include(ids("first").value)
+        RepositorySyncDirectoryList.payloadCodec.decode(RepositorySyncDirectoryList.payloadCodec.encode(payload)) shouldBe Right(payload)
+        payload.results shouldBe Vector(existing)
+      }
+    }
+
     "retain source origin, exact publication and immutable edge selection without implicitly building a provider" in {
       Given("an explicit independent source, JAR and project binding")
       val m = new Memory
@@ -751,6 +919,47 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
         Files.exists(shared) shouldBe baselineExists
         val compiled = call("compileDevelopmentConsumer", selected)
         withClue(compiled.toRecord().toString) { compiled.status shouldBe "verified" }
+        // Observe the exact already-written native envelope and selected record,
+        // rather than using active/pinned protection as a build-input selector.
+        var observedInput = Option.empty[RepositorySyncConsumedInputs.Subject]
+        setup(c => ManagedDevelopmentRuntime.repositorySyncInputC(c.core, policy, selected).map { actual =>
+          observedInput = Some(actual)
+        })
+        observedInput.get.input shouldBe selected
+        observedInput.get.publication.identity shouldBe input.publication
+        observedInput.get.envelope.hcursor.get[String]("kind").toOption shouldBe Some("consumer")
+        observedInput.get.envelope.hcursor.get[String]("buildWorkspace").toOption shouldBe Some(edge.consumer.workspace)
+        setup { c =>
+          import org.goldenport.cncf.processexecution.{SbtScenarioSelection, SbtTarget, SbtValidationMode}
+          import org.goldenport.cncf.workspace.WorkspaceId
+          val member = RepositorySyncDirectoryList.Member(edge.consumer.repository, edge.consumer.workspace,
+            root.resolve("consumer").toString, "main", "origin", "main", "configured", "selected-consumer-session")
+          val observation = RepositorySyncConsumedInputs.Observation(Vector(observedInput.get), None)
+          val change = RepositorySyncConsumedInputs.Change(observation, Some(observation))
+          val bound = RepositorySyncConsumedInputs.bind(c.core, member, Some(change))
+          val workspace = take(WorkspaceId.parseC(edge.consumer.workspace))
+          val discovery = take(RepositorySyncConsumedInputs.targetC(bound, SbtTarget(workspace, validationDiscovery = true)))
+          val cases = Vector(SbtValidationMode.Case(SbtScenarioSelection("example.SelectedSpec", "exact discovered case"), "develop"))
+          val testing = take(RepositorySyncConsumedInputs.targetC(bound, SbtTarget(workspace, validationBatch = cases)))
+          discovery.scopedInput shouldBe testing.scopedInput
+          discovery.validationDiscovery shouldBe true
+          testing.validationBatch shouldBe cases
+          discovery.scopedInput.get.buildWorkspace shouldBe workspace
+          discovery.scopedInput.get.ownerWorkspace.value shouldBe definition.ownerWorkspace
+          discovery.scopedInput.get.selection shouldBe selected.selection
+          discovery.scopedInput.get.input.value shouldBe observedInput.get.path
+          discovery.scopedInput.get.publication shouldBe None
+          RepositorySyncConsumedInputs.targetC(bound, SbtTarget(take(WorkspaceId.parseC("foreign-consumer")))).isSuccess shouldBe false
+          RepositorySyncConsumedInputs.targetC(bound, testing).isSuccess shouldBe false
+          val unknown = RepositorySyncConsumedInputs.bind(c.core, member, Some(change.copy(after = None)))
+          RepositorySyncConsumedInputs.targetC(unknown, SbtTarget(workspace, validationDiscovery = true)).isSuccess shouldBe false
+          Consequence.unit
+        }
+        setup { c =>
+          ManagedDevelopmentRuntime.repositorySyncInputC(c.core, policy,
+            selected.copy(requestIdentity = "never-written-input")).isSuccess shouldBe false
+          Consequence.unit
+        }
         call("readDevelopmentArtifactStatus", selected).status shouldBe "verified"
         val output = root.resolve("consumer/target/scala-2.12/classes/example/Consumer$.class")
         Files.isRegularFile(output) shouldBe true
@@ -1904,6 +2113,403 @@ allowedKinds = ["text"]
             }
           }
         }
+      }
+    }
+  }
+
+  /** Three actual Git source worktrees, two explicit provider edges, local bare
+    * remotes and no SBT/publication binding. The changed-input arm deliberately
+    * retains the missing consumer-validation subject instead of accepting it. */
+  private object WorkspaceSyncFixture extends Phase69ConfiguredRepositoryFixture {
+    private def source(root: Path, ordinal: Int) = root.resolve("source-" + ordinal)
+    private def workspace(ordinal: Int) = "p7-workspace-" + ordinal
+    private def identity(ordinal: Int) = "p7-repository-" + ordinal
+    private def component(ordinal: Int) = GoalPhaseDependencyScope.Component("org.example.Workspace" + ordinal,
+      identity(ordinal), workspace(ordinal))
+    private val edges = Vector(1, 2).map(ordinal => edge.copy(identity = "workspace-edge-" + ordinal,
+      provider = component(ordinal), consumer = component(0)))
+    private val managed = policy.copy(definition = definition.copy(edges = edges))
+
+    override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
+      val template = Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(super.process_plan(root, scenario, goal))
+      val original = template.hcursor.get[Vector[Json]]("gitRepositories").toOption.get.head
+      val repositories = Vector(0, 1, 2).map(ordinal => original.mapObject(_.add("target", workspace(ordinal).asJson)
+        .add("identity", identity(ordinal).asJson).add("capability", identity(ordinal).asJson)
+        .add("localBranch", ("work/p7-" + ordinal).asJson).add("remoteBranch", "release".asJson)
+        .add("endpoint", source(root, ordinal).resolve("upstream.git").toString.asJson)))
+      template.mapObject(_.add("gitRepositories", repositories.asJson)
+        .add("workspaces", Vector(0, 1, 2).map(ordinal => Json.obj("identity" -> workspace(ordinal).asJson,
+          "root" -> source(root, ordinal).resolve("repository").toString.asJson)).asJson)
+        .add("workspaceGrants", Vector(0, 1, 2).map(ordinal => Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "workspaceId" -> workspace(ordinal).asJson, "access" -> "manage".asJson)).asJson)
+        .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "capabilities" -> Vector(0, 1, 2).map(ordinal => identity(ordinal)).asJson))))
+    }
+
+    def exercise(root: Path, scenario: String): Unit = {
+      val directories = Vector(0, 1, 2).map(ordinal => source(root, ordinal).resolve("repository").toString)
+      directories.foreach(path => Files.createDirectories(Path.of(path)))
+      val parameters = Map(RepositorySyncDirectoryList.declaration.name -> directories.asJson.noSpaces,
+        ManagedDevelopmentRuntime.declaration.name -> managed.asJson.noSpaces,
+        // This fixture's text file has no build consumer. Declare that host
+        // fact explicitly: a docs/ path alone does not establish applicability.
+        RepositorySyncDocumentInputs.declaration.name -> Json.obj(
+          "documentPaths" -> Vector("docs/change.md").asJson,
+          "consumedPaths" -> Vector("src", "build.sbt", "project").asJson,
+          "reason" -> "The controlled Git-only fixture never consumes docs/change.md as a build input; immutable consumer selections remain unavailable".asJson).noSpaces)
+      var result = Json.Null
+      var session = ""
+      var revision = ""
+      def json(value: org.goldenport.protocol.operation.OperationResponse): Json = value match {
+        case org.goldenport.protocol.operation.OperationResponse.RecordResponse(record) => DevelopmentOperationalView.json(record)
+        case other => fail("Expected native workspace batch: " + other)
+      }
+      _with_runtime_(root, "Equal", hostParameters = parameters) { (owner, component, actor, prepare) =>
+        prepare { _ => Vector(0, 1, 2).foldLeft(Consequence.unit) { (prior, ordinal) =>
+          val directory = source(root, ordinal)
+          val selected = if (ordinal == 1 && scenario == "Conflict") "Conflict" else "Equal"
+          val commands = if (ordinal == 1 && scenario == "ChangedDependency") {
+            _setup_commands_(directory, "Equal") ++ Vector(
+              Vector("clone", "--no-local", directory.resolve("upstream.git").toString, directory.resolve("peer").toString),
+              Vector("-C", directory.resolve("peer").toString, "add", "--", "docs/change.md"),
+              Vector("-C", directory.resolve("peer").toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "non-consumed remote documentation"),
+              Vector("-C", directory.resolve("peer").toString, "push", directory.resolve("upstream.git").toString, "HEAD:refs/heads/main"))
+          } else _setup_commands_(directory, selected)
+          commands.zipWithIndex.foldLeft(prior) { case (previous, (command, index)) => previous.flatMap { _ =>
+            _setup_files_(directory, selected, index)
+            if (ordinal == 1 && scenario == "ChangedDependency" && index == 5) {
+              Files.createDirectories(directory.resolve("peer/docs"))
+              Files.writeString(directory.resolve("peer/docs/change.md"), "Unconsumed documentation does not prove changed dependency input.\n")
+            }
+            _run_setup_command_(command.map {
+              case "--initial-branch=main" => if (command.contains("--bare")) "--initial-branch=release" else "--initial-branch=work/p7-" + ordinal
+              case argument => argument.replace("refs/heads/main", "refs/heads/release")
+            })
+          }}
+        }}
+        def invoke(operation: String, properties: List[Property]) = json(take(owner.executeOperationResponseInContext(
+          Request.of(component = component.name, service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+        Given("one registered consumer and two selected provider sources, with the consumer listed first")
+        result = invoke(RepositorySyncDirectoryList.syncOperation, List(Property("input", Record.data("syncMode" -> "FULL_STATE"), None)))
+        session = result.hcursor.get[String]("sessionId").toOption.get
+        revision = result.hcursor.downField("resultReference").get[String]("revision").toOption.get
+        val rows = result.hcursor.get[Vector[Json]]("repositories").toOption.get
+        Then("native result identities retain provider order, actual conflicts and the independent provider result")
+        withClue("Actual native workspace batch: " + result.spaces2 + "\n") {
+          rows.take(2).map(_.hcursor.get[String]("repositoryIdentity").toOption.get) shouldBe Vector(identity(1), identity(2))
+          rows(1).hcursor.get[String]("kind").toOption shouldBe Some("Terminal")
+          rows(1).hcursor.get[String]("outcome").toOption shouldBe Some("converged")
+          result.hcursor.get[String]("outcome").toOption shouldBe Some("AttentionRequired")
+          result.hcursor.get[Vector[String]]("notStarted").toOption shouldBe Some(Vector(identity(0)))
+          val diagnostic = result.hcursor.downField("configuration").get[String]("diagnostic").toOption.get
+          diagnostic should include(if (scenario == "Conflict") "DependencyValidationPending" else "DependencyIntegrationApplicabilityUnknown")
+          if (scenario == "Conflict") rows.head.hcursor.get[String]("kind").toOption should not be Some("Terminal")
+          else {
+            rows.head.hcursor.get[String]("kind").toOption shouldBe Some("Terminal")
+            rows.head.hcursor.get[String]("outcome").toOption shouldBe Some("converged")
+          }
+        }
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+        Files.exists(root.resolve(".textus/sm-workflow/work.d/artifacts")) shouldBe false
+        invoke(RepositorySyncDirectoryList.syncOperation, List(Property("sessionId", session, None),
+          Property("input", Record.data("syncMode" -> "FULL_STATE"), None))) shouldBe result
+      }
+      _with_runtime_(root, "Equal", hostParameters = parameters) { (owner, component, actor, _) =>
+        val retained = json(take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "RepositorySyncService", operation = RepositorySyncDirectoryList.readOperation,
+          properties = List(Property("sessionId", session, None), Property("revision", revision, None))), actor)))
+        retained shouldBe result
+      }
+    }
+  }
+
+  /** Actual DirectoryList composition, existing shared engine and normal SBT.
+    * The two source generators coordinate only inside this private fixture;
+    * their bounded rendezvous fails when the required checks do not overlap.
+    */
+  private object WorkspaceProductFixture extends Phase69ConfiguredRepositoryFixture {
+    import org.goldenport.cncf.processexecution.*
+    import org.goldenport.cncf.workspace.WorkspaceId
+    import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
+    import GoalPhaseNativeMetadata.given
+    private def source(root: Path, n: Int) = root.resolve("source-" + n)
+    private def workspace(n: Int) = "p7-product-workspace-" + n
+    private def identity(n: Int) = "p7-product-repository-" + n
+    private def component(n: Int) = GoalPhaseDependencyScope.Component("org.example.Product" + n, identity(n), workspace(n))
+    private val selectedEdge = edge.copy(identity = "product-provider", provider = component(1), consumer = component(0),
+      requested = edge.requested.copy(module = "provider_3"))
+    private val orderingEdge = selectedEdge.copy(identity = "independent-provider", provider = component(2), localJar = false)
+    private val selectedDefinition = definition.copy(scope = "native-products", edges = Vector(selectedEdge, orderingEdge))
+    private val publicationInput = input.copy(edgeIdentity = selectedEdge.identity)
+    private val consumerInput = publicationInput.copy(requestIdentity = "native-product-consumer", selection = "native-product-selection")
+    private val selectedPolicy = policy.copy(definition = selectedDefinition, repositorySyncInputs = Some(Vector(consumerInput)))
+    private val productCompile = RepositorySyncNativeMergeValidation.Check("product-compile", 1, WorkflowSbtValidation.Kind.Compile)
+    private val focusedSource = org.simplemodeling.textus.smworkflow.admission.phase7workspacefixture.Phase7WorkspaceConsumerFixtureSource
+    private def compiledProducts(root: Path) = source(root, 0).resolve("repository/target/native-consumer-test-classes")
+    override protected def realtime_scheduler = true
+    private def array(value: Json, key: String) = value.hcursor.get[Vector[Json]](key).toOption.get
+
+    override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
+      val base = Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(super.process_plan(root, scenario, goal))
+      val repository = array(base, "gitRepositories").head
+      val repositories = Vector(0, 1, 2).map(n => repository.mapObject(_.add("target", workspace(n).asJson)
+        .add("identity", identity(n).asJson).add("capability", (workspace(n) + "-git").asJson)
+        .add("endpoint", source(root, n).resolve("upstream.git").toString.asJson)))
+      val template = array(TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1),
+        executionTimeoutMillis = 240000L, operation = SbtOperation.Compile), "sbtPrograms").head
+      val sbt = Vector(0, 1, 2).map(n => template.mapObject(_.add("target", workspace(n).asJson)
+        .add("identity", (workspace(n) + "-compile").asJson).add("capability", (workspace(n) + "-compile").asJson))) ++
+        Vector(template.mapObject(_.add("target", workspace(1).asJson).add("operation", "scoped-publish".asJson)
+          .add("identity", "product-publish".asJson).add("capability", "product-publish".asJson)),
+          template.mapObject(_.add("target", workspace(0).asJson).add("operation", "test-compile".asJson)
+            .add("identity", "product-test-compile".asJson).add("capability", "product-test-compile".asJson)),
+          template.mapObject(_.add("target", workspace(0).asJson).add("operation", "test-only".asJson)
+            .add("identity", "product-focused".asJson).add("capability", "product-focused".asJson)
+            .add("testClasses", Vector(focusedSource.suiteName).asJson)
+            .add("validationMode", Json.obj("modes" -> Vector("develop").asJson,
+              "provider" -> "fixture".asJson, "livePrerequisites" -> Json.arr()))))
+      val workspaces = Vector(0, 1, 2).map(n => Json.obj("identity" -> workspace(n).asJson,
+        "root" -> source(root, n).resolve("repository").toString.asJson)) :+
+        Json.obj("identity" -> selectedDefinition.ownerWorkspace.asJson,
+          "root" -> root.resolve(".textus/sm-workflow/work.d").toString.asJson)
+      base.mapObject(_.add("gitRepositories", repositories.asJson).add("sbtPrograms", sbt.asJson)
+        .add("workspaces", workspaces.asJson).add("workspaceGrants", workspaces.map(w => Json.obj(
+          "componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "workspaceId" -> w.hcursor.get[String]("identity").toOption.get.asJson, "access" -> "manage".asJson)).asJson)
+        .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "capabilities" -> (repositories ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).asJson))))
+    }
+
+    private def prepareSources(root: Path): Unit = {
+      Vector(0, 1, 2).foreach { n =>
+        val directory = source(root, n)
+        prepareBuild(directory.resolve("repository"), producer = n != 0)
+        val build = directory.resolve("repository/build.sbt")
+        Files.writeString(build, Files.readString(build).replace("2.12.18", "3.3.8"))
+        if (n == 2) {
+          // This independent provider has ordinary Compile authority only.
+          Files.writeString(build, "scalaVersion := \"3.3.8\"\n")
+        }
+        val coordination = root.resolve("qualification")
+        val generator = """
+          |Compile / sourceGenerators += Def.task {
+          |  val coordination = file(__COORDINATION__)
+          |  val ordinal = __ORDINAL__
+          |  val generated = (Compile / sourceManaged).value / "OverlapQualification.scala"
+          |  if ((coordination / "enabled").isFile) {
+          |    IO.write(coordination / (ordinal + ".started"), java.time.Instant.now.toString)
+          |    if (ordinal != 0) {
+          |      val deadline = System.nanoTime + java.util.concurrent.TimeUnit.SECONDS.toNanos(90)
+          |      while (!(coordination / "1.started").isFile || !(coordination / "2.started").isFile) {
+          |        require(System.nanoTime < deadline, "independent required Compile checks did not overlap")
+          |        Thread.sleep(10L)
+          |      }
+          |    } else {
+          |      require((coordination / "1.finished").isFile && (coordination / "2.finished").isFile,
+          |        "consumer check began before both provider checks")
+          |    }
+          |    val invalid = ordinal == 2 && (coordination / "fail-provider").isFile
+          |    IO.write(generated, "object OverlapQualification { val answer: Int = " +
+          |      (if (invalid) "\"actual compile failure\"" else "42") + " }\n")
+          |    IO.write(coordination / (ordinal + ".finished"), java.time.Instant.now.toString)
+          |  } else IO.write(generated, "object OverlapQualification { val answer: Int = 42 }\n")
+          |  Seq(generated)
+          |}.taskValue
+          |""".stripMargin.replace("__COORDINATION__", coordination.toString.asJson.noSpaces)
+          .replace("__ORDINAL__", n.toString)
+        Files.writeString(build, Files.readString(build) + generator)
+        if (n != 0) {
+          Files.createDirectories(directory.resolve("repository/src/main/java"))
+          Files.writeString(directory.resolve("repository/src/main/java/ProviderInput.java"),
+            "public final class ProviderInput { public static int answer() { return 1; } }\n")
+        }
+        if (n == 0) {
+          // Reuse the normal ScalaTest classpath/mode build, but compile this
+          // unique suite from source in the consumer rather than loading a
+          // same-named parent class through discovery's parent-first loader.
+          TypedSbtHostPlanFixture.buildMetadata(root.resolve("metadata-build"), focusedSource.getClass)
+          val metadataBuild = Files.readString(root.resolve("metadata-build/repository/build.sbt"))
+            .replace(focusedSource.getClass.getName.asJson.noSpaces, focusedSource.suiteName.asJson.noSpaces)
+          Files.writeString(build, Files.readString(build) + "\n" + metadataBuild +
+            "\nTest / classDirectory := baseDirectory.value / \"target\" / \"native-consumer-test-classes\"\n")
+          val testSource = directory.resolve("repository/src/test/scala/Phase7NativeScopedConsumerSpec.scala")
+          Files.createDirectories(testSource.getParent)
+          Files.writeString(testSource, focusedSource.source)
+        }
+        val commands = _setup_commands_(directory, "Equal")
+        commands.zipWithIndex.foreach { (command, index) =>
+          if (index == 2) take(_run_setup_command_(Vector("-C", directory.resolve("repository").toString, "add", "--", ".")))
+          take(_run_setup_command_(command))
+        }
+        // A real remote-only source successor forces nonmerge product checks.
+        take(_run_setup_command_(Vector("clone", "--no-local", directory.resolve("upstream.git").toString, directory.resolve("peer").toString)))
+        val changed = if (n == 0) "src/main/scala/example/Consumer.scala" else "src/main/java/ProviderInput.java"
+        Files.writeString(directory.resolve("peer").resolve(changed), if (n == 0)
+          "package example\nobject Consumer { val answer: Int = Provider.answer + 1 }\n"
+          else "public final class ProviderInput { public static int answer() { return 2; } }\n")
+        Vector(Vector("add", "--", changed), Vector("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "changed consumed source"),
+          Vector("push", directory.resolve("upstream.git").toString, "HEAD:refs/heads/main")).foreach(args =>
+          take(_run_setup_command_(Vector("-C", directory.resolve("peer").toString) ++ args)))
+      }
+    }
+
+    def exercise(root: Path, failedProvider: Boolean): Unit = {
+      import org.goldenport.cncf.job.{InMemoryJobEngine, JobResult}
+      import org.goldenport.protocol.operation.OperationResponse
+      prepareSources(root)
+      Files.createDirectories(root.resolve(".textus/sm-workflow/work.d"))
+      val storage = ThreeWorkflowNormalHostFixture.storagePlan.mapObject(fields => fields.add("records",
+        (fields("records").get.asArray.get :+ Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "storeName" -> "workflow".asJson, "collection" -> collection.asJson)).asJson))
+      val parameters = Map(RepositorySyncDirectoryList.declaration.name -> Vector(0, 1, 2)
+          .map(n => source(root, n).resolve("repository").toString).asJson.noSpaces,
+        ManagedDevelopmentRuntime.declaration.name -> selectedPolicy.asJson.noSpaces,
+        "textus.subsystem.storage.plan" -> storage.noSpaces,
+        "textus.job.scheduler.worker-count" -> "3",
+        RepositorySyncDocumentInputs.declaration.name -> Json.obj("documentPaths" -> Vector("docs").asJson,
+          "consumedPaths" -> Vector("src", "build.sbt", "project").asJson,
+          "reason" -> "Native compiled sources and the exact selected consumer envelope are consumed inputs".asJson).noSpaces)
+      var tree = ""
+      _with_runtime_(root, "Equal", hostParameters = parameters) { (owner, component, actor, prepare) =>
+        def artifact(operation: String, input: Input) = read_control_value[V.ManagedDevelopmentResult](take(
+          owner.executeOperationResponseInContext(Request.of(component = component.name, service = "ManagedDevelopmentService",
+            operation = operation, properties = List(Property("input", GoalPhaseNativeMetadata.record(input.asJson), None))), actor)))
+        artifact("publishDevelopmentArtifact", publicationInput).status shouldBe "published"
+        artifact("selectDevelopmentArtifact", consumerInput).status shouldBe "selected-unverified"
+        artifact("compileDevelopmentConsumer", consumerInput).status shouldBe "verified"
+        // Compile only the child metadata inputs under the existing retained
+        // consumer envelope, then read the exact future fast-forward tree.
+        // Aggregate product checks still execute and collect their own results.
+        prepare { call =>
+          val member = RepositorySyncDirectoryList.Member(identity(0), workspace(0), source(root, 0).resolve("repository").toString,
+            "main", "origin", "main", source(root, 0).resolve("upstream.git").toString, "native-product-test-products")
+          for {
+            observed <- RepositorySyncConsumedInputs.observeC(call.core, member)
+            _ = observed.diagnostic shouldBe None
+            _ = observed.subjects.size shouldBe 1
+            bound = RepositorySyncConsumedInputs.bind(call.core, member,
+              Some(RepositorySyncConsumedInputs.Change(observed, Some(observed))))
+            attempt <- WorkflowManagedProcessExecution.repositoryValidationAttemptC(bound, 1,
+              WorkflowSbtValidation.Kind.TestCompile, Some(workspace(0)))
+            _ = attempt match {
+              case SbtExecutionAttempt.Observed(result) =>
+                result.outcome shouldBe SbtExecutionOutcome.Succeeded
+                result.target.scopedInput.nonEmpty shouldBe true
+              case other => fail("Consumer metadata TestCompile must actually pass under its retained input: " + other)
+            }
+            _ <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.Fetch, workspace(0))
+            tip <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.RemoteTip, workspace(0)).flatMap(_.valueC)
+            metadata <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.CommitMetadata(tip.tip), workspace(0)).flatMap(_.valueC)
+          } yield { tree = metadata.tree.value }
+        }
+      }
+      // The actual TestCompile products are inside this candidate workspace;
+      // the unique suite is absent from discovery's parent loader.
+      val compiled = compiledProducts(root).toRealPath()
+      Files.isRegularFile(compiled.resolve(focusedSource.suiteName.replace('.', '/') + ".class")) shouldBe true
+      intercept[ClassNotFoundException] {
+        Class.forName(focusedSource.suiteName, false, classOf[D.Inventory].getClassLoader)
+      }
+      val scope = D.DiscoveryScope("native-consumer-metadata", "1", Vector(D.ArtifactScope("org.example.Product0",
+        "native-consumer-metadata", "1", tree, compiled, focusedSource.packageName)))
+      val profile = GoalPhaseNativeMetadata.Profile(scope, D.SelectionQuery(purposes = Set(M.Purpose.FOCUSED),
+        explicitSuites = Set(focusedSource.suiteName)), Vector.empty)
+      val focused = RepositorySyncNativeMergeValidation.Check("consumer-focused", 2, WorkflowSbtValidation.Kind.TestOnly,
+        workspace = Some(workspace(0)), metadata = Some(profile))
+      val paths = Vector("src", "build.sbt", "project")
+      val impact = RepositorySyncProgramImpact.Policy(Vector(
+        RepositorySyncProgramImpact.Coverage(productCompile, Vector("src"), paths, "Compile every changed native source"),
+        RepositorySyncProgramImpact.Coverage(focused, Vector("src/main/scala/example/Consumer.scala"), paths,
+          "Execute the actual focused metadata selector under the selected consumer envelope")),
+        Vector(productCompile, focused), Vector("build.sbt", "project"), "Changed build input requires all registered product checks", Vector.empty)
+      val qualification = Files.createDirectories(root.resolve("qualification"))
+      Files.writeString(qualification.resolve("enabled"), "bounded native aggregate qualification\n")
+      if (failedProvider) Files.writeString(qualification.resolve("fail-provider"), "genuine invalid generated Scala source\n")
+      var finalResult = Json.Null
+      var session = ""
+      _with_runtime_(root, "Equal", hostParameters = parameters.updated(RepositorySyncProgramImpact.declaration.name, impact.asJson.noSpaces)) {
+        (owner, component, actor, prepare) =>
+        val engine = component.jobEngine.asInstanceOf[InMemoryJobEngine]
+        engine.schedulerConfig.workerCount shouldBe 3
+        engine.schedulerConfig.autoStartWorkers shouldBe true
+        def invoke(extra: List[Property] = Nil) = read_control_value[V.RepositoryDirectoryBatchResult](take(
+          owner.executeOperationResponseInContext(Request.of(component = component.name, service = "RepositorySyncService",
+            operation = RepositorySyncDirectoryList.syncOperation,
+            properties = extra :+ Property("input", Record.data("syncMode" -> "FULL_STATE"), None)), actor)))
+        val result = invoke()
+        finalResult = DevelopmentOperationalView.json(result.toRecord())
+        session = result.sessionId
+        val rows = result.repositories
+        withClue(finalResult.spaces2) {
+          rows.take(2).map(_.repositoryIdentity) shouldBe Vector(identity(1), identity(2))
+          rows.head.kind shouldBe "Terminal"
+          rows.head.outcome shouldBe "converged"
+          if (failedProvider) {
+            rows(1).kind shouldBe "Wait"
+            rows(1).condition shouldBe Some("IntegrationValidationChecking")
+            result.notStarted shouldBe Vector(identity(0))
+            result.outcome shouldBe "AttentionRequired"
+            Files.exists(qualification.resolve("0.started")) shouldBe false
+          } else {
+            rows.map(_.kind) shouldBe Vector.fill(3)("Terminal")
+            rows.map(_.outcome) shouldBe Vector.fill(3)("converged")
+            result.notStarted shouldBe empty
+            result.outcome shouldBe "Completed"
+            Files.isRegularFile(qualification.resolve("0.started")) shouldBe true
+          }
+        }
+        val starts = Vector(1, 2).map(n => java.time.Instant.parse(Files.readString(qualification.resolve(n + ".started"))))
+        val ends = Vector(1, 2).map(n => java.time.Instant.parse(Files.readString(qualification.resolve(n + ".finished"))))
+        starts.forall(start => ends.forall(end => start.isBefore(end))) shouldBe true
+        val jobs = engine.listJobs(100, persistentOnly = false).flatMap { model => engine.getResult(model.jobId) match {
+          case Some(JobResult.Success(OperationResponse.RecordResponse(record))) =>
+            summon[org.goldenport.convert.ValueReader[V.RepositorySyncAdvanceResult]].readC(record).toOption
+              .filter(v => rows.exists(_.sessionId == v.sessionId)).map(v => model.jobId.value -> v)
+          case _ => None
+        }}
+        jobs.map(_._1).distinct.size shouldBe rows.size
+        val models = jobs.map((id, value) => value.sessionId -> engine.query(take(org.goldenport.cncf.job.JobId.parse(id))).get).toMap
+        if (!failedProvider) {
+          val consumer = models(rows.last.sessionId)
+          rows.take(2).foreach(row => consumer.createdAt.isBefore(models(row.sessionId).updatedAt) shouldBe false)
+        }
+        rows.foreach { row =>
+          val actual = jobs.filter(_._2.sessionId == row.sessionId)
+          actual.size shouldBe 1
+          actual.head._2.kind shouldBe row.kind
+          actual.head._2.outcome.getOrElse("unfinished") shouldBe row.outcome
+        }
+        // Retain exact native IDs, observed intervals and separate business
+        // records as qualification output, never as a synthesized PASS receipt.
+        Files.writeString(root.resolve("qualification-evidence.json"), Json.obj(
+          "aggregate" -> finalResult, "jobs" -> jobs.map((id, value) => Json.obj("jobId" -> id.asJson,
+            "result" -> DevelopmentOperationalView.json(value.toRecord()),
+            "createdAt" -> models(value.sessionId).createdAt.toString.asJson,
+            "terminalAt" -> models(value.sessionId).updatedAt.toString.asJson)).asJson,
+          "requiredCheckIntervals" -> Vector(1, 2).map(n => Json.obj("repository" -> identity(n).asJson,
+            "started" -> Files.readString(qualification.resolve(n + ".started")).asJson,
+            "finished" -> Files.readString(qualification.resolve(n + ".finished")).asJson)).asJson).spaces2)
+        val before = Vector(0, 1, 2).map(n => qualification.resolve(n + ".started"))
+          .filter(Files.exists(_)).map(p => p.toString -> Files.readString(p)).toMap
+        DevelopmentOperationalView.json(invoke(List(Property("sessionId", session, None))).toRecord()) shouldBe finalResult
+        before.foreach((path, bytes) => Files.readString(Path.of(path)) shouldBe bytes)
+        // Native child receipts prove the nonmerge Compile and scoped focused
+        // result reached persistence through the production loop.
+        rows.foreach { row => prepare { call => for {
+          stage <- call.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
+            InstanceIdentity(row.sessionId), source(root, if (row.repositoryIdentity == identity(0)) 0 else if (row.repositoryIdentity == identity(1)) 1 else 2),
+            if (row.kind == "Terminal") "integration-validated" else "validation-result-1")
+        } yield {
+          val state = stage.get.payload.validation.get
+          state.receipts.head.identity shouldBe "index-local"
+          state.receipts.count(_.identity.startsWith("index-")) shouldBe 1
+          if (row.repositoryIdentity == identity(0)) {
+            state.receipts.drop(1).map(_.identity) shouldBe state.selected.map(_.identity)
+            state.selected.last.invocation.nonEmpty shouldBe true
+            state.receipts.last.sbt.get.mode.get.verified shouldBe true
+            state.dependencyInputs.nonEmpty shouldBe true
+          }
+        } } }
       }
     }
   }

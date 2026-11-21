@@ -219,3 +219,151 @@ This semantic worker authored sources only. It ran no validation, independent
 review, sm-workflow, Git mutation, publication, dispatch or provider/network call.
 No finding closure, Submit admission, acceptance commit or whole-Phase completion
 is claimed. Parent/runtime-owned fresh validation and independent review remain.
+
+## P7-D bounded related-workspace connection — 2026-11-21
+
+Original public Request: `283-read-p7-d/response.json` under the existing retained
+Phase7 task root, continuation `ordered-implementation:2370`, expected revision
+2371, Session `14fad7b7a87c61d8d8f2eeb432a65fb4`, Plan2. The Request records
+accepted P7-A/P7-C/P7-DD/P7-B and their original review references. P7-B's final
+review at `275-p7-b-abi-independent-review/review-result.json` accepts its exact
+ABI repair and retains validation2357 (Compile/FixCheck/TestOnly exit0,
+44/44 tests). It expressly leaves cross-process protection and existing-process
+refresh outside that acceptance; this source assignment promotes neither.
+
+Authored a production dependency gate in the existing DirectoryList owner,
+reusing `ManagedDevelopment.Definition.edges`. New batches freeze exact members
+and dependency links, order providers before consumers and retain native source
+tree observations. Missing selected providers, crossed identities and cycles
+refuse before child effects. Failed/waiting/decision-needed/conflicting provider
+results cannot allow consumer Start. An unrelated ready source may progress;
+child outcome/continuation references and old payload compatibility are retained.
+
+A converged provider still supplies no consumer input applicability. Equal source
+trees do not prove equal selected artifacts, and documentation-only tree movement
+does not prove changed consumed dependency inputs. Runtime therefore retains an
+explicit unknown integration diagnostic and leaves that consumer unstarted.
+The unsupported existing-child call is RepositorySync Start/Advance over a
+consumer candidate plus frozen selected provider/overlay input and required
+provider results: current business input has no such validation subject. The
+existing metadata-driven ProgramImpact owner is available for the remaining
+composition, but calling its discovery helper without that admitted subject and
+real build/results would manufacture validation. No new graph/config vocabulary,
+producer build, publication or shared cache mutation is introduced here.
+
+Authored focused graph/order/cycle/missing-provider cases, legacy codec and
+failure/wait/unknown differentiation, and three actual-Git native batch arms
+(equal, documentation-only provider change, provider conflict) in the already
+registered Phase7ManagedDevelopmentSpec. These use three explicit source
+checkouts and local bare fixture remotes; none is the actual named CNCF101
+worktree driver. They retain independent provider results, consumer notStarted,
+exact aggregate recollection/reopen and absence of SBT/artifact publication.
+Fixture input preparation grants no production remote/push authority.
+
+Updated supported-use guidance and the original nine-scenario evidence map.
+P7-WORKSPACE/P7-TS01 need actual dependency-aware validation and concurrency;
+P7-PARALLEL needs the two-lane dispatch/wait/matching continuation observation;
+P7-DAO-A05 still needs persistent-process refresh qualification. CNCF101 must
+receive actual driver evidence and return attributable full acceptance/closure
+through its owner before Phase7 can close. All44 Phase conditions remain in
+force; no source-only/specification-only claim replaces them.
+
+This semantic worker executed no validation, independent review, workflow call,
+Git mutation, publication, app dispatch or provider/network request. No Submit
+acceptance, new check PASS, Step commit or meaningful Phase completion is claimed.
+Parent/runtime-owned checks and independent review apply to this changed tree.
+
+## P7-D issues19/20 bounded repair — 2026-11-21
+
+Consumed the unchanged public RepairStep Request retained at
+`293-p7-d-consumer-validation-concurrency-repair/response.json`, continuation
+`ordered-repair:2430`, expected revision2431. Only the two original independent
+findings are assigned. Existing accepted prefix, failures and repair counts
+remain untouched.
+
+Authored a narrow existing-envelope reader and before/after consumed subject,
+consumer dependency gate and exact scoped-input inheritance through native
+metadata discovery/checks. Actual native nonmerge tree deltas and external input
+changes use the ordinary impact selector; complete subjects bind receipt reuse.
+A known unchanged subject can proceed without product checks; genuine unknowns,
+provider failures, multiple independent input envelopes and localProject without
+an execution adapter remain blocked. Added focused gate/codec/receipt identity
+regressions and an actual immutable-envelope read in the existing native
+producer/publication/consumer fixture. These are authored tests, not executions.
+
+Authored per-child ActionTask jobs, launch lineage, exact ID collection and
+foreground joining. Independent ready jobs may overlap only on an actual
+multi-worker engine with sufficient capacity; the installed single-worker
+default uses synchronous native tasks and supplies no overlap evidence. CNCF
+Subsystem.scala currently seeds only default/profile JobEngine construction;
+normal profile uses SchedulerConfig.default(workerCount=1). Sync job execution
+does not create the fresh response cell provided by the private Async owner.
+A common multi-worker host resolver or scoped public isolated Sync child API is
+the remaining concrete CNCF dependency. No custom executor, unsafe shared-cell
+parallelism, new engine, shared-cache lock or CNCF change was introduced here.
+
+No validation, independent review, workflow invocation, Git mutation, publication,
+network/provider call, finding closure, Submit acceptance or Phase completion
+was performed by this semantic worker. Fresh checks and independent acceptance
+remain with the parent/runtime; issue20's actual concurrency requirement is
+unresolved. Earlier P7-D missing-subject descriptions record historical evidence
+and are superseded as source descriptions only by this bounded repair.
+
+A second exact CNCF limitation was established during scoped-check binding:
+`SbtScopedInputAdmission.applyC` in canonical `SbtExecution.scala` currently
+admits consumer scoped input only for Compile, not TestCompile or TestOnly.
+Ordinary metadata discovery and required FULL batches need those latter
+operations with the same immutable consumer envelope. Dropping the scoped input
+would validate a different dependency set and is not a fallback. The authored
+caller retains admission/setup failure honestly. Issue19's known unchanged/no-check
+path is authored, while changed selected-input metadata qualification is also
+blocked on this bounded upstream admission contract. Explicit Git-only edges
+may accompany the one selected scoped-consumption edge; multiple independent
+consumer envelopes and localProject execution remain outside the adapter.
+
+
+## P7-D resumed consumer repair after dependency adoption — 2026-11-22
+
+The existing Session `14fad7b7a87c61d8d8f2eeb432a65fb4`, Plan2, issued
+RepairStep `ordered-repair:2434`, revision2435, preserves issues19/20, accepted
+Steps, all earlier checks, failures and counters. The public Request is retained
+at `300-read-p7-d-post-dependency-repair/response.json`. The exact approved CNCF
+delivery `P7-D-CNCF-SCOPED-VALIDATION-JOB-CAPACITY-01` is formally attached at
+`dependencies/p7-d-cncf-scoped-validation-job-capacity/adopted.json`. Its
+canonical commit is `bcc3a50dcbab4c5df6eea2b20dbe522bc335b0f7`, tree
+`27283c42a2390a6473064c252a08199c54915202`. Producer validation/review/publication
+receipts apply to that producer subject and do not prove consumer activation.
+
+The earlier upstream gaps now have delivered API/configuration: consumer scoped
+TestCompile discovery and metadata-selected TestOnly under the exact existing
+selection envelope, and trusted bounded `textus.job.scheduler.worker-count`
+(default1, range1..64; manual remains1 without auto-start). The consumer source
+already forwards the same scoped input to both native targets. Its unchanged
+permissions require the executing Component, exact build workspace Manage,
+selection-owner ReadOnly and independent operation-specific SBT grants. No
+producer operation, publication authority or fallback dependency resolution is
+added by this repair.
+
+The retained continuation audit at
+`296-p7-d-validation-continuation-audit/qualification.md` identified a missed
+mixed-job foreground-join path. Repaired collection now joins every confirmed
+ID even when aggregate state or an earlier wait is uncertain, retains each
+actual returned success/failure receipt, and collects available native business
+results before returning. An Indeterminate aggregate may observe its retained
+confirmed IDs on a subsequent call without replaying missing-ID submissions.
+No attempt is recreated, no unknown effect is promoted to success, and earlier
+independent results are preserved.
+
+Authored narrow regressions in the existing Phase7ManagedDevelopmentSpec for
+mixed unconfirmed submission/first wait failure/later success and failure,
+including an already-Indeterminate aggregate. Added exact scoped target
+assertions using the fixture's already-written real immutable envelope: discovery
+and selected TestOnly preserve the same scope, selection, owner, build and path;
+foreign build, duplicate binding and unknown applicability are refused.
+These are authored tests only. This semantic worker ran no validation, review,
+workflow command, Git mutation, publication or provider/network operation.
+Parent/runtime-owned fresh compile/checks, native consumer discovery/TestOnly,
+known-unchanged and changed consumption driver, actual independent provider
+overlap and mixed termination collection, independent review, the outstanding
+multi-lane/persistent-process obligations, CNCF101 full closure and Phase7 closure
+remain unclaimed and required at their existing boundaries.

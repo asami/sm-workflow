@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -351,10 +351,21 @@ private[smworkflow] object RepositorySyncProgramImpact {
               profile.supplemental, workspace), loader).flatMap(_.requireRunnableC)
             finally loader.close()
           } catch { case NonFatal(error) => N.invalid("Ordinary project discovery is unavailable: " + error.getClass.getSimpleName) }
-          expanded = selection.operations.zipWithIndex.map { (bound, index) =>
-            check.copy(identity = check.identity + "-operation-" + (index + 1),
-              invocation = Some(V.Invocation(check.identity, selection.inventory, bound.operation.reference,
-                bound.intent.target.validationMode.get)))
+          operations <- selection.operations.foldLeft(Consequence.success(Vector.empty[B.BoundOperation])) { (prior, bound) => for {
+            values <- prior
+            // Focused selection can bind a mode-less operation. Use the same
+            // default variants as operationC without replacing explicit modes.
+            variants <- if (bound.intent.target.validationMode.nonEmpty) Consequence.success(Vector(bound))
+              else B.bindVariantsC(selection.inventory, bound.operation.reference, workspace)
+            next = values ++ variants
+            _ <- if (next.size <= 16) Consequence.unit else N.invalid("Ordinary selected variants exceed the existing 16-check bound")
+          } yield next }
+          expanded <- operations.zipWithIndex.foldLeft(Consequence.success(Vector.empty[V.Check])) { case (prior, (bound, index)) => for {
+            values <- prior
+            mode <- bound.intent.target.validationMode.map(Consequence.success)
+              .getOrElse(N.invalid("Ordinary selected operation has no bound validation mode"))
+          } yield values :+ check.copy(identity = check.identity + "-operation-" + (index + 1),
+            invocation = Some(V.Invocation(check.identity, selection.inventory, bound.operation.reference, mode)))
           }
         } yield expanded
       }

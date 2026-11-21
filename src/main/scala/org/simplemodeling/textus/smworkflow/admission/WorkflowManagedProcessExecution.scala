@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -93,7 +93,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
-    target = SbtTarget(workspace)
+    target <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace))
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
@@ -116,27 +116,28 @@ private[smworkflow] object WorkflowManagedProcessExecution {
           s.suiteClassName == bound.operation.selector.suiteClassName && s.testName == bound.operation.selector.testName))
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation requires its exact bound TestOnly selector")
     _ <- WorkspaceId.parseC(bound.intent.target.workspaceId.value)
+    target <- RepositorySyncConsumedInputs.targetC(core, bound.intent.target)
     execution = new Execution(core)
-    result <- execution.runSbtC(execution.prepareSbt(bound.intent.target, WorkflowSbtValidation.Kind.TestOnly))
-    _ <- if (result != null && result.operation == bound.intent.operation && result.target == bound.intent.target)
+    result <- execution.runSbtC(execution.prepareSbt(target, WorkflowSbtValidation.Kind.TestOnly))
+    _ <- if (result != null && result.operation == bound.intent.operation && result.target == target)
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation result differs from its exact selected target or operation")
   } yield result
 
   def discoveryBuildAttemptC(core: ActionCall.Core, workspaceIdentity: String): Consequence[SbtExecutionAttempt] = for {
     workspace <- WorkspaceId.parseC(workspaceIdentity)
-    target = SbtTarget(workspace, validationDiscovery = true)
+    target <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationDiscovery = true))
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.prepareDiscovery(target))
-    _ <- _attempt_target_c(result, target, SbtOperation.TestCompile)
+    _ <- attemptTargetC(result, target, SbtOperation.TestCompile)
   } yield result
 
   def validationBatchAttemptC(core: ActionCall.Core, workspaceIdentity: String,
     cases: Vector[SbtValidationMode.Case]): Consequence[SbtExecutionAttempt] = for {
     workspace <- WorkspaceId.parseC(workspaceIdentity)
-    target = SbtTarget(workspace, validationBatch = cases)
+    target <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationBatch = cases))
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, WorkflowSbtValidation.Kind.TestOnly))
-    _ <- _attempt_target_c(result, target, SbtOperation.TestOnly)
+    _ <- attemptTargetC(result, target, SbtOperation.TestOnly)
   } yield result
 
   /** Admission and uncertain execution remain distinct from observed process facts. */
@@ -147,7 +148,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
-    target = SbtTarget(workspace, validationEstimate = estimate)
+    target <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationEstimate = estimate))
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
@@ -157,7 +158,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     }
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))
-    _ <- _attempt_target_c(result, target, operation)
+    _ <- attemptTargetC(result, target, operation)
   } yield result
 
   def validationOperationAttemptC(core: ActionCall.Core, bound: B.BoundOperation): Consequence[SbtExecutionAttempt] = for {
@@ -168,12 +169,21 @@ private[smworkflow] object WorkflowManagedProcessExecution {
           s.suiteClassName == bound.operation.selector.suiteClassName && s.testName == bound.operation.selector.testName))
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation requires its exact bound TestOnly selector")
     _ <- WorkspaceId.parseC(bound.intent.target.workspaceId.value)
+    target <- RepositorySyncConsumedInputs.targetC(core, bound.intent.target)
     execution = new Execution(core)
-    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(bound.intent.target, WorkflowSbtValidation.Kind.TestOnly))
-    _ <- _attempt_target_c(result, bound.intent.target, bound.intent.operation)
+    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, WorkflowSbtValidation.Kind.TestOnly))
+    _ <- attemptTargetC(result, target, bound.intent.operation)
   } yield result
 
-  private def _attempt_target_c(value: SbtExecutionAttempt, target: SbtTarget, operation: SbtOperation): Consequence[Unit] = {
+  private[admission] def validationOperation(kind: WorkflowSbtValidation.Kind): SbtOperation = kind match {
+    case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
+    case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
+    case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
+    case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+    case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
+  }
+
+  private[admission] def attemptTargetC(value: SbtExecutionAttempt, target: SbtTarget, operation: SbtOperation): Consequence[Unit] = {
     val matches = value match {
       case SbtExecutionAttempt.Observed(result) => result != null && result.target == target && result.operation == operation
       case SbtExecutionAttempt.AdmissionRejected(actual, selected, conclusion) => actual == target && selected == operation && conclusion != null
@@ -192,7 +202,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     target = SbtTarget(workspace)
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.preparePublication(target))
-    _ <- _attempt_target_c(result, target, SbtOperation.PublishLocal)
+    _ <- attemptTargetC(result, target, SbtOperation.PublishLocal)
   } yield result
 
   /** The host fixes the selected Step's message and commit identity. */

@@ -154,7 +154,7 @@ private[smworkflow] object ManagedDevelopment {
     d.edges.find(_.identity == input.publicationEdge.getOrElse(e.identity)).filter(samePublisher(_, e))
       .map(Consequence.success).getOrElse(invalid("publication edge is not an explicitly declared matching producer/batch binding"))
 
-  private def selectionC(d: Definition, e: Edge, input: Input, p: Port): Consequence[Selection] = for {
+  private[admission] def selectionC(d: Definition, e: Edge, input: Input, p: Port): Consequence[Selection] = for {
     row <- p.loadC(key(d, e, "selection", input.selection))
     s <- row.map(decodeC[Selection]).getOrElse(invalid("selection is unavailable; ordinary fallback is forbidden"))
     _ <- if (s.identity == input.selection && samePublisher(s.publication.edge, e) && s.publication.edge.identity == input.publicationEdge.getOrElse(e.identity) && s.publication.scope == d.scope &&
