@@ -197,25 +197,6 @@ or treat generated publication metadata as exempt from the final clean check.
 
 ## Directory-list entry and explicit lower-level entry
 
-For main-directed synchronization, the default `mainIntegration: "local-first"`
-route is selected working checkout -> canonical local main -> configured remote
-main. `direct` skips the canonical checkout; `confirm` uses the runtime's genuine
-route decision. `uncommittedPolicy` selects `auto-commit` (default), `confirm` or
-`error`. The matching properties are `sm-workflow.repository-sync.main-integration`
-and `sm-workflow.repository-sync.uncommitted-policy`. These input fields and
-properties select new work; they do not retarget a captured Session or authorize
-committing excluded changes. Non-main targets keep their configured destination.
-Use the product's `docs/spec/repository-sync-local-main-integration.md` and
-`docs/spec/repository-sync-policy-selection.md` for the selected route.
-
-For a separate canonical clone, normal host configuration must map the selected
-source workspace to its admitted main workspace through
-`sm-workflow.repository-sync.canonical-main-workspaces` and include the declared
-source-fetch binding. The runtime verifies actual repository history and owns
-both hops. A missing mapping is same-Session setup, not permission to bypass
-local main, start again or run caller-owned Git. A successful local hop alone
-does not establish remote convergence; report the actual completed route.
-
 For one or more authorized configured checkouts, use the ordinary
 `RepositorySyncService.syncRepositoryDirectories` with
 `input={"syncMode":"FULL_STATE"}`. The normal
@@ -242,6 +223,11 @@ The Session retains both policies. For `confirm`, present the returned Human
 choices and submit the genuine answer with its independent host evidence through
 `submitRepositorySyncPolicyDecision`, then let the caller Advance. Route
 selection and acceptance of dirty-work preparation are separate choices.
+The matching host properties are `sm-workflow.repository-sync.main-integration`
+and `sm-workflow.repository-sync.uncommitted-policy`. These choices select new
+work and preserve the captured Session target and excluded changes. See
+`docs/spec/repository-sync-local-main-integration.md` and
+`docs/spec/repository-sync-policy-selection.md` in the product repository.
 
 Resolve the directory property through normal definition-file or invocation-time
 configuration. For an explicitly requested list, pass exactly those authorized
@@ -261,6 +247,14 @@ property selects existing admitted workspace/Git bindings. Each participating
 checkout needs a unique binding with its actual root, source branch and intended
 remote target. Resolve missing or ambiguous bindings through the selected
 Subsystem's normal host configuration, which owns process plans and grants.
+
+For a separate canonical clone, normal host configuration must map the selected
+source workspace to its admitted main workspace through
+`sm-workflow.repository-sync.canonical-main-workspaces` and include the declared
+source-fetch binding. The runtime verifies actual repository history and owns
+both hops. A missing mapping is same-Session setup, not permission to bypass
+local main, start again or run caller-owned Git. A successful local hop alone
+does not establish remote convergence; report the actual completed route.
 
 Keep `textus.subsystem.process-execution.plan` in its normally admitted selected
 Subsystem file or CAR defaults. An invocation-time `--textus.config.file` is
@@ -349,6 +343,11 @@ When ordinary Session-candidate selection chooses static FULL validation,
 successful Compile and Test receipts can satisfy code assessment. The actual
 Test report must show at least one executed successful test and no failures,
 cancellations or aborted suites. Apply any other selected checks or review.
+For a retained assessment stop with a complete static FULL check batch on
+the same candidate, use ordinary `syncRepositoryDirectories` with the existing
+aggregate Session. The runtime can re-evaluate the saved Test capture, including
+multiple complete ScalaTest reports. Retain the original result reference and
+let the runtime distinguish this case from an unfinished or uncertain effect.
 
 Repeated continuation collects saved effects/results in the same Session.
 A retained integration intent is observed without reissuing merge/fast-forward;
@@ -362,7 +361,16 @@ See the [runtime orchestration contract](../../docs/spec/repository-sync-runtime
 
 ## Continue retained validation or review
 
-Call `describeRepositorySyncValidationContinuation --sessionId` for the existing
+For a known completed merge check failure, use ordinary
+`advanceRepositorySync --sessionId <childSessionId>` on that child. Re-reading
+the aggregate can return its existing same-revision Wait. The child Advance
+reuses the recorded results and can issue the normal repair Request. Follow
+its actual `submitOperation` and issued context, then continue the original
+aggregate. If it returns Wait or a refusal, report the actual condition and
+retained reference. Keep the failed receipt and checks that already succeeded.
+
+For a continuation that needs an explicit recovery choice, call
+`describeRepositorySyncValidationContinuation --sessionId` on the existing
 child Session. Use the returned target, choices and evidence requirements from
 the [validation continuation contract](../../docs/spec/repository-sync-validation-continuation.md).
 The same public operations describe several conditions with different lifecycle
