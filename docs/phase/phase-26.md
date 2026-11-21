@@ -56,3 +56,7 @@ A developer can start the existing sm-workflow Server, connect **both Codex CLI 
 ## Scheduling
 
 Plan as the smallest practical dual-CLI interoperability slice, using existing server/CLI foundations. Do not reorder the currently selected stabilization → remaining Phase 7 → Phase 24 → Phase 25 sequence merely by creating this Phase. Assess and explicitly select a delivery slot after checking concrete prerequisites. No Phase/Session is started by this plan.
+
+## Scheduling decision — 2026-11-22
+
+Adopted execution order places Phase 26 **after Phase 23 and before Phase 27**, following Phases 24, 28 and 18. This delays common Server/multi-CLI architecture work until strategic convergence is strengthened. Keep Phase 26's existing functional scope and acceptance unchanged. Phase 25 is deferred; inspect concrete provider/Task API prerequisites and address only required gaps through normal owners. No Session starts from this planning change.
