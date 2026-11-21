@@ -13,7 +13,7 @@ import org.goldenport.protocol.Request
   * Standard borrows the existing mapping. Opt-in mappings are host declarations,
   * never a model table, observed availability or permission to execute.
   * @since   Oct. 29, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOperatingProfiles {
@@ -26,11 +26,13 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   final case class Concrete(identity: String, provider: String, model: String, controls: Map[String, String]) derives Codec.AsObject
   final case class Capture(selection: Selection, reasoningClass: Option[String], mappingIdentity: Option[String],
     mappingRevision: Option[String], configured: Option[Concrete], selected: Option[Concrete], fallback: Option[Concrete] = None,
-    dispatch: Option[GoalPhaseDispatchPolicy.Capture] = None)
+    dispatch: Option[GoalPhaseDispatchPolicy.Capture] = None,
+    providerTakeover: Option[GoalPhaseProviderTakeover.Evidence] = None)
   object Capture {
     private val _decoder = deriveDecoder[Capture]
     given Codec.AsObject[Capture] = Codec.AsObject.from(io.circe.Decoder.instance(cursor =>
-      if (cursor.downField("dispatch").focus.contains(Json.Null)) Left(io.circe.DecodingFailure("dispatch must be absent or a retained policy", cursor.history))
+      if (Vector("dispatch", "providerTakeover").exists(key => cursor.downField(key).focus.contains(Json.Null)))
+        Left(io.circe.DecodingFailure("Dispatch and takeover must be absent or retained records", cursor.history))
       else _decoder(cursor)),
       deriveEncoder[Capture].mapJsonObject(_.filter { case (_, value) => !value.isNull }))
   }
@@ -154,7 +156,9 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     * Actual model/effort remains with later execution evidence, never this record.
     */
   def bindFreshC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], d: GoalPhaseNativeRun.Declaration,
-    start: Option[Selection], isolateContext: Boolean = false): Consequence[WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]] = for {
+    start: Option[Selection], isolateContext: Boolean = false,
+    failureHistory: Vector[GoalPhaseProviderTakeover.Failure] = Vector.empty):
+    Consequence[WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]] = for {
     order <- Option(work).map(_.current) match {
       case Some(value: WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]) => Consequence.success(value)
       case _ => invalid("fresh profile capture requires a WorkOrder")
@@ -165,7 +169,12 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
       else invalid("already issued work must retain its profile and disposition")
     resolved <- captureFreshC(context(d), input.kind, GoalPhaseDispatchPolicy.classification(input),
       order.requirement, start, isolateContext)
-    captured = input.copy(operatingProfile = Some(resolved._2))
+    profile = resolved._2
+    takeover = if (input.kind == "RepairStep" && input.stepIdentity.nonEmpty && failureHistory.nonEmpty)
+      profile.dispatch.map(GoalPhaseProviderTakeover.select(_, failureHistory)) else None
+    captured = input.copy(operatingProfile = Some(takeover.fold(profile) { case (dispatch, evidence) =>
+      profile.copy(dispatch = Some(dispatch), providerTakeover = evidence)
+    }))
   } yield work.copy(current = order.copy(requirement = resolved._1,
     request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
 
@@ -213,6 +222,8 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   // Logical dispatch preserves optional classification; concrete mappings require it.
   def captureValid(value: Capture): Boolean = value != null && selectionValid(value.selection) &&
     value.dispatch != null && value.dispatch.forall(GoalPhaseDispatchPolicy.valid) &&
+    value.providerTakeover != null &&
+    value.providerTakeover.forall(evidence => value.dispatch.exists(GoalPhaseProviderTakeover.valid(evidence, _))) &&
     value.reasoningClass != null && value.reasoningClass.forall(_name) && value.mappingIdentity != null &&
     value.mappingRevision != null && value.configured != null && value.selected != null &&
     value.mappingIdentity.forall(_name) && value.mappingRevision.forall(_name) &&
@@ -226,7 +237,10 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   def admitExecutionC(capture: Option[Capture], evidence: ExecutionEvidence): Consequence[Unit] =
     capture.flatMap(_.selected) match {
       case None if capture.flatMap(_.dispatch).nonEmpty =>
-        if (evidence != null && evidence.execution.exists(o => capture.get.dispatch.get.candidates.contains(o.profileIdentity))) Consequence.unit
+        if (evidence != null && evidence.execution.exists(o => capture.get.dispatch.get.candidates.contains(o.profileIdentity) &&
+            capture.get.providerTakeover.forall(t => o.executorContextIdentity != t.departedExecutor &&
+              !evidence.references.exists(r => r.identity == t.departedResult && r.revision == t.departedResultRevision))))
+          Consequence.unit
         else invalid("execution observation is outside the retained logical candidate chain")
       case None => Consequence.unit // Historical or unconfigured standard has no invented concrete selection.
       case Some(selected) =>

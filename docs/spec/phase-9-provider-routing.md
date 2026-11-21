@@ -30,3 +30,22 @@ state: retain each state before the next effect, and do not redispatch a
 started or uncertain attempt. Socket availability is not evidence that a
 provider is configured or that a call succeeded. No live qualification has
 been established by these source changes.
+
+## Editor takeover from native validation
+
+The ordered Goal Phase connects a completed delegated editor's execution
+observation to the next authenticated terminal Step validation. Two distinct
+completed assignments under the same admitted editor profile can establish
+recurrence when the same candidate fails the same required Compile, TestOnly or
+Test check. This uses the selected check and adds no test runs. The next
+normally authorized RepairStep starts at the next role in the
+captured editor dispatch chain. If the chain has no next role, existing routing
+and repair limits apply. A caller can dispatch only an available editor for the
+issued repair capability. The supplied review API still accepts review work only.
+
+The issued operating profile records why the role changed and points to the
+prior attempt and both validation records. Later repairs continue from that
+role within the same Step. The runtime restores this selection from contiguous
+native history, issues each RepairStep through its ordinary Continuation, and
+admits completion against the captured role chain. The selected Plan, candidate,
+validation and repair accounting remain with their current native owners.

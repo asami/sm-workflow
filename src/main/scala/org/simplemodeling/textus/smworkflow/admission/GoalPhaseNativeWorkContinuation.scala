@@ -318,6 +318,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     issuedStepReviews: Set[(String, Long)] = Set.empty,
     metricProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
     metricRequests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
+    providerFailures: Vector[GoalPhaseProviderTakeover.Failure] = Vector.empty,
     releaseDependency: Option[R.Progress] = None,
     prerequisiteRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Progress] = None,
     prerequisiteUnknownDirection: Option[W.Saved] = None,
@@ -2808,16 +2809,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else _paused_c(source, cursor.copy(validation = Some(value)),
                 "Actual metadata selection and completed check prefix are retained. Any unresolved check intent remains non-replayable.")
             } yield result
-            case Some(value) => for {
-              state <- GoalPhaseNativeValidation.observedStateC(cursor.controller, value.payload,
-                value.record.identity.value + ":ordered-validation:" + value.payload.sourceRevision + ":validation", GoalPhaseNativeCandidate.workPaths(candidate.payload))
-              record <- _native_record_c(source, cursor.from, value.record, "ordered-validation:", state.stage)
-              issues <- GoalPhaseFixIssues.validationC(source.current.identity.value, cursor.controller.plan.repository,
-                cursor.issues, value.payload,
-                value.record.identity.value + ":ordered-validation:" + value.payload.sourceRevision + ":validation")
-              result <- _walk_c(source, cursor.copy(from = record, controller = state,
-                validation = Some(value.copy(record = record)), issues = issues), soughtwork, soughthuman, soughtrecording, core, historyonly)
-            } yield result
+            case Some(value) =>
+              val reference = _provider_validation_reference(value)
+              for {
+                state <- GoalPhaseNativeValidation.observedStateC(cursor.controller, value.payload,
+                  reference, GoalPhaseNativeCandidate.workPaths(candidate.payload))
+                record <- _native_record_c(source, cursor.from, value.record, "ordered-validation:", state.stage)
+                issues <- GoalPhaseFixIssues.validationC(source.current.identity.value, cursor.controller.plan.repository,
+                  cursor.issues, value.payload, reference)
+                failure = if (state.stage == O.Stage.Repair)
+                  GoalPhaseProviderTakeover.observe(cursor.controller, cursor.lastresult, value.payload, reference) else None
+                failures = failure.map(current => (cursor.providerFailures.filter(_.scope == current.scope) :+ current).takeRight(2))
+                  .getOrElse(Vector.empty)
+                result <- _walk_c(source, cursor.copy(from = record, controller = state,
+                  validation = Some(value.copy(record = record)), issues = issues, providerFailures = failures),
+                  soughtwork, soughthuman, soughtrecording, core, historyonly)
+              } yield result
           }
         } yield result
       }
@@ -3014,6 +3021,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       context <- _review_context_c(cursor.copy(controller = controller), input.kind)
       checkfailure <- _check_failure_context_c(cursor.copy(controller = controller), input.kind)
       publicationfailure <- _publication_failure_context_c(cursor.copy(controller = controller), input.kind)
+      _ <- if (input.operatingProfile.forall(GoalPhaseProviderTakeover.retained(_, _provider_failures(cursor, input.kind))))
+        Consequence.unit else F.invalid("Retained provider takeover differs from the native validation and completion history")
       _ <- if (input.instanceIdentity == source.current.identity.value && input.sourceRevision == cursor.from.revision.value.toString &&
           input.kind == semantic.key.kind.toString && input.stepIdentity == semantic.key.step && input.generation == semantic.key.generation &&
           input.originalBase == semantic.originalBase && input.completed == semantic.completed &&
@@ -3689,7 +3698,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
           cursor.dependencyApprovals, cursor.dependencyAdmission, cursor.dependencyChain, cursor.dependencySourceDirection,
           cursor.consumptionDirection, cursor.stepReviewRequest.map(_.reason), _source_history_failure_provenance(cursor))
-        plan <- _issue_assigned_c(draft.copy(validation = cursor.validation), core)
+        plan <- _issue_assigned_c(draft.copy(validation = cursor.validation), _provider_failures(cursor, input.kind), core)
         wire <- _work_output_c(plan, core)
       } yield NativeWorkflowOperationOutput.withFindingRecording(wire.copy(validation =
         cursor.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))), cursor.findings)
@@ -3795,7 +3804,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           checks.map(_.identity) == selected.map(_.identity)
       } yield GoalPhaseStepTriage.Context(GoalPhaseNativeCandidate.workPaths(candidate.payload), diff, checks, assessment)
 
-    private def _issue_assigned_c(plan: Prepared, core: ActionCall.Core): Consequence[Prepared] = for {
+    private def _provider_validation_reference(value: GoalPhaseNativeValidation.Saved): String =
+      value.record.identity.value + ":ordered-validation:" + value.payload.sourceRevision + ":validation"
+
+    private def _provider_failures(cursor: Cursor, kind: String): Vector[GoalPhaseProviderTakeover.Failure] =
+      if (kind == "RepairStep" && cursor.validation.exists(value => cursor.providerFailures.lastOption.exists(last =>
+        last.validation == _provider_validation_reference(value)))) cursor.providerFailures
+      else Vector.empty
+
+    private def _issue_assigned_c(plan: Prepared, failureHistory: Vector[GoalPhaseProviderTakeover.Failure],
+      core: ActionCall.Core): Consequence[Prepared] = for {
       _ <- GoalPhaseReleaseRepairContinuation.beforeWorkC(d, core, plan.input)
       intent <- plan.intent.map(Consequence.success).getOrElse(F.invalid("retained work cannot be resuspended"))
       issued <- plan.source.storage.bindIssuedC(F.completionOperation, S.inputCodec)
@@ -3815,7 +3833,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         plan.input.review.toVector.flatMap(_.dependencyValidations).flatMap(_.dependencySource))
         else Consequence.unit
       work <- GoalPhaseOperatingProfiles.bindFreshC(plan.work, d, plan.source.started.receipt.payload.value.operatingProfile,
-        isolateContext = plan.input.kind == "TriageStep")
+        isolateContext = plan.input.kind == "TriageStep", failureHistory = failureHistory)
       captured = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
       _ <- issued.suspendC(intent, work)(using core.executionContext)
     } yield plan.copy(work = work, input = captured)
