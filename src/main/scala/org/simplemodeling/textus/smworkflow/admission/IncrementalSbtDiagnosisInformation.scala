@@ -17,7 +17,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Common Evidence retains immutable delivered batches; its Journal supplies a
   * paged case history. No work assignment, repair charge or execution occurs.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object IncrementalSbtDiagnosisInformation {
@@ -26,14 +27,18 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   final case class Selection(identity: String, kind: String, reason: String, check: Option[String],
     stream: Option[String], occurrenceLine: Option[Int], path: Option[String])
   final case class Item(selection: Selection, status: String, coverage: String, sourceLoss: String,
-    locator: String, text: Option[String], message: String)
+    locator: String, text: Option[String], message: String, hygiene: Vector[GoalPhaseCompilePackage.Hygiene] = Vector.empty)
   final case class Batch(schemaVersion: String, work: String, revision: String,
     requestIdentity: String, candidate: Option[GoalPhaseOrderedProgression.Snapshot],
     observedAt: String, resolution: String, items: Vector[Item])
   given Encoder[Selection] = deriveEncoder
   given Decoder[Selection] = deriveDecoder
-  given Encoder[Item] = deriveEncoder
-  given Decoder[Item] = deriveDecoder
+  given Encoder[Item] = deriveEncoder[Item].mapJsonObject(fields =>
+    if (fields("hygiene").exists(_.asArray.exists(_.isEmpty))) fields.remove("hygiene") else fields)
+  private val _itemDecoder: Decoder[Item] = deriveDecoder
+  given Decoder[Item] = Decoder.instance(cursor =>
+    if (cursor.downField("hygiene").succeeded) _itemDecoder(cursor)
+    else _itemDecoder.decodeJson(cursor.value.mapObject(_.add("hygiene", Json.arr()))))
   given Encoder[Batch] = deriveEncoder
   given Decoder[Batch] = deriveDecoder
 
@@ -223,6 +228,13 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   def deliverC(store: CommonEvidence.Storage, policy: CommonEvidence.Policy, selectedsource: CommonEvidence.Source,
     work: WorkContext, input: V.GoalPhaseDiagnosticInformationInput, files: SourceReader, clock: java.time.Clock,
     journal: (CommonEvidence.Allocation, CommonEvidence.Observation) => Consequence[V.JournalRecordingState]):
+    Consequence[(Batch, V.EvidenceRecordingState)] =
+    _deliver_c(store, policy, selectedsource, work, input, selections => itemsC(work, selections, files), clock, journal)
+
+  private def _deliver_c(store: CommonEvidence.Storage, policy: CommonEvidence.Policy, selectedsource: CommonEvidence.Source,
+    work: WorkContext, input: V.GoalPhaseDiagnosticInformationInput,
+    prepareC: Vector[Selection] => Consequence[Vector[Item]], clock: java.time.Clock,
+    journal: (CommonEvidence.Allocation, CommonEvidence.Observation) => Consequence[V.JournalRecordingState]):
     Consequence[(Batch, V.EvidenceRecordingState)] = {
     val id = CommonEvidence.identity(selectedsource)
     val selections = input.selections.map(_selection)
@@ -248,7 +260,7 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
         result <- recordedC(batch, state, Some(allocation -> observed))
       } yield result
       case None => for {
-        items <- itemsC(work, selections, files)
+        items <- prepareC(selections)
         resolution = if (items.forall(_.status == "unavailable")) "no-new-information"
           else if (items.exists(_.status != "available")) "partial-information" else "information-available"
         batch = Batch("sm-workflow.diagnostic-information.v1", input.issuedWorkContext.continuationId,
@@ -263,13 +275,27 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   def resolveC(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
     work: GoalPhaseNativeWork.Request, input: V.GoalPhaseDiagnosticInformationInput): Consequence[V.GoalPhaseDiagnosticInformationResult] = {
     def result(status: String, message: String, batch: Option[Batch], recording: Option[V.EvidenceRecordingState],
-      history: DevelopmentJournalEvidence.ProducerPage) = {
+      history: DevelopmentJournalEvidence.ProducerPage, hygieneJournal: Vector[Json] = Vector.empty) = {
       val known = recording.flatMap(_.evidence).exists(input.knownEvidence.contains)
       val items = batch.toVector.flatMap(_.items).map { item =>
-        val json = item.asJson.deepMerge(Json.obj("observedAt" -> Json.fromString(batch.get.observedAt),
-          "candidateApplicability" -> Json.fromString(if (item.selection.kind == "source-file") "unverified" else "retained-check"),
-          "delivery" -> Json.fromString(if (known) "reference-already-known" else "payload")))
-        GoalPhaseNativeMetadata.record(if (known) json.mapObject(_.remove("text")) else json)
+        val compilePackage = item.selection.kind == GoalPhaseCompilePackage.kind
+        val candidateSource = item.selection.kind == GoalPhaseCompilePackage.sourceKind
+        val referenceOnly = compilePackage || known
+        val retained = recording.exists(r => r.status == "stored" && r.evidence.nonEmpty)
+        val delivery = if (compilePackage && item.text.nonEmpty && retained) "retained-package-reference"
+          else if (compilePackage) "package-unavailable"
+          else if (known) "reference-already-known" else "payload"
+        val projected = if (compilePackage && item.text.nonEmpty && !retained) item.copy(
+          status = "unavailable", coverage = "agent-required", message = "Package retention unavailable") else item
+        val applicability = if (candidateSource || compilePackage)
+          (if (projected.status == "available") "candidate-tree" else "unverified")
+          else if (item.selection.kind == "source-file") "unverified" else "retained-check"
+        val fields = Json.obj("observedAt" -> batch.get.observedAt.asJson,
+          "candidateApplicability" -> applicability.asJson, "delivery" -> delivery.asJson)
+        val projection = if (referenceOnly) projected.asJson.mapObject(_.remove("text")) else projected.asJson
+        val json = projection.deepMerge(fields)
+        GoalPhaseNativeMetadata.record(if (compilePackage && hygieneJournal.nonEmpty)
+          json.mapObject(_.add("hygieneJournal", Json.fromValues(hygieneJournal))) else json)
       }
       val summaries = history.entries.map(e => GoalPhaseNativeMetadata.record(Json.obj(
         "evidence" -> Json.obj("identity" -> Json.fromString(e.metadata.evidence.identity), "revision" -> Json.fromString("1")),
@@ -288,22 +314,44 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
       case None => historyC().map(h => result("unavailable", "Common Evidence is disabled; no source read or delivery recording attempted", None, None, h))
       case Some(policy) =>
         val store = CommonEvidence.storage(core, policy)
+        val workContext = context(work)
+        val read = new SourceReader {
+          def readC(path: String) = for {
+            workspace <- WorkspaceId.parseC("sm-workflow-repository")
+            selected <- WorkspaceFilePath.parseC(path)
+            observed <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), selected)
+          } yield observed.text
+        }
         val attempted = for {
-          delivered <- deliverC(store, policy, selectedsource, work, input, new SourceReader {
-            def readC(path: String) = for {
-              workspace <- WorkspaceId.parseC("sm-workflow-repository")
-              selected <- WorkspaceFilePath.parseC(path)
-              observed <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), selected)
-            } yield observed.text
-          }, core.executionContext.clock, (a, o) => DevelopmentJournalEvidence.recordC(d.journalPolicy, core, a, o))
+          delivered <- _deliver_c(store, policy, selectedsource, workContext, input,
+            selections => if (selections.exists(GoalPhaseCompilePackage.selected))
+              GoalPhaseCompilePackage.prepareC(core, d.target.root, work, input.issuedWorkContext.continuationId,
+                input.issuedWorkContext.expectedRevision, selections)
+              else itemsC(workContext, selections, read),
+            core.executionContext.clock, (a, o) => DevelopmentJournalEvidence.recordC(d.journalPolicy, core, a, o))
+          hygiene = _hygiene_journal(d, core, work, delivered._1.items.flatMap(_.hygiene))
           history <- historyC()
         } yield result(if (delivered._2.status != "stored") "recording-incomplete"
           else if (delivered._1.resolution == "no-new-information") "no-new-information" else "delivered",
-          "Information only; original work, validation outcomes and repair counters remain unchanged", Some(delivered._1), Some(delivered._2), history)
+          "Information only; original work, validation outcomes and repair counters remain unchanged",
+          Some(delivered._1), Some(delivered._2), history, hygiene)
         Consequence.success(attempted.fold(_ => result("unavailable", "Managed delivery unavailable or request conflicts; no work completion, replay or success inferred",
           None, None, emptyhistory), v => v))
     }
   }
+
+  private def _hygiene_journal(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
+    work: GoalPhaseNativeWork.Request, observations: Vector[GoalPhaseCompilePackage.Hygiene]): Vector[Json] =
+    work.checkFailure.toVector.flatMap { failure =>
+      observations.distinct.map { observation =>
+        val source = GoalPhaseCompilePackage.validationSource(work.instanceIdentity, failure.validation)
+        val outcome = DevelopmentJournalSemantic.recordSourceSizeC(d.journalPolicy, core, d.input.repositoryIdentity,
+          d.input.phaseIdentity, work.stepIdentity, work.instanceIdentity, source, observation).toOption
+        val entry = outcome.flatMap(_.entry).map(e => Json.obj("identity" -> e.identity.asJson, "revision" -> e.revision.asJson))
+        Json.obj("path" -> observation.path.asJson, "status" -> outcome.map(_.status).getOrElse("unavailable").asJson,
+          "entry" -> entry.asJson)
+      }
+    }
 
   def operations(port: GoalPhaseNativeWorkContinuation.Port): Vector[spec.OperationDefinition] = Vector(new Operation(port))
   private final class Operation(port: GoalPhaseNativeWorkContinuation.Port) extends spec.OperationDefinition {

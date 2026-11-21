@@ -16,7 +16,7 @@ import GoalPhaseNativeRun as F
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -34,7 +34,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
     new Operation(true, d, definition, plans, port, acknowledgement),
     new Operation(false, d, definition, plans, port, acknowledgement), completion, recording) ++ human.toVector ++
-      IncrementalSbtDiagnosisInformation.operations(port) ++
+      IncrementalSbtDiagnosisInformation.operations(port) ++ GoalPhaseApiReview.operations(port) ++
       GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseSourceHistoryRecovery.operations(port) ++
       GoalPhaseSourceHistoryNormalization.operations(port) ++
       GoalPhaseCandidateRecovery.operations(port) ++

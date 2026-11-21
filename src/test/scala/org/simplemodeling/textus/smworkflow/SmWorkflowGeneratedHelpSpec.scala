@@ -44,7 +44,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
-      "resolveGoalPhaseDiagnosticInformation", "reconstructGoalPhaseDevelopment",
+      "resolveGoalPhaseDiagnosticInformation", "runGoalPhaseApiReview", "reconstructGoalPhaseDevelopment",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
       "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
       "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",

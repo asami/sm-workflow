@@ -7,7 +7,8 @@ import io.circe.syntax.*
 /** Read-only extraction from the actual retained check, never a command or a
   * causal classifier. Line locators address the original, unmodified capture.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object IncrementalSbtFailureDiagnosis {
@@ -104,7 +105,7 @@ private[smworkflow] object IncrementalSbtFailureDiagnosis {
   def selected(payload: GoalPhaseNativeValidation.Payload): Vector[View] =
     payload.receipts.flatMap { receipt =>
       payload.selected.find(_.identity == receipt.identity).filter(check =>
-        !RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind))
+        !check.carLint && !RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind))
         .map(check => extract(receipt, check.kind, payload.sourceRevision, payload.candidate))
     }
 

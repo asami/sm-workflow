@@ -25,7 +25,7 @@ import RepositorySyncManagedGitObservation as G
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -301,6 +301,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             Set("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication")(core.action.request.operation) ||
             core.action.request.service.contains("GoalPhaseService") &&
           Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
+            "runGoalPhaseApiReview",
             IncrementalSbtDiagnosisInformation.operation,
             GoalPhaseValidationRecovery.describeOperation, GoalPhaseValidationRecovery.recoveryOperation,
             GoalPhaseSourceHistoryRecovery.describeOperation, GoalPhaseSourceHistoryRecovery.recoveryOperation,

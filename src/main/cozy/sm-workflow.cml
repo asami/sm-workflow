@@ -2429,6 +2429,35 @@ OperationResult
 | initialPhaseRepair | WorkflowArtifactReference | ? |
 | stepTestReportRepair | WorkflowArtifactReference | ? |
 
+## GoalPhaseApiReviewInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| workResource | string | 1 |
+| attemptIdentity | string | 1 |
+| packageResource | string | 1 |
+
+## GoalPhaseApiReviewResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| attemptIdentity | string | 1 |
+| continuationId | string | 1 |
+| result | GoalPhaseWorkResult | ? |
+| model | string | ? |
+| provider | string | ? |
+| metadata | org.goldenport.record.Record | ? |
+| message | string | 1 |
+| providerRecord | org.goldenport.record.Record | ? |
+
 ## GoalPhaseWorkResult
 
 - input-kind :: COMMAND
@@ -7974,6 +8003,34 @@ on = native-convergence-observed
 Own the selected Phase's entry, assigned semantic/Human completion, mechanical progression, explicit validation and Step closure recovery and independently directed remaining-Plan adoption. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult, submitGoalPhaseOrderedDecision, describeGoalPhaseValidationRecovery, recoverGoalPhaseValidation, describeGoalPhaseSourceHistoryRecovery, recoverGoalPhaseSourceHistory, describeGoalPhaseClosureRecovery, recoverGoalPhaseClosure, describeGoalPhaseRemainingPlan and adoptGoalPhaseRemainingPlan. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
 
 ### OPERATION
+
+#### runGoalPhaseApiReview
+
+##### DESCRIPTION
+
+Run one explicitly requested bounded supplied-input review against the currently issued GoalPhase review. The caller owns attempt retention and no-replay; returned work is submitted separately through normal Admission. If typed validation or conversion fails, the FAILED response retains the original provider record in providerRecord; it is not typed work for Admission.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseApiReviewInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseApiReviewInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseApiReviewResult
 
 #### resolveGoalPhaseDiagnosticInformation
 

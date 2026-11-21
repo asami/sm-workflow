@@ -26,7 +26,7 @@ import GoalPhaseSliceValidationPlan as L
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
   *  version Oct. 20, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
@@ -367,6 +367,7 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     if (requested == null || requested.isEmpty || requested.exists(c => c == null ||
         !hostIdentityValid(c.identity) || c.kind == null || c.ordinal < 1 ||
         c.metadata == null || c.hostIdentity == null || c.operation == null || c.hostIdentity.nonEmpty || c.operation.nonEmpty ||
+        !c.carLintShape ||
         c.metadata.exists(p => c.kind != WorkflowSbtValidation.Kind.TestOnly || !profileValid(p))) ||
         !GoalPhaseValidationSubjects.structurallyValid(requested) || !buildReferencesValid(requested) ||
         requested.exists(c => c.dependency.nonEmpty && c.metadata.nonEmpty) ||

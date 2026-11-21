@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit}
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterKey, ComponentParameterPathRoute}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.spi.ai.runner.AiRunnerSocketSet
 import org.goldenport.protocol.spec.{ServiceDefinition, ServiceDefinitionGroup}
 import org.goldenport.protocol.logic.ProtocolLogic
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -13,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.impl.SmWorkflowParticipantFactoryBas
   * No binder runs in create_Core; each component owns its creation capsule.
   * Binding does not create process/storage drivers, caller identity or grants.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] final class SmWorkflowConfiguredComponentFactory(
   declarations: Vector[ComponentParameterKey[?]],
@@ -35,7 +37,8 @@ private[smworkflow] final class SmWorkflowConfiguredComponentFactory(
     override protected def create_Component(params: ComponentCreate): Component = {
       require(params != null && declarations != null && routes != null && bind != null && publishedMcpOperations != null,
         "sm-workflow configured bundle factory is incomplete")
-      new ConfiguredComponent(params)
+      val component = new ConfiguredComponent(params)
+      component.withPort(Component.Port.input(new AiRunnerSocketSet {}).orElse(component.port))
     }
 
     override protected def create_Core(params: ComponentCreate, component: Component): Component.Core =

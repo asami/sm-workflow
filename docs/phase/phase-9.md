@@ -56,12 +56,13 @@ accepted ordinary review/Admission route for this Phase; do not wait for Phase
 and explicitly selected. Other owned delivery/validation obligations remain.
 
 
-Status: planned
+Status: completed locally on 2026-11-21
 Planned: 2026-10-08
 Depends on: Phase 6.3, Phase 8
 Related: CAR lint, deterministic validation, Provider Routing, textus-experiment
 
 Checklist: [Phase 9 delivery ledger](phase-9-checklist.md)
+Native Release commit: 0303f73a42ffc49ff9a08fe4647625fc78986545.
 Producer integration: the selected [CNCF Phase 80](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-80.md)
 interface slice, not completion of every Phase 80 extension candidate.
 

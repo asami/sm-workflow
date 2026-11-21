@@ -28,7 +28,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Commands terminate and retain logs. Typed host fixtures own actual SBT work.
   * No real Session, independent provider or genuine Human consent is claimed.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -568,6 +569,98 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
       cli.operations.count(_ == "startGoalPhase") shouldBe 1
       cli.operations.count(_.startsWith("submit")) shouldBe beforesubmissions
       cli.operations should not contain "submitGoalPhaseOrderedDecision"
+    }
+
+    "retain native work and shared repair count across a delegated editor takeover" in {
+      Given("a fixture with real failed checks and the logical delegated editor policy")
+      val scenario = F.fresh("p9-r2-connected", bootstrapSelectedInput = false,
+        sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), repairContinuation = true)
+      val selected = _select(scenario, 10)
+      val config = scenario.root.resolve(".textus/config.json")
+      Files.writeString(config, _read(config).mapObject(_.add("sm-workflow.goal-phase.dispatch-policy",
+        Json.fromString(GoalPhaseDispatchPolicy.revision)).add("sm-workflow.goal-phase.origin-context",
+        Json.fromString("p9-r2-fixture-origin"))).noSpaces)
+      val cli = new Cli(scenario.root, _required("smworkflow.spec.installedCommand"), _required("smworkflow.spec.runtimeRoot"))
+      val session = _started(cli, scenario)
+      val repository = Path.of(scenario.host.target.root)
+      def detail(invocation: Invocation): V.GoalPhaseAdvanceResult = {
+        val control = invocation.business[V.GoalPhaseAdvanceResult]
+        control.retainedWork.fold(control) { reference =>
+          val retained = cli.call("WorkflowRetainedWorkService", "readWorkflowRetainedWork", Vector("--input", _json(reference)))
+            .business[V.WorkflowRetainedWorkReadResult]
+          retained.availability shouldBe "available"
+          take(V.GoalPhaseAdvanceResult.createC(retained.response))
+        }
+      }
+      def execution(name: String, worker: String, role: String): V.WorkflowExecutionEvidence =
+        V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(name, "1")), Some(worker), None,
+          Some(V.WorkflowExecutionObservation("DELEGATED", "p9-r2-fixture-origin", worker, role)))
+      def profile(request: V.GoalPhaseAdvanceResult): Json =
+        parse(take(request.work.get.operatingProfile.get.toJsonStringC)).fold(error => throw new AssertionError(error.message), identity)
+      def role(request: V.GoalPhaseAdvanceResult): String =
+        profile(request).hcursor.downField("dispatch").get[String]("role").toOption.get
+      def submit(request: V.GoalPhaseAdvanceResult, name: String, worker: String, selectedRole: String): Unit =
+        cli.submit(request, _result(selected, request, "completed"), name, Some(execution(name, worker, selectedRole)))
+          .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+
+      val initial = detail(cli.advance(session))
+      role(initial) shouldBe "ordinary"
+      Files.writeString(repository.resolve("value.txt"), "first actual failing product input\n")
+      submit(initial, "p9-r2-implementation", "p9-r2-editor-one", "ordinary")
+      val first = detail(cli.advance(session))
+      first.work.get.kind shouldBe "RepairStep"
+      first.repairProgress.get.automaticCount shouldBe 1
+      role(first) shouldBe "ordinary"
+      val checksAfterFirst = _checks(scenario)
+      cli.advance(session).business[V.GoalPhaseAdvanceResult].issuedWorkContext shouldBe first.issuedWorkContext
+      _checks(scenario) shouldBe checksAfterFirst
+
+      When("the ordinary repair completes without changing the failing candidate")
+      submit(first, "p9-r2-first-repair", "p9-r2-editor-two", "ordinary")
+      val second = detail(cli.advance(session))
+      second.work.get.kind shouldBe "RepairStep"
+      second.repairProgress.get.automaticCount shouldBe 2
+      role(second) shouldBe "difficult"
+      second.issuedWorkContext should not be first.issuedWorkContext
+      val takeover = GoalPhaseNativeMetadata.normalizePublicJson(profile(second))
+        .fold(error => throw new AssertionError(error), identity).hcursor.downField("providerTakeover")
+      takeover.get[String]("fromProfile") shouldBe Right("ordinary")
+      takeover.get[String]("toProfile") shouldBe Right("difficult")
+      takeover.get[String]("departedResult") shouldBe Right("p9-r2-first-repair")
+      takeover.get[String]("previousValidation").toOption.get should not be takeover.get[String]("validation").toOption.get
+      val checksAfterSecond = _checks(scenario)
+      cli.advance(session).business[V.GoalPhaseAdvanceResult].issuedWorkContext shouldBe second.issuedWorkContext
+      _checks(scenario) shouldBe checksAfterSecond
+      val stale = cli.submit(second, _result(selected, first, "completed"), "p9-r2-first-repair",
+        Some(execution("p9-r2-first-repair", "p9-r2-editor-two", "ordinary")))
+      stale.exit should not be 0
+      _checks(scenario) shouldBe checksAfterSecond
+
+      Then("the replacement repairs the same work and reaches ordinary independent review")
+      Files.writeString(repository.resolve("value.txt"), "expected\n")
+      submit(second, "p9-r2-second-repair", "p9-r2-editor-three", "difficult")
+      val issuedReview = cli.advance(session)
+      val review = detail(issuedReview)
+      review.work.get.kind shouldBe "ReviewStep"
+      review.repairProgress.get.automaticCount shouldBe 2
+      review.work.get.review.get.checks.forall(_.exitCode.contains(0)) shouldBe true
+      val reviewName = "p9-r2-independent-review"
+      val result = _result(selected, review, "accept")
+      val reference = V.WorkflowArtifactReference(reviewName, "1")
+      val evidence = execution(reviewName, "p9-r2-independent-reviewer", role(review))
+      val issuedResource = issuedReview.business[V.GoalPhaseAdvanceResult].retainedWork.map(_.resource)
+        .getOrElse(issuedReview.stdout.toUri.toASCIIString)
+      val preparation = V.WorkflowEvidencePreparationInput("GoalPhase", "review",
+        issuedResource, cli.file(reviewName + "-result", result),
+        cli.file(reviewName + "-reference", reference), cli.file(reviewName + "-execution", evidence),
+        "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", None)
+      cli.importPrepared(cli.call("NativeWorkflowPreparationService", "prepareEvidence",
+        Vector("--preparationFormat", "legacy-full", "--input", _json(preparation))))
+      cli.submit(review, result, reviewName, Some(evidence)).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val checksAfterReview = _checks(scenario)
+      val after = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      after.repairProgress.get.automaticCount shouldBe 2
+      _checks(scenario) shouldBe checksAfterReview
     }
 
     "continue an actual terminated failure through ten charged batches let ten pass and issue no eleven" in {

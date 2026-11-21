@@ -16,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -64,7 +64,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
       payload.selected.lift(payload.receipts.size).exists(_.identity == receipt.identity)).toVector else Vector.empty
     V.GoalPhaseNativeValidationView(payload.sourceRevision, payload.step, _goal_snapshot(payload.candidate),
-      payload.selected.filter(_.dependency.isEmpty).map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.kind.wire, c.hostIdentity,
+      payload.selected.filter(_.dependency.isEmpty).map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.wireKind, c.hostIdentity,
         c.operation.map { operation =>
           import GoalPhaseNativeMetadata.given
           GoalPhaseNativeMetadata.record(operation.asJson)
@@ -288,7 +288,12 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseNativeSnapshot(value.head, value.tree)
   private def _goal_check(value: RepositorySyncNativeMergeValidation.Receipt): V.GoalPhaseNativeCheckReceipt =
     V.GoalPhaseNativeCheckReceipt(value.identity, value.termination, value.exitCode, value.stdout, value.stderr,
-      value.sbt.map(_sbt_facts), value.processObservation.map(p => GoalPhaseNativeMetadata.record(WorkflowSbtCapture.projection(p))))
+      value.sbt.map(_sbt_facts), value.processObservation.orElse(value.carLint.map(_.process)).map { process =>
+        val observed = WorkflowSbtCapture.projection(process)
+        val detail = value.carLint.flatMap(_.report).fold(observed)(report =>
+          observed.mapObject(_.add("carLintReport", report.asJson)))
+        GoalPhaseNativeMetadata.record(detail)
+      })
   private def _sbt_facts(value: WorkflowSbtValidation.Facts): V.WorkflowSbtValidationFacts =
     V.WorkflowSbtValidationFacts(value.kind.wire, value.outcome.wire,
       value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason,

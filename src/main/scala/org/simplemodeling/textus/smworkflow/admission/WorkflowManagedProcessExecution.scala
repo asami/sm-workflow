@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -199,6 +199,23 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     else Consequence.stateConflict("Workflow validation attempt differs from its exact selected target or operation")
   }
 
+  def validationCheckAttemptC(core: ActionCall.Core,
+    target: ValidationCheckTarget): Consequence[ValidationCheckExecutionAttempt] = for {
+    _ <- if (core != null && core.executionContext != null && target != null) Consequence.unit
+      else Consequence.stateConflict("Workflow native validation check has no owning call or target")
+    result <- new Execution(core).runValidationCheckAttemptC(target)
+    matched = result match {
+      case ValidationCheckExecutionAttempt.Observed(value) =>
+        value != null && value.target == target && value.operation == ValidationCheckOperation.Run
+      case ValidationCheckExecutionAttempt.AdmissionRejected(actual, operation, conclusion) =>
+        actual == target && operation == ValidationCheckOperation.Run && conclusion != null
+      case ValidationCheckExecutionAttempt.Uncertain(actual, operation, conclusion) =>
+        actual == target && operation == ValidationCheckOperation.Run && conclusion != null
+      case _ => false
+    }
+    _ <- if (matched) Consequence.unit else Consequence.stateConflict("Workflow native validation result differs from its selected intent")
+  } yield result
+
   /** A host-bound local publication runs through this call's existing UoW.
     * Publication necessity and retained intent belong to LocalPublication.
     */
@@ -265,6 +282,8 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check_attempt(target)
     }
     def runSbtAttemptC(program: ExecUowM[SbtExecutionAttempt]): Consequence[SbtExecutionAttempt] = executeProgram(program)
+    def runValidationCheckAttemptC(target: ValidationCheckTarget): Consequence[ValidationCheckExecutionAttempt] =
+      executeProgram(validation_check_attempt(target))
     def prepareGit[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {
       case GitOperation.Branch => git_branch(target)
       case GitOperation.Root => git_root(target)

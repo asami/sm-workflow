@@ -8,6 +8,7 @@ import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentP
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.security.SecuritySubject
+import org.goldenport.cncf.spi.ai.runner.AiRunnerSocketSet
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.protocol.spec.ServiceDefinition
@@ -19,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Canonical factory mechanics only. Generated declarations are wiring probes,
   * not native workflow implementations or independent host-evidence fixtures.
   * @since   Oct.  6, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -71,6 +73,7 @@ final class SmWorkflowConfiguredComponentFactorySpec extends AnyWordSpec with Ma
         SecuritySubject.current(using context).isTrustedLocalAuthenticated shouldBe false
         SecuritySubject.current(using context).isProviderAuthenticated shouldBe false
         built.protocol.services.services.map(_.name) should contain allElementsOf services.map(_.name)
+        built.port.get[AiRunnerSocketSet].isDefined shouldBe true
         built.mcpReadyOperations shouldBe publication
         built.mcpReadyServices shouldBe Set.empty
       }

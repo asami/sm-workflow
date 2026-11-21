@@ -64,7 +64,8 @@ class DispatchSpec(unittest.TestCase):
 
     def setUp(self):
         self.mapping = json.loads((ROOT / 'skills/sm-goal-phase/dispatch-mappings.json').read_text())
-        self.request = {'kind': 'Request', 'work': {'kind': 'ReviewStep', 'operating_profile': {
+        self.request = {'kind': 'Request', 'retained_work': {'resource': 'sm-workflow-work:actual'},
+            'work': {'kind': 'ReviewStep', 'operating_profile': {
             'dispatch': {'revision': A.REVISION, 'role': 'mechanical',
                          'candidates': ['mechanical', 'small', 'sol-medium', 'difficult', 'hardest'], 'placement': 'DELEGATED',
                          'edges': copy.deepcopy(self.mapping['edges'])}}},
@@ -76,6 +77,178 @@ class DispatchSpec(unittest.TestCase):
 
     def prepare(self, facts=None):
         return A.prepare(self.request, self.mapping, self.facts if facts is None else facts, ROOT, ROOT)
+
+    def test_supplied_review_binds_actual_work_and_uses_fresh_restricted_context(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'actual-head', 'tree': 'actual-tree'}
+        request['work']['review'] = {'diff': 'diff --git a/a b/a\n+変更', 'checks': [{'identity': 'test'}]}
+        request['work']['prior_history'] = 'must not be sent'
+        files = [{'name': 'specification.md', 'content': 'Required behavior'}]
+        package = A.review_package(request, files, True, 'caller-selected complete input')
+        self.assertEqual(package['status'], 'READY')
+        encoded = json.dumps(package['packet'], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        self.assertEqual(package['bytes'], len(encoded))
+        self.assertEqual(A.review_package(request, files, True, 'caller-selected complete input', len(encoded)),
+                         dict(package, limit=len(encoded)))
+        state = A.prepare(request, self.mapping, self.facts, ROOT, ROOT, supplied_review=package)
+        self.assertEqual(state['request'], request)
+        self.assertEqual(state['launch']['fork_turns'], 'none')
+        self.assertNotIn('Admitted working repository:', state['launch']['message'])
+        self.assertIn('Do not read the repository', state['launch']['message'])
+        self.assertIn('Required behavior', state['launch']['message'])
+        self.assertNotIn('must not be sent', state['launch']['message'])
+        self.assertEqual(A.restore(state, request), state)
+        with self.assertRaisesRegex(ValueError, 'distinct actual executor'):
+            A.launched(state, state['launch'], {'agent_id': 'fixture-parent'})
+        started = A.launched(state, state['launch'], {'agent_id': 'fresh-reviewer'})
+        uncertain = A.uncertain(started, 'fresh-reviewer', 'response lost after start')
+        self.assertEqual(A.restore(uncertain, request)['status'], 'UNCERTAIN')
+        with self.assertRaises(ValueError):
+            A.resolve(uncertain, self.facts)
+        recovered = A.complete(uncertain, 'fresh-reviewer', {'outcome': 'decision-needed', 'summary': 'Recovered', 'findings': []})
+        self.assertEqual(recovered['status'], 'RETURNED')
+        returned = A.complete(started, 'fresh-reviewer', {'outcome': 'decision-needed', 'summary': 'Needs evidence', 'findings': []})
+        evidence = A.execution_evidence(returned, [{'identity': 'actual-result', 'revision': '1'}])
+        self.assertEqual(evidence['execution']['executorContextIdentity'], 'fresh-reviewer')
+        altered = copy.deepcopy(state)
+        altered['suppliedReview']['packet']['files'][0]['content'] = 'changed'
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            A.restore(altered, request)
+        crossed = copy.deepcopy(request)
+        crossed['work']['candidate']['tree'] = 'another-tree'
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            A.prepare(crossed, self.mapping, self.facts, ROOT, ROOT, supplied_review=package)
+
+    def test_supplied_review_compacts_receipts_and_retains_contract(self):
+        request = copy.deepcopy(self.request)
+        del request['retained_work']
+        request['submit_session_id'] = 'fixture-run'
+        request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context']['context'] = {'summary': 'Evaluate all required conditions'}
+        request['work'].update(candidate={'head': 'head', 'tree': 'tree'}, checks_receipt='run:validation:1',
+            step_identity='step', selected_plan={'effective_acceptance': {'conditions': ['required']}},
+            purpose_repair={'identity': 'actual-contract'},
+            issues={'issues': [{'identity': 'issue-1', 'source': 'REVIEW', 'status': 'OPEN', 'step': 'step', 'summary': 'x' * 2000, 'evidence_reference': 'run:old:1'}]},
+            review={'diff': 'complete diff', 'checks': [{'identity': 'test', 'termination': 'exited',
+                'exit_code': 0, 'sbt': {'kind': 'test', 'outcome': 'succeeded'}, 'stdout': 'x' * 600000}]})
+        detail = {'availability': 'available', 'reference': {
+            'schema_version': 'sm-workflow.retained-work-reference.v1', 'session_id': 'fixture-run',
+            'identity': 'fixture:work:1', 'revision': '2', 'resource': 'sm-workflow-work:retained-owner'},
+            'response': request}
+        files = [{'name': 'source', 'content': 'complete'}]
+        supplied = A.review_package(detail, files, True, 'attested')
+        packet = supplied['packet']
+        self.assertEqual(packet['workResource'], 'sm-workflow-work:retained-owner')
+        self.assertEqual(packet['checksReceipt'], 'run:validation:1')
+        self.assertEqual(packet['review']['checks'][0]['exitCode'], 0)
+        self.assertNotIn('stdout', packet['review']['checks'][0])
+        self.assertEqual(packet['contract']['issues']['issues'][0]['evidence_reference'], 'run:old:1')
+        self.assertEqual(packet['contract']['purposeRepair']['identity'], 'actual-contract')
+        self.assertEqual(packet['contract']['selectedPlan']['effective_acceptance']['conditions'], ['required'])
+        self.assertEqual(packet['contract']['issues']['issues'][0]['status'], 'OPEN')
+        self.assertIn('RECURRING requires a unique 1-based findingOrdinal', A.REVIEW_RESULT_INSTRUCTIONS)
+        self.assertEqual(packet['contract']['instructions'], 'Evaluate all required conditions')
+        state = A.prepare(detail, self.mapping, self.facts, ROOT, ROOT, supplied_review=supplied)
+        self.assertEqual(A.restore(state, detail), state)
+        detail['reference']['resource'] = 'sm-workflow-work:crossed-owner'
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            A.restore(state, detail)
+        del request['work']['issues']['issues'][0]['evidence_reference']
+        with self.assertRaisesRegex(ValueError, 'retained evidence'):
+            A.review_package(detail, files, True, 'attested')
+
+    def test_supplied_review_declines_incomplete_or_oversized_without_truncation(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'head', 'tree': 'tree'}
+        request['work']['review'] = {'diff': 'complete diff', 'checks': [{'identity': 'check'}]}
+        files = [{'name': 'spec', 'content': 'x' * 65536}, {'name': 'source', 'content': '追加'}]
+        packet = A.review_package(request, files, True, 'attested')
+        self.assertEqual(packet['packet']['files'], files)
+        self.assertGreater(packet['bytes'], 65536)
+        self.assertEqual(A.review_package(request, files, False, 'attested')['reason'], 'completeness-unconfirmed')
+        self.assertEqual(A.review_package(request, [], True, 'attested')['reason'], 'missing-or-ambiguous-supplied-files')
+        self.assertEqual(A.review_package(request, files, True, 'attested', packet['bytes'] - 1)['reason'], 'package-too-large')
+        with self.assertRaisesRegex(ValueError, '512 KiB'):
+            A.review_package(request, files, True, 'attested', A.REVIEW_PACKAGE_MAX + 1)
+        malformed = copy.deepcopy(request)
+        malformed['issued_work_context']['execution_requirement'] = 'invalid'
+        with self.assertRaisesRegex(ValueError, 'Malformed'):
+            A.review_package(malformed, files, True, 'attested')
+        self.assertEqual(A.prepare(request, self.mapping, self.facts, ROOT, ROOT)['status'], 'PREPARED')
+        request['work']['kind'] = 'ImplementStep'
+        with self.assertRaisesRegex(ValueError, 'issued review'):
+            A.review_package(request, files, True, 'attested')
+
+    def test_api_attempt_retains_identity_and_never_restarts_uncertain_execution(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context'].update(result_type='GoalPhaseWorkResult', run_id='actual-session')
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'head', 'tree': 'tree'}
+        request['work']['review'] = {'diff': 'diff', 'checks': [{'identity': 'check'}]}
+        package = A.review_package(request, [{'name': 'spec', 'content': 'required'}], True, 'complete')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'package.json'
+            canonical = json.dumps(package['packet'], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+            path.write_bytes(canonical)
+            state = A.api_prepare(request, package, 'sm-workflow-work:actual', 'attempt-1', str(path))
+            self.assertEqual(state['arguments']['input']['packageResource'], path.as_uri())
+            self.assertNotIn('packageJson', state['arguments']['input'])
+            with self.assertRaisesRegex(ValueError, 'Actual work resource'):
+                A.api_prepare(request, package, 'sm-workflow-work:crossed', 'attempt-1', str(path))
+            path.write_bytes(b'{}')
+            with self.assertRaisesRegex(ValueError, 'canonical'):
+                A.api_prepare(request, package, 'sm-workflow-work:actual', 'attempt-1', str(path))
+        started = A.api_started(state, state['arguments'], 'invocation-1')
+        uncertain = A.api_uncertain(started, 'invocation-1', 'lost response')
+        with self.assertRaises(ValueError):
+            A.api_started(uncertain, state['arguments'], 'invocation-2')
+        with self.assertRaises(ValueError):
+            A.api_complete(uncertain, 'invocation-2', {})
+        blocked_response = {'status': 'BLOCKED', 'attemptIdentity': 'attempt-1',
+                            'continuationId': 'fixture:work:1', 'message': 'ai.input-budget'}
+        blocked = A.api_complete(uncertain, 'invocation-1', blocked_response)
+        self.assertEqual(blocked['status'], 'BLOCKED')
+        self.assertEqual(blocked['response'], blocked_response)
+        with self.assertRaises(ValueError):
+            A.api_started(blocked, state['arguments'], 'invocation-2')
+        with self.assertRaises(ValueError):
+            A.api_complete(blocked, 'invocation-1', blocked_response)
+        with self.assertRaises(ValueError):
+            A.api_execution_evidence(blocked, [{'identity': 'receipt', 'revision': '1'}])
+        opaque_block = dict(blocked_response, message='provider failed')
+        with self.assertRaises(ValueError):
+            A.api_complete(uncertain, 'invocation-1', opaque_block)
+        for other_status in ('DECLINED', 'UNAVAILABLE', 'FAILED', 'UNCERTAIN'):
+            other = A.api_complete(uncertain, 'invocation-1', dict(blocked_response, status=other_status))
+            self.assertEqual(other['status'], 'UNCERTAIN' if other_status == 'UNCERTAIN' else 'RETURNED')
+            self.assertEqual(other['response']['status'], other_status)
+        crossed_block = copy.deepcopy(blocked_response)
+        crossed_block['continuationId'] = 'another-continuation'
+        with self.assertRaises(ValueError):
+            A.api_complete(uncertain, 'invocation-1', crossed_block)
+        response = {'status': 'COMPLETED', 'attemptIdentity': 'attempt-1',
+                    'continuationId': 'fixture:work:1',
+                    'result': {'outcome': 'decision-needed', 'summary': 'reviewed', 'findings': []}}
+        returned = A.api_complete(uncertain, 'invocation-1', response)
+        self.assertEqual(returned['status'], 'RETURNED')
+        evidence = A.api_execution_evidence(returned, [{'identity': 'retained-result', 'revision': '1'}])
+        self.assertEqual(evidence['execution']['executorContextIdentity'], 'invocation-1')
+        self.assertNotIn('modelIdentity', evidence)
+        crossed = copy.deepcopy(response)
+        crossed['attemptIdentity'] = 'another-attempt'
+        with self.assertRaises(ValueError):
+            A.api_complete(uncertain, 'invocation-1', crossed)
+        same_context = copy.deepcopy(returned)
+        same_context['invocationIdentity'] = 'fixture-parent'
+        with self.assertRaises(ValueError):
+            A.api_execution_evidence(same_context, [{'identity': 'retained-result', 'revision': '1'}])
 
     def test_public_worker_result_projection_binds_format_type_and_context(self):
         request = copy.deepcopy(self.request)

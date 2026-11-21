@@ -38,7 +38,7 @@ private[smworkflow] object BoundedWorkRuntime {
     managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None)
   def host(d: GoalPhaseNativeRun.Declaration): Host = Host(d.configuration, d.instances, d.continuations,
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
-    d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords,
+    d.validationPolicy.toVector.flatMap(_.checks).filterNot(_.carLint), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords,
     Some(GoalPhaseOperatingProfiles.context(d)))
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
@@ -72,7 +72,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host

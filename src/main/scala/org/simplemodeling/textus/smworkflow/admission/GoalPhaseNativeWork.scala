@@ -19,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -54,7 +54,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     triage: Option[GoalPhaseStepTriage.Context] = None,
     diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None,
     operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None,
-    publicationFailure: Option[PublicationFailureContext] = None)
+    publicationFailure: Option[PublicationFailureContext] = None,
+    providerDecline: Option[GoalPhaseProviderTakeover.Decline] = None)
   // Findings and acceptance observations remain evidence, including during an
   // inventory-only Decision. They are not an additional Plan/effect instruction
   // and are not settled by appending files. Business changes use the complete
@@ -161,12 +162,13 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Encoder[GoalPhaseDocumentSource.Bound] = deriveEncoder
   private given Decoder[GoalPhaseDocumentSource.Bound] = deriveDecoder
   private given Encoder[Request] = deriveEncoder[Request].mapJson(_.mapObject(_.filter {
-    case ("operatingProfile" | "publicationFailure", value) => !value.isNull
+    case ("operatingProfile" | "publicationFailure" | "providerDecline", value) => !value.isNull
     case _ => true
   }))
   private val _request_decoder: Decoder[Request] = deriveDecoder
   private given Decoder[Request] = Decoder.instance { cursor =>
-    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory", "operatingProfile", "publicationFailure").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory", "operatingProfile", "publicationFailure",
+        "providerDecline").exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(DecodingFailure("Check failure context must be absent or a valid object", cursor.history))
     else _request_decoder.tryDecode(cursor).flatMap { request =>
       def _invalid_(field: String): Decoder.Result[Request] =
@@ -174,6 +176,10 @@ private[smworkflow] object GoalPhaseNativeWork {
       if (!_publication_request_valid(request)) _invalid_("publicationFailure")
       else if (request.operatingProfile == null || !request.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid))
         _invalid_("operatingProfile")
+      else if (request.providerDecline == null || !request.providerDecline.forall(value =>
+          GoalPhaseProviderTakeover.declineValid(value) && request.stepIdentity.nonEmpty &&
+            Set("ImplementStep", "RepairStep")(request.kind) && request.operatingProfile.flatMap(_.dispatch).contains(value.successor)))
+        _invalid_("providerDecline")
       else if (!IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory)) _invalid_("diagnosticHistory")
       else if (!request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess)) _invalid_("checkFailure")
       else if (!GoalPhaseFixIssues.validateOptionC(request.issues).isSuccess) _invalid_("issues")
@@ -364,6 +370,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     sourcehistoryrepair: Boolean): Consequence[Unit] =
     if (request == null || !_publication_request_valid(request) || !GoalPhasePurposeRepair.validateRequestC(request).isSuccess || !GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess)
       F.invalid("assigned request or progress is invalid")
+    else if (result != null && Set("declined", "blocked")(result.outcome))
+      admitProviderStopC(request, result)
     else if (request.kind == "TriageStep") GoalPhaseStepTriage.admitC(request, result)
     else if (request.kind == "ImplementStep") admitInitialResultC(request, result)
     else if (request.kind != "RepairStep" || request.repairDirective == null ||
@@ -388,6 +396,14 @@ private[smworkflow] object GoalPhaseNativeWork {
       _ <- GoalPhaseFixAssessment.admitC(request.kind, result.outcome, result.fixAssessment)
       _ <- GoalPhaseAcceptanceBoundary.admitC(request.selectedPlan, request.kind, result)
     } yield ()
+
+  private[admission] def admitProviderStopC(request: Request, result: Result): Consequence[Unit] =
+    if (request.stepIdentity.nonEmpty && Set("ImplementStep", "RepairStep")(request.kind) &&
+        request.operatingProfile.flatMap(_.dispatch).exists(_.placement == "DELEGATED") &&
+        Set("declined", "blocked")(result.outcome) && _bounded_text(result.summary) &&
+        result.copy(dependencyAdmission = None) == Result(result.outcome, result.summary, Vector.empty))
+      Consequence.unit
+    else F.invalid("Provider decline or block requires a current delegated Step and a plain attributable explanation")
 
   private def _plan_revision_c(result: Result): Consequence[Unit] = for {
     _ <- GoalPhasePlanRevision.validateOptionC(result.planRevision)

@@ -11,7 +11,7 @@ import GoalPhaseNativeValidation as N
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {
@@ -56,7 +56,8 @@ private[smworkflow] object GoalPhaseStepAssessment {
 
   private def policyShape(policy: Policy): Boolean = try {
     policy != null && text(policy.identity) && Set("code", "documentation")(policy.kind) &&
-      Set("required", "conditional")(policy.detailedReview) && Set("off", "required")(policy.scalaLint) && policy.carLint == "off" && Set("off", "conditional")(policy.semanticTriage) &&
+      Set("required", "conditional")(policy.detailedReview) && Set("off", "required")(policy.scalaLint) &&
+      Set("off", "required")(policy.carLint) && Set("off", "conditional")(policy.semanticTriage) &&
       policy.scenarioInventory != null && policy.scenarioInventory.forall(GoalPhaseStepTriage.validInventory) &&
       policy.observations != null && policy.observations.size <= 64 &&
       policy.observations.forall(o => o != null && text(o.identity) && o.source != null &&
@@ -96,7 +97,9 @@ private[smworkflow] object GoalPhaseStepAssessment {
     _ <- if (GoalPhaseNativeMetadata.declaredIdentities(selected) == step.checks &&
         receipts.map(_.identity) == selected.map(_.identity)) Consequence.unit
       else invalid("assessment requires the exact primary Step checks and matching receipts")
-    _ <- WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
+    _ <- N.validateCarLintSelectionC(selected, Some(policy))
+    ordinary = selected.zip(receipts).filterNot(_._1.carLint)
+    _ <- WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, ordinary.map(_._1), ordinary.map(_._2))
     signals = policy.scenarioInventory.map(GoalPhaseStepTriage.signals(changedPaths, _))
     immediate = policy.observations.exists(_.timing == "immediate") || signals.exists(_.missing.nonEmpty)
     branch = if (policy.detailedReview == "required" ||
@@ -120,7 +123,7 @@ private[smworkflow] object GoalPhaseStepAssessment {
     structural: RepositorySyncNativeMergeValidation.Receipt,
     selected: Vector[GoalPhaseNativeValidation.Check],
     receipts: Vector[RepositorySyncNativeMergeValidation.Receipt], ordinaryFull: Boolean = false): Consequence[Result] = for {
-    _ <- if (policyShape(policy) && text(reference) && structural != null &&
+    _ <- if (policyShape(policy) && policy.carLint == "off" && text(reference) && structural != null &&
         structural.termination == "exited" && structural.exitCode.contains(0) &&
         org.goldenport.cncf.processexecution.GitIndexCheck.parseStoredC(0, structural.stdout, structural.stderr).isSuccess)
       Consequence.unit else invalid("purpose assessment requires its actual structural receipt and selected policy")
