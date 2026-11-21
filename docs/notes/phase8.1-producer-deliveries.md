@@ -577,3 +577,129 @@ independent review. Checklist acceptance remains with the owning Phase runtime.
 C04/C05 consumer activation and Cozy/AI changes remain SLP-C3. This addition
 changes no build, producer, consumer, live Session, history or repair count and
 requires no new validation machinery or repetition of successful producer checks.
+
+## SLP-C3 consumer preparation — 2026-11-21
+
+C3 connects authored consumers and actual Cozy-generated Core API call sites to
+one explicit `scalaStrictAuthoring` qualification. The producer delivery below
+is observed and adopted; the new consumer compile/test/lint checks are **NOT
+RUN** by this implementation. C04/C05 remain open for native validation and
+independent acceptance.
+
+### Adopted producer output and binary
+
+Cozy delivery `P81-SLPC3-COZY-CORE-VALUE-MEMBERSHIP-20261121` identifies committed
+source `dd1b826e6ec55ff07edace688b8e6383a9eb5c40`, reviewed tree
+`1f5c58b6965c538731695f2a3c2753f89e8969d9`. Its public generation path is
+`cozy.Cozy.main` with `modeler-scala
+src/test/resources/modeler/workflow-semantic-outcome.cml --save <fresh-output>`.
+The admitted fixture belongs to Cozy. The generation JVM must receive
+`-Dcozy.generation.logical-action-membership=core-c3`; a version label or a
+property on only the consumer JVM does not select this emitter mode. Output
+without the property retains the legacy emitter byte for byte. An owning runtime
+may reuse the adopted generated-output evidence instead of repeating successful
+producer generation, retaining its exact bytes and custody.
+
+The selected `LogicalActionCompiler` imports
+`org.goldenport.util.TypeSafeCollections.*` and supplies a private `cats.Eq[String]`
+using the standard String equality. Its three `typeSafe.containsEq` sites select
+occurrences, accumulate required action values and diagnose duplicate requested
+occurrences. Existing filter/fold order and duplicate policy remain intact. These
+are value comparisons of Strings; no identity relation or business-ID wrapper is
+introduced. Only this compiler and its directly required
+`CompositeStateMachineActionProgramAbi` enter the consumer Compile scope.
+
+| Adopted generated source | SHA-256 |
+| --- | --- |
+| `LogicalActionCompiler.scala` | `f3daf8291539c06318829386d01c9c31aa58a5db13fcc9b2051bc320e85bec3a` |
+| `CompositeStateMachineActionProgramAbi.scala` | `d216a82c581cbba69dcb3b73fc3a2de0b2e663f9bdaea3e68653dcfd8defad19` |
+
+The producer retained native Compile and focused TestOnly success: ten tests in
+`CompositeStateMachineActionProgramSpec` and `Scala3StrictOutputGenerationSpec`,
+none canceled. Its actual selected compiler/ABI compiled with the ten strict
+Scala 3.3.8 options and selected Core source classes. Legacy output compiled with
+old Core; selected C3 with old Core failed for missing TypeSafeCollections; an
+`Int` membership argument failed with `Int =:= String`. Its class inspection
+observed the Core API link. These are producer checks, not the new consumer
+suite or a separate Scalafix result. The producer ran no separate consumer
+runtime-behavior fixture or repository Scalafix operation.
+
+The accepted Core source remains `e4972601207d4597f0ed3aa77fc0ed62fb286c75`,
+tree `b431c2b2a11946761912472f591b9faaf2efa19e`. The owning runtime has now
+reported clean-source `publishLocal` of the normal coordinate
+`org.goldenport:goldenport-core_3:0.4.3-SNAPSHOT`, JAR SHA-256
+`dbd6b315e4b61beb193394491102e3467974316f83c10a4326875643cc4dd327`.
+This replaces the earlier ambient JAR lacking the API. Consumer activation still
+requires the runtime to retain publication termination, dependency eviction and
+resolved Compile/Test artifact identity. No source-classpath replacement,
+alternate resolver or Core source repair is added to this consumer build.
+
+### Explicit consumer selection
+
+Default B2 behavior and the existing explicit B04 generation route remain
+usable. Select C with literal `SM_WORKFLOW_STRICT_CORE_QUALIFICATION=true` or
+module `qualification.strict_core: true`; the default is false and invalid
+environment values fail. Select an actual adopted-output directory with
+`SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR` or module
+`qualification.core_generated_source_dir`. Relative paths resolve from the
+strict module; environment selection takes precedence. Keep machine locations
+in local configuration, never in tracked build inputs. For example:
+
+```yaml
+qualification:
+  strict_core: true
+  core_generated_source_dir: /absolute/path/to/adopted-generated-output
+```
+
+The directory may be the producer's retained selected evidence resource or fresh
+public output from the admitted fixture/mode. `strictCoreGeneratedSources`
+requires exactly one copy of each of the two named sources, verifies their
+SHA-256 against the adopted delivery, and stages their unchanged bytes under
+managed `core-c3` sources. Missing/duplicate sources, legacy mode or changed
+bytes fail with a source-selection diagnostic. This is adoption of producer
+output, with no handwritten replacement or modification of generated source.
+A missing Core API then fails ordinary compilation, without fallback.
+
+| Core selected | B04 generated selected | Additional selected sources |
+| --- | --- | --- |
+| false | false | None; existing seven authored B2 cases |
+| false | true | Existing fresh CountryCode/RegionCode generation and three B04 cases |
+| true | false | Authored `src/core/scala` consumer, actual compiler/ABI managed sources, four `CoreCollectionComparisonSpec` cases and three `GeneratedLogicalActionCompilerSpec` cases |
+| true | true | Both preceding selections plus authored `src/generated-core/scala` consumer and two `GeneratedCoreCollectionComparisonSpec` cases |
+
+Paths are relative to `scala-lint-rules/strict-authoring`. Each suite is selected
+once. When B04 is enabled, retain its existing explicit qualified Cozy project
+and repaired SimpleModeler selection; the C3 evidence directory does not replace
+that generator. All selected sources use the existing ten strict options and
+SemanticDB. Ordinary handwritten Compile/Test lint includes the authored
+consumers and new specification; managed producer output stays excluded from
+handwritten lint. No legacy generated-source convention waiver is added to
+handwritten code.
+
+### Consumer behavior and remaining checks
+
+The authored consumer uses complete SourceId value membership and separately
+selects optional TraceId identity for `containsId`, `findById` and `distinctById`.
+Its specifications preserve first payload conflicts and each unidentified
+occurrence, empty receivers and attributed element/sibling-ID rejection.
+Existing workflow models and their identity contracts are unchanged.
+
+The generated-value consumer uses actual CountryCode/RegionCode companion Eq
+instances. Matching/unmatched/empty values and an incompatible query with
+`Eq[Any]` in scope are specified. Its call sites remain authored, while the
+adopted logical-action compiler supplies the genuinely generated API calls.
+
+`GeneratedLogicalActionCompilerSpec` calls the actual produced compiler with its
+actual produced ABI and the normal CNCF `ExecProgram` type. Three cases cover
+exact membership and definition order with reversed requests and empty input,
+stable unique required actions despite repeated occurrences, and duplicate plus
+case-sensitive unknown selection diagnostics. It neither executes effects nor
+reimplements the compiler. These cases exercise all three emitted Core call
+sites; compilation also binds the real producer output to the resolved Core API.
+
+Native compile/test/fix-check must now establish actual selected sources, ten
+strict flags, resolved Core JAR identity, applicable handwritten lint and each
+suite's single execution. Independent integrated A/B/C review and English final
+acceptance remain with the owning runtime. No tests, lint, workflow effects,
+publication or commit were executed by this semantic implementation. It changes
+no accepted prior results, Sessions, repair counts or conditional M01–M04 choices.

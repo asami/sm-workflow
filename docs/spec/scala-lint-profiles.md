@@ -589,9 +589,13 @@ and [initialization checking](https://docs.scala-lang.org/scala3/reference/other
 Subphase 8.1-C consumes a bounded goldenport-core delivery. Reuse existing Cats Eq
 and Identified/Identifiable abstractions where suitable, adding distinct domain
 identity semantics only where required. Give new standard-collection extensions
-distinct names; containsEq, containsId, findById and distinctById are examples,
-not finalized or already available API names. Existing collection members are
-not changed by importing extensions.
+distinct names. The adopted Core source `e4972601207d4597f0ed3aa77fc0ed62fb286c75`
+delivers `org.goldenport.util.TypeSafeCollections.*`: immutable
+`Vector[A].typeSafe.containsEq[B]` requires `Eq[A]` and `B =:= A`.
+Explicit `identifiedBy` / `identifiableBy` captures `I <: UniversalId` before
+`containsId`, `findById` or `distinctById`. These are finalized for that selected
+source revision; consumer binary availability and compilation are separate
+evidence. Existing collection members are not changed by importing extensions.
 
 Fix the element/ID type from the receiver and its declared identity relation;
 an argument must not widen it to a common parent/Any just to make a call compile.
@@ -612,6 +616,28 @@ code. Lint recommends/requires the actual available safe API only after delivery
 and adoption; do not emit calls to nonexistent extensions or auto-rewrite general
 contains to a business-ID operation. Stage 1/2 can advance independently of an
 unavailable Core delivery; only affected Stage 3 acceptance remains open.
+
+The [strict collection authoring guidance](../rules/strict-scala3-authoring.md)
+records the selected API, value/identity decision and missing-binary behavior.
+The explicit strict-module C qualification compiles authored consumers and the
+actual Cozy `dd1b826e` logical-action compiler/ABI. Select adopted generated
+output with `qualification.core_generated_source_dir` or
+`SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR`; the build verifies the two
+accepted source hashes and stages unchanged managed sources. Producer selection
+uses the admitted workflow fixture and generation JVM property
+`-Dcozy.generation.logical-action-membership=core-c3`; only affected C acceptance
+requires this output and the accepted Core binary. Producer mode is never
+inferred from the consumer version or substituted silently. Ordinary defaults
+remain usable without local qualification inputs.
+
+When B04 generation is also selected, authored calls over actual generated
+CountryCode/RegionCode and their companion Eq instances join the same module.
+The logical-action compiler supplies actual generated API call sites; its
+consumer specification checks selection order, unique required actions and
+duplicate/unknown selection behavior. Producer strict qualification is retained
+separately from the pending consumer native compilation, applicable handwritten
+lint and behavioral results. Managed output remains outside handwritten lint;
+producer ownership and its existing generated-output qualification are preserved.
 
 All stages reuse existing validation, independent review where required and
 normal publication/consumer verification. No second review/test loop, runtime

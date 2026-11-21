@@ -334,6 +334,35 @@ checklist items remain unchanged pending their owning runtime's validation,
 review and acceptance. Applicable producer evidence is reused without repeating
 producer work or requiring its whole Phase to close.
 
+### C04/C05 adopted generated delivery and pending consumer checks
+
+The [C3 consumer preparation record](../notes/phase8.1-producer-deliveries.md#slp-c3-consumer-preparation--2026-11-21)
+records adopted Cozy `dd1b826e6ec55ff07edace688b8e6383a9eb5c40`, the admitted
+workflow-semantic-outcome fixture, public generation path and generator JVM
+selection `-Dcozy.generation.logical-action-membership=core-c3`. Actual generated
+`LogicalActionCompiler` uses the accepted Core API at its three String-value
+membership sites; the unselected producer retains legacy output. Its generated
+compiler and direct ABI have exact qualified SHA-256 inputs. Producer strict
+compilation and focused checks are observed; no repeat or whole producer Phase
+closure is required.
+
+The explicit C qualification now verifies/stages that actual output resource
+through `qualification.core_generated_source_dir` or
+`SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR`, alongside authored consumers and
+a specification executing the produced compiler. Default B2/B04 selection and
+the existing B04 qualified generator route are preserved. C compilation requires
+the normal accepted Core binary; the runtime reports clean-source publishLocal
+at the recorded JAR digest, while actual resolved consumer classpaths remain a
+native validation obligation. No dependency source repair or alternate resolver
+is requested.
+
+C04 awaits native consumer strict compilation, applicable handwritten lint and
+the selected behavioral/type-negative suites. Producer source and checks do not
+supply those consumer results. C05 guidance now includes actual output selection,
+missing/mismatched-output and missing-API diagnostics; its existing independent
+review/acceptance remains pending. No model contract or comparison meaning is
+changed.
+
 All plans preserve current priorities, Goals, Sessions, base, accepted results,
 history, repair counts and unrelated tracked/untracked work. They start no
 implementation, chat dispatch, workflow operation, build, publication, commit or

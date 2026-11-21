@@ -223,6 +223,18 @@ requirements and previously issued selections remain unchanged.
 
 ## Completion
 
+Current completion disposition (2026-11-21): **OPEN**. The
+[integrated checklist disposition](phase-8.1-checklist.md#integrated-abc-disposition--2026-11-21)
+preserves accepted A/B and C1/C2 Steps and records C3's authored consumer/guidance
+and adopted Cozy generated compiler/ABI. The selected producer output emits the
+accepted Core API at all three String membership sites; source hashes bind it to
+the delivered fixture/mode. Clean-source Core local publication is reported,
+while actual resolved consumer artifact identity, strict compilation, behavioral
+specifications and applicable handwritten lint remain native validation
+obligations. C05 guidance includes available APIs and explicit output/binary
+selection and awaits independent review. Producer success does not substitute
+for these consumer checks; Phase 8.1 remains OPEN with no new checklist acceptance.
+
 Close only with actual results for all required checklist items and recorded dispositions
 for any explicitly relocated work. Publish an English completion record describing
 configuration selection, rule coverage, preserved history behavior, validation and

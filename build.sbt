@@ -93,6 +93,9 @@ lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(sourc
 lazy val validateCncfSource = taskKey[Unit]("Validate the selected source dependency against the declared CNCF coordinates")
 lazy val validateCncfPublicationClasspath = taskKey[Unit]("Verify the normal attributed source JAR in the application publication closure")
 lazy val strictGeneratedQualification = settingKey[Boolean]("Explicitly qualify fresh B04 generated strict consumers")
+lazy val strictCoreQualification = settingKey[Boolean]("Explicitly qualify C04 consumers of the adopted Core collection API")
+lazy val strictCoreGeneratedSourceDir = settingKey[Option[File]]("Explicit adopted Cozy C3 generated-output resource")
+lazy val strictCoreGeneratedSources = taskKey[Seq[File]]("Verify and stage the adopted Cozy C3 compiler and its direct ABI")
 lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatMap { source => Seq(
   libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
   validateCncfSource := {
@@ -147,6 +150,62 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
         case None => cozyProjectConfig.value.boolean("qualification.strict_generated").getOrElse(false)
       }
     },
+    strictCoreQualification := {
+      sys.env.get("SM_WORKFLOW_STRICT_CORE_QUALIFICATION") match {
+        case Some("true") => true
+        case Some("false") => false
+        case Some(_) => sys.error("SM_WORKFLOW_STRICT_CORE_QUALIFICATION must be true or false")
+        case None => cozyProjectConfig.value.boolean("qualification.strict_core").getOrElse(false)
+      }
+    },
+    strictCoreGeneratedSourceDir := {
+      val basedir = baseDirectory.value
+      sys.env.get("SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR")
+        .orElse(cozyProjectConfig.value.value("qualification.core_generated_source_dir"))
+        .map { path =>
+          val selected = file(path)
+          if (selected.isAbsolute) selected else basedir / path
+        }
+    },
+    strictCoreGeneratedSources := {
+      val selected = strictCoreGeneratedSourceDir.value.getOrElse(sys.error(
+        "C04 qualification requires SM_WORKFLOW_STRICT_CORE_GENERATED_SOURCE_DIR or qualification.core_generated_source_dir " +
+          "selecting adopted Cozy dd1b826e core-c3 output"))
+      require(selected.isDirectory, "C04 adopted Cozy output directory is unavailable: " + selected)
+      val expected = Map(
+        "CompositeStateMachineActionProgramAbi.scala" -> "d216a82c581cbba69dcb3b73fc3a2de0b2e663f9bdaea3e68653dcfd8defad19",
+        "LogicalActionCompiler.scala" -> "f3daf8291539c06318829386d01c9c31aa58a5db13fcc9b2051bc320e85bec3a")
+      val sources = (selected ** "*.scala").get.filter(source => expected.contains(source.getName))
+      require(sources.map(_.getName).toSet == expected.keySet && sources.size == expected.size,
+        "C04 requires exactly one adopted LogicalActionCompiler.scala and CompositeStateMachineActionProgramAbi.scala")
+      val destinationdir = (Compile / sourceManaged).value / "core-c3"
+      sources.sortBy(_.getName).map { source =>
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(IO.readBytes(source))
+          .map(byte => f"${byte & 0xff}%02x").mkString
+        require(digest == expected(source.getName),
+          "C04 generated source differs from adopted Cozy dd1b826e core-c3 output: " + source.getName +
+            "; select the admitted workflow-semantic-outcome fixture with generator JVM property " +
+            "-Dcozy.generation.logical-action-membership=core-c3")
+        val destination = destinationdir / source.getName
+        IO.copyFile(source, destination)
+        destination
+      }
+    },
+    // The owning runtime first publishes/selects the adopted Core source through
+    // normal resolution and retains the actual artifact identity. A version label
+    // alone does not establish delivery. Missing APIs fail explicit qualification.
+    libraryDependencies ++= {
+      if (strictCoreQualification.value)
+        Seq("org.goldenport" %% "goldenport-core" % "0.4.3-SNAPSHOT")
+      else Nil
+    },
+    Compile / unmanagedSourceDirectories ++= {
+      val root = baseDirectory.value / "src"
+      if (strictCoreQualification.value)
+        Seq(root / "core/scala") ++
+          (if (strictGeneratedQualification.value) Seq(root / "generated-core/scala") else Nil)
+      else Nil
+    },
     cozyGeneratorBackend := "cozy",
     cozyTargetDir := (Compile / sourceManaged).value / "scala",
     cozySkipUnchangedGeneration := {
@@ -169,6 +228,9 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
           selected
         }
       } else Def.task { Seq.empty[File] }
+    }.taskValue, Def.taskDyn {
+      if (strictCoreQualification.value) Def.task { strictCoreGeneratedSources.value }
+      else Def.task { Seq.empty[File] }
     }.taskValue),
     // This library fixture has no CNCF ABI resources. The plugin's default
     // resource generator would otherwise invoke cozyGenerate unconditionally.
@@ -179,6 +241,13 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
         "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala") ++
       (if (strictGeneratedQualification.value) Seq(
         baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/GeneratedStrictComparisonSpec.scala")
+      else Nil) ++
+      (if (strictCoreQualification.value) Seq(
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/CoreCollectionComparisonSpec.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/GeneratedLogicalActionCompilerSpec.scala") ++
+        (if (strictGeneratedQualification.value) Seq(
+          baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/GeneratedCoreCollectionComparisonSpec.scala")
+        else Nil)
       else Nil),
     scalafixScalaBinaryVersion := "2.13",
     scalafixConfig := (LocalProject("root") / scalafixConfig).value,
