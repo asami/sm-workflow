@@ -73,3 +73,7 @@ The same sm-workflow Server supports the Phase 26 Codex/Claude CLI path and at l
 ## Scheduling
 
 Phase 26 is the functional prerequisite. Do not alter the previously selected stabilization → Phase 7 → Phase 24 → Phase 25 priority merely by recording Phase 27. Decide its implementation slot against actual accepted dependencies. Planning does not start a Workflow Session or grant changes in producer repositories.
+
+## Scheduling decision — 2026-11-22
+
+Adopted order: Phase 24 -> 28 -> 18 -> 23 -> 26 -> **27** -> 22 -> 17 -> 21 -> 15 -> 14. Phase 27 follows actual Phase 26 common Server/multi-CLI interoperability, not a speculative early Phase 27.1 split. Phase 25 remains deferred; qualify concrete required API/provider prerequisites without assuming its completion. Preserve existing scope, evidence and no-unapproved-paid-overage policy. No Session starts.
