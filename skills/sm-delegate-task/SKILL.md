@@ -187,9 +187,34 @@ without fabricating Human direction. Preserve explicit user limits and consumer
 Session exclusions.
 
 Record actual dispatch/result/return using
-`DelegateTaskDeliveryService.observeDelegateTaskDelivery`. Requester adoption
-requires `describeDelegateTaskAdoption` and independently admitted exact adoption
-evidence. A transport acknowledgment, local commit, publication, return, artifact
+`DelegateTaskDeliveryService.observeDelegateTaskDelivery`.
+
+## Requester adoption
+
+1. On the requester deployment, call
+   `DelegateTaskDeliveryService.describeDelegateTaskAdoption` for the existing
+   Session. Keep its exact target and the actual observation, selection,
+   reference and execution evidence.
+2. Call `NativeWorkflowPreparationService.prepareEvidence` with family
+   `DelegateTask` and kind `adoption` on that deployment. Obtain the issuer from
+   the selected CNCF Subsystem's runtime identity. Check the `subsystem` entry
+   in the assembly actually selected for the requester, including the CAR's
+   assembly when using the shipped deployment. The Operation reads the
+   running Subsystem's name and independently resolves
+   `sm-workflow.external-evidence.issuer` from the effective deployment
+   configuration. Use the actual Subsystem name for the input issuer.
+3. If preparation reports an issuer mismatch, report the diagnostic and keep
+   the requester at its current revision. If the input value was wrong, correct
+   it from the actual runtime identity. If the Subsystem and declaration
+   differ, have the deployment owner resolve that discrepancy before preparing
+   evidence again on the same Session.
+4. Have the owning host independently admit and provision the resulting
+   import under `delegate-task-requester-artifact-adoption`. Then call
+   `DelegateTaskDeliveryService.observeDelegateTaskDelivery` with event `adopt`
+   for the same described target. The adoption Operation checks the stored
+   evidence independently. [Requester operation contract](../../docs/spec/native-delegate-task-caller.md#transport-and-adoption)
+
+A transport acknowledgment, local commit, publication, return, artifact
 attachment and actual consumer activation are separate facts. Report their actual
 references and remaining limitations. Source fixtures never establish a real
 cross-chat delivery or consumer check. Collect retained results after interruption;

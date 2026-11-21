@@ -271,6 +271,8 @@ keeps requester integration separate from destination development. The destinati
 runtime owns its validation, local commit and selected publishLocal. Return actual
 source/artifact references, checks and remaining limitations. Source edits or a
 message acknowledgment alone are not completed delivery.
+When the requester adopts a native DelegateTask result, follow
+[Requester adoption](../sm-delegate-task/SKILL.md#requester-adoption).
 
 Keep a single owner of process/result collection. Consumers use the returned
 result rather than polling the same logs or requesting progress-only AI turns.

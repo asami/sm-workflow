@@ -374,6 +374,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
 
   protected final case class InstalledBootstrapSelection(component: Path)
 
+  protected def subsystemName: String = "direct-repository-spec"
+
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
     hostParameters: Map[String, String] = Map.empty,
@@ -413,7 +415,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     val directory = Files.createDirectories(root.resolve(".textus"))
     Files.writeString(directory.resolve("config.json"), Json.obj(raw.toVector.map((key, value) => key -> Json.fromString(value))*).noSpaces)
     Files.writeString(directory.resolve("assembly.yaml"),
-      s"""subsystem: direct-repository-spec
+      s"""subsystem: $subsystemName
         |components: []
         |security:
         |  authentication:

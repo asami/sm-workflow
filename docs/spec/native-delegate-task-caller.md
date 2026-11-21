@@ -210,7 +210,14 @@ It returns componentInstance, sessionId, sourceRevision and exact target.
 `NativeWorkflowPreparationService.prepareEvidence`, family DelegateTask and kind
 adoption, consumes absolute file URIs for the actual description, observation
 result, result reference and execution evidence plus the actual issuer/time and
-host evidence collection. Independently provision the resulting evidence through
+host evidence collection. The issuing identity is the actual CNCF Subsystem
+name of the executing call. The Operation independently resolves the effective
+`sm-workflow.external-evidence.issuer` declaration in that requester deployment.
+If the Subsystem name, its declaration or the presented issuer disagree, it
+returns an issuer-specific permission error before reading evidence, preparing
+import rows or changing the Session. Resolve the reported mismatch using the
+actual deployment and continue on the same Session. Independently provision
+the resulting evidence through
 the host's `delegate-task-requester-artifact-adoption` admission. Passive output
 does not authenticate itself. Then observe adopt against that unchanged target.
 
