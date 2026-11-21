@@ -6,6 +6,9 @@ Insert [Phase 28](../../../phase/phase-28.md) immediately after Phase 24 in the 
 ## Rationale
 The current AI Fix path can handle compiler errors and lint warnings, but programmatic fixes should precede inference whenever provably safe. Compiler diagnostics and language-server code actions may offer targeted edits; Scalafmt/Scalafix provide established transformations. Their availability and safety must be verified by Scala version and error category.
 
+## Project-level Metals configuration
+Metals integration is opt-in through the project's `project.yaml`, not a mandatory or globally assumed tool. Define and validate enabled state, server/executable selection, timeouts and resource bounds; use workspace-authorized process execution and deterministic fallback when disabled, unsupported or unavailable. Exact YAML keys must be aligned with the existing project schema during implementation, rather than inventing a parallel configuration system.
+
 ## Architecture
 Compile/Lint -> structured diagnostics -> allowlisted deterministic fix candidates -> scoped patch -> compile/lint/focused test -> existing Admission. Ambiguous or unresolved diagnostics -> existing AI Judgement/Fix. No duplicated orchestration, unbounded retries, speculative edits or unapproved source writes.
 
