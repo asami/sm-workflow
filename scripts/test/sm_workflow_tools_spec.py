@@ -23,6 +23,8 @@ spec = importlib.util.spec_from_file_location('sm_tools', ROOT / 'scripts/sm-wor
 tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tools)
 
+EXPECTED_INSTALL_CHANGES = len(tools.PAYLOAD_PATHS) + len(tools.AGENTS) + len(tools.SKILLS)
+
 
 class SmWorkflowInstallationSpec(unittest.TestCase):
     def setUp(self):
@@ -67,7 +69,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
         # When the transported installer loads and installs that product archive.
         self.payload = tools.load_bundle(self.archive)
         # Then structural entries create no extra payload or installation targets.
-        self.assertEqual(self.install(), 52)
+        self.assertEqual(self.install(), EXPECTED_INSTALL_CHANGES)
         self.assertEqual(self.install(), 0)
 
     def test_unexpected_or_duplicate_archive_directories_are_rejected(self):
@@ -93,7 +95,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
         first = self.install()
         second = self.install()
         # Then only the selected files and links are added, once.
-        self.assertEqual(first, 52)
+        self.assertEqual(first, EXPECTED_INSTALL_CHANGES)
         self.assertEqual(second, 0)
         self.assertEqual(other.read_bytes(), b'existing unrelated definition')
         self.assertEqual(config.read_bytes(), b'existing config and credentials are not install targets')
@@ -169,7 +171,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
             submitOperation='submitGoalTaskWorkResult', submitSessionId='fixture-task',
             resultType='GoalTaskWorkResult', issued_work_context=issued)))
         submission = self.root / 'submission.json'
-        submission.write_text(json.dumps({'result': {'summary': 'fixture only'},
+        submission.write_text(json.dumps({'result': {'outcome': 'accept', 'summary': 'fixture only', 'findings': []},
                                          'resultReference': {'identity': 'fixture', 'revision': '1'}}))
         executable = self.root / 'sm-workflow'
         calls = self.root / 'calls.jsonl'
