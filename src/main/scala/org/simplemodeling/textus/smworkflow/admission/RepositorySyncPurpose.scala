@@ -18,7 +18,7 @@ import WorkflowManagedProcessExecution as E
 /** Purpose proposals consume genuine work records and native content facts.
   * Neither grouping nor an old record establishes candidate acceptance.
   * @since   Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncPurpose {
@@ -89,12 +89,18 @@ private[smworkflow] object RepositorySyncPurpose {
   final case class Candidate(parent: String, index: String, commit: String, tree: String, projectedIndex: String,
     changes: Vector[Content], expected: Vector[Content], message: String, baselineTree: Option[String] = None,
     worktreeBefore: Option[String] = None, worktreeAfter: Option[String] = None,
-    worktreeProjection: Option[Vector[Content]] = None)
-  given candidate_encoder: Encoder[Candidate] = io.circe.generic.semiauto.deriveEncoder[Candidate].mapJson(_.mapObject(_.filter {
-    case ("worktreeProjection", value) => !value.isNull
+    worktreeProjection: Option[Vector[Content]] = None,
+    priorCandidate: Option[Candidate] = None)
+  private lazy val _candidate_encoder = io.circe.generic.semiauto.deriveEncoder[Candidate]
+  private lazy val _candidate_decoder = io.circe.generic.semiauto.deriveDecoder[Candidate]
+  given candidate_encoder: Encoder[Candidate] = Encoder.instance(value => _candidate_encoder(value).mapObject(_.filter {
+    case ("worktreeProjection" | "priorCandidate", value) => !value.isNull
     case _ => true
   }))
-  given candidate_decoder: Decoder[Candidate] = io.circe.generic.semiauto.deriveDecoder[Candidate]
+  given candidate_decoder: Decoder[Candidate] = Decoder.instance(cursor =>
+    if (cursor.downField("priorCandidate").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Purpose prior candidate cannot be explicitly null", cursor.history))
+    else _candidate_decoder(cursor))
   final case class Progress(request: Request, plan: Option[Result] = None, cursor: Int = 0, attempt: Int = 0, slotCursor: Int = 0, baselineTree: Option[String] = None,
     candidate: Option[Candidate] = None, receipts: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty,
     assessment: Option[GoalPhaseStepAssessment.Result] = None, commits: Vector[String] = Vector.empty,
@@ -324,6 +330,20 @@ private[smworkflow] object RepositorySyncPurpose {
     } yield values :+ group }
   } yield Result(value.decision, value.rationale, groups, value.excludedPaths)
 
+  def requestC(request: GitPurposeRequest, priorCandidate: Option[Candidate], message: String): Consequence[GitPurposeRequest] =
+    priorCandidate match {
+      case None => Consequence.success(request)
+      case Some(prior) => for {
+        candidate <- producerC(prior)
+        _ <- if (candidate.request.parent == request.parent && candidate.request.index == request.index &&
+            request.baselineTree.contains(candidate.tree) && candidate.message == message &&
+            candidate.worktreeBefore.nonEmpty && candidate.worktreeAfter.nonEmpty &&
+            candidate.request.changes.forall(old => request.changes.exists(current =>
+              current.path == old.path && current.expectedWorktree == old.expectedWorktree))) Consequence.unit
+          else N.invalid("Purpose prior candidate crosses the exact source, worktree inputs or repair baseline")
+      } yield GitPurposeRepairRequest(request, candidate)
+    }
+
   def producerC(candidate: Candidate): Consequence[GitPurposeCandidate] = for {
     _ <- if (candidate.worktreeProjection != null && candidate.worktreeProjection.forall(values =>
         candidate.baselineTree.nonEmpty && values != null && values.forall(_ != null) && values.map(_.path).distinct.size == values.size &&
@@ -341,7 +361,8 @@ private[smworkflow] object RepositorySyncPurpose {
     baseline <- candidate.baselineTree.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
     before <- candidate.worktreeBefore.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
     after <- candidate.worktreeAfter.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
-  } yield GitPurposeCandidate(GitPurposeRequest(parent, index, changes, baseline), commit, tree, projected, candidate.message, before, after)
+    request <- requestC(GitPurposeRequest(parent, index, changes, baseline), candidate.priorCandidate, candidate.message)
+  } yield GitPurposeCandidate(request, commit, tree, projected, candidate.message, before, after)
 
   private def _records_c(store: N.Store): Consequence[Vector[SourceRecord]] =
     store.declaration.purposePolicy.toVector.flatMap(_.sources).filter(_.repositoryIdentity.forall(_ == store.context.repositoryIdentity))

@@ -22,7 +22,7 @@ import P.given
 /** Authored observations for pure contracts, not actual Human evidence or live
   * native effects. The installed fixture owns actual receipt/transition checks.
   * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -47,6 +47,52 @@ final class RepositorySyncPurposePreparationContinuationSpec extends AnyWordSpec
     P.repairProgressJson(progress).noSpaces, failed.noSpaces,
     RepositorySyncPurposeContentContinuation.canonical(f.actual.asJson).noSpaces, f.request.indexTree, f.request.parent, "", N.policy)
   private val reference = ContextReference("actual-human-direction", "1")
+
+  "Repeated Purpose candidate preparation" should {
+    "rebuild the original typed requests and preserve their entire chain across storage" in {
+      Given("a retained older candidate including its distinct staged remainder and worktree projection")
+      val legacy = f.progress.candidate.get.copy(worktreeBefore = Some("a" * 40), worktreeAfter = Some("b" * 40))
+      val legacyrequest = take(P.producerC(legacy))
+      val next = legacy.copy(commit = "c" * 40, tree = "d" * 40, projectedIndex = "e" * 40,
+        baselineTree = Some(legacy.tree), priorCandidate = Some(legacy))
+      val latest = next.copy(commit = "1" * 40, tree = "2" * 40, projectedIndex = "3" * 40,
+        baselineTree = Some(next.tree), priorCandidate = Some(next))
+      When("the completed preparation is read back and offered to ordinary materialization or installation")
+      val restored = latest.asJson.as[P.Candidate].toOption.get
+      val native = take(P.producerC(restored))
+      Then("all original candidate facts and both layers of the new typed repair request survive")
+      restored shouldBe latest
+      val previous = native.request.asInstanceOf[GitPurposeRepairRequest].priorCandidate
+      previous shouldBe take(P.producerC(next))
+      previous.request.asInstanceOf[GitPurposeRepairRequest].priorCandidate shouldBe legacyrequest
+      legacy.asJson.hcursor.downField("priorCandidate").succeeded shouldBe false
+      legacy.asJson.as[P.Candidate] shouldBe Right(legacy)
+      P.producerC(next.copy(priorCandidate = Some(legacy.copy(index = "9" * 40)))).isSuccess shouldBe false
+    }
+
+    "select only the accepted predecessor and leave the original failed preparation intact" in {
+      Given("an admitted next attempt and its actual prior prepared candidate, whose grouped request is intact")
+      val original = f.progress
+      val group = RepositorySyncPurposeOwnership.effectiveGroup(original, original.plan.get.groups(original.cursor))
+      val candidate = original.candidate.get.copy(changes = group.content,
+        expected = group.content.flatMap(content => RepositorySyncPurposeOwnership.expected(original, content.path)))
+      val intent = original.copy(candidate = None)
+      val success = process.copy(termination = ProcessExecutionTermination.Exited(0))
+      val prepared = original.copy(candidate = Some(candidate), effects = intent.effects :+ effect(success, "Succeeded"))
+      val admitted = before.copy(request = prepared.request, commits = prepared.commits, effects = prepared.effects)
+      val current = admitted.copy(effects = admitted.effects :+ failed, preparationNamespace = Some("prepare-continuation-30"))
+      When("the pending attempt and actual selected history are compared")
+      val selected = RepositorySyncPurposeCandidateLineage.qualifyC(current, admitted, intent, prepared)
+      Then("the actual predecessor is reusable but a crossed Purpose, source, or attempt is refused")
+      take(selected) shouldBe candidate
+      current.effects.last shouldBe failed
+      RepositorySyncPurposeCandidateLineage.qualifyC(current, admitted, intent.copy(attempt = intent.attempt + 1), prepared).isSuccess shouldBe false
+      RepositorySyncPurposeCandidateLineage.qualifyC(current.copy(request = current.request.copy(root = "/another")),
+        admitted, intent, prepared).isSuccess shouldBe false
+      val crossed = prepared.copy(cursor = prepared.cursor + 1)
+      RepositorySyncPurposeCandidateLineage.qualifyC(current, admitted, intent.copy(cursor = crossed.cursor), crossed).isSuccess shouldBe false
+    }
+  }
 
   "ID08 exact failed preparation target" should {
     "preserve opaque full progress and process observations through public Record conversion and reject malformed targets" in {

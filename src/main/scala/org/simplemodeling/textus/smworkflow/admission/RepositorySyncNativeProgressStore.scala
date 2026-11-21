@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -46,7 +46,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     mergeCheckContinuation: Option[RepositorySyncMergeCheckContinuation.Direction] = None,
     validationPreparation: Option[RepositorySyncMergeCheckContinuation.PreparationRefusal] = None,
     purposeTestEvidenceRequirement: Option[String] = None,
-    reviewSupplemental: Option[RepositorySyncReviewInputContinuation.SupplementalEvidence] = None)
+    reviewSupplemental: Option[RepositorySyncReviewInputContinuation.SupplementalEvidence] = None,
+    purposeAdditionalTestOnly: Option[RepositorySyncPurposeTestOnlyContinuation.Direction] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -94,9 +95,10 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       "mergeCheckContinuation" -> value.mergeCheckContinuation.asJson,
       "validationPreparation" -> value.validationPreparation.asJson,
       "purposeTestEvidenceRequirement" -> value.purposeTestEvidenceRequirement.asJson,
-      "reviewSupplemental" -> value.reviewSupplemental.asJson
+      "reviewSupplemental" -> value.reviewSupplemental.asJson,
+      "purposeAdditionalTestOnly" -> value.purposeAdditionalTestOnly.asJson
     )).mapJson(_.mapObject(_.filter {
-      case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposePreparationIntent" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation" | "purposeTestEvidenceRequirement" | "reviewSupplemental", value) => !value.isNull
+      case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposePreparationIntent" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation" | "purposeTestEvidenceRequirement" | "reviewSupplemental" | "purposeAdditionalTestOnly", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Payload] = Decoder.instance(cursor => for {
@@ -131,6 +133,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       validationpreparation <- cursor.get[Option[RepositorySyncMergeCheckContinuation.PreparationRefusal]]("validationPreparation")
       evidencerequirement <- cursor.get[Option[String]]("purposeTestEvidenceRequirement")
       reviewsupplemental <- GoalPhaseNativeMetadata.optional[RepositorySyncReviewInputContinuation.SupplementalEvidence](cursor, "reviewSupplemental")
+      purposeadditionaltestonly <- GoalPhaseNativeMetadata.optional[RepositorySyncPurposeTestOnlyContinuation.Direction](
+        cursor, "purposeAdditionalTestOnly")
       _ <- Either.cond(!cursor.downField("purposeTestEvidenceRequirement").focus.exists(_.isNull) &&
         evidencerequirement.forall(value => value == strictPurposeTestEvidence && stage == "PurposeChecking"), (),
         DecodingFailure("Invalid direct Purpose Test evidence requirement", cursor.history))
@@ -145,7 +149,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       purposeMaterialization = purposematerialization, repairBudget = repairbudget, pushContinuation = pushcontinuation,
       pushObservation = pushobservation, mergeCheckContinuation = mergecheckcontinuation,
       validationPreparation = validationpreparation, purposeTestEvidenceRequirement = evidencerequirement,
-      reviewSupplemental = reviewsupplemental))
+      reviewSupplemental = reviewsupplemental, purposeAdditionalTestOnly = purposeadditionaltestonly))
   }
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "RepositorySyncNativeProgressReceipt"

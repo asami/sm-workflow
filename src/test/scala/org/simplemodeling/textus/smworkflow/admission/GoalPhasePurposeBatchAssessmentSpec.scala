@@ -91,6 +91,37 @@ final class GoalPhasePurposeBatchAssessmentSpec extends AnyWordSpec with Matcher
       unsupported.foreach(stdout => _assess_(_test_receipt_(process(stdout)), true).isSuccess shouldBe false)
     }
 
+    "offer a fixed TestOnly only after a complete original batch with actual cancellations" in {
+      Given("typed Compile and full Test receipts at the assessment boundary")
+      val target = SbtTarget(take(WorkspaceId.parseC(workspace)))
+      val checks = Vector(V.Check("compile", 1, S.Kind.Compile), V.Check("test", 2, S.Kind.Test))
+      val compile = take(V.sbtReceiptC("compile", S.Kind.Compile,
+        SbtExecutionResult(target, SbtOperation.Compile, process(""))))
+      val report = """[info] ProductCheckSpec:
+        |[info] Total number of tests run: 1
+        |[info] Suites: completed 1, aborted 0
+        |[info] Tests: succeeded 1, failed 0, canceled 1, ignored 0, pending 0
+        |[info] All tests passed.
+        |""".stripMargin
+      def _receipt_(value: ProcessExecutionResult): V.Receipt =
+        take(V.sbtReceiptC("test", S.Kind.Test, SbtExecutionResult(target, SbtOperation.Test, value)))
+      val original = Vector(structural, compile, _receipt_(process(report)))
+      When("the runtime evaluates whether the only missing result is the additional fixed check")
+      val incomplete = process(report).copy(stdout = capture(report).copy(truncated = true))
+      val invalid = Vector(process(""), process(report.replace("failed 0", "failed 1")),
+        process(report.replace("aborted 0", "aborted 1")), process(report.replace("canceled 1", "canceled 0")),
+        process(report, ProcessExecutionTermination.Exited(1)),
+        process(report, ProcessExecutionTermination.TerminationUnconfirmed))
+      val continuation = RepositorySyncPurposeTestOnlyContinuation
+      Then("the real cancellation report qualifies and failed, unobserved and already-selected checks remain ineligible")
+      continuation.prefixEligible(original, checks) shouldBe true
+      invalid.foreach(value => continuation.prefixEligible(original.updated(2, _receipt_(value)), checks) shouldBe false)
+      continuation.prefixEligible(original.updated(2, original.last.copy(processObservation = Some(incomplete))), checks) shouldBe false
+      continuation.prefixEligible(original.dropRight(1), checks) shouldBe false
+      continuation.prefixEligible(original, checks :+ V.Check("unfinished", 3, S.Kind.FixCheck)) shouldBe false
+      continuation.prefixEligible(original :+ original.last, checks :+ V.Check("focused", 3, S.Kind.TestOnly)) shouldBe false
+    }
+
     "admit the successful compiled discovery batch without legacy suite counters" in {
       Given("a complete native discovery build and one exact successful mode/provider batch")
       val actual = group()

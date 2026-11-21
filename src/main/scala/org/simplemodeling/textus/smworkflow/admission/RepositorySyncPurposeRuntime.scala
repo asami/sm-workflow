@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -81,6 +81,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     def _save_(key: String, stage: String, from: N.Stage, value: P.Progress): Consequence[N.Stage] =
       store.saveC(prefix + "-" + key, "purpose-progress", from.record,
         from.payload.copy(stage = stage, purposes = Some(value),
+          purposeAdditionalTestOnly = from.payload.purposeAdditionalTestOnly.filter(direction =>
+            attemptPrefix(value) == direction.target.attempt && value.candidate.exists(_.commit == direction.target.commit)),
           purposePreparation = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparation else None,
           purposePreparationIntent = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparationIntent else None,
           purposeMaterialization = if (stage == "PurposePreparing") None else from.payload.purposeMaterialization.filter(direction =>
@@ -118,9 +120,10 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           projection.find(_.path == content.path).map(value => GitPurposeWorktreeProjection(value.text))) }
         selection <- _selection_c(group)
         baseline <- progress.baselineTree.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
+        prior <- RepositorySyncPurposeCandidateLineage.priorC(store, source, progress)
+        request <- P.requestC(GitPurposeRequest(parent, tree, changes, baseline), prior, group.message)
         intent <- _save_("prepare-intent", "PurposePreparing", source, progress)
-        result <- E.executePurposeC(store.core, GitOperation.PreparePurposeCandidate(selection.identity,
-          GitPurposeRequest(parent, tree, changes, baseline)), selection) match {
+        result <- E.executePurposeC(store.core, GitOperation.PreparePurposeCandidate(selection.identity, request), selection) match {
           case success @ Consequence.Success(_) => success
           case Consequence.Failure(conclusion) =>
             // Retain only the actual boundary diagnostic. There is no process
@@ -132,12 +135,14 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         }
         output <- result.value match {
           case Some(candidate) if result.outcome == GitExecutionOutcome.Succeeded => for {
+            _ <- if (candidate.request == request && candidate.message == group.message) Consequence.unit
+              else N.uncertain("Purpose preparation returned a candidate for a different typed request")
             prepared <- _save_("prepared", "PurposePrepared", intent, progress.copy(candidate = Some(P.Candidate(
               candidate.request.parent.value, candidate.request.index.value, candidate.commit.value, candidate.tree.value,
               candidate.projectedIndex.value, group.content,
               changes.map(change => P.Content(change.path.value, change.expectedWorktree)), candidate.message,
               candidate.request.baselineTree.map(_.value), candidate.worktreeBefore.map(_.value), candidate.worktreeAfter.map(_.value),
-              Option.when(projection.nonEmpty)(projection))),
+              Option.when(projection.nonEmpty)(projection), prior)),
               effects = progress.effects :+ _effect_json(result)))
             output <- _drive_c(store, prepared, policy, authority, review, finish)
           } yield output
@@ -317,12 +322,14 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         "The retained actual failed or unknown purpose check requires its owning FIX disposition; no replay or success is inferred", "purpose-check-failed"))
     if (done < selected.size) {
       val check = selected(done)
-      val forceFresh = progress.hostContinuation.exists(direction =>
-        direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))
+      val forceFresh = source.payload.purposeAdditionalTestOnly.exists(_.target.check == check) ||
+        progress.hostContinuation.exists(direction => direction.target.proposedChecks.exists(_.contains(check)) &&
+          !direction.target.selectedChecks.contains(check))
       if (check.ordinaryDiscovery && (!reused.contains(check.identity) || forceFresh))
         return _ordinary_c(store, source, slot, check, done, reused, policy, authority, review, finish)
       val reusable = reused.get(check.identity).filterNot(_ => forceFresh)
       for {
+        _ <- RepositorySyncPurposeTestOnlyContinuation.authenticateC(store, source)
         _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
         _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
         scoped <- candidateCoreC(store, progress)
@@ -350,6 +357,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           else _checks_c(store, checked, slot, reused, policy, authority, review, finish)
       } yield output
     } else for {
+      _ <- RepositorySyncPurposeTestOnlyContinuation.authenticateC(store, source)
       _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
       _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
       _ <- if (selected.zip(progress.receipts.drop(1)).forall((check, receipt) => C.productSuccessful(receipt, check.kind))) Consequence.unit

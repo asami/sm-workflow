@@ -437,6 +437,22 @@ namespace and direction do not authorize another repair attempt or subsequent
 Purpose; normal candidate verification, validation, independent review, commit
 and terminal handling remain authoritative.
 
+Preparation after an accepted repair resolves the preceding successful candidate
+from the current Session's immutable history. The admitted repair must refer to
+the same ordered Purpose and repository source. The previous attempt's preparation
+intent and successful candidate receipt must be adjacent, and its candidate tree
+must match the accepted repair's baseline. An unrelated candidate with an equal
+tree is insufficient.
+
+CNCF receives the complete retained previous candidate with the typed repair
+request. New prepared candidates preserve that request's predecessor recursively
+through materialization and commit, including the prior projected index and
+worktree trees. A historical candidate without a predecessor field retains its
+original request form. After a failed old preparation cleared the active candidate,
+the same history lookup applies when the existing authorized continuation prepares
+again. Unknown effects and former preparation results remain in their original
+history.
+
 ## ID09: retained baseline provenance across ownership repairs
 
 A qualified inventory's baseline file records ordinary unchanged text from the

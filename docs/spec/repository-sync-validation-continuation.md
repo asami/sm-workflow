@@ -2,6 +2,34 @@
 
 Date: 2026-10-26. Contract: RS-VC1.
 
+## Additional fixed TestOnly after a completed Purpose batch
+
+A materialized code Purpose can retain a successful structural check, Compile
+and full Test whose complete report records cancellations. When behavioral
+acceptance still requires a focused test, the same Session can add one
+`TestOnly` to the end of the retained selection. The original results,
+including cancellations, remain in native history. Normal acceptance still
+requires a real successful nonempty behavioral report.
+
+The host's ordinary validation declaration must retain the exact previous
+FULL selection and append one fixed TestOnly. The materialized Session
+candidate alias must have a single granted `test-only` SBT program with explicit
+test classes. Discovery and alternate workspaces are ineligible. The runtime
+checks the original adjacent native intent/result records, exact clean
+candidate, original check order and current host binding. Missing results,
+failed or incomplete reports and a previously selected TestOnly are ineligible.
+
+Call `describeRepositorySyncValidationContinuation --sessionId <id>`, prepare
+the independent answer for the returned
+`sm-workflow.repository-sync-purpose-additional-test-only.v1` target, and call
+`adoptRepositorySyncValidationContinuation` with
+`AuthorizeAdditionalPurposeTestOnly`. Both prior-execution assertions are
+false for this completed batch. `Defer` writes no state. A repeated identical
+adoption at the admitted frontier returns the saved direction. A new or stale
+decision cannot reuse it. A separate ordinary `advanceRepositorySync` runs
+only the new check and sends its typed result through the existing acceptance
+and review route.
+
 ## Resultless direct Purpose Test
 
 The existing describe and adopt operations support two evidence policies for a

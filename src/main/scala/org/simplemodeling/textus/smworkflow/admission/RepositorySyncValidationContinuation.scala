@@ -20,11 +20,12 @@ import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as C
 import RepositorySyncPurposeTestInterruption as T
+import RepositorySyncPurposeTestOnlyContinuation as AdditionalTest
 
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since   Oct. 26, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -224,6 +225,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = T.availableChoices(value)
   }
+  final case class PurposeAdditionalTestOnlyTarget(value: AdditionalTest.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = AdditionalTest.choices
+  }
   /** Dispatch on the explicit discriminator, never on a failed decoder. */
   def decodeAnyTarget(value: Json): Either[String, AnyTarget] = for {
     wire <- Option(value).toRight("Continuation target is absent")
@@ -239,6 +244,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case RepositorySyncPurposeMaterializationContinuation.policy => RepositorySyncPurposeMaterializationContinuation.decodeTarget(wire).map(PurposeMaterializationTarget(_))
+      case AdditionalTest.policy => AdditionalTest.decodeTarget(wire).map(PurposeAdditionalTestOnlyTarget(_))
       case T.policy | T.legacyPolicy => T.decodeTarget(wire).map(PurposeTestInterruptionTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
@@ -255,6 +261,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
     case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.decodeAnswer(value)
+    case PurposeAdditionalTestOnlyTarget(_) => AdditionalTest.decodeAnswer(value)
     case PurposeTestInterruptionTarget(target) => T.decodeAnswer(target, value)
     case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
@@ -275,6 +282,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeMaterializationTarget(value) => RepositorySyncPurposeMaterializationContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case PurposeAdditionalTestOnlyTarget(value) => AdditionalTest.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeTestInterruptionTarget(value) => RepositorySyncPurposeTestInterruption.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
@@ -471,6 +480,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeMaterializing")))
         RepositorySyncPurposeMaterializationContinuation.describeC(identity, d, definition, core, acknowledge)
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeMaterialized")))
+        AdditionalTest.describeC(session, d, core, policy, acknowledge)
       else if (session.started.current.currentProgression.exists(p =>
           Set("sync.ValidationChecking", "sync.ValidationPreparationRejected")(p.value))) for {
         store <- N.bindC(session, d, core, acknowledge)
@@ -535,6 +546,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         installation, acknowledge)
       case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.adoptC(input, d, definition, core,
         installation, acknowledge)
+      case PurposeAdditionalTestOnlyTarget(value) => AdditionalTest.adoptC(input, value, d, definition, core,
+        policy, installation, acknowledge)
       case PurposeTestInterruptionTarget(value) => RepositorySyncPurposeTestInterruption.adoptC(input, value, d, definition, core,
         installation, acknowledge)
       case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.adoptC(input, d, definition, core,
