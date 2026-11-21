@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -122,6 +123,49 @@ class DispatchSpec(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'differs'):
             A.prepare(crossed, self.mapping, self.facts, ROOT, ROOT, supplied_review=package)
 
+    def test_candidate_file_assembly_is_ordered_bounded_and_keeps_provenance_local(self):
+        # Given an issued review and Git's actual candidate object responses.
+        request = copy.deepcopy(self.request)
+        request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        head, tree, a, b = '1' * 40, '2' * 40, '3' * 40, '4' * 40
+        request['work'].update(candidate={'head': head, 'tree': tree}, checks_receipt='receipt',
+                               review={'diff': 'diff', 'checks': [{'identity': 'test'}]})
+        def git(argv, **kwargs):
+            self.assertEqual(kwargs['env']['GIT_NO_LAZY_FETCH'], '1')
+            self.assertEqual(kwargs['env']['GIT_NO_REPLACE_OBJECTS'], '1')
+            args = argv[4:]
+            if args[0] == 'rev-parse':
+                output = (str(ROOT) + '\n').encode()
+            elif args[0] == 'ls-tree':
+                name = args[-1]
+                blob = {'a.txt': a, 'b.txt': b}[name]
+                output = ('100644 blob ' + blob + '\t' + name + '\0').encode()
+            elif args[1] == '-t':
+                output = b'commit\n' if args[-1] == head else b'tree\n'
+            elif args[1] == '-s':
+                output = b'1\n'
+            else:
+                output = {a: b'A', b: b'B'}[args[-1]]
+            return mock.Mock(stdout=output)
+        exclusions = [{'name': 'omitted.txt', 'reason': 'outside review scope'}]
+        # When the caller selects files in either order from the candidate.
+        with mock.patch.object(A.subprocess, 'run', side_effect=git):
+            first = A.assemble_review_package(request, ROOT, ['b.txt', 'a.txt'], exclusions, True, 'scope reviewed')
+            second = A.assemble_review_package(request, ROOT, ['a.txt', 'b.txt'], exclusions, True, 'scope reviewed')
+            oversized = A.assemble_review_package(request, ROOT, ['a.txt', 'b.txt'], exclusions, True, 'scope reviewed', 1)
+        # Then the separate staged tree is accepted, the v1 packet is stable,
+        # and provenance remains outside the packet.
+        self.assertEqual(first, second)
+        self.assertEqual(first['status'], 'READY')
+        self.assertEqual([f['name'] for f in first['suppliedReview']['packet']['files']], ['a.txt', 'b.txt'])
+        self.assertEqual(first['provenance']['files'][0]['blob'], a)
+        self.assertNotIn('provenance', first['suppliedReview']['packet'])
+        self.assertEqual(oversized['reason'], 'files-too-large')
+        self.assertEqual(A.assemble_review_package(request, ROOT, ['a.txt'], [], False, 'scope reviewed')['reason'],
+                         'completeness-unconfirmed')
+        self.assertEqual(A.assemble_review_package(request, ROOT, ['../a.txt'], [], True, 'scope reviewed')['reason'],
+                         'invalid-resource-inventory')
+
     def test_supplied_review_compacts_receipts_and_retains_contract(self):
         request = copy.deepcopy(self.request)
         del request['retained_work']
@@ -184,6 +228,29 @@ class DispatchSpec(unittest.TestCase):
         request['work']['kind'] = 'ImplementStep'
         with self.assertRaisesRegex(ValueError, 'issued review'):
             A.review_package(request, files, True, 'attested')
+
+    def test_supplied_review_reproduces_ordered_multifile_package_and_provenance(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'candidate-head', 'tree': 'candidate-tree'}
+        request['work']['review'] = {'diff': '+変更', 'checks': [{'identity': 'test'}]}
+        files = [{'name': 'spec', 'content': '要件'}, {'name': 'source', 'content': 'code'}]
+
+        first = A.review_package(request, files, True, 'caller-selected complete input')
+        repeated = A.review_package(copy.deepcopy(request), copy.deepcopy(files), True,
+                                    'caller-selected complete input')
+        self.assertEqual(first, repeated)
+        self.assertEqual(first['packet']['files'], files)
+        self.assertEqual(first['packet']['candidate'], request['work']['candidate'])
+        self.assertEqual(first['packet']['checksReceipt'], 'fixture:validation:1')
+        self.assertEqual(first['packet']['workResource'], 'sm-workflow-work:actual')
+        encoded = json.dumps(first['packet'], ensure_ascii=False, sort_keys=True,
+                             separators=(',', ':')).encode('utf-8')
+        self.assertEqual(first['bytes'], len(encoded))
+        self.assertEqual(A.review_package(request, files, True, 'caller-selected complete input',
+                                          len(encoded) - 1)['reason'], 'package-too-large')
+        self.assertEqual(first['packet']['files'][0]['content'], '要件')
 
     def test_api_attempt_retains_identity_and_never_restarts_uncertain_execution(self):
         request = copy.deepcopy(self.request)
@@ -398,6 +465,7 @@ class DispatchSpec(unittest.TestCase):
             self.assertEqual(state['policy'], policy)
             self.assertEqual(state['request'], original)
             self.assertEqual(request, original)
+
             self.assertEqual(A.restore(state, request), state)
             for target in ('difficult', 'hardest'):
                 policy['edges']['sol-medium'] = target
@@ -486,6 +554,24 @@ class DispatchSpec(unittest.TestCase):
             self.assertIn('read-only', state['launch']['message'])
             self.assertEqual(state['request'], original)
             self.assertEqual(request, original)
+
+            # The installed resource also assembles the issued candidate, rather
+            # than reading the possibly dirty source worktree.
+            head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+            tree = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+            path = 'scripts/goal-phase-dispatch.py'
+            candidate_content = subprocess.check_output(['git', '-C', str(ROOT), 'show', head + ':' + path]).decode('utf-8')
+            request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+            request['work'].update(candidate={'head': head, 'tree': tree}, checks_receipt='fixture:receipt',
+                                   review={'diff': 'fixture diff', 'checks': [{'identity': 'test'}]})
+            first = adapter.assemble_review_package(request, ROOT, [path], [], True, 'fixture scope')
+            repeated = adapter.assemble_review_package(request, ROOT, [path], [], True, 'fixture scope')
+            self.assertEqual(first, repeated)
+            self.assertEqual(first['status'], 'READY')
+            self.assertEqual(first['suppliedReview']['packet']['files'], [{'name': path, 'content': candidate_content}])
+            self.assertEqual(first['provenance']['candidate'], {'head': head, 'tree': tree})
+            self.assertEqual(adapter.assemble_review_package(request, ROOT, ['missing-fixture'], [], True,
+                                                              'fixture scope')['reason'], 'candidate-file-unavailable')
 
     def test_launch_callback_preserves_role_contract_arguments_return_and_resume(self):
         # Given exposed absence of Luna/Terra, then an available Sol high.

@@ -14,7 +14,10 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
+import subprocess
 import sys
 
 if (sys.implementation.name != 'cpython' or sys.version_info < (3, 12)
@@ -155,6 +158,74 @@ def review_package(request, files, complete, completeness_source, max_bytes=REVI
     if len(encoded) > max_bytes:
         return dict(status='DECLINED', reason='package-too-large', bytes=len(encoded), limit=max_bytes)
     return dict(status='READY', packet=packet, bytes=len(encoded), limit=max_bytes)
+
+
+def assemble_review_package(request, repository, paths, excluded, complete, completeness_source,
+                            max_bytes=REVIEW_PACKAGE_MAX):
+    """Read explicit regular files from the issued Git candidate, never the worktree.
+
+    Provenance and exclusions are local evidence, outside the v1 provider packet.
+    Completeness remains an explicit caller judgment, not an inferred guarantee.
+    """
+    if complete is not True or not isinstance(completeness_source, str) or not completeness_source.strip():
+        return dict(status='DECLINED', reason='completeness-unconfirmed')
+    def valid_path(path):
+        return (isinstance(path, str) and path and not path.startswith('/') and
+                '\\' not in path and ':' not in path and not any(ord(c) < 32 or ord(c) == 127 for c in path) and
+                all(part not in ('', '.', '..') for part in path.split('/')))
+    if (not isinstance(paths, list) or not paths or len(paths) > 128 or not all(valid_path(p) for p in paths)
+            or len(set(paths)) != len(paths) or not isinstance(excluded, list)
+            or len(excluded) > 128
+            or any(not isinstance(e, dict) or set(e) != {'name', 'reason'} or
+                   not valid_path(e['name']) or not isinstance(e['reason'], str) or not e['reason'].strip()
+                   for e in excluded) or len({e['name'] for e in excluded}) != len(excluded)
+            or set(paths) & {e['name'] for e in excluded}):
+        return dict(status='DECLINED', reason='invalid-resource-inventory')
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 0 < max_bytes <= REVIEW_PACKAGE_MAX:
+        raise ValueError('Package limit must be between 1 and 512 KiB')
+    selected = selected_request(request)
+    candidate = selected.get('work', {}).get('candidate', {})
+    head, tree = candidate.get('head'), candidate.get('tree')
+    if not all(isinstance(x, str) and re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', x) for x in (head, tree)):
+        return dict(status='DECLINED', reason='candidate-identity-unavailable')
+    def git(*args):
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0',
+                   GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1')
+        return subprocess.run(['git', '--literal-pathspecs', '-C', str(repository), *args],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10, env=env).stdout
+    try:
+        if Path(git('rev-parse', '--show-toplevel').decode('utf-8').strip()).resolve() != Path(repository).resolve():
+            return dict(status='DECLINED', reason='repository-root-mismatch')
+        if git('cat-file', '-t', head).strip() != b'commit' or git('cat-file', '-t', tree).strip() != b'tree':
+            return dict(status='DECLINED', reason='candidate-object-mismatch')
+        files, provenance, total = [], [], 0
+        for path in sorted(paths):
+            entry = git('ls-tree', '-z', tree, '--', path)
+            match = re.fullmatch(rb'(100644|100755) blob ([0-9a-f]{40}|[0-9a-f]{64})\t([^\x00]+)\x00', entry)
+            if not match or match.group(3) != path.encode('utf-8'):
+                return dict(status='DECLINED', reason='candidate-file-unavailable', path=path)
+            blob = match.group(2).decode('ascii')
+            size = int(git('cat-file', '-s', blob).strip())
+            total += size
+            if total > max_bytes:
+                return dict(status='DECLINED', reason='files-too-large', limit=max_bytes)
+            content = git('cat-file', 'blob', blob)
+            if len(content) != size:
+                return dict(status='DECLINED', reason='candidate-file-unavailable', path=path)
+            files.append(dict(name=path, content=content.decode('utf-8')))
+            provenance.append(dict(name=path, blob=blob, bytes=size, sha256=hashlib.sha256(content).hexdigest()))
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        return dict(status='DECLINED', reason='candidate-read-failed')
+    package = review_package(request, files, complete, completeness_source, max_bytes)
+    if package['status'] != 'READY':
+        return package
+    return dict(status='READY', suppliedReview=package,
+                provenance=dict(candidate=dict(head=head, tree=tree), files=provenance,
+                                excluded=sorted(copy.deepcopy(excluded), key=lambda e: e['name']),
+                                completenessSource=completeness_source),
+                estimate=dict(packageBytes=package['bytes'], tokenEstimate=package['bytes'],
+                              tokenEstimateBasis='one token per UTF-8 byte heuristic; model tokenizer unverified'))
 
 
 def alias(value, camel, snake):
@@ -634,7 +705,7 @@ def dispatch(request, mapping, capabilities, launch, root=None, repository=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['prepare', 'review_package', 'launched', 'rejected', 'complete', 'uncertain', 'api_prepare', 'api_started', 'api_complete', 'api_uncertain', 'api_execution_evidence', 'inline_complete', 'execution_evidence', 'restore'])
+    parser.add_argument('operation', choices=['prepare', 'review_package', 'assemble_review_package', 'launched', 'rejected', 'complete', 'uncertain', 'api_prepare', 'api_started', 'api_complete', 'api_uncertain', 'api_execution_evidence', 'inline_complete', 'execution_evidence', 'restore'])
     parser.add_argument('input', help='JSON object containing operation arguments; output is stdout only')
     args = parser.parse_args()
     values = json.loads(Path(args.input).read_text())

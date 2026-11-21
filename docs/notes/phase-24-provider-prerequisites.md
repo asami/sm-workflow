@@ -48,6 +48,22 @@ any concrete missing producer contract with its owner and deliver it through the
 normal producer validation, review and delivery route. No such producer change
 is authorized or claimed by this inventory.
 
+## Q1 offline assembly
+
+`assemble_review_package` in `scripts/goal-phase-dispatch.py` accepts an issued
+independent review, the admitted repository root, explicit included paths and
+excluded paths with reasons, and the caller's completeness judgment. It reads
+regular UTF-8 blobs from the issued candidate tree, checking the issued head
+and tree as separate Git objects: a staged candidate tree may differ from the
+head commit's tree. It sorts paths, bounds the inventory and package, and declines
+on missing or unsuitable content. Git lazy fetch and replacement objects are
+disabled. The result contains the existing v1 `suppliedReview` packet plus local
+blob identities, SHA-256 hashes, sizes and exclusions. It does not inspect the
+live worktree or prove that the selected files are sufficient. Its byte-based
+token estimate is a heuristic, not a model tokenizer or cost guarantee. The
+offline implementation and specifications still require runtime-owned validation;
+construction overhead and practical connected review remain unmeasured.
+
 ## PRE-4: access and no-paid-overage gate
 
 The operator must confirm the selected organization/project has eligible API
