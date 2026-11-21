@@ -184,6 +184,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
       DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
       publication,
-      ManagedDevelopmentService.bind(host.managedDevelopment)).map(NativeWorkflowCompactResponse.bind) :+
+      ManagedDevelopmentService.bind(host.managedDevelopment, Some(ProviderPhaseDelivery.Storage(
+        host.goal.configuration, host.goal.instances, host.goal.continuations)))).map(NativeWorkflowCompactResponse.bind) :+
       WorkflowRetainedWork.bind
 }

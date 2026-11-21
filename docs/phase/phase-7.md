@@ -1,5 +1,20 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Operational release follow-up — 2026-11-22
+
+The operational integration candidate passed production Compile. Its four
+focused suites recorded 379 successful cases and two stopped cases. After
+configuring the fixture's owned validation-capture workspace, the connected
+B delivery and A continuation case passed. The other case reached
+`DirtyPostCommit`. Its managed Compile and TestOnly processes exited 0, but
+the public compact receipt did not satisfy the fixture's inline exit-code
+assertion, so the later dirty-source rejection assertions did not run.
+The remaining case and the evidence required to close it are in
+[Phase 22, P22-11](phase-22.md#phase-7-operational-qualification).
+Keep the original failed observations and the successful cases at their
+actual scope. The active Phase 7 Session and its adopted Plan retain their
+current state.
+
 ## Parallel development first — 2026-11-11
 
 The Phase order is **7 -> [11.1](phase-11.1.md) -> [8](phase-8.md) -> [8.1](phase-8.1.md) ->
@@ -284,6 +299,54 @@ Additional necessary files within the admitted Component/purpose/acceptance/oper
 are scope updates judged by sm-workflow, not automatic Human questions. Preserve
 real Component and operation boundaries. Reuse the producer implementation and
 evidence; do not create another consent owner or repeat accepted Phase 6 work.
+
+### Phase/Task-owned chat permissions — 2026-11-21
+
+Clarify P7-DD-01/04/10/13 within the ongoing Phase 7 delivery work. Reuse the
+existing dependency-edge `AssignedChat` binding, delegated request contract and
+purpose-based authorization owner. Existing source already checks the configured
+destination; the Phase policy retains admitted in-purpose repair permission.
+These authored mechanisms do not establish installed qualification of the complete
+Phase/Task permission lifecycle described here.
+
+Each Phase or Task retains its effective permitted destination chats and their
+authorized scope in the existing Workflow state. Bind the actual chat identity
+to the responsible Component/project, development purpose, acceptance boundary,
+permitted operations and explicit exclusions, with the original authorization
+references. A Task may inherit applicable authorization from its owning Phase
+or retain its own adopted scope; it cannot enlarge that authority by changing
+caller settings. A chat's availability or registration alone grants no effects.
+
+Within that retained scope, runtime admits necessary requests, same-purpose
+follow-up requests, repairs, affected revalidation and result return/adoption
+without another Human permission question. Preserve destination FIFO and actual
+validation, review and delivery ownership. A changed candidate, Step, source
+revision, failure reason, or necessary file/test/fixture inventory does not by
+itself invalidate the permission. Compare changes against the retained purpose
+and actual restrictions, rather than treating an initial path estimate as a
+Human-imposed exact-file boundary. Resume/reconnect retains the same policy.
+
+A request to an unpermitted destination, work outside the adopted purpose, or
+an operation beyond retained authority requires the missing direction; report
+the actual difference instead of asking for the whole task again. Preserve
+explicit Fixed choices, exclusions and independent shared-CLI/publication/push
+permissions. Missing execution configuration is a setup error, not absent Human
+consent. Unknown effects still require normal reconciliation before any retry.
+
+For example, an admitted Cozy generation repair includes its necessary tests
+and fixtures, follow-up corrections and revalidation within that same purpose;
+changing their inventory must not produce another `ApproveDependencyScope`
+question solely for those changes. This does not authorize unrelated Cozy work
+or an excluded effect.
+
+Integrate this clarification at the next applicable boundary of the existing
+Phase 7 work. Retain original Step/condition IDs, accepted results, successful
+checks, Sessions, histories and repair counts. Do not restart/rebaseline the
+active Phase, add a separate permission store or approval gate, or mark existing
+pending Human questions answered through this document. Reconcile legacy pending
+records through the existing public continuation using genuine retained authority;
+otherwise identify the actual missing decision. Track remaining qualification
+under P7-DD-01/04/10/13 without reopening already covered acceptance.
 
 
 Evidence ownership update (2026-10-20): consume [Phase 6.4](phase-6.4.md)'s
@@ -1023,3 +1086,87 @@ A as ready. Registered specifications now include the connected public route,
 canonical-check misbinding, selected-B failure and negative consumer/source
 cases. These additions are authored source, not executed verification or
 independent review evidence. The original 44 Phase conditions remain in force.
+
+## P7-D current driver and closure evidence — 2026-11-21
+
+The issued P7-D ImplementStep is continuation
+`14fad7b7a87c61d8d8f2eeb432a65fb4:ordered-implementation:2370`, revision 2371,
+Plan 2. Its accepted prefix is P7-A `4f9c659f`, P7-C `b4db3ca8`, P7-DD
+`1895af77`, P7-B `372efcfa`. All 44 adopted conditions are still Phase-scoped;
+an empty Step condition report is not their acceptance.
+
+P7-D authors a bounded connection from the existing development edges into the
+normal directory-list owner: captured provider-first order, native child
+results, unfinished-provider consumer gating and explicit unknown consumer-input
+applicability. The consumer remains unstarted even when provider trees match,
+because artifact selection may differ. Historical unbound batches keep their
+ordinary behavior. The [dependency gate contract](../spec/repository-sync-local-main-integration.md#p7-d-selected-workspace-dependency-gate--2026-11-21)
+names the missing cross-repository validation subject. It is not replaced by
+input ordering, three physical directories or successful producer checks.
+
+| Original scenario | Current P7-D evidence obligation |
+| --- | --- |
+| 1. All unchanged | New registered equal-provider native scenario retains missing consumer-input applicability. Ordinary unbound equality already has its separate native evidence. |
+| 2. Root program change | Existing per-repository program-impact specifications remain applicable only at their original subject; integrated workspace result remains owed. |
+| 3 and 6. Selected dependency changes, root unchanged | Native gate retains actual provider results and leaves consumer unstarted; affected consumer validation subject and results are still missing. |
+| 4. Two independent dependency changes | Provider scheduling can retain independent pending results; actual concurrent metadata-selected checks followed by root validation are not qualified. |
+| 5. Required dependency failure | Focused gate cases preserve failed/nonterminal/unknown provider distinctions and prevent consumer Start. Actual multi-repository failed FULL integration remains owed. |
+| 7. Fetch without incorporation | Reuse the original native policy/specification subject; no precautionary FULL may be inferred from fetch or Git classification alone. |
+| 8. Conflict | New registered real-Git conflict arm retains the native conflict work, an independent provider result and the unstarted consumer. Execution/review remain required. |
+| 9. Native SBT concurrency | No product-wide lock is added; actual overlapping provider checks in the related-workspace driver remain owed. |
+
+Existing two-lane `Phase7ManagedDevelopmentSpec` exercises different scoped
+publications and failed-consumer/reconnection isolation. Its connected A/B route
+returns the exact original A Request after explicit selection and consumer
+compilation. These distinct cases do not establish two simultaneous managed
+A/B worker dispatches, runtime waiting without parent inference, or an ended-turn
+automatic Goal reactivation. Retain that P7-PARALLEL/P7-DD-09 qualification gap.
+Fresh invocation/generator processes likewise do not establish refresh of an
+already-running external SBT/Cozy process (P7-DAO-A05).
+
+No meaningful Phase completion record may claim these gaps resolved. First
+obtain real driver results with registered resources, actual affected metadata
+membership, dependency failure/order/concurrency and consumer input evidence.
+Then obtain attributable CNCF owner Phase101 **full** acceptance/closure,
+including its nine resource/workspace requirements and named driver worktrees.
+The source documentation's planned status is not a native completion receipt.
+Finally perform Phase7's own required checks, integrated independent review and
+ordinary native closure. Preserve every earlier failure, UNKNOWN, review,
+Session, accepted result and repair count through that sequence. P7-B's scoped
+FileDelete delivery is usable dependency evidence at its own subject and does
+not substitute for CNCF Phase101 closure.
+
+## P7-D consumer-input/concurrency repair status — 2026-11-21
+
+RepairStep `ordered-repair:2430`, expected revision2431, retains original
+issues19/20, Session14fad7b7a87c61d8d8f2eeb432a65fb4 and Plan2. The source
+repair adds an actual existing immutable consumer-input observation, retained
+before/after applicability, scoped check binding and impact-selected native
+Integrated validation. It removes the unconditional dependency refusal for
+known inputs; missing/multiple envelopes and unsupported localProject execution
+remain explicit unknowns. Equal Git alone is never input equality.
+
+Per-child native Job intents and actual results replace the one-at-a-time
+aggregate relation for related batches. Multi-worker engines can launch a ready
+wave before foreground collection; the installed one-worker default retains
+synchronous execution. The formally adopted CNCF delivery at canonical commit
+`bcc3a50dcbab4c5df6eea2b20dbe522bc335b0f7` supplies the trusted bounded
+`textus.job.scheduler.worker-count` setting and scoped consumer TestCompile /
+TestOnly. The resumed source repair at `ordered-repair:2434`, revision2435,
+joins each confirmed Job even after another submit/wait becomes unconfirmed,
+collects available later success/failure receipts, and retains uncertainty
+without replay. Actual overlapping checks on the configured consumer host and
+mixed-outcome qualification remain runtime-owned requirements.
+
+See the [current repair contract](../spec/repository-sync-local-main-integration.md#p7-d-consumer-input-continuation-repair--2026-11-21).
+No source-only repair closes the nine-scenario driver, any of the44 Phase
+conditions, CNCF101, independent integrated review or native Phase closure.
+
+The earlier Compile-only CNCF admission and absent worker setting were producer
+dependency gaps; their formal delivery is attached to the existing consumer
+Session. Discovery and metadata-selected tests retain the exact same scoped
+input under Component, build-Manage, owner-ReadOnly and operation-specific grants.
+Consumer activation and fresh tests are still required; producer delivery alone
+does not qualify the repaired consumer or close issue19/20. Explicit Git-only
+edges may accompany one selected scoped-consumption edge; multiple independent
+consumer envelopes and localProject execution remain outside the adapter.

@@ -80,6 +80,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     logicalOrigin: Option[String] = None,
     retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None,
     qualificationPolicy: Option[GoalPhaseQualification.Policy] = None,
+    managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None,
     private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
     private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
@@ -94,7 +95,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     documents: Option[GoalPhaseDocumentSource.Bound] = None,
     completionPolicy: Option[String] = None, developmentStartedAt: Option[String] = None,
     repairPolicy: Option[String] = None, operatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None,
-    sourceMetrics: Option[GoalPhasePhaseMetrics.Endpoint] = None)
+    sourceMetrics: Option[GoalPhasePhaseMetrics.Endpoint] = None,
+    dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -108,7 +110,8 @@ private[smworkflow] object GoalPhaseNativeRun {
         val occurrence = if (value.developmentStartedAt.isEmpty) policy.remove("developmentStartedAt") else policy
         val repair = if (value.repairPolicy.isEmpty) occurrence.remove("repairPolicy") else occurrence
         val profile = if (value.operatingProfile.isEmpty) repair.remove("operatingProfile") else repair
-        if (value.sourceMetrics.isEmpty) profile.remove("sourceMetrics") else profile
+        val metrics = if (value.sourceMetrics.isEmpty) profile.remove("sourceMetrics") else profile
+        if (value.dependencyDelivery.isEmpty) metrics.remove("dependencyDelivery") else metrics
       }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
@@ -148,6 +151,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (admitted.plan.repairLimit <= GoalPhaseRuntimeRepairControl.ceiling) Consequence.unit
       else invalid("new native Starts require selected repair allowance at most 10")
     plan <- GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, admitted.plan)
+    _ <- if (plan.deliverySynchronization.isEmpty || d.selectedCompletionPolicy == GoalPhasePostCompletionSync.localPolicy)
+      Consequence.unit else invalid("after-scoped-publication delivery requires an explicitly compatible local-completion policy; strict synchronization is not silently deferred")
     _ <- if (plan.phase == input.phaseIdentity && plan.repository == input.repositoryIdentity &&
         input.phaseIdentity == d.input.phaseIdentity && input.repositoryIdentity == d.input.repositoryIdentity)
       Consequence.unit else invalid("selected plan crosses its requested Phase/repository or host target")
@@ -159,7 +164,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     metrics = GoalPhasePhaseMetrics.capture(core, GoalPhasePhaseMetrics.scope(d), base)
     payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents,
       Some(d.selectedCompletionPolicy), d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
-      Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile, Some(metrics))
+      Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile, Some(metrics), d.managedDevelopment.filter(p =>
+        p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == plan.repository)))
+        .flatMap(DependencyDevelopmentDelivery.binding))
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -175,6 +182,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     saved <- starts.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(identity.value),
       active, active.revision, history(active, "phase.Implementation", "ordered-goal-plan-saved:" + identity.value),
       TypedValue(codec.typeIdentity, payload)), empty, events)(using core.executionContext)
+    _ <- AssignedDevelopmentChatQueue.enqueuePhaseC(ProviderPhaseDelivery.Storage(d.configuration, d.instances, d.continuations),
+      saved.receipt.next.identity.value, saved.receipt.next.revision.value.toString, payload, core)
   } yield GoalPhaseStartResult(saved.receipt.next.identity.value, "started",
     "Started Phase " + input.phaseIdentity + " in " + input.repositoryIdentity +
       ". The selected plan is saved; Advance selects the first work.")
@@ -182,6 +191,9 @@ private[smworkflow] object GoalPhaseNativeRun {
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     session <- retainedSessionC(identity, d, definition, core)
     _ <- WorkflowForceClosure.requireOpenC(session.current)
+    permitted <- AssignedDevelopmentChatQueue.permitPhaseC(ProviderPhaseDelivery.Storage(d.configuration, d.instances, d.continuations),
+      session, core, requireActive = true)
+    _ <- if (permitted) Consequence.unit else invalid("provider Phase has no active assigned-chat execution permit; observe through its retained owner")
     p = session.started.receipt.payload.value
     root <- G.rootC(core)
     branch <- G.branchC(core)

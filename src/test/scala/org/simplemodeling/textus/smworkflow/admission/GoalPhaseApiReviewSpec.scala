@@ -118,7 +118,7 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
       val review = V.GoalPhaseNativeReviewContext(Vector("code"), "+code", Vector(check), None,
         Vector.empty, Vector.empty, Vector.empty, None, None)
       val plan = V.GoalPhaseOrderedPlan("plan", "1", "phase", "repo", Vector.empty, Vector.empty,
-        10, None, None, Vector.empty, None)
+        10, None, None, Vector.empty, None, None, None, None)
       val work = V.GoalPhaseWorkView("ReviewStep", "review change", Some("step"), plan, candidate, Vector.empty,
         Some(candidate), Some("checks:1"), None, Some(review), None, None, None, None, None, None, Vector.empty, None, None)
       val disposition = Record.dataAuto("placement" -> "DELEGATED", "independence" -> "REQUIRED")

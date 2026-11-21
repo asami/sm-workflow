@@ -7,7 +7,7 @@ import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.config.{ComponentConfigurationDecoder, ComponentConfigurationKey}
-import org.goldenport.cncf.processexecution.{SbtExecutionAttempt, SbtOperation}
+import org.goldenport.cncf.processexecution.{SbtExecutionAttempt, SbtOperation, SbtTarget}
 import org.goldenport.cncf.processexecution.ProcessExecutionTermination
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -51,26 +51,22 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
   }
   def validPreparation(value: PreparationRefusal): Boolean = value != null && value.workspaceId != null &&
     org.goldenport.cncf.workspace.WorkspaceId.parseC(value.workspaceId).isSuccess && value.kind != null && ordinary(value.diagnostic)
-  private def _operation(kind: WorkflowSbtValidation.Kind): SbtOperation = kind match {
-    case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
-    case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
-    case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
-    case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
-  }
-  /** Only the actual typed UoW rejection branch can create preparation facts. */
-  private[admission] def preparationRefusalC(check: C.Check, attempt: SbtExecutionAttempt): Consequence[PreparationRefusal] = attempt match {
-    case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) if check != null && target != null &&
-        target.workspaceId != null.asInstanceOf[org.goldenport.cncf.workspace.WorkspaceId] && target.validationEstimate.isEmpty &&
-        (check.invocation match {
-          case None => target.scenario.isEmpty && target.validationMode.isEmpty && target.validationProvider.isEmpty
-          case Some(_) => RepositorySyncProgramImpact.operationC(check).toOption.exists(_.intent.target == target)
-        }) && check.kind != null &&
-        target.workspaceId.value == check.workspaceIdentity &&
-        operation == _operation(check.kind) && conclusion != null =>
-      val value = PreparationRefusal(target.workspaceId.value, check.kind, conclusion.show)
-      if (validPreparation(value)) Consequence.success(value) else N.invalid("typed preparation refusal diagnostic is incomplete")
-    case _ => N.invalid("preparation refusal requires the exact actual AdmissionRejected target and operation")
-  }
+  /** Historical unscoped callers and the native loop use the same exact typed
+    * target gate; the loop supplies its already admitted consumed-input target.
+    */
+  private[admission] def preparationRefusalC(check: C.Check, attempt: SbtExecutionAttempt): Consequence[PreparationRefusal] =
+    C.productTargetC(check).flatMap(preparationRefusalC(check, attempt, _))
+
+  private[admission] def preparationRefusalC(check: C.Check, attempt: SbtExecutionAttempt,
+    target: SbtTarget): Consequence[PreparationRefusal] = for {
+    _ <- WorkflowManagedProcessExecution.attemptTargetC(attempt, target, WorkflowManagedProcessExecution.validationOperation(check.kind))
+    value <- attempt match {
+      case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) =>
+        val value = PreparationRefusal(target.workspaceId.value, check.kind, conclusion.show)
+        if (validPreparation(value)) Consequence.success(value) else N.invalid("typed preparation refusal diagnostic is incomplete")
+      case _ => N.invalid("preparation refusal requires the exact actual AdmissionRejected target and operation")
+    }
+  } yield value
 
   final case class Target(componentInstance: String, sessionId: String, context: F.StartContext,
     root: String, endpoint: String, frontierRevision: String, frontierCause: String,

@@ -396,3 +396,161 @@ Reuse shared authorization/convergence, Evidence/Journal and typed Git/SBT.
 Preserve active 6.6/6.7 and other Sessions, bases, accepted work, history, counts
 and all successful/failed/unknown evidence. No new Session wrapping for each
 existing Phase repair, private storage edit, counter reset or accepted Submit replay.
+
+## P7-DD source implementation — 2026-11-12
+
+The optional `delivery` member of the existing `sm-workflow.managed-development`
+configuration is an array of `{ "edge": "<declared edge>", "mode": "Fixed" }`,
+`{ "edge": "<declared edge>", "mode": "AssignedChat", "chat": "<actual configured destination identity>" }`,
+or `{ "edge": "<declared edge>", "mode": "DevelopmentSubtree" }`.
+`dependencyWorkEdge` selects the applicable entry. Unknown modes/edges, duplicate
+entries, a missing AssignedChat identity, or a chat on another mode are invalid.
+Historical configurations without `delivery` retain their existing managed subtree
+route. Existing Sessions retain the mode captured at their original Start; later
+configuration does not move them to a new queue or remove queue exclusion.
+
+Fixed requester Start retains the existing consumer/delegation input and returns
+`DependencyChangeRequired` on Advance with the affected Component and objective.
+No dispatch is exposed. A Fixed destination refuses execution. Phase booleans do
+not override Fixed. Direction to change the mode stays with its existing owner;
+a failed dependency check or transport acknowledgement cannot change it.
+
+AssignedChat destination Start, after ordinary complete-input/participant/owner
+admission, enqueues its immutable native Session/request in a chat aggregate in
+the existing canonical Workflow store. The aggregate uses the same native
+expected-revision mechanical transition owner. One chat has one active request;
+other chats and managed subtree lanes remain independent. Start/admission is
+separate from transport `dispatch-observed`, and the aggregate is not a second
+executor, repair counter or artifact ledger. A concurrent queue revision conflict
+returns a conflict without an execution permit. Reconnection observes/reuses the
+original request; it cannot silently adopt a changed body or another Session.
+
+Advance claims the first eligible request before issuing implementation. An
+active request in Human/wait retains its place. On the first claim the runtime
+records the actual current clean provider base, allowing an already queued request
+to follow a predecessor's accepted commit without capturing that predecessor's
+uncommitted work. Accepted local commit plus required scoped publication and
+post-publication acceptance release the place at `ReturnReady`; transport return,
+consumer adoption and separate synchronization do not retain the queue place.
+Failed/unverified publication stays pending, preserving the existing accepted
+commit/checks and scoped operation's no-blind-replay behavior.
+
+The original `DelegateTaskContract.permittedOperations` may explicitly include
+`queue-hold`, `queue-cancel` and `queue-resume`. The existing delivery observation
+Operation accepts those events only for the actual destination Session, original
+control authorization reference, current participant and a safe Implement/Human/
+ReturnReady/Returned frontier without a pending semantic WorkOrder. A prior intent
+with unknown effects cannot release its place through this route. Hold removes
+its place explicitly; resume appends a held request at the end with a native
+event. Cancellation retains the entry/history and cannot become successful
+delivery or resume. A declared `prerequisiteFor` in the delegation contract names
+an unfinished request whose prerequisite is being requested; enqueuing it to the
+same chat refuses with `dependency-cycle`, rather than waiting behind itself.
+
+The captured `Phase7ManagedDevelopmentSpec` includes the new business examples
+and public native-operation AssignedChat and Phase-policy scenarios. They are
+authored source, not execution evidence. Real app dispatch/return observations
+remain the live authorized caller's responsibility; neither chat identity text
+nor these fixture actors establish external-chat authority. The existing native
+bounded delivery and matching A handoff remain the supported connected route.
+A declared `providerPhase` in `DelegateTaskContract` supplies the existing native
+`sessionId`, exact original `startRevision`, immutable `publication` and
+`producerSelection`. There is no bounded destination Start for this mode. The
+provider continues its original GoalPhase; requester Advance passively reads its
+canonical accepted local or strict terminal through those owners' readers. A
+pending/failed/decision-needed Phase remains a wait. A force-closed, crossed or
+unaccepted result cannot become delivery. The typed Phase delivery retains its
+actual accepted Plan/prefix/review, source revision/root/branch, publication and
+original A capture; it is never encoded as a fictitious bounded `S.State`.
+
+The provider owner explicitly invokes `publishDevelopmentArtifact` with the same
+`providerPhase` locator in `ManagedDevelopmentInput`; required publication never
+runs in requester collection. Preflight verifies native Phase completion and its
+actual clean provider commit/tree before a fresh scoped publication. Reconnection
+reads the existing immutable result without building again, including after
+subsequent synchronization changes the provider source. Consumer adoption and
+explicit integration use the same exact publication and original A handoff as
+bounded delivery.
+
+`DelegateTaskContract.synchronization`, when selected, supplies the existing
+RepositorySync business target and requires the original `repository-sync`
+operation grant. Bounded delivery attempts it only after actual successful scoped
+publication. The normal owner still admits the selected source, remote/branch,
+execution and push permissions; the data field grants none. Managed main requires
+the existing scoped `main-integration=direct` property and explicit
+`repositorySyncEdge`. An absent/incompatible binding records a deferred outcome,
+leaving local delivery usable.
+
+For a provider Phase, a newly selected original Plan may explicitly declare
+`deliverySynchronization: "after-scoped-publication"` under the existing local
+completion policy. Its native local closure records that declaration without
+starting an early child. Strict synchronization is never silently deferred, and
+ordinary Plan permission adoption cannot change this sequencing. The explicit
+provider publication input may select the synchronization target after the
+artifact succeeds. If the Phase already has a native child/result, that exact
+actual outcome/reference is reused instead of starting a second child. Neither a
+locator nor source artifact success supplies new push authority.
+
+The artifact owner's existing immutable native Component records reserve one
+sync child and retain its actual outcome. Start/Advance is attempted once through
+the existing public RepositorySync owner. Unknown intent, failure, defer and
+Human/request outcomes preserve local usability and the original child link;
+redelivery never retries them. Further child work uses its own ordinary public
+continuation. Source synchronization that changes the checkout does not rewrite
+or republish the already attributed artifact.
+
+The selected suite includes authored native provider-Phase pending/refusal and
+nonblocking post-publication deferred-sync cases in addition to the assigned-chat
+and Phase-policy cases. Full successful provider-Phase delivery and remote-sync
+integration still require the owning runtime's actual checks and independent
+review. These source/specifications make no actual dispatch, publication,
+synchronization or Phase acceptance claim.
+
+
+### Assigned-chat repair contract — 2026-11-16
+
+A real managed provider GoalPhase Start now captures its configured delivery
+binding and admits its own immutable native Start payload/Session to the same
+per-chat FIFO as bounded destinations. It retains the GoalPhase execution owner,
+Plan, repair history and original Start reference. Advance obtains the queue
+permit before issuing work or executing further native Phase effects; a queued
+Phase returns Wait without changing its Session, pending work or repair counts.
+Native execution-source reads and semantic completion require the active permit.
+Other chats remain independent. Requester Phase locators must match that actual
+Start and its captured assigned-chat binding. Historical Starts without that
+capture are not silently migrated by a new request's configuration.
+
+The declared Phase publication/selection locator is frozen in that same queue
+entry. Only the actual accepted Phase source plus its verified immutable scoped
+publication can release its place. Pending, failed or unknown publication leaves
+the active place retained. Reconnection can complete an interrupted release by
+reading the already retained publication, without rebuilding or completing the
+Phase again. Requester attachment and consumer adoption remain separate. No
+bounded provider Session, accepted Phase result or new effect grant is invented.
+
+For `observeDelegateTaskDelivery`, ordinary transport/adoption observations keep
+`commandIdentity` absent. Each `queue-hold`, `queue-cancel` or `queue-resume`
+command must supply a distinct nonempty `commandIdentity` as well as its original
+operation/authorization grant and exact destination Session. The native chat
+aggregate retains the complete command body and applied status/order. Replaying
+an old identity/body returns retained evidence without reapplying its transition
+over newer direction. Reusing an identity with another event, grant, Session or
+body refuses. A new command may reuse the same valid grant. Historical records
+remain readable without manufactured command identities; new controls cannot
+omit the identity.
+
+A redelivered bounded Start supplies the original actual `sessionId`. The owning
+Start route authenticates the existing definition, idempotency key, participant
+and complete input before composing the source/mode. It recovers the original
+root, branch and captured binding before mode admission. Current configuration
+applies only to a genuinely new request, so changing AssignedChat to Fixed or to
+a different chat cannot silently reject, move or re-enqueue the original request.
+Force closure, changed bodies/owners and crossed physical sources still refuse.
+
+The authored Phase7 regression cases cover mixed native bounded/Phase FIFO in
+both admission orders, two genuine provider Phases, queued history preservation,
+unfinished-publication exclusion, immutable control-command replay, and retained
+Start replay after configuration changes. These are source specifications; their
+runtime validation and independent review are separate evidence. Full successful
+provider-Phase publication/integration remains subject to its owning native
+qualification and the original Phase acceptance conditions.

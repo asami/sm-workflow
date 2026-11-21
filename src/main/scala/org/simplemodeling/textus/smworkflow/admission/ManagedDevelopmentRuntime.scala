@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Path
 import java.security.MessageDigest
+import scala.util.control.NonFatal
 import cats.free.Free
 import io.circe.Json
 import io.circe.generic.auto.*
@@ -26,19 +27,24 @@ import ManagedDevelopment.*
   * Physical roots come only from the resolved CNCF workspace graph. All actual
   * acquisition and effects still cross CNCF admission, including owner grants.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 21, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
   final case class Policy(storeName: String, collection: String, definition: Definition,
-    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None)
+    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None, delivery: Option[Vector[DependencyDevelopmentDelivery.Binding]] = None,
+    repositorySyncInputs: Option[Vector[Input]] = None)
   val declaration = ComponentParameterKey.optional("sm-workflow.managed-development",
     ComponentParameterDecoder[Policy] {
       case ConfigurationValue.StringValue(text) => io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text)
         .flatMap(_.as[Policy]).fold(e => Consequence.configurationInvalid(e.getMessage), p =>
           validateC(p.definition).flatMap(_ => if (p.storeName.nonEmpty && EntityCollectionId.parse(p.collection).isSuccess &&
             p.repositorySyncEdge != null && p.repositorySyncEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
-            p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)))
+            p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
+            p.repositorySyncInputs != null && p.repositorySyncInputs.forall(inputs => inputs != null && inputs.size <= 128 &&
+              inputs.forall(i => i != null && p.definition.edges.exists(_.identity == i.edgeIdentity)) &&
+              inputs.map(_.edgeIdentity).distinct.size == inputs.size) &&
+            DependencyDevelopmentDelivery.validateC(p.definition, p.delivery).isSuccess)
             Consequence.success(p) else Consequence.configurationInvalid("Managed development requires its granted Component collection")))
       case _ => Consequence.configurationInvalid("Managed development requires a structured JSON declaration")
     })
@@ -49,10 +55,52 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     result <- ManagedDevelopment.runC(operation, policy.definition, input, new NativePort(core, policy, roots))
   } yield result
 
+  def executionPlanC(core: ActionCall.Core): Consequence[Json] =
+    core.executionContext.resolvedParameters.get("textus.subsystem.process-execution.plan").flatMap(p => p.value match {
+      case ConfigurationValue.StringValue(v) => Some(v)
+      case _ => None
+    }).map(text => io.circe.parser.parse(text).fold(e => invalid(e.message), Consequence.success))
+      .getOrElse(invalid("CNCF workspace graph is unavailable"))
+
+  def workspaceRootC(core: ActionCall.Core, workspace: String): Consequence[String] = rootsC(core).flatMap(roots =>
+    roots.get(workspace).map(Consequence.success).getOrElse(invalid("unregistered workspace: " + workspace)))
+
+  def publicationC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[Option[Publication]] = for {
+    roots <- rootsC(core)
+    edge <- edgeC(policy.definition, input)
+    raw <- new NativePort(core, policy, roots).loadC(key(policy.definition, edge, "publication", input.publication))
+    publication <- raw.fold(Consequence.success(Option.empty[Publication]))(_.as[Publication]
+      .fold(e => invalid(e.message), p => Consequence.success(Some(p))))
+    _ <- publication.fold(Consequence.unit)(p => if (p.edge == edge && p.scope == policy.definition.scope && p.identity == input.publication)
+      Consequence.unit else invalid("immutable publication crosses its scoped edge/identity"))
+  } yield publication
+
   def consumerSourceC(core: ActionCall.Core, policy: Policy, edge: Edge): Consequence[Json] = for {
     roots <- rootsC(core)
     source <- new NativePort(core, policy, roots).consumerSourceC(edge)
   } yield source
+
+  /** Read an existing admitted consumer invocation. This never creates input,
+    * selects an artifact, builds a provider, or treats protection as selection. */
+  def repositorySyncInputC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[RepositorySyncConsumedInputs.Subject] = for {
+    roots <- rootsC(core)
+    edge <- edgeC(policy.definition, input)
+    _ <- if (edge.localProject.isEmpty) Consequence.unit else invalid("RepositorySync localProject has no admitted scoped SBT execution adapter")
+    port = new NativePort(core, policy, roots)
+    selection <- ManagedDevelopment.selectionC(policy.definition, edge, input, port)
+    owner <- roots.get(policy.definition.ownerWorkspace).map(Consequence.success).getOrElse(invalid("input owner workspace is unavailable"))
+    build <- roots.get(edge.consumer.workspace).map(Consequence.success).getOrElse(invalid("consumer workspace is unavailable"))
+    _ <- ownedInventoryC(policy.definition, selection.publication, owner)
+    path = "inputs/" + edge.identity + "/consumer/" + input.requestIdentity + "/input.json"
+    target <- WorkspaceId.parseC(policy.definition.ownerWorkspace).map(FileTarget.apply)
+    file <- WorkspaceFilePath.parseC(path)
+    actual <- WorkflowFileExecution.readTextC(core, target, file)
+    text <- actual.text.map(Consequence.success).getOrElse(invalid("existing consumer input is unavailable"))
+    envelope <- io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text).fold(e => invalid(e.message), Consequence.success)
+    expected = executionInput(policy.definition, edge, input, owner, build, Some(selection.publication),
+      Path.of(owner).resolve("inputs/" + edge.identity + "/consumer/" + input.requestIdentity + "/result.json").toString)
+    _ <- if (envelope == expected) Consequence.unit else invalid("existing consumer input differs from its admitted immutable selection/build/owner")
+  } yield RepositorySyncConsumedInputs.Subject(policy.definition, input, selection.publication, path, envelope)
 
   private def rootsC(core: ActionCall.Core): Consequence[Map[String, String]] = for {
     text <- core.executionContext.resolvedParameters.get("textus.subsystem.process-execution.plan")
@@ -143,7 +191,83 @@ private[smworkflow] object ManagedDevelopmentRuntime {
       actual <- new ExecutionCall(core).runC(sbtTarget, operation)
     } yield attempt(actual, sbtTarget, operation)
 
-    def publicationC(e: Edge, input: Input, source: Json): Consequence[Publication] = for {
+    override def detachC(e: Edge, input: Input): Consequence[Execution] = for {
+      // A distinct invocation without scoped input actually drops the selection.
+      // No running SBT/Cozy process is claimed to have reloaded.
+      workspace <- WorkspaceId.parseC(e.consumer.workspace)
+      target = SbtTarget(workspace)
+      actual <- new ExecutionCall(core).runC(target, SbtOperation.Compile)
+    } yield attempt(actual, target, SbtOperation.Compile)
+
+    override def deleteC(relative: String): Consequence[String] = for {
+      target <- ownerC
+      path <- pathC(relative)
+      actual <- new ExecutionCall(core).deleteC(target, path)
+      _ <- if (actual.target == target && actual.path == path) Consequence.unit
+        else invalid("FileDelete result crosses its exact owned target")
+    } yield actual.outcome.toString
+
+    override def inventoryC(pub: Publication): Consequence[Option[OwnedInventory]] = for {
+      owner <- rootC(d.ownerWorkspace)
+      inventory <- ownedInventoryC(d, pub, owner)
+      // Cross-check actual completion metadata before admitting or reserving
+      // cleanup; only derived logical filenames ever reach FileDelete.
+      controls = pub.batch match {
+        case None => Vector(base(d, pub.edge, pub.identity) + "/completed.json" -> pub.completion)
+        case Some(batch) => batch.members.map(m =>
+          moduleBase(d, m.requested, pub.identity) + "/completed.json" -> m.completion) ++
+          batch.members.map { m =>
+            val row = batch.artifacts.hcursor.get[Vector[Json]]("members").toOption.get.find(value =>
+              value.hcursor.downField("module").get[String]("organization").toOption.contains(m.selected.organization) &&
+                value.hcursor.downField("module").get[String]("name").toOption.contains(m.selected.module)).get
+            val control = Json.obj("scope" -> d.scope.asJson, "owner" -> d.ownerWorkspace.asJson,
+              "producerSelectionId" -> pub.producerSelection.asJson, "batch" -> pub.identity.asJson,
+              "complete" -> true.asJson, "module" -> row.hcursor.downField("module").focus.get,
+              "artifacts" -> row.hcursor.downField("artifacts").focus.get)
+            moduleBase(d, m.requested, pub.identity) + "/completed-v3.json" -> control
+          } ++ Vector(batchPath(d, pub.identity) + "/completed.json" -> batch.completion,
+            batchPath(d, pub.identity) + "/completed-v3.json" -> batch.artifacts)
+      }
+      _ <- controls.foldLeft(Consequence.unit) { case (prior, (path, expected)) => for {
+        _ <- prior
+        actual <- readC(path)
+        _ <- if (actual == expected) Consequence.unit else invalid("owned publication completion metadata changed")
+      } yield () }
+    } yield Some(inventory)
+
+    def publicationC(e: Edge, input: Input, source: Json): Consequence[Publication] =
+      if (e.batch.nonEmpty) batchPublicationC(e, input, source) else singlePublicationC(e, input, source)
+
+    private def batchPublicationC(e: Edge, input: Input, source: Json): Consequence[Publication] = for {
+      owner <- rootC(d.ownerWorkspace)
+      report <- readC(resultPath(e, input, true))
+      completion <- readC(batchPath(d, input.publication) + "/completed.json")
+      artifacts <- readC(batchPath(d, input.publication) + "/completed-v3.json")
+      members <- e.batch.get.modules.foldLeft(Consequence.success(Vector.empty[Member])) { (prior, module) => for {
+        values <- prior
+        paths = member(d, module.requested, input.publication, owner)
+        control <- readC(moduleBase(d, module.requested, input.publication) + "/completed.json")
+        v3control <- readC(moduleBase(d, module.requested, input.publication) + "/completed-v3.json")
+        _ <- if (batchMemberValid(d, input, paths, control) &&
+          v3control.hcursor.get[String]("scope").toOption.contains(d.scope) &&
+          v3control.hcursor.get[String]("owner").toOption.contains(d.ownerWorkspace) &&
+          v3control.hcursor.get[String]("batch").toOption.contains(input.publication) &&
+          v3control.hcursor.get[String]("producerSelectionId").toOption.contains(input.selection) &&
+          v3control.hcursor.get[Boolean]("complete").toOption.contains(true) &&
+          artifacts.hcursor.get[Vector[Json]]("members").toOption.exists(_.exists(row =>
+            row.hcursor.downField("module").focus == v3control.hcursor.downField("module").focus &&
+            row.hcursor.downField("artifacts").focus == v3control.hcursor.downField("artifacts").focus)))
+          Consequence.unit else invalid("incomplete or contradictory batch member/control")
+      } yield values :+ paths.copy(completion = control) }
+      batch = PublishedBatch(members, completion, artifacts)
+      _ <- if (batchPublicationValid(d, input, batch, report)) Consequence.unit
+        else invalid("zero exit lacks the exact completed batch and producer report")
+      primary <- members.find(_.requested == e.requested).map(Consequence.success)
+        .getOrElse(invalid("batch omits primary consumer coordinate"))
+    } yield Publication(e, d.scope, input.publication, input.selection, primary.selected, primary.jar, primary.ivy,
+      source, report, primary.completion, Some(batch))
+
+    private def singlePublicationC(e: Edge, input: Input, source: Json): Consequence[Publication] = for {
       owner <- rootC(d.ownerWorkspace)
       report <- readC(resultPath(e, input, true))
       completion <- readC(base(d, e, input.publication) + "/completed.json")
@@ -164,11 +288,134 @@ private[smworkflow] object ManagedDevelopmentRuntime {
       else invalid("zero exit lacks matching completed publication and actual adapter report")
     } yield Publication(e, d.scope, input.publication, input.selection, selected, jar, ivy, source, report, completion)
 
-    def consumerReportC(e: Edge, input: Input, selected: Publication): Consequence[Json] = for {
-      report <- readC(resultPath(e, input, false))
-      _ <- if (consumerReportValid(d, input, selected, report)) Consequence.unit
-        else invalid("consumer compile lacks actual matching selected coordinates/classpath resolution")
-    } yield report
+    def consumerReportC(e: Edge, input: Input, selected: Publication): Consequence[Json] =
+      if (selected.edge.batch.isEmpty) for {
+        report <- readC(resultPath(e, input, false))
+        _ <- if (consumerReportValid(d, input, selected, report)) Consequence.unit
+          else invalid("consumer compile lacks actual matching selected coordinates/classpath resolution")
+      } yield report
+      else for {
+        target <- ownerC
+        file <- pathC(resultPath(e, input, false))
+        limits <- WorkflowArtifactBudget.limitsC(core)
+        actual <- WorkflowFileExecution.readBytesC(core, target, file, FileRepresentation.Identity, FileReadPolicy(limits))
+        bytes <- actual.bytes.map(Consequence.success).getOrElse(invalid("required adapter output is unavailable: " + file.value))
+        text <- try Consequence.success(UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toArray)).toString)
+          catch { case NonFatal(_) => invalid("consumer adapter report is not complete UTF-8") }
+        report <- io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text).fold(e => invalid(e.message), Consequence.success)
+        // Check the complete original report before reducing persisted evidence.
+        _ <- if (consumerReportValid(d, input, selected, report)) Consequence.unit
+          else invalid("consumer compile lacks actual matching selected coordinates/classpath resolution")
+      } yield consumerReportEvidence(report, target.workspaceId.value, file.value, bytes)
+  }
+
+  /** Persist actual consumer/generator observations once, with a content-bound
+    * reference to the unchanged full report. Producer resolution rows are large
+    * duplicates of the adapter's retained evidence, not status payloads.
+    * The caller must validate the full report before invoking this projection.
+    */
+  private[admission] def consumerReportEvidence(report: Json, owner: String, path: String, bytes: Vector[Byte]): Json = {
+    val compact = report.mapObject { fields =>
+      fields("generation").fold(fields) { generation =>
+        fields.add("generation", generation.mapObject { g =>
+          g("observations").fold(g) { observations =>
+            g.add("observations", observations.mapArray(_.map(_.mapObject { row =>
+              row("producerResolution").fold(row) { producer =>
+                val p = producer.hcursor
+                row.add("producerResolution", Json.obj(
+                  "producerRunReference" -> p.downField("producerRunReference").focus.getOrElse(Json.Null),
+                  "reportRowCount" -> p.get[Vector[Json]]("reportRows").toOption.map(_.size).asJson))
+              }
+            })))
+          }
+        })
+      }
+    }
+    val sha256 = MessageDigest.getInstance("SHA-256").digest(bytes.toArray).map(b => f"${b & 0xff}%02x").mkString
+    compact.mapObject(_.add("rawReport", Json.obj("workspace" -> owner.asJson, "path" -> path.asJson,
+      "byteCount" -> bytes.size.asJson, "sha256" -> sha256.asJson)))
+  }
+
+  /** Convert admitted v1/v2/v3 metadata into literal owned filenames. Absolute
+    * DTO paths are equality evidence only; they never choose deletion targets. */
+  private[admission] def ownedInventoryC(d: Definition, pub: Publication, owner: String): Consequence[OwnedInventory] = {
+    def check(ok: Boolean, reason: String): Consequence[Unit] = if (ok) Consequence.unit else invalid(reason)
+    def absolute(relative: String): String = Path.of(owner).resolve(relative).normalize.toString
+    def dependencies(value: Json): Consequence[Vector[Coordinate]] = for {
+      values <- value.hcursor.get[Vector[Coordinate]]("dependencies").fold(e => invalid(e.message), Consequence.success)
+      _ <- check(values.size <= 4096 && values.forall(c => c != null && Vector(c.organization, c.module, c.version).forall(id)),
+        "invalid bounded publication dependency coordinates")
+    } yield values
+    val members = pub.batch.map(_.members).getOrElse(Vector(Member(pub.edge.requested, pub.selected, pub.jar, pub.ivy, pub.completion)))
+    for {
+      _ <- validateC(d)
+      _ <- check(d.edges.contains(pub.edge) && pub.scope == d.scope && id(pub.identity) && id(pub.producerSelection) &&
+        Path.of(owner).isAbsolute && members.nonEmpty && members.size <= 64 &&
+        members.map(_.requested).toSet == pub.edge.batch.map(_.modules.map(_.requested).toSet).getOrElse(Set(pub.edge.requested)) &&
+        members.map(_.requested).distinct.size == members.size &&
+        pub.selected == pub.edge.requested.copy(version = version(pub.edge.requested.version, d.scope, pub.identity)) &&
+        members.exists(m => m.requested == pub.edge.requested && m.jar == pub.jar && m.ivy == pub.ivy), "foreign owned publication")
+      result <- members.foldLeft(Consequence.success(OwnedInventory(Vector.empty, Vector.empty))) { (prior, m) => for {
+        before <- prior
+        prefix = moduleBase(d, m.requested, pub.identity)
+        coordinate = m.requested.copy(version = version(m.requested.version, d.scope, pub.identity))
+        _ <- check(Vector(m.requested.organization, m.requested.module, m.requested.version).forall(id) && m.selected == coordinate &&
+          m.jar == absolute(prefix + "/jars/" + coordinate.module + ".jar") && m.ivy == absolute(prefix + "/ivys/ivy.xml"),
+          "publication paths/coordinates differ from the configured logical repository")
+        deps <- dependencies(m.completion)
+        auxiliary <- pub.batch match {
+          case None => check(m.completion.hcursor.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v1") &&
+            m.completion.hcursor.get[String]("scope").toOption.contains(d.scope) &&
+            m.completion.hcursor.get[String]("selection").toOption.contains(pub.producerSelection) &&
+            m.completion.hcursor.get[String]("publication").toOption.contains(pub.identity) &&
+            m.completion.hcursor.get[String]("organization").toOption.contains(coordinate.organization) &&
+            m.completion.hcursor.get[String]("module").toOption.contains(coordinate.module) &&
+            m.completion.hcursor.get[String]("version").toOption.contains(coordinate.version),
+            "single publication completion differs from admitted identity").map(_ => Vector.empty[String])
+          case Some(batch) => for {
+            rows <- batch.artifacts.hcursor.get[Vector[Json]]("members").fold(e => invalid(e.message), Consequence.success)
+            matching = rows.filter(row => row.hcursor.downField("module").get[String]("organization").toOption.contains(coordinate.organization) &&
+              row.hcursor.downField("module").get[String]("name").toOption.contains(coordinate.module))
+            row <- if (matching.size == 1) Consequence.success(matching.head) else invalid("v3 member is missing or duplicated")
+            module = row.hcursor.downField("module")
+            _ <- check(batchMemberValid(d, Input(pub.edge.identity, "inventory", pub.identity, pub.producerSelection), m, m.completion) &&
+              batchOwnerValid(d, Input(pub.edge.identity, "inventory", pub.identity, pub.producerSelection), batch.completion) &&
+              batchOwnerValid(d, Input(pub.edge.identity, "inventory", pub.identity, pub.producerSelection), batch.artifacts) &&
+              rows.size == members.size && module.get[String]("selectedVersion").toOption.contains(coordinate.version) &&
+              module.get[String]("baseVersion").toOption.contains(m.requested.version) &&
+              module.get[String]("descriptor").toOption.contains(m.ivy) &&
+              module.get[String]("control").toOption.contains(absolute(prefix + "/completed-v3.json")),
+              "v3 metadata differs from admitted owner/member")
+            v2rows <- batch.completion.hcursor.get[Vector[Json]]("members").fold(e => invalid(e.message), Consequence.success)
+            _ <- check(v2rows.count(row => row.as[Coordinate].toOption.contains(coordinate) &&
+              row.hcursor.downField("dependencies").focus == m.completion.hcursor.downField("dependencies").focus) == 1,
+              "batch and member dependency evidence differ")
+            artifacts <- row.hcursor.get[Vector[Json]]("artifacts").fold(e => invalid(e.message), Consequence.success)
+            _ <- check(artifacts.nonEmpty && artifacts.size <= 64 && artifacts.distinct.size == artifacts.size, "invalid bounded auxiliary inventory")
+            paths <- artifacts.foldLeft(Consequence.success(Vector.empty[String])) { (prior, artifact) => for {
+              paths <- prior
+              key = artifact.hcursor.downField("key")
+              name <- key.get[String]("name").fold(e => invalid(e.message), Consequence.success)
+              extension <- key.get[String]("extension").fold(e => invalid(e.message), Consequence.success)
+              kind <- key.get[String]("artifactType").fold(e => invalid(e.message), Consequence.success)
+              classifier <- key.get[Option[String]]("classifier").fold(e => invalid(e.message), Consequence.success)
+              _ <- check(name == coordinate.module && id(extension) && id(kind) && classifier.forall(id) &&
+                key.get[String]("module").toOption.contains(coordinate.organization + ":" + coordinate.module + ":" + coordinate.version),
+                "foreign or nonstandard auxiliary artifact identity")
+              path = prefix + "/jars/" + coordinate.module + classifier.map("-" + _).getOrElse("") + "." + extension
+              _ <- check(artifact.hcursor.get[String]("publicationFile").toOption.contains(absolute(path)),
+                "auxiliary filename differs from configured owned coordinate")
+            } yield paths :+ path }
+            _ <- check(paths.contains(prefix + "/jars/" + coordinate.module + ".jar"), "v3 inventory omits its primary JAR")
+          } yield paths :+ (prefix + "/completed-v3.json")
+        }
+        files = Vector(prefix + "/jars/" + coordinate.module + ".jar", prefix + "/ivys/ivy.xml") ++ auxiliary ++ Vector(prefix + "/completed.json")
+      } yield OwnedInventory(before.paths ++ files.distinct, (before.dependencies ++ deps).distinct) }
+      markers = pub.batch.toVector.flatMap(_ => Vector(batchPath(d, pub.identity) + "/completed.json", batchPath(d, pub.identity) + "/completed-v3.json"))
+      paths = result.paths ++ markers
+      _ <- check(result.dependencies.size <= 4096 && paths.size <= 8192 && paths.distinct.size == paths.size && paths.forall(path =>
+        path.startsWith(d.repository + "/") && WorkspaceFilePath.parseC(path).isSuccess), "owned inventory is not bounded/exact")
+    } yield result.copy(paths = paths)
   }
 
   /** Hash only complete bytes acquired by the producer workspace's File UoW.
@@ -189,16 +436,32 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     selected: Option[Publication], result: String): Json = {
     def path(relative: String): String = Path.of(owner).resolve(relative).normalize.toString
     val producer = selected.isEmpty
-    val mapping = selected.toVector.map(p => Json.obj("requested" -> e.requested.asJson, "selected" -> p.selected.asJson,
-      "jar" -> p.jar.asJson, "ivy" -> p.ivy.asJson, "publication" -> p.identity.asJson,
-      "publicationSelection" -> p.producerSelection.asJson))
+    val members = selected.toVector.flatMap(p => p.batch.map(_.members).getOrElse(
+      Vector(Member(e.requested, p.selected, p.jar, p.ivy, p.completion))))
+    def mapping(values: Vector[Coordinate]): Vector[Json] = selected.toVector.flatMap { p =>
+      values.map { requested =>
+        val m = members.find(_.requested == requested).getOrElse(
+          throw new IllegalArgumentException("immutable publication omits a configured member"))
+        Json.obj("requested" -> requested.asJson, "selected" -> m.selected.asJson,
+          "jar" -> m.jar.asJson, "ivy" -> m.ivy.asJson, "publication" -> p.identity.asJson,
+          "publicationSelection" -> p.producerSelection.asJson)
+      }
+    }
+    val runtimeMappings = mapping(e.batch.map(_.consumerModules).getOrElse(Vector(e.requested)))
     val shared = Json.obj("component" -> SmWorkflowComponent.componentId.name.asJson,
       "buildWorkspace" -> (if (producer) e.provider.workspace else e.consumer.workspace).asJson, "ownerWorkspace" -> d.ownerWorkspace.asJson,
       "scope" -> d.scope.asJson, "selection" -> input.selection.asJson)
-    val adapter = shared.deepMerge(Json.obj("schema" -> "sbt-cozy.development-artifact.v1".asJson,
+    val adapter = shared.deepMerge(Json.obj("schema" -> (if (e.batch.nonEmpty) "sbt-cozy.development-artifact.v2" else "sbt-cozy.development-artifact.v1").asJson,
       "buildRoot" -> build.asJson, "ownerRoot" -> owner.asJson, "repositoryRoot" -> path(d.repository).asJson,
-      "resultFile" -> result.asJson, "mappings" -> mapping.asJson))
-    val declared = if (!producer) adapter else adapter.deepMerge(Json.obj("producer" -> Json.obj(
+      "resultFile" -> result.asJson, "mappings" -> runtimeMappings.asJson))
+    val consumer = e.batch.flatMap(_.generator).filter(_ => !producer).fold(adapter)(g => adapter.deepMerge(Json.obj(
+      "generator" -> Json.obj("cozyVersion" -> g.cozyVersion.asJson, "modelerVersion" -> g.modelerVersion.asJson,
+        "batch" -> input.publication.asJson, "mappings" -> mapping(g.modules).asJson))))
+    val declared = if (!producer) consumer else if (e.batch.nonEmpty) adapter.deepMerge(Json.obj(
+      "producers" -> e.batch.get.modules.map { module =>
+        val m = member(d, module.requested, input.publication, owner)
+        m.selected.asJson.deepMerge(Json.obj("project" -> module.project.asJson, "jar" -> m.jar.asJson, "ivy" -> m.ivy.asJson))
+      }.asJson)) else adapter.deepMerge(Json.obj("producer" -> Json.obj(
       "organization" -> e.requested.organization.asJson, "module" -> e.requested.module.asJson,
       "version" -> version(e.requested.version, d.scope, input.publication).asJson,
       "jar" -> path(base(d, e, input.publication) + "/jars/" + e.requested.module + ".jar").asJson,
@@ -209,20 +472,96 @@ private[smworkflow] object ManagedDevelopmentRuntime {
       "repository" -> d.repository.asJson, "staging" -> d.staging.asJson))
   }
 
+  def moduleBase(d: Definition, requested: Coordinate, publication: String): String =
+    d.repository + "/" + requested.organization + "/" + requested.module + "/" + version(requested.version, d.scope, publication)
+  def batchPath(d: Definition, publication: String): String = d.repository + "/.batches/" + d.scope + "/" + publication
+  def member(d: Definition, requested: Coordinate, publication: String, owner: String): Member = {
+    val root = Path.of(owner).resolve(moduleBase(d, requested, publication))
+    Member(requested, requested.copy(version = version(requested.version, d.scope, publication)),
+      root.resolve("jars/" + requested.module + ".jar").toString, root.resolve("ivys/ivy.xml").toString, Json.Null)
+  }
+  private def batchOwnerValid(d: Definition, input: Input, json: Json): Boolean = {
+    val c = json.hcursor
+    c.get[String]("scope").toOption.contains(d.scope) && c.get[String]("owner").toOption.contains(d.ownerWorkspace) &&
+      c.get[String]("batch").toOption.contains(input.publication) &&
+      c.get[String]("producerSelectionId").toOption.contains(input.selection) && c.get[Boolean]("complete").toOption.contains(true)
+  }
+  private[admission] def batchMemberValid(d: Definition, input: Input, member: Member, control: Json): Boolean = {
+    val c = control.hcursor
+    batchOwnerValid(d, input, control) && c.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v2") &&
+      c.get[String]("organization").toOption.contains(member.selected.organization) &&
+      c.get[String]("module").toOption.contains(member.selected.module) && c.get[String]("version").toOption.contains(member.selected.version) &&
+      c.get[String]("baseVersion").toOption.contains(member.requested.version) &&
+      c.get[String]("artifact").toOption.contains(member.jar)
+  }
+  private[admission] def batchPublicationValid(d: Definition, input: Input, batch: PublishedBatch, report: Json): Boolean = {
+    def exact(rows: Option[Vector[Json]], coordinate: Json => Option[Coordinate]): Boolean = rows.exists { values =>
+      val actual = values.map(coordinate)
+      actual.forall(_.nonEmpty) && actual.flatten.distinct.size == actual.size && actual.flatten.toSet == batch.members.map(_.selected).toSet
+    }
+    val r = report.hcursor
+    batch.members.nonEmpty && batchOwnerValid(d, input, batch.completion) && batchOwnerValid(d, input, batch.artifacts) &&
+      batch.completion.hcursor.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-batch.v2") &&
+      r.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-result.v2") &&
+      r.get[String]("kind").toOption.contains("producer") && r.get[String]("scope").toOption.contains(d.scope) &&
+      r.get[String]("publication").toOption.contains(input.publication) && r.get[String]("selection").toOption.contains(input.selection) &&
+      exact(r.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
+      exact(batch.completion.hcursor.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
+      exact(batch.artifacts.hcursor.get[Vector[Json]]("members").toOption, value => {
+        val c = value.hcursor.downField("module")
+        for { org <- c.get[String]("organization").toOption; name <- c.get[String]("name").toOption
+          version <- c.get[String]("selectedVersion").toOption } yield Coordinate(org, name, version)
+      }) && batch.members.forall(m => batchMemberValid(d, input, m, m.completion) &&
+        r.get[Vector[Json]]("members").toOption.exists(_.exists(row => row.as[Coordinate].toOption.contains(m.selected) &&
+          row.hcursor.get[String]("jar").toOption.contains(m.jar) && row.hcursor.get[String]("ivy").toOption.contains(m.ivy))))
+  }
+
   def consumerReportValid(d: Definition, input: Input, selected: Publication, report: Json): Boolean = {
     val c = report.hcursor
+    val members = selected.batch.map(_.members).getOrElse(Vector(Member(selected.edge.requested, selected.selected,
+      selected.jar, selected.ivy, selected.completion)))
+    val expected = selected.edge.batch.map(_.consumerModules).getOrElse(Vector(selected.edge.requested))
+    val resolved = c.get[Vector[Json]]("results").toOption.exists(_.exists { row =>
+      val r = row.hcursor
+      val classpath = r.get[Vector[String]]("classpath").toOption.getOrElse(Vector.empty)
+      val rows = r.get[Vector[Json]]("resolved").toOption.getOrElse(Vector.empty)
+      r.get[String]("configuration").toOption.contains("Compile") && r.get[String]("outcome").toOption.contains("success") &&
+        classpath.nonEmpty && expected.forall { requested => members.find(_.requested == requested).exists { member =>
+          val matches = rows.filter(_.hcursor.get[Coordinate]("requested").toOption.contains(requested))
+          matches.size == 1 && matches.head.hcursor.get[Coordinate]("selected").toOption.contains(member.selected) &&
+            matches.head.hcursor.get[Vector[String]]("jars").toOption.exists(jars => jars.nonEmpty && jars.forall(classpath.contains))
+        }}
+    })
     c.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-result.v1") &&
       c.get[String]("kind").toOption.contains("consumer") && c.get[String]("scope").toOption.contains(d.scope) &&
-      c.get[String]("selection").toOption.contains(input.selection) && c.get[Vector[Json]]("results").toOption.exists(_.exists { row =>
-        val r = row.hcursor
-        r.get[String]("configuration").toOption.contains("Compile") && r.get[String]("outcome").toOption.contains("success") &&
-          r.get[Vector[String]]("classpath").toOption.exists(_.nonEmpty) &&
-          r.get[Vector[Json]]("resolved").toOption.exists(_.exists { value =>
-            value.hcursor.get[Coordinate]("requested").toOption.contains(selected.edge.requested) &&
-              value.hcursor.get[Coordinate]("selected").toOption.contains(selected.selected) &&
-              value.hcursor.get[Vector[String]]("jars").toOption.exists(jars =>
-                jars.nonEmpty && r.get[Vector[String]]("classpath").toOption.exists(paths => jars.exists(paths.contains)))
-          })
+      c.get[String]("selection").toOption.contains(input.selection) && resolved &&
+      selected.edge.batch.flatMap(_.generator).forall(_ => generationReportValid(input, selected, report))
+  }
+
+  /** The adapter reconciles child origins with its actual SBT resolution. Native
+    * verification still requires that observation and generated inventory, rather
+    * than mistaking a successful compiler process for selected generation.
+    */
+  private[admission] def generationReportValid(input: Input, selected: Publication, report: Json): Boolean = {
+    val g = report.hcursor.downField("generation")
+    g.get[String]("outcome").toOption.contains("generated") && g.get[String]("batch").toOption.contains(input.publication) &&
+      g.get[Vector[String]]("products").toOption.exists(_.exists(_.endsWith(".scala"))) &&
+      g.get[Vector[String]]("results").toOption.exists(_.nonEmpty) &&
+      g.get[Vector[Json]]("observations").toOption.exists(rows => rows.nonEmpty && rows.forall { row =>
+        val c = row.hcursor
+        c.get[String]("outcome").toOption.contains("generated") &&
+          c.downField("producerResolution").get[Vector[Json]]("reportRows").toOption.exists(_.nonEmpty) &&
+          c.downField("observation").get[Vector[String]]("classpath").toOption.exists(_.nonEmpty) &&
+          c.downField("observation").get[String]("cozyVersion").toOption.contains(selected.edge.batch.get.generator.get.cozyVersion) &&
+          c.downField("observation").get[String]("simpleModelerVersion").toOption.contains(selected.edge.batch.get.generator.get.modelerVersion) &&
+          c.downField("observation").get[String]("requiredSimpleModelerVersion").toOption.contains(selected.edge.batch.get.generator.get.modelerVersion) &&
+          Vector("cozy" -> "cozy_2.12", "simpleModeler" -> "simplemodeler_2.12").forall { (name, module) =>
+            selected.batch.toVector.flatMap(_.members).find(m => m.requested.organization == "org.simplemodeling" &&
+              m.requested.module == module).exists { member =>
+                c.downField("observation").downField(name).get[String]("codeSource").toOption.contains(member.jar) &&
+                  c.downField("observation").get[Vector[String]]("classpath").toOption.exists(_.contains(member.jar))
+              }
+          }
       })
   }
 
@@ -242,6 +581,8 @@ private[smworkflow] object ManagedDevelopmentRuntime {
   private final class ExecutionCall(val core: ActionCall.Core) extends ProcedureActionCall {
     def runC(target: SbtTarget, operation: SbtOperation): Consequence[SbtExecutionAttempt] =
       executeProgram(ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExecAttempt(target, operation))))
+    def deleteC(target: FileTarget, path: WorkspaceFilePath): Consequence[FileDeleteResult] =
+      executeProgram(ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileDelete(target, path))))
     def execute(): Consequence[OperationResponse] = invalid("SBT bridge is not a public Operation")
   }
 }

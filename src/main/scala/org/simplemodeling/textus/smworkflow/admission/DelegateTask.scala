@@ -23,9 +23,11 @@ private[smworkflow] object DelegateTask {
   final case class Contract(requesterIdentity: String, destinationIdentity: String, returnDestination: String,
     componentIdentity: String, role: String, validationScope: String, permittedOperations: Vector[String],
     exclusions: Vector[String], authorizationReferences: Vector[ContextReference], publicationTarget: Option[String],
-    artifactCoordinates: Vector[String], consumerInstructions: String)
+    artifactCoordinates: Vector[String], consumerInstructions: String, prerequisiteFor: Option[String] = None,
+    providerPhase: Option[ProviderPhaseDelivery.Locator] = None,
+    synchronization: Option[DevelopmentDeliverySynchronization.Selection] = None)
   final case class Observation(event: String, sourceReference: ContextReference, destinationSessionId: Option[String],
-    result: Option[Json], artifactSelection: Option[Json], rationale: String)
+    result: Option[Json], artifactSelection: Option[Json], rationale: String, commandIdentity: Option[String] = None)
   final case class ArtifactSelection(sourceCommit: String, coordinates: Vector[String], selectionReference: ContextReference,
     activationReference: Option[ContextReference], consumerCheckReferences: Vector[ContextReference])
   final case class Delivery(destinationSessionId: Option[String] = None, observations: Vector[Observation] = Vector.empty,
@@ -33,17 +35,23 @@ private[smworkflow] object DelegateTask {
     artifactSelection: Option[Json] = None, adoptionScope: Option[String] = None,
     managedPublication: Option[ManagedDevelopment.Publication] = None,
     managedConsumer: Option[ManagedDevelopment.Result] = None,
-    managedContinuation: Option[GoalPhaseDependencyValidation.ManagedCapture] = None)
+    managedContinuation: Option[GoalPhaseDependencyValidation.ManagedCapture] = None,
+    phaseDelivery: Option[ProviderPhaseDelivery.Delivery] = None,
+    synchronization: Option[GoalPhasePostCompletionSync.Synchronization] = None)
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
   given Encoder[ArtifactSelection] = deriveEncoder
   given Decoder[ArtifactSelection] = deriveDecoder
-  given Encoder[Contract] = deriveEncoder
+  given Encoder[Contract] = deriveEncoder[Contract].mapJson(_.mapObject(_.filter {
+    case ("prerequisiteFor" | "providerPhase" | "synchronization", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Contract] = deriveDecoder
-  given Encoder[Observation] = deriveEncoder
+  given Encoder[Observation] = deriveEncoder[Observation].mapJson(_.mapObject(fields =>
+    if (fields("commandIdentity").contains(Json.Null)) fields.remove("commandIdentity") else fields))
   given Decoder[Observation] = deriveDecoder
   given Encoder[Delivery] = deriveEncoder[Delivery].mapJson(_.mapObject(_.filter {
-    case ("managedPublication" | "managedConsumer" | "managedContinuation", value) => !value.isNull
+    case ("managedPublication" | "managedConsumer" | "managedContinuation" | "phaseDelivery" | "synchronization", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Delivery] = deriveDecoder
@@ -93,11 +101,15 @@ private[smworkflow] object DelegateTask {
     Set("requester", "destination")(c.role) && Set("localized", "broad", "documentation")(c.validationScope) &&
     c.permittedOperations != null && c.permittedOperations.distinct == c.permittedOperations &&
     Set("dispatch", "implement", "validate", "commit", "return", "adopt", "review").subsetOf(c.permittedOperations.toSet) &&
-    c.permittedOperations.forall(Set("dispatch", "implement", "validate", "commit", "return", "adopt", "publishLocal", "review")) &&
+    c.permittedOperations.forall(Set("dispatch", "implement", "validate", "commit", "return", "adopt", "publishLocal", "review", "queue-hold", "queue-cancel", "queue-resume", "repository-sync")) &&
     c.exclusions != null && c.exclusions.forall(exact) && !c.exclusions.exists(c.permittedOperations.contains) && c.authorizationReferences != null &&
     c.authorizationReferences.nonEmpty && c.authorizationReferences.forall(reference) &&
     c.publicationTarget != null && c.publicationTarget.forall(exact) &&
     (c.publicationTarget.isEmpty || c.permittedOperations.contains("publishLocal")) &&
+    c.prerequisiteFor != null && c.prerequisiteFor.forall(exact) &&
+    c.providerPhase != null && c.providerPhase.forall(ProviderPhaseDelivery.valid) &&
+    c.synchronization != null && c.synchronization.forall(DevelopmentDeliverySynchronization.valid) &&
+    (c.synchronization.isEmpty || c.permittedOperations.contains("repository-sync")) &&
     c.artifactCoordinates != null && c.artifactCoordinates.forall(exact) &&
     (c.publicationTarget.isEmpty || c.artifactCoordinates.nonEmpty)
 
@@ -106,7 +118,10 @@ private[smworkflow] object DelegateTask {
     val contract = Contract(c.requesterIdentity, c.destinationIdentity, c.returnDestination, c.componentIdentity,
       c.role, c.validationScope, c.permittedOperations.toVector, c.exclusions,
       c.authorizationReferences.toVector.map(r => ContextReference(r.identity, r.revision)), c.publicationTarget,
-      c.artifactCoordinates, c.consumerInstructions)
+      c.artifactCoordinates, c.consumerInstructions, c.prerequisiteFor,
+      c.providerPhase.map(p => ProviderPhaseDelivery.Locator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
+      c.synchronization.map(p => DevelopmentDeliverySynchronization.Selection(p.repositoryIdentity, p.localBranch,
+        p.trackingRemote, p.trackingBranch, p.remoteEndpointIdentity, p.syncMode)))
     val value = S.Input(v.repositoryIdentity, v.requestIdentity, v.objective, v.ownedPaths.toVector, v.checks.toVector,
       v.conditions.toVector, v.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
       v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract),
@@ -130,7 +145,11 @@ private[smworkflow] object DelegateTask {
     V.DelegateTaskContract(c.requesterIdentity, c.destinationIdentity, c.returnDestination, c.componentIdentity,
       c.role, c.validationScope, NonEmptyVector.fromVectorUnsafe(c.permittedOperations), c.exclusions,
       NonEmptyVector.fromVectorUnsafe(c.authorizationReferences.map(r => V.WorkflowArtifactReference(r.identity, r.revision))),
-      c.publicationTarget, c.artifactCoordinates, c.consumerInstructions), input.submissionConditions.getOrElse(Vector.empty))
+      c.publicationTarget, c.artifactCoordinates, c.consumerInstructions, c.prerequisiteFor,
+      c.providerPhase.map(p => V.DelegateProviderPhaseLocator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
+      c.synchronization.map(s => V.DelegateDeliverySynchronization(s.repositoryIdentity, s.localBranch,
+        s.trackingRemote, s.trackingBranch, s.remoteEndpointIdentity, s.syncMode))),
+    input.submissionConditions.getOrElse(Vector.empty))
 
   /** Passive request policy remains applicable without destination check bindings. */
   def requesterInputC(input: S.Input): Consequence[Unit] = for {
@@ -263,7 +282,7 @@ private[smworkflow] object DelegateTask {
       case Some(_) => invalid("retained transport/adoption observation is immutable")
       case None => observation.event match {
         case "dispatch-observed" if c.role == "requester" && state.stage == "DispatchReady" &&
-            observation.destinationSessionId.nonEmpty && observation.result.isEmpty && observation.artifactSelection.isEmpty =>
+            observation.destinationSessionId.nonEmpty && c.providerPhase.forall(p => observation.destinationSessionId.contains(p.sessionId)) && observation.result.isEmpty && observation.artifactSelection.isEmpty =>
           Consequence.success(state.copy(stage = "AwaitResult", delivery = Some(d.copy(destinationSessionId = observation.destinationSessionId,
             observations = d.observations :+ observation)), message = "Dispatch observed; no destination acceptance or work result is implied"))
         case "result-received" if c.role == "requester" && state.stage == "AwaitResult" &&
@@ -279,9 +298,11 @@ private[smworkflow] object DelegateTask {
             message = "Destination result return observed; consumer adoption and activation are separate"))
         case "adopt" if c.role == "requester" && state.stage == "ResultReceived" && observation.result.isEmpty &&
             observation.destinationSessionId == d.destinationSessionId && observation.artifactSelection.nonEmpty => for {
-          producer <- d.returned.map(value => returnedC(state.input, value, hydrate)).getOrElse(invalid("Adoption has no actual received producer result"))
+          producer <- if (d.phaseDelivery.nonEmpty) Consequence.success(Option.empty[S.State])
+            else d.returned.map(value => returnedC(state.input, value, hydrate).map(Some(_)))
+              .getOrElse(invalid("Adoption has no actual received producer result"))
           selected <- observation.artifactSelection.get.as[ArtifactSelection].fold(e => invalid(e.message), Consequence.success)
-          _ <- if (selected.sourceCommit == producer.commit.get.identity && selected.coordinates == c.artifactCoordinates &&
+          _ <- if (selected.sourceCommit == d.phaseDelivery.map(_.phase.input.candidate.head).getOrElse(producer.get.commit.get.identity) && selected.coordinates == c.artifactCoordinates &&
             reference(selected.selectionReference) && selected.activationReference != null && selected.activationReference.forall(reference) &&
             selected.consumerCheckReferences != null && selected.consumerCheckReferences.forall(reference)) Consequence.unit
             else invalid("Artifact selection crosses the returned source/coordinates or lacks attributable selection references")

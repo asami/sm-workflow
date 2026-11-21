@@ -115,7 +115,8 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
           "SPECIFICATION-OWNED-requester", "org.example.ScopeCorrectionFixture", "destination", "documentation",
           NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
-        None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"), Vector("behavior", "coverage", "preservation"))
+          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched", None, None, None),
+        Vector("behavior", "coverage", "preservation"))
       val repository = Path.of(scenario.host.target.root)
       val document = Files.readString(repository.resolve("docs/phase.md"))
       val requestfile = scenario.root.resolve("delegate-request.json")

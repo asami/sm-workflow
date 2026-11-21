@@ -113,7 +113,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
-      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
+      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus", "verifyDevelopmentArtifact",
+      "detachDevelopmentArtifact", "pruneDevelopmentArtifact"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication",
       "describeLocalPublicationRecovery", "admitLocalPublicationRecovery", "advanceLocalPublicationRecovery"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries",
@@ -147,6 +148,15 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("ManagedDevelopmentService", "selectDevelopmentArtifact", Vector(
+      "retain=true", "retain=false", "creates no pin", "active selection"
+    )),
+    ("ManagedDevelopmentService", "detachDevelopmentArtifact", Vector(
+      "expected active selection", "concurrent newer selection", "fresh process"
+    )),
+    ("ManagedDevelopmentService", "pruneDevelopmentArtifact", Vector(
+      "CNCF FileDelete UoW", "in-flight and uncertain dependency closures", "without replay", "prune-unavailable"
+    )),
     ("RepositorySyncService", "adoptRepositorySyncValidationContinuation", Vector(
       "exactly one of input or inputResource", "finite UTF-8", "AuthorizeNewValidationAfterSelectionCorrection",
       "actual appended TestOnly", "separate Advance"

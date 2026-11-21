@@ -224,7 +224,7 @@ final class DelegateTaskRepairContinuationOperationSpec extends DelegateTaskRepa
     val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-repair-managed").toAbsolutePath), "SPEC-").toRealPath()
     val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination",
       "documentation", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
-      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction")
+      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction", None, None, None)
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-delegate-repair", "SPEC-managed continuation",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,

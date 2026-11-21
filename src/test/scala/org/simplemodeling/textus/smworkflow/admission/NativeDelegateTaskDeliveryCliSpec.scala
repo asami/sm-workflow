@@ -117,7 +117,7 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       val destination = "SPECIFICATION-OWNED-destination-session"
       def observation(event: String, result: Option[org.goldenport.record.Record]) = V.DelegateTaskObservationInput(
         started.sessionId, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"), Some(destination),
-        result, None, "SPECIFICATION-OWNED transport observation")
+        result, None, "SPECIFICATION-OWNED transport observation", None)
       val dispatch = observation("dispatch-observed", None)
       val dispatchFile = root.resolve("dispatch-observation.json")
       Files.writeString(dispatchFile, json(dispatch))

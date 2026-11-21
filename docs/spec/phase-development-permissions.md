@@ -1,7 +1,7 @@
 # Phase development permissions and scoped dependency artifacts
 
 Adopted direction: 2026-11-10 (Asia/Tokyo).
-Status: planned; no public input, installed implementation or live adoption claimed.
+Status: public Plan fields and native policy admission authored; installed qualification and live adoption remain pending.
 Owner: [purpose-based authorization correction](../phase/purpose-based-authorization-correction.md).
 Consumer: [Phase 7](../phase/phase-7.md#phase-development-permissions-and-scoped-jars--2026-11-10).
 
@@ -35,9 +35,10 @@ PDP-03. Declare two independent booleans, both defaulting to false when omitted:
 | `allowDependencyRepair` | A necessary repair outside managed development scope requires Human direction | Admit necessary external dependency repair and selected local delivery within the Phase purpose without another Human permission decision |
 | `allowSharedCliUpdate` | A necessary shared CLI installation/update requires Human direction | Admit necessary shared CLI installation/update through the normal route within the Phase purpose without another Human permission decision |
 
-These are target logical names; establish CML/public input and projection together
-during implementation. Callers must not invent these fields in current runtime
-requests. Historical omission means false for this policy; it does not revoke
+The selected complete Plan declares optional boolean `allowDependencyRepair` and
+`allowSharedCliUpdate` fields in CML/public projection and its native codec.
+Explicit null/non-boolean values are invalid. Historical omission means false
+for this policy; it does not revoke
 separately retained actual authorization for concrete work/effects.
 
 PDP-04. Initial true in admitted Phase configuration supplies Phase-level
@@ -106,3 +107,39 @@ PDP-09. Qualify through the actual installed public route:
   Session `3585e04191dce0bc0f70e394b6745767`, Plan 2, B5, Human 3251 motivates
   the policy; it is not a fixture to operate or consent supplied by this plan.
   Its authored five-file response correction remains unvalidated until actual checks.
+
+## Authored native source — 2026-11-12
+
+The actual selected Plan is the policy source. Initial true passes through normal
+selected-Plan Start admission. Mid-Phase enablement uses an ordinary complete
+`planRevision` proposal and the existing independent Human `AdoptPlanRevision`
+question/completion. An AI proposal, rejected/unanswered/deferred question, later
+host default, or a boolean in a semantic result cannot enable policy. The adopted
+Plan governs later Steps/reconnects in that same native Session. Existing concrete
+approvals remain independent; historical omission does not erase them.
+
+A necessary implementation/repair `dependencyProposal` supplies its explicit
+`authorizationBoundary.purpose` as the selected Plan identity/revision, bounded
+local operations, inventory and exclusions. Native Advance evaluates current
+managed graph membership or the independent enabled properties and retains a
+distinct `AdmitPhaseDependencyPolicy` receipt. It never labels that receipt as an
+`ApproveDependencyScope` Human answer. The native history reconstructs this
+receipt with its original Plan, graph/mode, proposal and semantic result; it
+preserves original Human approval lineage, base, accepted Steps and repair
+counts. Reviews retain their existing read-only decision route.
+
+An external source edit needs dependency-repair policy; shared `install-runtime`
+needs shared-CLI policy independently. Installing an existing tool without a
+source edit does not require external source-repair policy. A scope-local tool
+uses its existing execution route and is not an `install-runtime` proposal.
+Neither permission supplies a provider registration, source root, artifact scope,
+platform grant or host installation capability. Those actual owners remain
+required. Phase 7 JAR publication still uses its existing scoped artifact owner.
+Remote/push/configuration operations and explicit Fixed/purpose/path exclusions
+cannot be automatically admitted by these properties.
+
+The selected Phase7 suite contains authored public native initial-true and
+independent-fixture-Human false-to-true/reconnect examples plus all four boolean
+combinations. Fixture evidence is not actual user consent, installation evidence,
+validation success or Phase acceptance. No historical live Human question was
+answered or replayed to implement this source.

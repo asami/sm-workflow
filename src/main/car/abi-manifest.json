@@ -1128,6 +1128,27 @@
           "output": "ManagedDevelopmentResult"
         },
         {
+          "service": "ManagedDevelopmentService",
+          "name": "verifyDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "VerifyDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "detachDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "DetachDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "pruneDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "PruneDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
           "service": "DelegateTaskService",
           "name": "describeDelegateTaskSemanticContinuation",
           "kind": "COMMAND",
@@ -2016,6 +2037,24 @@
               "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "allowDependencyRepair",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "allowSharedCliUpdate",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "deliverySynchronization",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -2759,6 +2798,18 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "mainIntegration",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "uncommittedPolicy",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -7925,6 +7976,78 @@
           ]
         },
         {
+          "name": "DelegateProviderPhaseLocator",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "startRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "publication",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producerSelection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateDeliverySynchronization",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingRemote",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteEndpointIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "syncMode",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "DelegateTaskContract",
           "kind": "value",
           "fields": [
@@ -7999,6 +8122,24 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "prerequisiteFor",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "providerPhase",
+              "type": "DelegateProviderPhaseLocator",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "synchronization",
+              "type": "DelegateDeliverySynchronization",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -8047,6 +8188,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "commandIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -9697,6 +9844,30 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "providerPhase",
+              "type": "DelegateProviderPhaseLocator",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "synchronization",
+              "type": "DelegateDeliverySynchronization",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "publicationEdge",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retain",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

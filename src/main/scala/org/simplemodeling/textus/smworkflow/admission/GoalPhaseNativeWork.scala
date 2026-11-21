@@ -122,7 +122,7 @@ private[smworkflow] object GoalPhaseNativeWork {
     else _decision_decoder(cursor).flatMap { value =>
       val validreference = value.decisionReference.forall(reference => reference != null &&
         Vector(reference.identity, reference.revision).forall(text => _bounded_text(text) && !text.exists(_.isControl)))
-      val dependency = Set("ApproveDependencyScope", "RejectDependencyScope")(value.choice)
+      val dependency = Set("ApproveDependencyScope", "RejectDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(value.choice)
       val inventory = value.inventoryContinuation.forall(context =>
         GoalPhaseDependencyInventoryContinuation.contextValid(context) && value.choice == "ApproveDependencyScope" &&
           value.decisionReference.contains(context.approval) && value.requestingResult != null &&

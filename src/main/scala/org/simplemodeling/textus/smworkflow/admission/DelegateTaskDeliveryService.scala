@@ -8,6 +8,7 @@ import cats.data.NonEmptyVector
 import io.circe.Json
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import StandaloneFixExecution.given
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.{ComponentParameterDecoder, ComponentParameterKey}
@@ -130,14 +131,15 @@ private[smworkflow] object DelegateTaskDeliveryService {
   } yield NativeWorkflowDescriptionMetadata.service(declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
     new Operation(false, h, definition, evidence), new Operation(true, h, definition, evidence))))
 
-  private def targetC(core: ActionCall.Core, current: InstanceRecord, state: StandaloneFixExecution.State,
+  private def targetC(core: ActionCall.Core, host: BoundedWorkRuntime.Host, current: InstanceRecord, state: StandaloneFixExecution.State,
     hydrate: StandaloneFixExecution.State => Consequence[StandaloneFixExecution.State]): Consequence[DelegateTask.AdoptionTarget] = for {
     delivery <- state.delivery.map(Consequence.success).getOrElse(N.invalid("No requester result is retained"))
     result <- delivery.returned.map(Consequence.success).getOrElse(N.invalid("No producer result is received"))
     destination <- delivery.destinationSessionId.map(Consequence.success).getOrElse(N.invalid("No actual destination Session is retained"))
     _ <- if (state.input.delegation.exists(_.role == "requester") && state.stage == "ResultReceived") Consequence.unit
       else N.invalid("Adoption description requires its actual requester receipt frontier")
-    _ <- DelegateTask.returnedC(state.input, result, hydrate)
+    _ <- if (delivery.phaseDelivery.nonEmpty) ProviderPhaseDelivery.receivedC(host, state, core)
+      else DelegateTask.returnedC(state.input, result, hydrate)
   } yield DelegateTask.AdoptionTarget(core.component.get.core.instanceId.canonicalKey, current.identity.value,
     current.revision.value.toString, state.participant, state.input, result, destination)
 
@@ -177,7 +179,7 @@ private[smworkflow] object DelegateTaskDeliveryService {
             else payload.state.delivery.flatMap(_.destinationSessionId).map(id => hydrateReturnedC(selected, id, producer))
               .getOrElse(N.invalid("Returned capture has no observed destination Session"))
           response <- if (describe) for {
-            target <- targetC(selected, current, payload.state, hydrate)
+            target <- targetC(selected, h, current, payload.state, hydrate)
             raw <- { import io.circe.syntax.*; N.recordC(summon[io.circe.Encoder[DelegateTask.AdoptionTarget]].apply(target)) }
           } yield NativeWorkflowOperationOutput.response(V.DelegateTaskAdoptionContext(target.componentInstance, target.sessionId, target.sourceRevision, raw))
           else for {
@@ -185,10 +187,14 @@ private[smworkflow] object DelegateTaskDeliveryService {
             result <- value.result.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             selection <- value.artifactSelection.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             observation = DelegateTask.Observation(value.event, ContextReference(value.sourceReference.identity, value.sourceReference.revision),
-              value.destinationSessionId, result, selection, value.rationale)
-            next <- DelegateTask.observeC(payload.state, observation, hydrate)
+              value.destinationSessionId, result, selection, value.rationale, value.commandIdentity)
+            queueControl = observation.event.startsWith("queue-")
+            controlled <- if (queueControl) AssignedDevelopmentChatQueue.controlC(h, definition, storage, current, payload.state, observation, selected).map(Some(_))
+              else Consequence.success(Option.empty[AssignedDevelopmentChatQueue.State])
+            next <- if (queueControl) Consequence.success(payload.state)
+              else DelegateTask.observeC(payload.state, observation, hydrate)
             _ <- if (observation.event != "adopt" || next == payload.state) Consequence.unit else for {
-              target <- targetC(selected, current, payload.state, hydrate)
+              target <- targetC(selected, h, current, payload.state, hydrate)
               admitted <- evidence.loadC(selected, NativeExternalEvidence.Purpose.DelegateAdoption,
                 ThreeWorkflowExternalEvidencePorts.key(observation.sourceReference.identity, observation.sourceReference.revision),
                 DelegateTask.adoptionBinding(target, observation))
@@ -200,8 +206,13 @@ private[smworkflow] object DelegateTaskDeliveryService {
               else if (current.lifecycle == Lifecycle.Active) N.saveC(h, storage, current, payload.copy(state = integrated), selected)
               else N.invalid("Completed delivery cannot accept a new observation")
             retained <- N.loadPayloadC(storage, session, saved.revision.value, selected)
-          } yield NativeWorkflowOperationOutput.response(N.view(saved, retained.state,
-            if (DelegateTask.terminal(retained.state.stage) && saved.lifecycle == Lifecycle.Completed) "Terminal" else "Wait", retained.state.message))
+            projected = N.view(saved, retained.state,
+              if (DelegateTask.terminal(retained.state.stage) && saved.lifecycle == Lifecycle.Completed) "Terminal" else "Wait", retained.state.message)
+            response = controlled.fold(projected)(queue => projected.copy(
+              message = "Assigned development chat retained " + observation.event + "; current request is " +
+                queue.entries.find(_.session == session).get.status,
+              state = Some(GoalPhaseNativeMetadata.record(retained.state.asJson.deepMerge(Json.obj("assignedChatQueue" -> queue.asJson))))))
+          } yield NativeWorkflowOperationOutput.response(response)
         } yield response
       }
     }

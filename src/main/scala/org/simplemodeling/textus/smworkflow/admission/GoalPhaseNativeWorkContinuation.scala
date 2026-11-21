@@ -731,6 +731,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       retained <- F.retainedSessionC(identity, d, definition, core)
       _ <- WorkflowForceClosure.requireOpenC(retained.current)
+      permitted <- if (retained.current.lifecycle == Lifecycle.Completed) Consequence.success(true)
+        else AssignedDevelopmentChatQueue.permitPhaseC(ProviderPhaseDelivery.Storage(d.configuration, d.instances, d.continuations), retained, core)
+      result <- if (!permitted) F.waitC(retained.current, "Assigned development chat waiting",
+        "Another admitted request owns the active FIFO place; original Phase, work, history and repair counts are retained")
+      else _advance_permitted_c(identity, retained, core)
+    } yield result
+
+    private def _advance_permitted_c(identity: String, retained: F.Session, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       closure <- CompletionRecordContinuation.retainedC(retained.storage, retained.current, core)
       completed <- closure match {
         case Some(value) => Consequence.success(Some(NativeWorkflowOperationOutput.goalWait(identity,
@@ -2574,6 +2583,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Decision if entry.causation.value.startsWith("ordered-validation-repair-adoption:") &&
           cursor.candidate.nonEmpty && cursor.validation.nonEmpty =>
         _resume_validation_repair_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
+      case O.Stage.Decision if entry.causation.value == GoalPhasePolicyDependencyContinuation.causation => for {
+        retained <- GoalPhasePolicyDependencyContinuation.retainedC(source, cursor.from, cursor.controller, cursor.lastresult, core)
+        lineage <- AL.policyC(cursor.dependencyLineage, retained)
+        result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.controller,
+          decisioncontext = Some(retained.context), dependencyLineage = lineage,
+          dependencyApprovals = lineage.approvals, dependencyDecisions = lineage.decisions),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
       case O.Stage.Decision if entry.causation.value == I.causation => for {
         selected <- _inventory_source_c(cursor).flatMap(_.map(Consequence.success)
           .getOrElse(F.invalid("retained inventory receipt has no eligible actual dependency Decision")))
@@ -3531,7 +3548,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         initial <- _initial_phase_repair_source_c(cursor)
         inventory <- K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
         currentinventory <- _current_inventory_source_c(source, cursor)
-        wire <- if (currentinventory.exists(_current_inventory_covered)) L.advanceC(currentinventory.get, d, core).flatMap { saved =>
+        policyDependency <- GoalPhasePolicyDependencyContinuation.selectC(cursor.from, cursor.controller, cursor.lastresult, d.managedDevelopment)
+        wire <- if (policyDependency.nonEmpty) GoalPhasePolicyDependencyContinuation.advanceC(source, d, policyDependency.get, core).flatMap { saved =>
+          F.waitC(saved.record, "Phase dependency policy admitted", "The actual Phase policy covers necessary local work; configured owners and concrete effect admission remain in force")
+            .flatMap(_after_native_c(source, cursor, _, core))
+        } else if (currentinventory.exists(_current_inventory_covered)) L.advanceC(currentinventory.get, d, core).flatMap { saved =>
           F.waitC(saved.record, "Current Step inventory continued", L.message)
             .flatMap(_after_native_c(source, cursor, _, core))
         } else if (inventory.nonEmpty) K.advanceC(inventory.get, d, core).flatMap { saved =>
@@ -3991,7 +4012,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         (if (input.kind == "ImplementStep" && input.repairDirective.exists(_.reason.startsWith("Human-requested reconciliation: ")))
           " This is explicit human-requested reconciliation of current scoped development changes, not an independent reviewer finding. Preserve the index and every completed old stage/history effect; old unresolved observations remain UNKNOWN and termination-unconfirmed. First assess whether the current changes require different adopted requirements: if so, return decision-needed with the existing complete bounded planRevision Proposal before implementation. Otherwise reconcile within the saved Plan, checks, ownership and limits. Never execute old intent or repeat old staging/history. Ordinary follow-on candidate staging belongs only to this newly issued generation after its semantic result."
           else "") +
-        (if (input.kind == "TriageStep") documents + sources else GoalPhaseAcceptanceBoundary.instructions(input.selectedPlan) + documents + sources) +
+        (if (input.kind == "TriageStep") documents + sources else GoalPhaseAcceptanceBoundary.instructions(input.selectedPlan) + GoalPhaseDevelopmentPermissions.instructions(input.selectedPlan) + documents + sources) +
         (if (input.kind == "TriageStep") "" else if (dependencysourcedirection.exists(direction =>
             input.stepIdentity.contains(direction.target.step))) {
           val direction = dependencysourcedirection.get
@@ -4137,6 +4158,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               case None => F.invalid("result has no actual assigned work")
             }
             source <- F.sessionC(actual.handle.instanceIdentity.value, d, definition, call)
+            permitted <- AssignedDevelopmentChatQueue.permitPhaseC(ProviderPhaseDelivery.Storage(d.configuration, d.instances, d.continuations), source, call, requireActive = true)
+            _ <- if (permitted) Consequence.unit else F.invalid("Assigned development chat has no active provider Phase execution permit")
             draft <- _locate_assigned_c(source, submitted.continuationId, call)
             plan = draft
             _ <- _historical_freshness_c(plan, call)

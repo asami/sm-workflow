@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -48,7 +48,10 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
       "direct-instruction", Vector.empty, V.DelegateTaskContract(c.requesterIdentity, c.destinationIdentity, c.returnDestination,
         c.componentIdentity, c.role, c.validationScope, NonEmptyVector.fromVectorUnsafe(c.permittedOperations), c.exclusions,
         NonEmptyVector.of(V.WorkflowArtifactReference(c.authorizationReferences.head.identity, c.authorizationReferences.head.revision)),
-        c.publicationTarget, c.artifactCoordinates, c.consumerInstructions), Vector("behavior"))
+        c.publicationTarget, c.artifactCoordinates, c.consumerInstructions, c.prerequisiteFor,
+        c.providerPhase.map(p => V.DelegateProviderPhaseLocator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
+        c.synchronization.map(p => V.DelegateDeliverySynchronization(p.repositoryIdentity, p.localBranch,
+          p.trackingRemote, p.trackingBranch, p.remoteEndpointIdentity, p.syncMode))), Vector("behavior"))
   }
   private def _state(v: V.DelegateTaskView): S.State = {
     val raw = take(v.state.get.toJsonStringC)
@@ -418,7 +421,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         def observe(id: String, event: String, destination: String, result: Option[Record] = None, artifact: Option[Record] = None) =
           invoke("observeDelegateTaskDelivery", List(Property("input", V.DelegateTaskObservationInput(id, event,
             V.WorkflowArtifactReference("specification-transport-" + event, "1"), Some(destination), result, artifact,
-            "SPECIFICATION-OWNED caller observation; no real chat or activation is claimed"), None)), delivery = true)
+            "SPECIFICATION-OWNED caller observation; no real chat or activation is claimed", None), None)), delivery = true)
         def implement(started: V.DelegateTaskView, changed: Boolean): V.DelegateTaskView = {
           val work = advance(started.sessionId)
           work.kind shouldBe "Request"
@@ -499,7 +502,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
           "consumerCheckReferences" -> Vector.empty[Record])
         val adoptionInput = V.DelegateTaskObservationInput(requester.sessionId, "adopt",
           V.WorkflowArtifactReference("specification-transport-adopt", "1"), Some(destination.sessionId), None, Some(selection),
-          "SPECIFICATION-OWNED caller observation; no real chat or activation is claimed")
+          "SPECIFICATION-OWNED caller observation; no real chat or activation is claimed", None)
         // A label or caller attachment alone cannot cross the host observation gate.
         owner.executeOperationResponseInContext(Request.of(component = component.name, service = "DelegateTaskDeliveryService",
           operation = "observeDelegateTaskDelivery", properties = List(Property("input", adoptionInput, None))), actor).isSuccess shouldBe false

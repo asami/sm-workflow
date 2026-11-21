@@ -14,7 +14,7 @@ import RepositorySyncNativeProgressStore.*
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -25,8 +25,21 @@ private[smworkflow] object RepositorySyncNativeProgression {
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] =
+    _advanceC(identity, declaration, definition, core, fetchAcknowledgement, acknowledgement, conflicts,
+      validationPolicy.map(p => p.copy(dependencyInputs = RepositorySyncConsumedInputs.subject(core))), review, convergence, repair)
+
+  private def _advanceC(identity: String, declaration: Fetch.Declaration, definition: DefinitionBinding,
+    core: ActionCall.Core, fetchAcknowledgement: () => Consequence[Unit],
+    acknowledgement: String => Consequence[Unit],
+    conflicts: Option[RepositorySyncNativeConflictContinuation.Port] = None,
+    validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
+    _ <- if (session.started.receipt.payload.value.dependencyBinding == RepositorySyncConsumedInputs.binding(core))
+      Consequence.unit else invalid("RepositorySync Advance omitted the original dependency subject")
     remoteGate <- RepositorySyncLocalMain.remoteReadyC(session, declaration, core)
     policyGate <- if (remoteGate.isEmpty) RepositorySyncPolicyDecision.gateC(session, declaration, core)
       else Consequence.success(None)
@@ -185,6 +198,12 @@ private[smworkflow] object RepositorySyncNativeProgression {
       case Some(value) if value.payload.stage == "Converged" => Consequence.success(value)
       case _ => invalid("retained terminal has no saved convergence")
     }
+    _ <- if (!RepositorySyncConsumedInputs.related(core) || saved.payload.validation.exists { state =>
+      val merge = saved.payload.mergeHead.nonEmpty
+      state.dependencyInputs == RepositorySyncConsumedInputs.subject(core) &&
+        state.receipts.size == state.selected.size + (if (merge) 2 else 1) &&
+        RepositorySyncNativeMergeValidation.successful(state.receipts, merge, state.selected)
+    }) Consequence.unit else invalid("retained convergence has no validation for its exact dependency subject")
     _ <- if (current.identity == saved.record.identity && current.revision == saved.record.revision.next &&
         current.history.dropRight(1) == saved.record.history) Consequence.unit
       else invalid("retained terminal does not immediately follow its saved convergence")
@@ -257,7 +276,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
           }
           source <- RepositorySyncNativeMergeValidation.integrationSourceC(original)
           policy <- validationpolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
-          _ <- RepositorySyncNativeMergeValidation.completedC(value, source, integrationPolicy(declaration, policy), merge = false)
+          _ <- RepositorySyncNativeMergeValidation.completedIntegratedC(store, value, source,
+            integrationPolicy(declaration, policy, core))
           _ <- if (value.payload.stage == "IntegrationValidated" && value.payload.mergeHead.isEmpty &&
               session.started.current.suspension.isEmpty) Consequence.unit
             else invalid("retained integration validation crosses its genuine source or current host policy")
@@ -306,8 +326,14 @@ private[smworkflow] object RepositorySyncNativeProgression {
           else pendingMergeC(store.scoped(""), integrated, validationPolicy, review, convergence, store.namespace, repair)
       } yield result
       else if (integrated.payload.stage == "Integrated" && validationPolicy.nonEmpty) for {
-        checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, integrationPolicy(store.declaration, validationPolicy.get))
-        wire <- if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
+        policy <- Consequence.success(integrationPolicy(store.declaration, validationPolicy.get, store.core))
+        setup <- RepositorySyncNativeMergeValidation.integratedSetupReasonC(store, integrated, policy)
+        checked <- if (setup.nonEmpty) Consequence.success(integrated)
+          else RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, policy)
+        refusal = setup.orElse(checked.payload.validation.toVector.flatMap(_.groups.values.flatMap(_.refusal)).headOption)
+        wire <- if (refusal.nonEmpty) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
+          refusal.get, "ValidationSetupRequired"))
+          else if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
           RepositorySyncNativeConvergence.advanceC(store, checked, convergence.get)
           else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(checked.record.identity.value,
                 if (checked.payload.stage == "IntegrationValidated") "Selected checks passed; current host convergence authority is required."
@@ -325,8 +351,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
   } yield changed.exists(change => Set("build.sbt", "project.yaml")(change.path.value))
 
   private[admission] def integrationPolicy(declaration: Fetch.Declaration,
-    mergePolicy: RepositorySyncNativeMergeValidation.Policy): RepositorySyncNativeMergeValidation.Policy =
-    if (declaration.runtimeCleanSync) RepositorySyncNativeMergeValidation.Policy(
+    mergePolicy: RepositorySyncNativeMergeValidation.Policy, core: ActionCall.Core = null): RepositorySyncNativeMergeValidation.Policy =
+    if (declaration.runtimeCleanSync && !RepositorySyncConsumedInputs.related(core)) RepositorySyncNativeMergeValidation.Policy(
       "clean-repository-sync", 1, "explicit-no-product-tests",
       "Equal, local-ahead and fast-forward create no program merge candidate; retain structural Git checks only.", Vector.empty)
     else mergePolicy

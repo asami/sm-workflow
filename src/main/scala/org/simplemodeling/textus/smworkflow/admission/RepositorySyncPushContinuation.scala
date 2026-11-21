@@ -698,7 +698,8 @@ private[smworkflow] object RepositorySyncPushContinuation {
           original <- store.loadC("integrated").flatMap(_.map(Consequence.success).getOrElse(N.invalid("fresh integration source is absent")))
           source <- C.integrationSourceC(original)
           policy <- validation.map(Consequence.success).getOrElse(N.invalid("fresh integration requires selected policy"))
-          _ <- C.completedC(checked, source, RepositorySyncNativeProgression.integrationPolicy(store.declaration, policy), merge = false)
+          _ <- C.completedIntegratedC(store, checked, source,
+            RepositorySyncNativeProgression.integrationPolicy(store.declaration, policy, store.core))
         } yield ())
         result <- RepositorySyncNativeConvergence.advanceC(base, value, convergence.get, validation)
       } yield result

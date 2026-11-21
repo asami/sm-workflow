@@ -81,7 +81,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     }
     val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination",
       "documentation", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
-      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction")
+      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction", None, None, None)
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-delegate-semantic", "SPEC-managed continuation",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("objective", "delivery"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,
@@ -936,7 +936,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       "textus.resource.url.file.roots" -> root.toString, "textus.resource.read.max-bytes" -> "16777216")
     val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination",
       "documentation", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
-      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction")
+      NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-authority", "1")), None, Vector.empty, "SPEC-owned direction", None, None, None)
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-incomplete-semantic", "SPEC preserve ordinary Repair decisions",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,

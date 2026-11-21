@@ -231,6 +231,10 @@ OperationResult
 | requestIdentity | string | 1 |
 | publication | string | 1 |
 | selection | string | 1 |
+| providerPhase | DelegateProviderPhaseLocator | ? |
+| synchronization | DelegateDeliverySynchronization | ? |
+| publicationEdge | string | ? |
+| retain | boolean | ? |
 
 ## PublishDevelopmentArtifactInput
 
@@ -263,6 +267,36 @@ OperationResult
 | input | ManagedDevelopmentInput | 1 |
 
 ## ReadDevelopmentArtifactStatusInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## VerifyDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## DetachDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## PruneDevelopmentArtifactInput
 
 - input-kind :: COMMAND
 
@@ -1860,6 +1894,9 @@ OperationResult
 | effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
 | phaseRepairInventory | string | * |
 | phaseReviewClassification | org.goldenport.record.Record | ? |
+| allowDependencyRepair | boolean | ? |
+| allowSharedCliUpdate | boolean | ? |
+| deliverySynchronization | string | ? |
 
 ## GoalPhaseAcceptanceCondition
 
@@ -4813,6 +4850,16 @@ on = dependency-inventory-continued-Implementation
 
 to = Repair
 on = dependency-inventory-continued-Repair
+
+##### TRANSITION
+
+to = Implementation
+on = dependency-policy-admitted-Implementation
+
+##### TRANSITION
+
+to = Repair
+on = dependency-policy-admitted-Repair
 
 ##### TRANSITION
 
@@ -12759,7 +12806,7 @@ Runtime-owned scope-private producer publication, immutable selection, actual co
 
 ##### DESCRIPTION
 
-Publish one declared ordinary JVM or Scala-cross producer module into its admitted development repository. Retain source origin, completed adapter output and actual typed execution separately from consumer verification.
+Publish one declared ordinary JVM or Scala-cross producer module or an explicitly configured atomic multi-module batch into its admitted development repository. Retain source origin, completed adapter output and actual typed execution separately from consumer verification.
 
 ##### TYPE
 
@@ -12787,7 +12834,7 @@ ManagedDevelopmentResult
 
 ##### DESCRIPTION
 
-Create an immutable selection bound to one declared consumer edge and completed publication. Selection does not build or publish the provider and reports selected-unverified.
+Create an immutable selection bound to one declared consumer edge and completed publication, and protect it as that edge's active selection. Optional retain=true pins this exact selection; retain=false explicitly unpins it. Omission preserves retained selections and creates no pin. Selection does not build or publish the provider and reports selected-unverified.
 
 ##### TYPE
 
@@ -12854,6 +12901,90 @@ COMMAND
 ###### TYPE
 
 ReadDevelopmentArtifactStatusInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### verifyDevelopmentArtifact
+
+##### DESCRIPTION
+
+Verify the exact immutable selection by a fresh typed consumer compilation, including actual selected generation records when configured. Reusing the same compile request returns its retained outcome.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+VerifyDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### detachDevelopmentArtifact
+
+##### DESCRIPTION
+
+Start an ordinary consumer compilation without the per-build selection input and retain the previous immutable selection for explicit rollback. Successful completion clears only the expected active selection, preserving a concurrent newer selection and explicit pins. This operation starts a fresh process; it does not claim to reload an existing JVM.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DetachDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### pruneDevelopmentArtifact
+
+##### DESCRIPTION
+
+Delete only a newly admitted unprotected publication's bounded owned artifact inventory through CNCF FileDelete UoW. Protect active, explicitly retained, in-flight and uncertain dependency closures through owner Component records. Reserve unavailability before effects and retain each actual outcome without replay. Legacy, changed, unknown or protected inventories return prune-unavailable. Partial or uncertain deletion stays unavailable. No source checkout, claim, shared cache or directory tree is deleted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+PruneDevelopmentArtifactInput
 
 ##### PARAMETER
 
@@ -16621,6 +16752,9 @@ Independent single available existing-chat request. Complete adopted input binds
 | publicationTarget | string | ? |
 | artifactCoordinates | string | * |
 | consumerInstructions | string | 1 |
+| prerequisiteFor | string | ? |
+| providerPhase | DelegateProviderPhaseLocator | ? |
+| synchronization | DelegateDeliverySynchronization | ? |
 
 ## DelegateTaskObservationInput
 
@@ -16637,6 +16771,7 @@ Independent single available existing-chat request. Complete adopted input binds
 | result | record | ? |
 | artifactSelection | record | ? |
 | rationale | string | 1 |
+| commandIdentity | string | ? |
 
 # SERVICE
 
@@ -17428,3 +17563,27 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | target | string | 1 |
 | choices | string | * |
 | resumeOperation | string | 1 |
+
+## DelegateProviderPhaseLocator
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| startRevision | string | 1 |
+| publication | string | 1 |
+| producerSelection | string | 1 |
+
+## DelegateDeliverySynchronization
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| localBranch | string | 1 |
+| trackingRemote | string | 1 |
+| trackingBranch | string | 1 |
+| remoteEndpointIdentity | string | 1 |
+| syncMode | string | 1 |

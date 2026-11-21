@@ -44,6 +44,11 @@ evidence and accepted Steps. It does not retroactively condition that release.
       accepted Steps, failure/UNKNOWN history and repair count 10/10, without
       private-state edits, re-Start, successful-operation replay or duplicate
       effects. Approved NOT RUN does not invalidate the released predecessor.
+- [ ] P22-11: Complete the remaining Phase 7 connected delivery qualification.
+      Read the exact retained B capture, attribute the intended B failure, and
+      exercise the post-commit refusal for both tracked and untracked changes
+      before B publication or A certification. Preserve the prior failures and
+      the successful connected delivery result.
 
 Retain the Phase 8 origin Session and its 10/10 history. Planning this Phase
 changes neither that history nor any earlier successful or uncertain result.
