@@ -215,6 +215,26 @@ the exact native Request and adapter-generated launch arguments. Reference
 specific decisions, files and evidence rather than copying a transcript. A
 worker's report is input to the owner's verification, not runtime acceptance.
 
+## Cross-chat result reply authority
+
+For either waiting mode, the requester includes the authorized return chat
+identity, the information the user permits sharing, the work covered (including
+any covered follow-up repairs), and a reference to the original user instruction
+or approval that the destination can verify. Carry these together in the
+existing handoff and forward them when issuing a covered repair. An AI request
+alone cannot establish user consent.
+
+At return, compare the actual recipient, outgoing information and repair purpose
+with that approval, respecting any later user restriction. Send a covered result
+directly. A new request ID, Session or commit for a covered repair does not by
+itself require another Human decision. For example, approval to share commit IDs
+and verification references for a repair series covers the next commit in that
+series. An approval limited to a named commit applies only to that commit.
+Omit optional information outside the grant. If a necessary part of the reply
+lacks verifiable authority, retain the result and ask only for that specific
+permission. Record completed transport and requester adoption through their
+respective existing operations.
+
 ## Cross-chat waiting mode selection
 
 All sm-* skills default to [active-Goal Luna waiting](#active-goal-luna-wait)
@@ -277,10 +297,9 @@ receipt acknowledgments. A later explicit human request for status permits a
 bounded inspection, not an ongoing monitor. This rule concerns cross-chat waiting;
 it does not replace runtime-owned process waiting, termination or result retention.
 
-The authorized request carries its return destination and attributable human
-authorization for the result reply and requester continuation. A message from
-another AI or this contract alone is not messaging authority. Reuse existing
-covering human authorization; do not ask again when it is already established.
+Apply the [cross-chat result reply authority](#cross-chat-result-reply-authority)
+from dispatch through result delivery. Resume requester work within its existing
+authorization.
 If reply authority or a usable return transport is absent, retain the result for
 human retrieval and disclose that limitation rather than promising automatic wakeup.
 

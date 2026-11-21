@@ -143,6 +143,13 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
+At dispatch, include the return chat identity, permitted information, covered
+work and a verifiable reference to the original user approval in the handoff.
+Carry the same authority into covered follow-up repairs. At return, send the
+result directly when all three scope elements still match, including for a new
+repair commit or Session. Resolve any uncovered part under the shared
+[result reply authority](../../docs/spec/native-host-execution.md#cross-chat-result-reply-authority).
+
 Requester and destination have different host requirements. The requester
 retains destination checks and publication as delivery requirements, uses its
 own read-only repository observations and issues transport work only. It does
