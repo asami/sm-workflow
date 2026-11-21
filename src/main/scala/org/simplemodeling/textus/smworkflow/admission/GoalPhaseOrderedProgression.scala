@@ -106,6 +106,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case Some(proof) => qualifiedCheckpointValid(anchor, proof, value.commit)
       case None => value.partialCompletion.fold(value.commit.parent == anchor.head)(_.originalParent == anchor)
     })
+
+  private[admission] def acceptedStepPredecessor(state: State, index: Int): Snapshot =
+    if (index == 0) state.base
+    else Snapshot(state.completed(index - 1).commit.identity, state.completed(index - 1).commit.tree)
+
+  private[admission] def acceptedPredecessorsValid(state: State): Boolean =
+    state.completed.indices.forall(i => acceptedPredecessorValid(state.completed(i), acceptedStepPredecessor(state, i)))
   final case class StepCommitChain(originalParent: Snapshot, partial: Commit, completion: Commit)
   object StepCommitChain {
     given Encoder[StepCommitChain] = deriveEncoder
@@ -608,13 +615,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     /** Explicit direction changes only the outstanding adopted Phase boundary.
       * Successful checks and the immutable accepted prefix remain actual evidence.
       */
-    private[admission] def adoptPhaseAcceptanceDeferralC(proposed: Plan, evidence: String): Consequence[State] = for {
+    private[admission] def adoptPhaseAcceptanceDeferralC(proposed: Plan, evidence: String,
+      predecessors: Option[GoalPhaseNativeCandidate.DeferralPredecessors]): Consequence[State] = for {
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseReview) && cursor == plan.steps.size && cursor == completed.size &&
           completed.map(_.step) == plan.steps.map(_.identity) && completed.forall(s =>
             validStepAcceptance(s) && validCommit(s.commit)) &&
-          completed.zipWithIndex.forall { (s, i) => acceptedPredecessorValid(s,
-            if (i == 0) base else Snapshot(completed(i - 1).commit.identity, completed(i - 1).commit.tree)) } &&
+          (acceptedPredecessorsValid(this) || predecessors.exists(_.matches(this))) &&
           validSnapshot(base) && candidate.exists(validSnapshot) && checksReceipt.exists(text) &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && releaseCommit.isEmpty && !policyRepairPending &&

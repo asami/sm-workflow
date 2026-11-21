@@ -27,6 +27,13 @@ project defaults are never recaptured for this branch.
 R2. Adoption requires Decision sourced from PhaseReview, with cursor equal to
 both the complete Step count and the exact valid accepted-prefix size. The
 actual candidate and successful checks receipt must be present and valid.
+An ordinary accepted Step with an intervening commit uses the same retained
+predecessor evidence as whole-Phase candidate qualification. The native
+owner matches the reviewed candidate and ordered completed Step candidates
+against the original base and the actual parents. Missing or crossed evidence
+refuses. Direct-parent, qualified checkpoint and partial completion evidence
+keep their existing rules. Preparation, saved-question readback and adoption
+use this same native evidence.
 Document decisions, pending repair, closure intent, accepted Phase review,
 recording paths, release commit, pending policy repair, convergence stop and
 generation overflow refuse. Actual-shaped nonempty evidence is required.
@@ -81,15 +88,16 @@ requires new independent evidence and the existing normal closure gates.
 
 R6. Installed qualification requires an explicit absolute
 `smworkflow.spec.installedCommand`. Old-to-new compatibility additionally
-requires explicit `smworkflow.spec.inventoryPreviousInstallations` and
-`smworkflow.spec.inventoryInstallations`. The old image must create and drive
+requires explicit `smworkflow.spec.deferralPreviousLauncherHome` and
+`smworkflow.spec.deferralLauncherHome`. Each isolated launcher home selects
+its own locally published CAR. The old runtime must create and drive
 the original normal episode through actual ReviewPhase and its accepted
-decision-needed result. Only the fixture installation selector changes before
-the new image continues the identical database and Session through ordinary
+decision-needed result, then refuse Advance at the predecessor guard. Only
+the fixture's launcher home changes before the new runtime continues the
+identical database and Session through ordinary
 question/adoption. No private Workflow state is seeded or reconstructed, and
 no global development runtime is selected. The compatibility example may
-cancel when neither old nor new property is selected; qualification itself
-requires a later actual run with both roots and the installed command.
+cancel when neither launcher home is selected.
 
 R7. A historical native candidate receipt may carry optional `hygiene` JSON
 only as completed, inert evidence. Its exact closed six-field record must have

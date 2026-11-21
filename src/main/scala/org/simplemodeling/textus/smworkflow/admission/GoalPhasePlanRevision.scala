@@ -146,7 +146,9 @@ private[smworkflow] object GoalPhasePlanRevision {
     * An ordinary capture failure must never be reinterpreted as another scope.
     */
   def captureSemanticProposalC(controller: O.State, proposal: Proposal, project: Option[A.Project],
-    documents: Option[D.Bound] = None): Consequence[Captured] = for {
+    documents: Option[D.Bound] = None,
+    predecessors: => Consequence[Option[GoalPhaseNativeCandidate.DeferralPredecessors]] = Consequence.success(None)
+  ): Consequence[Captured] = for {
     _ <- _check(controller != null && documents != null, "semantic capture source is absent")
     _ <- validateProposalC(proposal)
     captured <- if (controller.stage == O.Stage.Decision && controller.decisionSource.contains(O.Stage.PhaseReview) &&
@@ -161,7 +163,7 @@ private[smworkflow] object GoalPhasePlanRevision {
         effective.copy(conditions = effective.conditions.map(condition =>
           if (changed.contains(condition.identity)) condition.copy(required = false) else condition))))
       selected = Captured(proposal, plan, revisionScope = Some(phaseAcceptanceDeferralScope))
-      _ <- adoptedC(controller, selected, "proposal-eligibility")
+      _ <- adoptedC(controller, selected, "proposal-eligibility", predecessors)
     } yield selected else if (proposal.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) for {
       plan <- phaseRepairInventoryPlanC(controller.plan, proposal.plan)
       selected = Captured(proposal, plan, documents, Some(phaseRepairInventoryScope))
@@ -270,24 +272,29 @@ private[smworkflow] object GoalPhasePlanRevision {
     * Ownership narrowing uses ordinary explicit AdoptPlanRevision; appends keep
     * their separate inventory authority and stricter append-only guard.
     */
-  def eligibleC(controller: O.State, captured: Captured): Consequence[Unit] = for {
+  def eligibleC(controller: O.State, captured: Captured,
+    predecessors: => Consequence[Option[GoalPhaseNativeCandidate.DeferralPredecessors]] = Consequence.success(None)
+  ): Consequence[Unit] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
     _ <- if (captured.revisionScope.contains(phaseAcceptanceDeferralScope) ||
       captured.revisionScope.contains(remainingPurposeScope))
-      adoptedC(controller, captured, "proposal-eligibility").map(_ => ())
+      adoptedC(controller, captured, "proposal-eligibility", predecessors).map(_ => ())
       else if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
         captured.plan.steps(controller.cursor).ownedPaths.size > controller.step.ownedPaths.size)
       controller.adoptCurrentInventoryRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
       else controller.adoptRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
   } yield ()
 
-  def adoptedC(controller: O.State, captured: Captured, evidence: String): Consequence[O.State] = for {
+  def adoptedC(controller: O.State, captured: Captured, evidence: String,
+    predecessors: => Consequence[Option[GoalPhaseNativeCandidate.DeferralPredecessors]] = Consequence.success(None)
+  ): Consequence[O.State] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
     _ <- validateCapturedScopeC(controller.plan, controller.cursor, captured)
     adopted <- captured.revisionScope match {
-      case Some(`phaseAcceptanceDeferralScope`) => controller.adoptPhaseAcceptanceDeferralC(captured.plan, evidence)
+      case Some(`phaseAcceptanceDeferralScope`) => predecessors.flatMap(
+        controller.adoptPhaseAcceptanceDeferralC(captured.plan, evidence, _))
       case Some(`phaseRepairInventoryScope`) => controller.adoptPhaseRepairInventoryC(captured.plan, evidence)
       case None => controller.adoptRevisionC(captured.plan, evidence)
       case Some(`remainingPurposeScope`) => for {

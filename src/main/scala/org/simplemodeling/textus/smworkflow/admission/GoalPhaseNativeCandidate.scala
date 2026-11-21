@@ -833,6 +833,28 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     }
   }
 
+  /** A proof confined to the exact controller reconstructed by the native owner. */
+  final class DeferralPredecessors private[GoalPhaseNativeCandidate] (controller: O.State) {
+    def matches(value: O.State): Boolean = value eq controller
+  }
+
+  private[admission] def deferralPredecessorsC(controller: O.State, work: GoalPhaseNativeWork.Request,
+    candidate: Option[Payload], completedCandidates: Vector[Payload],
+    managementPaths: Vector[String]): Consequence[Option[DeferralPredecessors]] =
+    if (O.acceptedPredecessorsValid(controller)) Consequence.success(None)
+    else for {
+      _ <- if (work.kind == "ReviewPhase" && work.selectedPlan == controller.plan &&
+          work.originalBase == controller.base && work.completed == controller.completed &&
+          controller.completed.map(_.step) == controller.plan.steps.map(_.identity) &&
+          work.candidate == controller.candidate && work.checksReceipt == controller.checksReceipt)
+        Consequence.unit else F.invalid("Phase acceptance deferral crosses its retained checked review")
+      payload <- candidate.filter(p => p.step == "phase:" + controller.plan.phase &&
+          p.candidate.nonEmpty && p.candidate == work.candidate && p.stepEvidence.nonEmpty &&
+          work.review.exists(r => r.changedPaths == workPaths(p) && workDiff(p).contains(r.diff)))
+        .map(Consequence.success).getOrElse(F.invalid("Phase acceptance deferral has no exact retained whole-Phase Step evidence"))
+      _ <- retainedEvidenceC(payload, controller, completedCandidates, managementPaths)
+    } yield Some(new DeferralPredecessors(controller))
+
   /** Retained receipt structure is checked independently of current Git authority. */
   private[admission] def retainedEvidenceC(payload: Payload, controller: O.State,
     completedCandidates: Vector[Payload], managementPaths: Vector[String]): Consequence[Unit] = payload.stepEvidence match {
@@ -848,8 +870,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           val closed = controller.completed(index)
           value.step == closed.step && value.commit == closed.commit && value.partialCompletion == closed.partialCompletion &&
             value.qualifiedCheckpoint == closed.qualifiedCheckpoint && {
-              val predecessor = if (index == 0) controller.base else
-                O.Snapshot(controller.completed(index - 1).commit.identity, controller.completed(index - 1).commit.tree)
+              val predecessor = O.acceptedStepPredecessor(controller, index)
               O.acceptedPredecessorValid(closed, predecessor) ||
                 (O.validStepAcceptance(closed) && closed.partialCompletion.isEmpty && closed.qualifiedCheckpoint.isEmpty &&
                   actual.continuation.exists(proof => O.continuationValid(predecessor, proof) &&

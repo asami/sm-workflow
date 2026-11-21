@@ -3907,7 +3907,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           H.Source(source, if (cursor.sourceHistoryRecovery.nonEmpty) input else input.copy(issues = cursor.issues), cursor.controller, cursor.from,
             result, cursor.candidate, cursor.documents, cursor.sourceHistoryRecovery, reason,
             cursor.developmentReconstruction.filter(saved => saved.payload.assessment.reasons.nonEmpty &&
-              saved.payload.humanAnswer.isEmpty).map(_.payload)))
+              saved.payload.humanAnswer.isEmpty).map(_.payload), cursor.completedCandidates, N.managementPaths(cursor.findings)))
         else F.invalid("Human question has no actual Decision predecessor")
       } yield human }.getOrElse(F.invalid("Human question has no genuine preceding semantic result"))
 

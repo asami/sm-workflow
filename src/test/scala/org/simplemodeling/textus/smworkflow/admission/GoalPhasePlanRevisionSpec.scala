@@ -410,10 +410,12 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       paused.adoptRemainingRevisionC(proposed, "spec-wrong-ordinary-route").isSuccess shouldBe false
     }
   }
-  private def _close_step(state: O.State, identity: String, tree: String): O.State = {
+  private def _close_step(state: O.State, identity: String, tree: String,
+    continuation: Option[O.CandidateContinuation] = None): O.State = {
     val implemented = _take(state.acceptC(O.SemanticCompleted(_key(state), "Specification-owned implementation")))
-    val snapshot = O.Snapshot(state.tipSnapshot.head, tree)
-    val observed = _take(implemented.acceptC(O.CandidateObserved(snapshot)))
+    val snapshot = O.Snapshot(continuation.fold(state.tipSnapshot.head)(_.parent.head), tree)
+    val observed = _take(implemented.acceptC(continuation.fold[O.Event](O.CandidateObserved(snapshot))(
+      O.CandidateContinuationObserved(snapshot, _))))
     val checked = _take(observed.acceptC(O.ChecksObserved(snapshot, state.plan.steps(state.cursor).checks,
       "fixture-step-checks", true)))
     val reviewed = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "fixture-step-checks",
@@ -470,6 +472,53 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
 
   "E1 explicit Phase acceptance deferral" should afterWord(
     "in spec:goal-phase-acceptance-deferral, example:E1, rules:R1,R2,R3,R4, phase:P68-PLAN-DEFERRAL-01") {
+    "require exact retained ordinary Step lineage before accepting an interleaved deferral" in {
+      Given("a checked Phase decision with an ordinary Step committed after independent work")
+      val raw = _raw.copy(acceptance = Some(_adoption.copy(conditions = _adoption.conditions :+
+        A.Condition("closure", "phase", true, "Explicit adopted Phase verification"))))
+      val first = _close_first(_take(O.startC(_take(A.captureC(Some(_project), raw)), _base)))
+      val anchor = first.tipSnapshot
+      val parent = O.Snapshot("1" * 40, "2" * 40)
+      val lineage = O.CandidateContinuation(parent, Vector(
+        O.HistoryCommit(parent.head, parent.tree, Vector(anchor.head)),
+        O.HistoryCommit(anchor.head, anchor.tree, Vector(_base.head))))
+      val review = _review_phase(_close_step(first, "f" * 40, "e" * 40, Some(lineage)))
+      val result = _deferral_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "SPECIFICATION-OWNED review", review))
+      val evidence = paused.completed.zipWithIndex.map { (step, index) =>
+        val paths = paused.plan.steps(index).ownedPaths
+        GoalPhaseNativeCandidate.StepEvidence(step.step, O.Snapshot(step.commit.parent, step.commit.tree),
+          paths, "retained diff for " + step.step, step.commit, Vector.empty)
+      }
+      val saved = evidence.zipWithIndex.map { (step, index) =>
+        GoalPhaseNativeCandidate.Payload((index + 2).toString, step.step, step.changedPaths, step.changedPaths,
+          Some(step.candidate), step.changedPaths, Some(step.diff), Option.when(index == 1)(lineage))
+      }
+      val paths = evidence.flatMap(_.changedPaths)
+      val diff = evidence.map(_.diff).mkString("\n")
+      val whole = GoalPhaseNativeCandidate.Payload("15", "phase:" + paused.plan.phase, Vector.empty, Vector.empty,
+        paused.candidate, paths, Some(diff), stepEvidence = Some(evidence))
+      val request = _review_request(review)
+      val work = request.copy(review = request.review.map(_.copy(changedPaths = paths, diff = diff)))
+      def proof(candidate: Option[GoalPhaseNativeCandidate.Payload], ordered: Vector[GoalPhaseNativeCandidate.Payload],
+        source: S.Request = work) =
+        GoalPhaseNativeCandidate.deferralPredecessorsC(paused, source, candidate, ordered, Vector.empty)
+
+      When("the native owner compares the exact retained Phase and Step records")
+      val predecessors = _take(proof(Some(whole), saved))
+      val proposal = result.planRevision.get
+      val captured = _take(captureSemanticProposalC(paused, proposal, None, predecessors = Consequence.success(predecessors)))
+      Then("only the matching evidence permits eligibility and explicit adoption")
+      predecessors should not be empty
+      eligibleC(paused, captured, Consequence.success(predecessors)) shouldBe Consequence.unit
+      _take(adoptedC(paused, captured, "SPECIFICATION-OWNED Human direction", Consequence.success(predecessors))).completed shouldBe paused.completed
+      adoptedC(paused, captured, "no-retained-proof") shouldBe a[Consequence.Failure[?]]
+      Vector(proof(None, saved), proof(Some(whole), saved.reverse), proof(Some(whole), Vector(saved.head, saved.head)),
+        proof(Some(whole), saved.updated(1, saved(1).copy(continuation = None))),
+        proof(Some(whole), saved.updated(1, saved(1).copy(candidate = Some(saved(1).candidate.get.copy(head = _base.head))))),
+        proof(Some(whole), saved, work.copy(originalBase = parent))).foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
     "prepare eligibility only for the explicit valid deferral without adopting or changing the controller" in {
       Given("R1–R4 E1: an actual-shaped all-closed Phase review Decision and its explicit saved deferral")
       val review = _deferral_review
