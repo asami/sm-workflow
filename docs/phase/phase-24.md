@@ -44,6 +44,11 @@ connected acceptance. Ready capabilities are consumed without reimplementation.
 | 3: Phase 24 consumer delivery | Implement Q1 -> Q2 -> Q3 below using the qualified producer interfaces and normal installed control version. | Required producer changes receive their ordinary owner validation/review and necessary publication/delivery; only changed connections need consumer qualification. |
 | 4: Phase 25 | Expand the usable route with a generic task contract and selected provider policies. | Separately planned; no Phase 25 gate on Phase 24 completion. |
 
+The [P24-PRE connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
+records the applicable Phase 9 evidence, named owner gaps, and the unverified
+access and no-paid-overage gate. It does not satisfy or replace the remaining
+Phase 7 predecessor.
+
 PRE-2/3 are conditional development work, not assumed completed prerequisites.
 Any required dependency change uses its normal owner and applicable approval
 boundary; this planning record does not dispatch another chat or grant execution,

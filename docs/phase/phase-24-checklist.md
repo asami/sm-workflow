@@ -3,6 +3,10 @@
 Status: planned; all new delivery conditions remain unverified.
 Plan: [Phase 24](phase-24.md)
 
+The [connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
+records source and retained evidence and outstanding prerequisites. Checklist
+conditions remain unchecked pending their actual acceptance evidence.
+
 ## Pre-development dependencies
 
 - [ ] P24-01: After current stabilization and remaining Phase 7, PRE-1 identifies the concrete dispatcher, textus-ai/OpenAI and agent adapters, existing typed completion and applicable accepted evidence; gaps have named owners.
