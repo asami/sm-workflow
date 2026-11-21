@@ -8,17 +8,16 @@ The user selected this **execution order** after the currently running Phases 7 
 2. **Phase 28** — deterministic compiler/lint auto-fix.
 3. **Phase 18** — tool-neutral validation and Flutter integration.
 4. **Phase 23** — strategic Phase convergence.
-5. **Phase 26** — common Server and multi-CLI interoperability.
-6. **Phase 27** — AI Capability Pool and surplus-allowance cost optimization.
-7. **Phase 22** — runtime stabilization and difficult continuations.
-8. **Phase 17** — Task and Standalone Fix extensions.
-9. **Phase 21** — recursive repository catch-up.
-10. **Phase 15** — development workspace operations.
-11. **Phase 14** — development investigation.
+5. **Phase 25** — generic textus-ai Task API and provider expansion.
+6. **Phase 26** — common Server and multi-CLI interoperability.
+7. **Phase 27** — AI Capability Pool and surplus-allowance cost optimization.
+8. **Phase 22** — runtime stabilization and difficult continuations.
+9. **Phase 17** — Task and Standalone Fix extensions.
+10. **Phase 21** — recursive repository catch-up.
+11. **Phase 15** — development workspace operations.
+12. **Phase 14** — development investigation.
 
-**Deferred:** Phases 10, 19, 13, 20, 25 and 16. Phase 25's generic Task API remains separately planned; Phase 26/27 must assess and implement only concrete necessary prerequisites through their proper owners, not silently treat Phase 25 as completed.
-
-Phases 7 and 9 remain in execution as last reported. This scheduling decision does not start or complete a Phase, modify Session state, or change acceptance evidence. Phase 26's common Server work is deliberately delayed until after Phase 23 to contain architecture risk; Phase 27 follows Phase 26. Existing phase scopes and ownership remain unchanged. If a prerequisite is blocking, record its bounded dependency without silently changing this priority.
+**Deferred:** Phases 10, 19, 13, 20 and 16. Phase 25 is now deliberately scheduled before Phase 26 to provide the reusable task/provider contract for common Server and CLI integration; Phase 27 follows both. Phases 7 and 9 remain in execution as last reported. Scheduling only: no Phase/Session starts, no existing evidence or acceptance is changed. Preserve normal ownership and concrete prerequisites.
 
 Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
 **stabilization -> remaining [Phase 7](phase-7.md) ->
