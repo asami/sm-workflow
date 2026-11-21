@@ -32,7 +32,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -131,16 +131,19 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false, firstinventory: Boolean = false,
     hygiene: Boolean = false, hygieneMode: Option[String] = None, completionRecords: Option[CompletionRecords.Policy] = None, releaseRecords: Boolean = false,
     completionPolicy: Option[String] = None, documentHygiene: Boolean = false,
-    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)(task: Episode => Unit): Unit = {
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None,
+    omitRecordingStage: Boolean = false,
+    recordingStageRefusal: Option[GoalPhaseNativeRecordingCandidate.StageRefusal] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
-    val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
+    val configured = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces)) ++
       (if (evidence) _evidence_values(directory) else Map.empty) ++ hygieneMode.map(CommitHygiene.declaration.name -> _) ++
       completionRecords.map(p => CompletionRecords.declaration.name -> summon[io.circe.Encoder[CompletionRecords.Policy]].apply(p).noSpaces) ++
       completionPolicy.map(ThreeWorkflowRuntimeParameters.completionPolicy.name -> _) ++
-      retainedObservations.map(p => GoalPhaseRetainedObservations.declaration.name -> p.asJson.noSpaces)
+      retainedObservations.map(p => GoalPhaseRetainedObservations.declaration.name -> p.asJson.noSpaces) ++
+      recordingStageRefusal.map(p => GoalPhaseNativeRecordingCandidate.stageRefusalProperty -> p.asJson.noSpaces)
     val basehost = _host(directory)
     val initialhost = if (releaseRecords) basehost.copy(goal = basehost.goal.copy(closure = basehost.goal.closure.copy(
       programs = basehost.goal.closure.programs :+ GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3)))) else basehost
@@ -150,6 +153,20 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       candidatePaths = inventoryhost.goal.candidatePaths :+ _first_inventory_path)) else inventoryhost
     val selectedhost = if (documentHygiene) firsthost.copy(goal = firsthost.goal.copy(
       candidatePaths = firsthost.goal.candidatePaths :+ "docs/spec")) else firsthost
+    val parameters = if (omitRecordingStage) {
+      val identity = "goal-path-" + (selectedhost.goal.candidatePaths.indexOf(_candidates) + 1)
+      val process = _process_plan(directory, selectedhost.goal).mapObject { fields =>
+        val programs = fields("gitPrograms").get.asArray.get
+        val (omitted, retained) = programs.partition(program =>
+          program.hcursor.get[String]("operation").contains("stage-selected-all") &&
+            program.hcursor.get[String]("selectionId").contains(identity))
+        val capabilities = omitted.flatMap(_.hcursor.get[Json]("capability").toOption).toSet
+        fields.add("gitPrograms", Json.fromValues(retained)).add("grants",
+          fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
+            grant("capabilities").get.mapArray(_.filterNot(capabilities)))))))
+      }
+      configured.updated("textus.subsystem.process-execution.plan", process.noSpaces)
+    } else configured
     _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
       if (initialize) prepare(call => call.setupC(_setup_commands_(directory, "FindingRecording").size).flatMap(_ => _install(call, selected)))
@@ -253,6 +270,105 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _checks(directory) shouldBe checks
       e.advance(id).issuedWorkContext shouldBe next.issuedWorkContext
       e.observe().head shouldBe after
+    }
+  }
+
+  private[admission] def qualifyRecordingPrelaunchRecovery(narrator: GivenWhenThen): Unit = {
+    val directory = _root()
+    val repository = directory.resolve("repository")
+    val paths = Vector(_candidates, _hygiene)
+    val policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("phase", _input.phaseIdentity, paths)))
+    val local = Some(GoalPhasePostCompletionSync.localPolicy)
+    var accepted = Option.empty[(String, O.Snapshot, String, Int)]
+    narrator.Given("real accepted Step and Phase results and two tracked completion records")
+    _episode(directory, initialize = true, selectedPolicy = None, completionRecords = Some(policy),
+      releaseRecords = true, completionPolicy = local) { e =>
+      val (id, display, review) = _phase_review(e)
+      val source = _business(review).candidate.get
+      val ack = e.submit(review, Some(display), "accept")
+      accepted = Some((id, source, ack.resultReference.identity, _checks(directory)))
+    }
+    val (id, source, review, checks) = accepted.get
+    var rejected = Option.empty[InstanceRecord]
+    _episode(directory, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = local, omitRecordingStage = true) { e =>
+      narrator.When("the actual fixed Git program is missing after the first durable staging intent")
+      val failure = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
+      failure.isSuccess shouldBe false
+      failure match {
+        case Consequence.Failure(conclusion) => conclusion.show should include("git.execution.program-definition")
+        case _ => fail("Expected native Git admission rejection")
+      }
+      val current = e.current(id)
+      current.causation.value shouldBe "ordered-recording-candidate:stage-intent-0"
+      rejected = Some(current)
+      e.observe().dirty shouldBe empty
+      e.index() shouldBe source.tree
+    }
+    val old = rejected.get
+    val refusal = GoalPhaseNativeRecordingCandidate.StageRefusal(id, old.revision.value, "fixture-terminated-advance",
+      source, paths, "fixture-observed-git-definition-refusal", "NotDispatched")
+    _episode(directory, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = local) { e =>
+      e.advance(id).message should include("unknown intent")
+      e.advance(id).message should include("unknown intent")
+      _same_instance(e.current(id), old)
+      e.index() shouldBe source.tree
+    }
+    val crossed = policy.copy(targets = Vector(policy.targets.head.copy(paths = paths.reverse)))
+    _episode(directory, selectedPolicy = None, completionRecords = Some(crossed), releaseRecords = true,
+      completionPolicy = local, recordingStageRefusal = Some(refusal)) { e =>
+      e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id)).isSuccess shouldBe false
+      _same_instance(e.current(id), old)
+      e.index() shouldBe source.tree
+    }
+    _episode(directory, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = local, recordingStageRefusal = Some(refusal)) { e =>
+      narrator.When("ordinary configuration returns with and then without an independently changed index")
+      val original = Files.readString(repository.resolve(_hygiene))
+      Files.writeString(repository.resolve(_hygiene), original + "\nAn external edit.\n")
+      e.stageCompletionPath(_hygiene)
+      val changed = e.index()
+      changed should not be source.tree
+      e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id)).isSuccess shouldBe false
+      _same_instance(e.current(id), old)
+      e.index() shouldBe changed
+      Files.readString(repository.resolve(_hygiene)) should endWith("An external edit.\n")
+      Files.writeString(repository.resolve(_hygiene), original)
+      e.stageCompletionPath(_hygiene)
+      e.index() shouldBe source.tree
+      e.observe().dirty shouldBe empty
+      val waiting = e.advance(id)
+      narrator.Then("the same Phase records a new exact observation and closes through its existing Release authority")
+      val actual = e.recordingCandidate(id)
+      actual.payload.stagedPaths shouldBe empty
+      actual.payload.stageRefusal shouldBe Some(refusal)
+      actual.payload.changedPaths.toSet shouldBe paths.toSet
+      actual.payload.records.get.evidence should contain(review)
+      actual.payload.reviewedCandidate shouldBe source
+      val observed = e.current(id)
+      observed.history.take(old.history.size) shouldBe old.history
+      val causes = observed.history.drop(old.history.size).map(_.causation.value)
+      causes.count(_ == "ordered-recording-candidate:completion-observation") shouldBe 1
+      causes.exists(_.startsWith("ordered-recording-candidate:stage-")) shouldBe false
+      e.authority(id, waiting)
+      var result = e.advance(id)
+      for (_ <- 1 to 4 if result.kind != "Terminal") {
+        if (result.authorityContext.nonEmpty) e.authority(id, result)
+        result = e.advance(id)
+      }
+      result.kind shouldBe "Terminal"
+      e.current(id).lifecycle shouldBe Lifecycle.Completed
+      val released = e.observe().head
+      e.commit(released).parents shouldBe Vector(source.head)
+      val texts = paths.map(path => Files.readString(repository.resolve(path)))
+      texts.foreach(_.sliding(s"<!-- sm-workflow completion ${id}".length)
+        .count(_ == s"<!-- sm-workflow completion ${id}") shouldBe 1)
+      _checks(directory) shouldBe checks
+      e.advance(id).kind shouldBe "Terminal"
+      e.observe().head shouldBe released
+      paths.map(path => Files.readString(repository.resolve(path))) shouldBe texts
+      _checks(directory) shouldBe checks
     }
   }
 
@@ -966,6 +1082,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       prepare(call => RepositorySyncManagedGitObservation.commitC(call.core, identity).map(v => { value = Some(v); () }))
       value.get
     }
+    def stageCompletionPath(path: String): Unit =
+      prepare(call => WorkflowManagedProcessExecution.stageGoalCandidateC(call.core, _paths.indexOf(path) + 1)
+        .flatMap(_.valueC))
     def index(): String = {
       var value = Option.empty[String]
       prepare(call => RepositorySyncManagedGitObservation.indexTreeC(call.core).map(v => { value = Some(v); () }))

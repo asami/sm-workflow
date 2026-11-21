@@ -1,10 +1,13 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
-import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
+import org.goldenport.cncf.config.{ComponentConfigurationDecoder, ComponentConfigurationKey}
+import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
@@ -21,14 +24,50 @@ import WorkflowManagedProcessExecution as E
   * Unknown effects retain their intent and never replay on reconstruction.
   * @since   Oct. 18, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   final case class Payload(sourceRevision: String, reviewedCandidate: O.Snapshot,
     assignedPaths: Vector[String], selectedPaths: Vector[String], stagedPaths: Vector[String],
     finalCandidate: Option[O.Snapshot], changedPaths: Vector[String], records: Option[CompletionRecords.Plan] = None,
-    metrics: Option[GoalPhasePhaseMetrics.Summary] = None)
+    metrics: Option[GoalPhasePhaseMetrics.Summary] = None,
+    stageRefusal: Option[StageRefusal] = None)
+  /** The owning host supplies its actual pre-launch refusal for an older intent.
+    * A clean repository cannot identify or settle an unconfirmed invocation.
+    */
+  final case class StageRefusal(sessionId: String, intentRevision: Long, invocationIdentity: String,
+    reviewed: O.Snapshot, paths: Vector[String], evidenceReference: String, outcome: String)
+  object StageRefusal {
+    given Encoder[StageRefusal] = deriveEncoder
+    given Decoder[StageRefusal] = deriveDecoder
+  }
+  private[admission] val stageRefusalProperty = "sm-workflow.goal-phase.recording-stage-refusal"
+  private def _valid_refusal(value: StageRefusal): Boolean =
+    value.outcome == "NotDispatched" && value.intentRevision > 0 &&
+      Vector(value.sessionId, value.invocationIdentity, value.evidenceReference).forall(text =>
+        text.nonEmpty && text.trim == text && !text.exists(_.isControl)) &&
+      GitObjectId.parseC(value.reviewed.head).isSuccess && GitObjectId.parseC(value.reviewed.tree).isSuccess &&
+      CompletionRecords.readSelectionC(value.paths).isSuccess
+
+  private val _stage_refusal_key = ComponentConfigurationKey.optional(stageRefusalProperty,
+    new ComponentConfigurationDecoder[StageRefusal] {
+      def decode(value: ConfigurationValue): Consequence[StageRefusal] = for {
+        wire <- (value match {
+          case ConfigurationValue.StringValue(raw) => io.circe.parser.parse(raw).left.map(_.message)
+          case other => GoalPhaseWholePhaseCandidateRecovery.configurationJson(other)
+        }).fold(F.invalid, Consequence.success)
+        refusal <- wire.as[StageRefusal].fold(e => F.invalid(e.message), Consequence.success)
+        _ <- if (_valid_refusal(refusal) && refusal.asJson == wire) Consequence.unit
+          else F.invalid("completion record prelaunch refusal requires exact host evidence")
+      } yield refusal
+    })
+  private final class RefusalReader(val core: ActionCall.Core) extends ProcedureActionCall {
+    def readC: Consequence[Option[StageRefusal]] = component_configuration(_stage_refusal_key).map(_.value)
+    def execute(): Consequence[org.goldenport.protocol.operation.OperationResponse] =
+      F.invalid("completion record refusal reader is not an Operation")
+  }
+
   final case class Saved(record: InstanceRecord, payload: Payload)
   /** A shape selector only. Store.retainedC must first authenticate every
     * adjacent staging intent/result; current repository facts are checked
@@ -39,24 +78,43 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       payload.selectedPaths.nonEmpty && payload.selectedPaths.distinct == payload.selectedPaths &&
       payload.selectedPaths == payload.assignedPaths && payload.stagedPaths == payload.selectedPaths
 
+  private def _stage_observation_pending(saved: Saved): Boolean = {
+    val p = saved.payload
+    p.records.isEmpty && p.finalCandidate.isEmpty && p.changedPaths.isEmpty && p.stageRefusal.isEmpty &&
+      p.selectedPaths.nonEmpty && p.selectedPaths == p.assignedPaths &&
+      p.stagedPaths.size < p.selectedPaths.size &&
+      saved.record.causation.value == "ordered-recording-candidate:stage-intent-" + p.stagedPaths.size
+  }
+
+  private[admission] def resumable(saved: Saved, completionPaths: Vector[String]): Boolean =
+    resumable(saved.payload) || (_stage_observation_pending(saved) && saved.payload.selectedPaths == completionPaths)
+
   private[admission] def resumable(payload: Payload): Boolean =
     payload.finalCandidate.isEmpty && (payload.records.nonEmpty || capturePreparationPending(payload))
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeRecordingCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-recording-candidate.v1"),
-      "payload" -> value.asJson.mapObject(fields => if (value.metrics.isEmpty) fields.remove("metrics") else fields))
+      "payload" -> value.asJson.mapObject(_.filter {
+        case ("metrics" | "stageRefusal", value) => !value.isNull
+        case _ => true
+      }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("recording candidate is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(schema == "sm-workflow.goal-phase-recording-candidate.v1", (), "recording candidate schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond(payload.stageRefusal.forall(refusal =>
+        _valid_refusal(refusal) && refusal.paths == payload.selectedPaths &&
+          refusal.reviewed == payload.reviewedCandidate &&
+          payload.records.exists(p => p.session == refusal.sessionId && p.files.map(_.path) == refusal.paths)),
+        (), "record observation must bind its exact plan and prelaunch evidence")
     } yield payload
   }
 
   def observedC(controller: O.State, payload: Payload): Consequence[O.State] = payload.finalCandidate match {
     case Some(value) if value == payload.reviewedCandidate && payload.changedPaths.isEmpty => Consequence.success(controller)
     case Some(value) if payload.changedPaths.nonEmpty && payload.changedPaths.distinct == payload.changedPaths &&
-        payload.changedPaths.forall(payload.assignedPaths.contains) && payload.changedPaths.forall(payload.stagedPaths.contains) &&
+        payload.changedPaths.forall(payload.assignedPaths.contains) && payload.changedPaths.forall(_record_paths(payload).contains) &&
         controller.plan.phasePathsOwned(payload.changedPaths) =>
       controller.acceptC(O.PhaseFindingRecordsObserved(payload.reviewedCandidate, value, payload.changedPaths))
     case _ => F.invalid("recording candidate has no bounded actual final observation")
@@ -76,6 +134,21 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     prior <- store.retainedC
     saved <- prior match {
       case Some(value) if value.payload.records.nonEmpty && value.payload.finalCandidate.isEmpty => _finish_c(store, value)
+      case Some(value) if _stage_observation_pending(value) &&
+          value.payload.selectedPaths == store.completionPaths => for {
+        _ <- if (session.current == value.record) Consequence.unit
+          else F.invalid("completion record observation must start at the actual latest staging intent")
+        evidence <- new RefusalReader(core).readC
+        result <- evidence.filter(_.sessionId == session.current.identity.value) match {
+          case None => Consequence.success(value)
+          case Some(refusal) if _matches_refusal(value, refusal) => for {
+            _ <- _clean_reviewed_index_c(store, value.payload.stagedPaths)
+            prepared <- _prepare_c(store, value, Some(refusal))
+            finished <- _finish_c(store, prepared)
+          } yield finished
+          case Some(_) => F.invalid("completion record prelaunch evidence crosses its actual intent, candidate or selected paths")
+        }
+      } yield result
       case Some(value) if capturePreparationPending(value.payload) => for {
         _ <- if (session.current == value.record && store.completionPaths.nonEmpty &&
             store.completionPaths == value.payload.assignedPaths) Consequence.unit
@@ -141,7 +214,22 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   /** Capture reads only. Persist the plan before the existing managed File and
     * repository closure routes can perform any effect. Never restage here.
     */
-  private def _prepare_c(store: Store, staged: Saved): Consequence[Saved] =
+  private def _record_paths(payload: Payload): Vector[String] =
+    payload.stageRefusal.map(_.paths).getOrElse(payload.stagedPaths)
+
+  private def _matches_refusal(intent: Saved, refusal: StageRefusal): Boolean =
+    refusal.sessionId == intent.record.identity.value && refusal.intentRevision == intent.record.revision.value &&
+      refusal.reviewed == intent.payload.reviewedCandidate && refusal.paths == intent.payload.selectedPaths
+
+  private def _clean_reviewed_index_c(store: Store, staged: Vector[String]): Consequence[Unit] = for {
+    actual <- store.inspectC(staged)
+    index <- G.indexTreeC(store.core)
+    _ <- if (actual.dirty.isEmpty && actual.head == store.reviewed.head && actual.tree == store.reviewed.tree &&
+        index == store.reviewed.tree)
+      Consequence.unit else F.invalid("completion record observation requires the exact clean reviewed HEAD and index")
+  } yield ()
+
+  private def _prepare_c(store: Store, staged: Saved, refusal: Option[StageRefusal] = None): Consequence[Saved] =
     if (store.completionPaths.isEmpty) Consequence.success(staged) else for {
       index <- G.indexTreeC(store.core)
       plan <- CompletionRecords.captureC(store.core, store.from.identity.value, "phase", store.controller.plan.phase, index,
@@ -150,17 +238,33 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
           val rendered = GoalPhasePhaseMetrics.durableEnglish(m)
           if (rendered.length <= 32768) rendered else rendered.take(32000) + "\nCompact summary truncated; retained metrics carry full coverage limitations.\n"
         }))
-      prepared <- store.saveC("completion-plan", staged.record, staged.payload.copy(records = Some(plan)))
+      _ <- if (refusal.nonEmpty) for {
+        _ <- CompletionRecords.preflightExactStagingC(store.core, plan)
+        _ <- _clean_reviewed_index_c(store, staged.payload.stagedPaths)
+      } yield () else Consequence.unit
+      key = if (refusal.nonEmpty) "completion-observation" else "completion-plan"
+      prepared <- store.saveC(key, staged.record, staged.payload.copy(records = Some(plan), stageRefusal = refusal))
     } yield prepared
 
   private def _finish_c(store: Store, staged: Saved): Consequence[Saved] = for {
-    _ <- staged.payload.records.fold(Consequence.unit)(CompletionRecords.applyC(store.core, _))
+    _ <- staged.payload.records.fold(Consequence.unit)(plan => for {
+      _ <- if (staged.payload.stageRefusal.nonEmpty) for {
+        _ <- store.inspectC(_record_paths(staged.payload))
+        existing <- G.indexTreeC(store.core)
+        changes <- CompletionRecords.deltaC(store.core, plan, existing)
+        // A resumed projection may already have staged some of its exact files.
+        // An independently staged value is never overwritten.
+        stagedPaths = changes.map(_.path.value).toSet
+        _ <- CompletionRecords.admitActualC(store.core, plan.copy(files = plan.files.filter(f => stagedPaths(f.path))), changes)
+      } yield () else Consequence.unit
+      _ <- CompletionRecords.applyC(store.core, plan, exactStaging = staged.payload.stageRefusal.nonEmpty)
+    } yield ())
     index <- G.indexTreeC(store.core)
     _ <- staged.payload.records.fold(Consequence.unit)(p => for {
       changes <- CompletionRecords.deltaC(store.core, p, index)
       _ <- CompletionRecords.admitActualC(store.core, p, changes)
     } yield ())
-    actual <- store.inspectC(staged.payload.stagedPaths)
+    actual <- store.inspectC(_record_paths(staged.payload))
     _ <- if (GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, store.stagedScope, true)) Consequence.unit
       else F.invalid("recording candidate retains unstaged or unsupported paths")
     tree <- G.indexTreeC(store.core)
@@ -171,7 +275,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     reviewed <- GitObjectId.parseC(store.reviewed.tree)
     nativepaths <- E.executeGitC(store.core, GitOperation.PendingPaths(reviewed)).flatMap(_.valueC)
     paths = nativepaths.map(_.value)
-    _ <- if (paths.distinct == paths && paths.forall(store.assigned.contains) && paths.forall(staged.payload.stagedPaths.contains))
+    _ <- if (paths.distinct == paths && paths.forall(store.assigned.contains) && paths.forall(_record_paths(staged.payload).contains))
       Consequence.unit else F.invalid("final recording delta crosses assigned and actually staged Phase destinations")
     nativediff <- E.executeGitC(store.core, GitOperation.PendingDiff(reviewed)).flatMap(_.valueC)
     _ <- if (!nativediff.isBinary &&
@@ -205,7 +309,10 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
             payload.stagedPaths == payload.selectedPaths.take(payload.stagedPaths.size) &&
             payload.changedPaths.distinct == payload.changedPaths && payload.changedPaths.forall(assigned.contains) &&
             value.receipt.next.currentProgression == from.currentProgression && value.receipt.next.suspension.isEmpty)
-          Consequence.success(Some(Saved(value.receipt.next, payload)))
+          GoalPhaseNativeHistory.prefixC(session.current, value.receipt.next.revision).flatMap { actual =>
+            if (actual == value.receipt.next.copy(definition = actual.definition)) Consequence.success(Some(Saved(actual, payload)))
+            else F.invalid("retained recording observation has no exact native history")
+          }
         else F.invalid("retained recording candidate crosses its actual source, paths or stage")
     }
     /** Read only a contiguous intent/result prefix, stopping at unknown effect. */
@@ -233,24 +340,37 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
           } yield next
         }}
         completion <- _load_c("completion-plan")
-        prepared <- completion match {
-          case None => Consequence.success(staged)
-          case Some(value) if value.record.revision == staged.record.revision.next &&
-              value.payload.copy(records = None) == staged.payload && value.payload.records.exists(p => CompletionRecords.valid(p) &&
-                p.session == from.identity.value && p.family == "phase" && p.scope == controller.plan.phase &&
-                p.files.map(_.path) == completionPaths) => Consequence.success(value)
+        observation <- _load_c("completion-observation")
+        prepared <- (completion, observation) match {
+          case (None, None) => Consequence.success(staged)
+          case (Some(value), None) if staged.payload.stagedPaths == staged.payload.selectedPaths &&
+              value.payload.stageRefusal.isEmpty && _completion_plan(staged, value) =>
+            Consequence.success(value)
+          case (None, Some(value)) if _stage_observation_pending(staged) &&
+              value.payload.stageRefusal.exists(_matches_refusal(staged, _)) &&
+              completionPaths == staged.payload.selectedPaths && value.payload.records.exists(_.acceptedTree == reviewed.tree) &&
+              _completion_plan(staged, value) =>
+            Consequence.success(value)
           case _ => F.invalid("completion plan has no contiguous scoped record predecessor")
         }
         finalsaved <- _load_c("candidate")
         selected <- finalsaved match {
           case None => Consequence.success(prepared)
           case Some(value) if value.record.revision == prepared.record.revision.next &&
-              staged.payload.stagedPaths == staged.payload.selectedPaths && value.payload.stagedPaths == staged.payload.stagedPaths &&
-              value.payload.selectedPaths == staged.payload.selectedPaths => observedC(controller, value.payload).map(_ => value)
+              _record_paths(prepared.payload) == staged.payload.selectedPaths &&
+              value.payload.copy(finalCandidate = None, changedPaths = Vector.empty) == prepared.payload =>
+            observedC(controller, value.payload).map(_ => value)
           case _ => F.invalid("final recording candidate has no contiguous complete staging prefix")
         }
       } yield Some(selected)
     }
+    private def _completion_plan(staged: Saved, value: Saved): Boolean =
+      value.record.revision == staged.record.revision.next &&
+        value.payload.copy(records = None, stageRefusal = None) == staged.payload &&
+        value.payload.records.exists(p => CompletionRecords.valid(p) &&
+          p.session == from.identity.value && p.family == "phase" && p.scope == controller.plan.phase &&
+          p.files.map(_.path) == completionPaths)
+
     def saveC(key: String, current: InstanceRecord, payload: Payload): Consequence[Saved] = for {
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, _reference(key), current, current.revision,
         F.history(current, "phase.PhaseClosing", "ordered-recording-candidate:" + key), TypedValue(codec.typeIdentity, payload)),

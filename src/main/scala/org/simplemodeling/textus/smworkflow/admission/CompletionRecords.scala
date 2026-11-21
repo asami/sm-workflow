@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  2, 2026
+ * @version Nov. 21, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -130,9 +130,21 @@ private[smworkflow] object CompletionRecords {
   /** Observe exact before or after on re-entry; a third value is never overwritten.
     * File CAS is ordinary managed CNCF file execution; no product FIX is charged.
     */
-  def applyC(core: ActionCall.Core, p: Plan): Consequence[Unit] = for {
+  private def _exact_stage_c(core: ActionCall.Core, f: File): Consequence[(GitTarget, GitOperation[Unit])] = for {
+    id <- GitSelectionId.parseC("goal-path-" + f.stagingOrdinal)
+    path <- GitPath.parseC(f.path)
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
+  } yield GitTarget(workspace, Some(GitSelectionParameters(id, Vector(path)))) -> GitOperation.StageSelectedAll(id)
+
+  private[admission] def preflightExactStagingC(core: ActionCall.Core, p: Plan): Consequence[Unit] =
+    p.files.foldLeft(Consequence.unit) { (prior, f) => prior.flatMap(_ =>
+      _exact_stage_c(core, f).flatMap((target, operation) =>
+        GitExecutionPreflight.validateC(core.executionContext, target, operation))) }
+
+  def applyC(core: ActionCall.Core, p: Plan, exactStaging: Boolean = false): Consequence[Unit] = for {
     _ <- if (valid(p)) Consequence.unit else invalid("application has no retained exact plan")
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    _ <- if (exactStaging) preflightExactStagingC(core, p) else Consequence.unit
     _ <- p.files.foldLeft(Consequence.unit) { (prior, f) => prior.flatMap { _ => for {
       file <- WorkspaceFilePath.parseC(f.path)
       actual <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), file)
@@ -140,7 +152,9 @@ private[smworkflow] object CompletionRecords {
         WorkflowFileExecution.writeTextC(core, FileTarget(workspace), file, f.after, FileWriteMode.UpdateExisting(f.before)).flatMap { r =>
           if (r.outcome == FileWriteOutcome.Updated) Consequence.unit else invalid("record write conflicted; closure remains unfinished") }
         else invalid("record changed after preparation; no overwrite")
-      _ <- E.stageGoalCandidateC(core, f.stagingOrdinal).flatMap(_.valueC)
+      _ <- if (exactStaging) _exact_stage_c(core, f).flatMap((target, operation) =>
+        E.executePurposeC(core, operation, target.selection.get).flatMap(_.valueC))
+      else E.stageGoalCandidateC(core, f.stagingOrdinal).flatMap(_.valueC)
     } yield () } }
   } yield ()
   def admitC(p: Plan, changes: Vector[GitTreeChange], blobs: Map[String, GitBlobContent]): Consequence[Vector[GoalPhaseNativeClosure.Change]] = {

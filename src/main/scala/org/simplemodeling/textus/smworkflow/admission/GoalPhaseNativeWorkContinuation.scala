@@ -46,7 +46,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -3168,10 +3168,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
             cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
-          case Paused(cursor, _, false) if cursor.recordingCandidate.exists(s => C.resumable(s.payload)) =>
-            C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings, acknowledgement, cursor.metricProfiles, cursor.metricRequests)
-              .flatMap(saved => F.waitC(saved.record, "Phase records retained", "Continue missing local closure without replay"))
-              .flatMap(_after_native_c(source, cursor, _, core))
+          case Paused(cursor, reason, false) if cursor.recordingCandidate.exists(saved =>
+              C.resumable(saved, CompletionRecords.selected(d.completionRecords, "phase", cursor.controller.plan.phase))) =>
+            C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings,
+              acknowledgement, cursor.metricProfiles, cursor.metricRequests).flatMap { saved =>
+              if (saved.record.revision.value <= source.current.revision.value) _wait_cursor_c(cursor, reason)
+              else F.waitC(saved.record, "Phase records retained", "Continue missing local closure without replay")
+                .flatMap(_after_native_c(source, cursor, _, core))
+            }
           case Paused(cursor, _, false) if cursor.repositoryFrontier.nonEmpty && cursor.controller.stage == O.Stage.PhaseClosing &&
               source.current.causation.value.startsWith("ordered-release-closure:") =>
             GoalPhaseNativeReleaseClosure.advanceC(source, d, core, cursor.repositoryFrontier.get, cursor.controller, acknowledgement)

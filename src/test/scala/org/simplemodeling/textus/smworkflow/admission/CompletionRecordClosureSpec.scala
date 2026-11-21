@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 30, 2026
+ * @version Nov. 21, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -118,6 +118,16 @@ final class CompletionRecordClosureSpec extends AnyWordSpec with Matchers with G
       CompletionRecords.fileState(file, None) shouldBe "conflict"
       CompletionRecords.projection(projectedRecord, plan.session, plan.family, plan.scope, plan.evidence) shouldBe projectedRecord
       CompletionRecords.valid(plan.copy(files = Vector(file.copy(after = projectedRecord + "unissued text")))) shouldBe false
+    }
+  }
+}
+
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class GoalPhaseRecordingPrelaunchRecoverySpec extends AnyWordSpec with GivenWhenThen {
+  "Phase completion records" should {
+    "continue original Phase closing after exact read-only observation of a rejected record stage" in {
+      new GoalPhaseNativeFindingRecordingSpec().qualifyRecordingPrelaunchRecovery(this)
     }
   }
 }
