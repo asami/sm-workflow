@@ -60,3 +60,7 @@ Plan as the smallest practical dual-CLI interoperability slice, using existing s
 ## Scheduling decision — 2026-11-22
 
 Adopted execution order places Phase 26 **after Phase 23 and before Phase 27**, following Phases 24, 28 and 18. This delays common Server/multi-CLI architecture work until strategic convergence is strengthened. Keep Phase 26's existing functional scope and acceptance unchanged. Phase 25 is deferred; inspect concrete provider/Task API prerequisites and address only required gaps through normal owners. No Session starts from this planning change.
+
+## Adopted prerequisite update — 2026-11-22
+
+Schedule Phase 26 after **Phase 25** (and Phase 23), before Phase 27. Consume Phase 25's accepted generic Task API/provider contract where applicable; preserve CLI-agent Continuation semantics rather than treating CLI as stateless API inference. Do not assume Phase 25 completion without evidence. This supersedes older scheduling-only notes; scope and acceptance unchanged.
