@@ -659,23 +659,23 @@ no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Logical operating profile
 
-For a new Phase Start, pass optional `--profile standard|cost|quality` to the
-installed `startGoalPhase` Operation alongside its unchanged `--input`. The
+For a new Phase Start, pass optional
+`--profile standard|cost|quality|local-experiment` to `startGoalPhase`
+alongside its unchanged `--input`. The
 bundled caller forwards `--profile` for `--action start` and `--action advance`.
 Advance applies its explicit parameter only to newly issued work in that call;
 existing pending work is recollected unchanged. With no current explicit input,
 a saved explicit Start choice applies, then current typed
 `sm-workflow.goal-phase.profile` configuration, then `standard`.
 
-Standard borrows the existing execution mapping and origin. Cost and quality
-are registered opt-in names whose concrete class bindings must be explicitly
-installed through `sm-workflow.goal-phase.profiles.cost` and
-`sm-workflow.goal-phase.profiles.quality`, using the existing CNCF execution
-mapping schema. Missing mappings/classes/origin are unavailable and never imply
+Standard borrows the existing execution mapping and origin. Cost, quality and
+local-experiment are opt-in names with explicitly installed class bindings
+under `sm-workflow.goal-phase.profiles.<name>`, using the existing CNCF execution
+mapping schema. Local-experiment requires its own complete mapping and origin.
+Missing mappings/classes/origin are unavailable and never imply
 fallback to standard or another model. Keep model/effort overrides out of skill
 input. Host mappings express supported candidates; they do not grant execution,
 change parent settings or bypass acceptance, checks, independent review or limits.
-No live Terra activation, availability-fetch call or model evaluation follows.
 
 New work includes `work.operatingProfile` and the same saved capture in
 `issuedWorkContext.context.operatingProfile` (wire aliases may use underscores).
@@ -687,12 +687,35 @@ Those values are planned/configured selection, not observed model execution.
 Actual model/effort remains unknown unless genuine execution evidence supplies it.
 Historical work without this capture retains its original execution facts.
 
-Cost/quality execution reports unavailable without alternate substitution when
-its chosen executor is unavailable. Standard retains its existing explicitly
-configured finite fallback mechanism, including the unavailable/declined receipt;
-no silent fallback is introduced. Runtime result admission checks the saved
-selected profile against actual execution evidence. Never substitute packaged
-agent TOML settings for an observed executor or acquire new usage for attribution.
+An unavailable opt-in mapping reports unavailable. Use the finite role chain
+captured in an actual Request and the returned execution disposition. A
+delegated Step editor that declines before editing returns `declined` with a
+concrete summary and empty findings. Ordinary Submit and Advance retain the
+decline. Runtime may issue a replacement on the same unchanged candidate using
+the remaining captured roles. For recurrence or CAR lint Takeover, use the
+next runtime-issued Request and its captured role, prior-attempt references,
+candidate and allowance. A `blocked` result goes to Decision. Unknown
+execution keeps its ordinary uncertainty handling. Runtime result admission
+checks the saved profile against actual execution evidence.
+
+### Supplied-input independent review
+
+For an issued independent `ReviewStep` or `ReviewPhase`, the current
+`goal-phase-dispatch.py review_package` prepares a package from the retained
+work, candidate, diff, checks and complete supplied files. Retain the original
+Request and the source of the completeness judgment. Use the ordinary capable
+reviewer when completeness is unconfirmed or the canonical UTF-8 JSON package
+exceeds the configured bound of at most 512 KiB.
+
+A READY package can be passed as `supplied_review` to the ordinary delegated
+reviewer. For an explicitly selected API review, use `api_prepare` with the
+actual work Resource and canonical package file to prepare
+`GoalPhaseService.runGoalPhaseApiReview` through the configured provider. Use
+`api_started`, `api_complete` or `api_uncertain` to retain the real invocation
+and its disposition. A started or uncertain invocation stays with its original
+attempt. A typed completed result and `api_execution_evidence` go through the
+original review's normal Submit and Admission. For detail, see
+`docs/spec/phase-9-provider-routing.md` in the product repository.
 
 ## Journal results and purpose-driven lookup
 
@@ -724,6 +747,12 @@ reference; preserve the original finding and failed result, and recheck the
 exception plus unrelated violations. Do not disable the Action or claim the
 original implementation was corrected. Ordinary correction needs no new Human
 question, and an already admitted applicable exception needs no duplicate approval.
+
+When the Plan selects a required `car-lint` check, keep it after Compile and
+the selected behavioral checks. Read the runtime's retained typed result and
+use the issued Step repair for an actionable failure. CAR lint uses the admitted
+candidate workspace and fixed host binding. Compile or behavioral failure before
+that check remains its own failure; the caller does not run Cozy lint separately.
 
 Perform `TriageStep` only when actually issued. Use a separate read-only context
 through the configured execution profile; the existing `sm_workflow_analysis`
@@ -1062,6 +1091,15 @@ Empty `selections` request delivered-context history, paged by the returned
 `EvidenceService.readEvidence`. File observations retain their observation
 time and unverified candidate applicability. History or unavailable information
 does not establish a successful check or justify replaying SBT.
+
+For compile-error packaging, send one `compile-package` selection for the
+failed check and a `candidate-source` selection for each required whole file
+in one request.
+Give the source of the complete file-set judgment in the package selection's
+reason. Read the resulting package through `EvidenceService.readEvidence`.
+`agent-required` keeps the issued repair available to a capable editor. An
+individual oversized source may be recorded as nonblocking Hygiene by the
+runtime. Package size alone does not change Step acceptance.
 
 Form one concrete `sm-workflow.diagnostic-repair.v1` Fix Manifest before edits,
 then implement it inside the already issued repair and return it as optional
