@@ -1,5 +1,25 @@
 # sm-workflow incremental-use roadmap
 
+## Adopted development priority — 2026-11-21
+
+The user selected this **execution order** after the currently running Phases 7 and 9:
+
+1. **Phase 24** — practical OpenAI API-credit use (first usable review/patch route).
+2. **Phase 18** — tool-neutral validation and Flutter integration.
+3. **Phase 23** — strategic Phase convergence.
+4. **Phase 22** — runtime stabilization and difficult continuations.
+5. **Phase 17** — Task and Standalone Fix extensions (elevated priority).
+6. **Phase 21** — recursive repository catch-up.
+7. **Phase 15** — development workspace operations.
+8. **Phase 14** — development investigation.
+
+**Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), 13/20 (AI usage measurement and summaries), 25/26/27 (generic provider, multi-CLI and cost-aware expansion), and 16 (experimentation). Deferral is scheduling only: preserve all scope, ownership, dependencies and acceptance conditions.
+
+Phases **7 and 9 are currently in execution**, as reported by the user; this roadmap edit does not claim their completion or alter their Sessions. Phase 24 is the first new priority after both complete. Preserve only concrete producer/setup prerequisites required for the selected usable API-credit route; do not make entire unrelated Phases prerequisites. Phase 18/23/22 then strengthen the platform before further development-support features. Phase 21 precedes Phase 15 as required for its related-repository operations. If a blocking dependency is discovered, record and resolve its bounded prerequisite without silently reordering this adopted roadmap.
+
+This decision supersedes older priority sequences in this README and individual Phase files **for scheduling only**. Historical status, scope, evidence and explicit acceptance remain unchanged. No new Phase or Workflow Session is started by this documentation change.
+
+
 Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
 **stabilization -> remaining [Phase 7](phase-7.md) ->
 [necessary producer/setup prerequisites](phase-24.md#prerequisites-and-development-schedule) ->
