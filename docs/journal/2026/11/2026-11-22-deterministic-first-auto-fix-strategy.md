@@ -22,3 +22,6 @@ Scala/CAR linter owners implement rule semantics and safe transforms; sm-workflo
 
 ## Handoff
 Implement only after Phase 24's usable delivery. Existing Phase 18/23/22 scope is unchanged, but its scheduled slot moves after Phase 28. No prior acceptance or runtime status is altered.
+
+## AI Capability Pool allocation principle (2026-11-22)
+AI execution is not a Local -> API -> CLI hierarchy. After deterministic fixes, select from an eligible AI Capability Pool by task capability, quality, security and lowest expected total incremental cost. Explicitly include expiring surplus subscription/free-tier allowances (such as Copilot when permitted), promotional API credits, remaining quota, reset times, future demand, retries and opportunity cost. Favor otherwise-wasted capacity without sacrificing convergence or generating unnecessary work. Shared quota pools must not be double counted; unknown remaining allowance is not verified free; no silent paid overage or unsupported automation. Phase 27 owns this cost-aware pool scheduler, while Phase 28 owns deterministic repair before AI selection.
