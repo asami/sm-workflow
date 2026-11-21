@@ -9,6 +9,9 @@ The current AI Fix path can handle compiler errors and lint warnings, but progra
 ## Project-level Metals configuration
 Metals integration is enabled by default and configurable through the project's `project.yaml`, not a mandatory tool; projects can explicitly disable it. Define and validate enabled state, server/executable selection, timeouts and resource bounds; use workspace-authorized process execution and deterministic fallback when disabled, unsupported or unavailable. Exact YAML keys must be aligned with the existing project schema during implementation, rather than inventing a parallel configuration system.
 
+## Language-neutral interface, Scala-first delivery
+Phase 28 defines a reusable, language-neutral diagnostics/code-action/patch contract and implements/qualifies its **Scala adapter** using Metals LSP plus compatible Scalafix/Scalafmt capabilities. Do not hardwire Metals into the shared engine. Java, TypeScript, Python and Dart adapters are future extensions and are not Phase 28 acceptance conditions. Servers differ in Code Action support; use capability discovery and fail-safe patch validation. Keep `project.yaml` authoritative and Metals enabled by default unless explicitly disabled; missing/unavailable Metals must fall back to supported non-Metals checks.
+
 ## Architecture
 Compile/Lint -> structured diagnostics -> allowlisted deterministic fix candidates -> scoped patch -> compile/lint/focused test -> existing Admission. Ambiguous or unresolved diagnostics -> existing AI Judgement/Fix. No duplicated orchestration, unbounded retries, speculative edits or unapproved source writes.
 
