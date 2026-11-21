@@ -360,26 +360,44 @@ rerun effects to reconstruct a response or override an older unanswered Human
 request. Follow the existing owning public continuation and exact actual target.
 See the [runtime orchestration contract](../../docs/spec/repository-sync-runtime-orchestration.md).
 
-## Interrupted integration validation
+## Continue retained validation or review
 
-For a resultless integration-validation intent, use the public
-`describeRepositorySyncValidationContinuation` and the
-[same-Session validation continuation contract](../../docs/spec/repository-sync-validation-continuation.md).
-Offer only the actual target's choices: `AuthorizeNewValidation`,
-`AdoptCurrentFullState`, or `Defer`. Reuse attributable existing direction only
-when it covers that precise target and unresolved effects. A non-Defer adoption
-requires actual independently verified prior execution termination and explicit
-acceptance of original uncertainty. Missing receipts or elapsed time supply
-neither. If a genuinely new decision is required, present it to the user.
+Call `describeRepositorySyncValidationContinuation --sessionId` for the existing
+child Session. Use the returned target, choices and evidence requirements from
+the [validation continuation contract](../../docs/spec/repository-sync-validation-continuation.md).
+The same public operations describe several conditions with different lifecycle
+assertions. Present the actual choices when a new Human decision is required.
+Reuse existing direction only when it covers that target and effect.
 
-Normal `prepareEvidence` with family `RepositorySync` and kind
-`validation-continuation` passively encodes supplied facts; it does not verify
-termination or grant authority. Public `adoptRepositorySyncValidationContinuation`
-records the direction only; separate ordinary Advance owns unfinished work.
-Preserve old UNKNOWN effects, successful history and Session identity. A changed
-FULL_STATE candidate requires its fresh checks. Do not reconstruct targets,
-reset the index, replay accepted results or infer general commit/push/fetch
-recovery support from this bounded route.
+For a resultless integration-validation intent, `AuthorizeNewValidation` and
+`AdoptCurrentFullState` require independently verified prior termination or
+nonstart and explicit acceptance of the original uncertainty. A changed
+FULL_STATE candidate requires fresh checks. A completed Purpose batch missing
+a required TestOnly or a review missing selected input coverage uses its own
+described target and retained successful checks.
+
+For a pending, unsubmitted detailed review with an incomplete parent diff, use
+[the review refresh target](../../docs/spec/repository-sync-validation-continuation.md#refresh-an-incomplete-pending-detailed-review)
+when Describe returns `RefreshIncompleteReviewDiffs`. The owner must confirm
+that the earlier reviewer ended or never started. Use `priorExecutionEnded=true`
+and `acceptOriginalUncertainty=false`. An absent submission alone supplies no
+lifecycle evidence. If the reviewer is still active or its state is uncertain,
+wait or use the offered passive `Defer`.
+
+Before adopting a refresh, size both the CNCF `cncf.git.diff.maximum-bytes`
+setting and the selected Git program's `gitRepositories` entry
+`limits.stdoutBytes` for the actual parent diffs. The smaller bound applies.
+Ordinary Advance alone reads the retained request until refresh is adopted.
+
+Use `prepareEvidence` with family `RepositorySync` and kind
+`validation-continuation` for the genuine direction, then use the owning host's
+independent evidence admission and `adoptRepositorySyncValidationContinuation`.
+Preparation encodes the supplied facts. Separate ordinary Advance performs the
+remaining work. After a review refresh, Advance rechecks the same candidate
+and issues a new review only with both parent diffs complete. Preserve the
+earlier review, classification, successful checks and Session. Submit only
+against the newly issued context. Existing authorities govern commit, push or
+fetch recovery.
 
 ## AI activity forwarding
 
