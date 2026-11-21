@@ -8,7 +8,7 @@ import org.simplemodeling.scalalint.ScalaLintProfiles
 
 /** Per-call source selection consumes CNCF's resolved values; it does not execute lint.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowScalaLintParameters {
@@ -28,8 +28,11 @@ private[smworkflow] object WorkflowScalaLintParameters {
     * The resulting data still needs the native SLP-4 validation binding/retention.
     */
   def resolveC(parameters: ResolvedParameters, project: Option[Config]): Consequence[ScalaLintProfiles.Effective] =
-    selectionC(parameters).flatMap(selected => scala.util.Try(ScalaLintProfiles.resolve(selected, project,
-      ScalaLintProfiles.getClass.getClassLoader)).fold(error => _invalid(error.getMessage), Consequence.success))
+    selectionC(parameters).flatMap(resolveSelectionC(_, project))
+
+  def resolveSelectionC(selection: ScalaLintProfiles.Selection, project: Option[Config]): Consequence[ScalaLintProfiles.Effective] =
+    scala.util.Try(ScalaLintProfiles.resolve(selection, project, ScalaLintProfiles.getClass.getClassLoader))
+      .fold(error => _invalid(error.getMessage), Consequence.success)
 
   private def _string_c(parameters: ResolvedParameters, key: String): Consequence[Option[String]] =
     parameters.get(key).map(_.value) match {

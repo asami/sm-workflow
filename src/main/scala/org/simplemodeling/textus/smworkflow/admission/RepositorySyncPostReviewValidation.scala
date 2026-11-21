@@ -14,7 +14,7 @@ import RepositorySyncProgramImpact as I
 
 /** Definition-owned input obligations and actual observations for post-review validation.
   * @since   Nov. 20, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 22, 2026
   */
 private[smworkflow] object RepositorySyncPostReviewValidation {
   enum Attempt[+A] {
@@ -142,13 +142,14 @@ private[smworkflow] object RepositorySyncPostReviewValidation {
     }
   } yield GitReceipt(WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process), observations)
 
-  def observeLintC(store: N.Store, plan: Plan): Consequence[Attempt[C.Receipt]] = for {
+  def observeLintC(store: N.Store, plan: Plan, lintBase: String): Consequence[Attempt[C.Receipt]] = for {
     _ <- if (plan.valid) Consequence.unit else N.invalid("invalid post-review lint plan")
     check = plan.check
     workspace <- WorkspaceId.parseC(check.workspaceIdentity)
-    attempt <- WorkflowManagedProcessExecution.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, check.workspace)
+    attempt <- WorkflowManagedProcessExecution.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, check.workspace,
+      lintBase = Some(lintBase))
     receipt <- attempt match {
-      case SbtExecutionAttempt.Observed(result) if result != null && result.target == SbtTarget(workspace) &&
+      case SbtExecutionAttempt.Observed(result) if result != null && result.target.copy(lintInput = None) == SbtTarget(workspace) &&
           result.operation == SbtOperation.FixCheck && result.processResult != null &&
           result.processResult.termination != ProcessExecutionTermination.TerminationUnconfirmed =>
         C.sbtReceiptC(check.identity, check.kind, result).map[Attempt[C.Receipt]](Attempt.Observed(_))

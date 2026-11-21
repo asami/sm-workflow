@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 22, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -344,7 +344,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         // historical reuse cannot stand in for the missing TestOnly evidence.
         receipt <- reusable match {
           case Some(value) => Consequence.success(value)
-          case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
+          case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind,
+            Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace)),
+            lintBase = progress.candidate.map(_.parent), lintCandidateWorkspace = Some(slot.workspace)).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)
             case _ => N.uncertain("purpose check admission/execution is unavailable or unknown; no PASS, review acceptance or replay")
           }
@@ -366,7 +368,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       // including its exact retained reuse reference; a retained map alone is not authority.
       currentReuse <- if (progress.receipts.drop(1).exists(_.group.exists(_.sourceTree != progress.candidate.get.tree)))
         policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reuseForTreeC(store,
-          progress.candidate.get.tree, p, progress.selection.get.copy(reused = Vector.empty)))
+          progress.candidate.get.tree, p, progress.selection.get.copy(reused = Vector.empty), progress.selection.get.reused))
           .getOrElse(N.invalid("purpose grouped receipt has no current native reuse policy"))
         else Consequence.success(progress.selection.get.copy(reused = Vector.empty) -> Map.empty[String, C.Receipt])
       _ <- if (progress.receipts.drop(1).forall(groupReceiptBound(_, progress.candidate.get.tree, progress.selection.get, currentReuse)))

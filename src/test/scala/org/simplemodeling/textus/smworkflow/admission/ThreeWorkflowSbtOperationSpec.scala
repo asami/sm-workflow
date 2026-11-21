@@ -25,7 +25,8 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -53,10 +54,28 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       goalPaths = if (scenario == "Goal") goal.candidatePaths else Vector.empty,
       goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty,
       goalSelections = if (scenario == "Goal") Vector(goal.candidatePaths) else Vector.empty))
+    val checks = goal.stepValidation.checks ++ goal.phaseValidation.checks
+    val lintOrdinals = if (scenario == "Goal")
+      checks.filter(_.kind == WorkflowSbtValidation.Kind.FixCheck).map(_.ordinal).distinct else Vector.empty
     val ordinals = if (isolated || scenario != "Goal") Vector(1) else
-      (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal).distinct
-    TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan,
+      checks.filterNot(_.kind == WorkflowSbtValidation.Kind.FixCheck).map(_.ordinal).distinct
+    val ordinary = TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan,
       operation = if (compile) SbtOperation.Compile else SbtOperation.Test)
+    if (lintOrdinals.isEmpty) ordinary
+    else {
+      val lint = TypedSbtHostPlanFixture.plan(root, _sbt_executable, lintOrdinals, operation = SbtOperation.FixCheck)
+      def entries(plan: Json, key: String) = plan.hcursor.get[Vector[Json]](key).toOption.get
+      ordinary.mapObject { fields =>
+        val bindings = Vector("sbtPrograms", "workspaces", "workspaceGrants").foldLeft(fields) { (result, key) =>
+          result.add(key, Json.fromValues(entries(ordinary, key) ++ entries(lint, key)))
+        }
+        val lintCapabilities = entries(lint, "sbtPrograms").map(_.hcursor.downField("capability").focus.get)
+        val grants = entries(ordinary, "grants").map(_.mapObject { grant =>
+          grant.add("capabilities", grant("capabilities").get.mapArray(_ ++ lintCapabilities))
+        })
+        bindings.add("grants", Json.fromValues(grants))
+      }
+    }
   }
   private def _build(root: Path, successful: Boolean): Unit = TypedSbtHostPlanFixture.build(root, successful)
   private def _same_native(actual: InstanceRecord, expected: InstanceRecord): Unit = {
@@ -591,10 +610,36 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       _build(root, true)
       Files.writeString(root.resolve("repository/value.txt"), "initial\n")
       val original = ThreeWorkflowNormalHostFixture.definition(root)
-      val host = original.copy(goal = original.goal.copy(candidatePaths = Vector("value.txt")))
+      val (phaseChecks, host) = if (lostAcknowledgement) {
+        Vector("test") -> original.copy(goal = original.goal.copy(candidatePaths = Vector("value.txt")))
+      } else {
+        val repository = root.resolve("repository")
+        Files.writeString(repository.resolve("project.yaml"),
+          "validation:\n  fixCheck: true\n  scalaLint:\n    sourceStyle: goldenport\n    historyStyle: none\n")
+        val build = repository.resolve("build.sbt")
+        Files.writeString(build, Files.readString(build) + """
+          |lazy val fixtureLint = taskKey[Unit]("Observe the runtime-selected lint policy")
+          |fixtureLint := {
+          |  val raw = java.util.Base64.getUrlDecoder.decode(sys.props("cncf.sbt.lint.input"))
+          |  val input = new String(raw, java.nio.charset.StandardCharsets.UTF_8)
+          |  require(input.contains("\"sourceStyle\":\"goldenport\""))
+          |  require(input.contains("\"historyStyle\":\"none\""))
+          |  streams.value.log.info("FIXTURE_SHARED_LINT " + baseDirectory.value.getCanonicalPath)
+          |}
+          |addCommandAlias("fixCheck", "fixtureLint")
+          |""".stripMargin)
+        val lint = WorkflowSbtValidation.Kind.FixCheck
+        val phase = original.goal.phaseValidation
+        val sync = original.repository.validation
+        Vector("fix-check", "test") -> original.copy(
+          goal = original.goal.copy(candidatePaths = Vector("value.txt"),
+            phaseValidation = phase.copy(checks = GoalPhaseNativeValidation.Check("fix-check", 19, lint) +: phase.checks)),
+          repository = original.repository.copy(validation = sync.copy(checks =
+            RepositorySyncNativeMergeValidation.Check("fix-check", 19, lint) +: sync.checks)))
+      }
       val plan = O.Plan("selected-sbt-goal-plan", "1", host.goal.input.phaseIdentity,
         host.goal.input.repositoryIdentity, Vector(O.Step("step-1", "Correct selected product input",
-          Vector("value.txt"), Vector.empty, Vector("test"))), Vector("test"), repairLimit = 1)
+          Vector("value.txt"), Vector.empty, Vector("test"))), phaseChecks, repairLimit = 1)
       val selection = _goal_selection_(host.goal.input, "selected-sbt-goal", "direct-sbt-goal-start")
       var execution = Option.empty[InstanceIdentity]
       def identity: InstanceIdentity = execution.get
@@ -733,6 +778,11 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             observed.get.dirty shouldBe empty
             checked.get.receipts.last.exitCode shouldBe Some(0)
             checked.get.receipts.last.stdout should include("PRODUCT_CHECK_PASSED")
+            if (!lostAcknowledgement) {
+              val lint = checked.get.receipts.find(_.identity == "fix-check").get
+              lint.exitCode shouldBe Some(0)
+              lint.stdout should include("FIXTURE_SHARED_LINT " + root.resolve("repository").toRealPath())
+            }
             executions().size shouldBe 3
             executions().distinct.size shouldBe 3
             executions() should not contain ProcessHandle.current().pid()
@@ -814,6 +864,11 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
                 input().selectedPlan.repairLimit shouldBe 1
                 input().review.get.checks.last.exitCode shouldBe Some(0)
                 input().review.get.checks.last.stdout should include("PRODUCT_CHECK_PASSED")
+                if (!lostAcknowledgement) {
+                  val lint = input().review.get.checks.find(_.identity == "fix-check").get
+                  lint.exitCode shouldBe Some(0)
+                  lint.stdout should include("FIXTURE_SHARED_LINT " + root.resolve("repository").toRealPath())
+                }
                 executions().size shouldBe 2
               } else {
                 phaseReviewReference = Some(completion.resultReference)
@@ -850,7 +905,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         reopenedgoal.kind shouldBe "Terminal"
         reopenedchild.kind shouldBe "Terminal"
         childsession shouldBe retainedchild
-        reopenedchild.convergence shouldBe retainedgoal.get.completion.map(_.repository)
+        reopenedchild.convergence shouldBe retainedgoal.get.completion.flatMap(_.repository)
         goalcurrent.get.lifecycle shouldBe Lifecycle.Completed
         childcurrent.get.lifecycle shouldBe Lifecycle.Completed
         _same_native(goalcurrent.get, retainedgoalnative.get)

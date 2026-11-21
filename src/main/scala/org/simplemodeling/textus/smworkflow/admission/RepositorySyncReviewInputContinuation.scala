@@ -23,7 +23,7 @@ import RepositorySyncPostReviewValidation as P
 /** Append-only correction of input classification, followed by fresh independent
   * review. Native references retain the old checks and decision-needed result.
   * @since   Nov.  3, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 22, 2026
   */
 private[smworkflow] object RepositorySyncReviewInputContinuation {
   val policy = "sm-workflow.repository-sync-review-input-continuation.v3"
@@ -881,7 +881,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       case Some(intent) if intent.step == SupplementalStep.LintIntent =>
         qualifyCurrentC(store, saved.record, saved, validation).flatMap { _ =>
           _record_supplemental_c[C.Receipt](store, progress, validation, direction.target,
-            intent, SupplementalStep.LintResult, P.observeLintC(store, plan),
+            intent, SupplementalStep.LintResult, P.observeLintC(store, plan, direction.target.candidate.before.head),
             receipt => SupplementalEvidence(saved.payload.reviewSupplemental.flatMap(_.git), receipt))
         }.flatMap(_advance_supplemental_c(store, _, validation, port, direction, plan, allowretry = false))
       case _ => _terminal_evidence(progress, plan) match {

@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 22, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -279,7 +279,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
 
   /** Reuse the existing ordinary runtime declaration, not another sync-only test catalogue. */
   def ordinaryPolicyC(parameters: ComponentInitializationParameters, root: String, plan: Json,
-    providesFixCheck: Boolean, sharedScalaLint: Boolean = false): Consequence[Option[Policy]] = {
+    providesFixCheck: Boolean): Consequence[Option[Policy]] = {
     val workspaces = plan.hcursor.get[Vector[Json]]("workspaces").toOption.getOrElse(Vector.empty)
       .filter(_.hcursor.get[String]("root").contains(root)).flatMap(_.hcursor.get[String]("identity").toOption).toSet
     val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.getOrElse(Vector.empty)
@@ -293,8 +293,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
         val full = V.Check("ordinary-project-full", 1, WorkflowSbtValidation.Kind.TestOnly,
           workspace = Some(workspace), ordinaryDiscovery = true)
         val lint = programs.filter(program => program.hcursor.get[String]("target").contains(workspace) &&
-          program.hcursor.get[String]("operation").contains("fix-check") &&
-          (!sharedScalaLint || program.hcursor.get[Boolean]("lintInput").contains(true)))
+          program.hcursor.get[String]("operation").contains("fix-check"))
         val checks = Vector(full) ++ Option.when(providesFixCheck && lint.size == 1)(V.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck,
           workspace = Some(workspace))).toVector
         val policy = Policy(Vector.empty, checks, Vector.empty,
@@ -436,7 +435,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
     * structural checks and semantic review still belong to the remote candidate.
     */
   def reuseLocalC(store: N.Store, pending: N.Stage, policy: V.Policy,
-    p: Policy): Consequence[Option[(Selection, Map[String, V.Receipt])]] =
+    p: Policy, retained: Vector[Reuse]): Consequence[Option[(Selection, Map[String, V.Receipt])]] =
     RepositorySyncLocalMain.checkedLocalC(store, pending, policy).flatMap {
       case None => Consequence.success(None)
       case Some(prior) =>
@@ -467,10 +466,12 @@ private[smworkflow] object RepositorySyncProgramImpact {
             equivalent = assessment.documentOnly && assessment.binaryPaths.isEmpty && !assessment.submoduleChanges &&
               !delta.exists(change => covers(p.fullPaths ++ p.coverage.flatMap(_.inputPaths), change.path.value))
             _ <- V.preconditionsC(store, pending)
-          } yield Option.when(equivalent)((current.copy(reason =
+            reusable = state.selected.map(check => check -> Reuse(check.identity, prior.validation, prior.closure, None))
+              .collect { case (check, reference) if reusableProductCheck(check, reference, retained) => reference }
+          } yield Option.when(equivalent && reusable.nonEmpty)((current.copy(reason =
             "REUSED: successful actual local-hop checks; checked validation inputs are unchanged; " + current.reason,
-            reused = state.selected.map(check => Reuse(check.identity, prior.validation, prior.closure, None))),
-            state.receipts.drop(2).map(receipt => receipt.identity -> receipt).toMap))
+            reused = reusable), state.receipts.drop(2).filter(receipt => reusable.exists(_.check == receipt.identity))
+            .map(receipt => receipt.identity -> receipt).toMap))
         }
     }
 
@@ -487,7 +488,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
     * The owning native purpose route separately binds its candidate/source facts.
     */
   def reuseForTreeC(store: N.Store, candidateTree: String, p: Policy,
-    selection: Selection): Consequence[(Selection, Map[String, V.Receipt])] = for {
+    selection: Selection, retained: Vector[Reuse] = Vector.empty): Consequence[(Selection, Map[String, V.Receipt])] = for {
     _ <- validateC(p)
     prior <- p.priorEvidence.foldLeft(Consequence.success(Vector.empty[Evidence])) { (before, source) => for {
       values <- before
@@ -500,13 +501,20 @@ private[smworkflow] object RepositorySyncProgramImpact {
       newTree <- GitObjectId.parseC(candidateTree)
       delta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(oldTree, newTree)).flatMap(_.valueC)
       reusable = selection.checks.filterNot(c => current._2.contains(c.identity)).filter { check =>
-        p.coverage.find(_.check == check).exists(coverage => !delta.exists(c => covers(coverage.inputPaths, c.path.value))) &&
+        reusableProductCheck(check, Reuse(check.identity, evidence.validation, evidence.closure, evidence.review), retained) &&
+          p.coverage.find(_.check == check).exists(coverage => !delta.exists(c => covers(coverage.inputPaths, c.path.value))) &&
           evidence.checks.contains(check) && evidence.receipts.exists(r => r.identity == check.identity && V.productSuccessful(r, check.kind))
       }
       receipts = reusable.map(c => c.identity -> evidence.receipts.find(_.identity == c.identity).get).toMap
       refs = reusable.map(c => Reuse(c.identity, evidence.validation, evidence.closure, evidence.review))
     } yield (current._1.copy(reused = current._1.reused ++ refs), current._2 ++ receipts) }
   } yield result
+
+  /** Coverage equivalence does not establish a new FixCheck's policy or diff base.
+    * Confirm an already selected reference during reconstruction of its original validation.
+    */
+  private[admission] def reusableProductCheck(check: V.Check, reference: Reuse, retained: Vector[Reuse]): Boolean =
+    check.kind != WorkflowSbtValidation.Kind.FixCheck || retained.contains(reference)
 
   /** Composition receives the existing managed native storage. These are reads
     * of actual Start, validation and committed Step closure, never caller claims.

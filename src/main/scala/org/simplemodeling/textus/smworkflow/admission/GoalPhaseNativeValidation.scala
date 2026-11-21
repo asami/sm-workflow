@@ -32,7 +32,7 @@ import GoalPhaseCanonicalCheckConsumption as Q
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -653,6 +653,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case Left(setup) => Consequence.success(Left(setup))
       case Right((store, initial)) => for {
         _ <- store.pendingSelectionC
+        _ <- _require_phase_lint_c(store, initial)
         current <- _check_loop_c(store, initial)
         selected <- if (store._selection_pending &&
             (current.payload.receipts.size == store.initial.selected.size && successful(current.payload.receipts, store.initial.selected) ||
@@ -668,6 +669,18 @@ private[smworkflow] object GoalPhaseNativeValidation {
         }
       } yield saved
     }
+
+  private def _require_phase_lint_c(store: Store, initial: Saved): Consequence[Unit] = {
+    val needsCheck = store.whole && initial.payload.receipts.isEmpty &&
+      GoalPhaseNativeCandidate.workPaths(store.candidate.payload).exists(_.endsWith(".scala")) &&
+      !store.requested.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)
+    if (!needsCheck) Consequence.unit
+    else WorkflowScalaLintAction.requiresPhaseCheckC(store.core, store.repositoryRoot).flatMap {
+      case true =>
+        F.invalid("The Phase candidate's project.yaml requires a FixCheck in phaseChecks")
+      case false => Consequence.unit
+    }
+  }
 
   private def _check_loop_c(store: Store, initial: Saved): Consequence[Saved] =
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>

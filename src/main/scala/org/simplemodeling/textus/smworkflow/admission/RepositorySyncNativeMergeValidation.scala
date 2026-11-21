@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -289,7 +289,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
       retained = first.flatMap(_.payload.validation).flatMap(_.impact)
       prior <- if (eligible && retained.forall(_native_)) policy.impact match {
-        case Some(value) => RepositorySyncProgramImpact.reuseLocalC(store, pending, policy, value)
+        case Some(value) => RepositorySyncProgramImpact.reuseLocalC(store, pending, policy, value,
+          retained.toVector.flatMap(_.reused))
         case None => Consequence.success(None)
       } else Consequence.success(None)
       local = prior.filter(value => !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
@@ -300,7 +301,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       result <- retained match {
         case Some(value) if !_native_(value) && value.reused.nonEmpty => policy.impact match {
           case Some(current) => RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get,
-            current, value.copy(reused = Vector.empty)).flatMap { (selected, receipts) =>
+            current, value.copy(reused = Vector.empty), value.reused).flatMap { (selected, receipts) =>
               if (selected.reused == value.reused) Consequence.success((Some(value), receipts))
               else N.invalid("Retained prior reuse no longer matches its actual evidence references")
             }

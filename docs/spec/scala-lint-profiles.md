@@ -706,14 +706,22 @@ and records remain intact. See the [Phase 8.1 ledger](../phase/phase-8.1-checkli
 
 ## SLP-4 authored native/build binding
 
-The bounded CNCF SLP-EXEC producer capability is delivered at `bf1de998`. Its
-fixed FixCheck opt-in `lintInput: true` admits an already resolved
-`SbtLintInput(identity, revision, configJson)` and retains actual admitted input.
-The consumer build decodes `cncf.sbt.lint.input` and applies effective JSON
-without ambient fallback. `validation.sharedScalaLint: true` advertises the
-source build contract; it requires an existing trusted input-enabled host
-capability and creates no grant. Absence of that capability is setup failure,
-not proof of activation. Legacy captured work/results retain their meaning.
+The CNCF SLP-EXEC producer capability at `bf1de998` originally used a host opt-in
+for typed FixCheck inputs. An authorized FixCheck now accepts an optional
+`SbtLintInput(identity, revision, configJson)` and retains the actual supplied
+input. The host grants the operation and workspace and sets process limits.
+Workflow operations read the user-managed `.textus/config.json`.
+
+The Session selects the candidate checkout. A project exposing `validation.fixCheck`
+uses shared lint by default, and may explicitly set `validation.sharedScalaLint:
+false`. Both Phase closure and repository synchronization read the candidate's
+`project.yaml`. Optional `validation.scalaLint.sourceStyle` and
+`validation.scalaLint.historyStyle` select the source and source-history
+profiles, with baseline source rules and inherited history style when omitted.
+The consumer build decodes the typed `cncf.sbt.lint.input` and applies the
+resolved configuration. A Phase changing Scala sources with shared lint enabled
+requires FixCheck in its closing validation plan. Recorded legacy results retain
+their original meaning.
 
 The authored input captures profile/configuration provenance plus finite ranges
 from existing typed native `PendingDiff` at the unchanged Step or cumulative
@@ -734,7 +742,6 @@ Explicit file includes use normal Resource authorization; URL/classpath includes
 quoted Git paths, binary deltas and changed Scala paths without textual hunks
 are explicit unsupported cases. No empty/clean fallback is supplied.
 
-These changes and paired connected fixtures are authored **NOT RUN**. They do
-not close A09/A10/A15, install a runtime or admit a requester result. Current
-source/producer/derived-delivery limits are recorded in the existing
+The original SLP-4 paired fixtures and their recorded qualification limits are
+described in the existing
 [bounded integration notes](../notes/phase8.1-producer-deliveries.md).

@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -147,12 +147,14 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     workspaceIdentity: Option[String] = None,
     estimate: Option[SbtValidationEstimate] = None,
-    lintBase: Option[String] = None): Consequence[SbtExecutionAttempt] = for {
+    lintBase: Option[String] = None,
+    lintCandidateWorkspace: Option[String] = None): Consequence[SbtExecutionAttempt] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
     baseTarget = SbtTarget(workspace, validationEstimate = estimate)
-    lint = if (kind == WorkflowSbtValidation.Kind.FixCheck) WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase)
+    lint = if (kind == WorkflowSbtValidation.Kind.FixCheck)
+      WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase, lintCandidateWorkspace)
       else Consequence.success(Option.empty[SbtLintInput])
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile

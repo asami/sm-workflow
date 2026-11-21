@@ -10,7 +10,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared defaults never create grants, precise coverage or successful results.
   * @since   Nov.  9, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,16 +36,23 @@ final class WorkflowValidationInitializationSpec extends AnyWordSpec with Matche
   private def assessment(paths: String*) = RepositorySyncDocumentInputs.Assessment(paths.toVector, Vector.empty, paths.toVector, Vector.empty, "actual merge delta")
 
   "Shared validation initialization" should {
-    "connect a shared-lint project declaration only to an already trusted input-enabled source host" in {
+    "require a fresh FixCheck for a new candidate when only coverage equivalence is known" in {
+      Given("a prior successful check reference for an equivalent declared input scope")
+      val lint = RepositorySyncNativeMergeValidation.Check("fix-check", 2, WorkflowSbtValidation.Kind.FixCheck)
+      val compile = RepositorySyncNativeMergeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+      val prior = RepositorySyncProgramImpact.Reuse(lint.identity, "validation", "closure", None)
+      When("validation considers reusing the prior reference for a newly selected check")
+      RepositorySyncProgramImpact.reusableProductCheck(lint, prior, Vector.empty) shouldBe false
+      RepositorySyncProgramImpact.reusableProductCheck(compile, prior.copy(check = compile.identity), Vector.empty) shouldBe true
+      Then("reconstruction preserves only the exact previously selected FixCheck reference")
+      RepositorySyncProgramImpact.reusableProductCheck(lint, prior, Vector(prior)) shouldBe true
+      RepositorySyncProgramImpact.reusableProductCheck(lint, prior, Vector(prior.copy(validation = "other"))) shouldBe false
+    }
+    "connect a shared-lint project to an authorized FixCheck without a host lint flag" in {
       val declared = take(WorkflowProjectDeclaration.fromC(Some("existing fixed check-only build"),
-        Some("validation:\n  fixCheck: true\n  sharedScalaLint: true\n")))
-      declared.get.sharedScalaLint shouldBe true
-      val enabled = normal.mapObject(fields => fields.add("sbtPrograms", fields("sbtPrograms").get.mapArray(_.map { program =>
-        if (program.hcursor.get[String]("operation").contains("fix-check")) program.mapObject(_.add("lintInput", Json.True))
-        else program
-      })))
-      I.assembleC(root, normal, declared, None, None).isSuccess shouldBe false
-      val actual = take(I.assembleC(root, enabled, declared, None, None))
+        Some("validation:\n  fixCheck: true\n")))
+      declared.get.lint.enabled shouldBe true
+      val actual = take(I.assembleC(root, normal, declared, None, None))
       actual.program.get.checks.map(c => c.identity -> c.ordinal) shouldBe Vector("compile" -> 1, "fix-check" -> 2, "test" -> 3)
       I.assembleC(root, plan(Vector(1 -> "compile", 2 -> "fix-check", 3 -> "test"), grant = false), declared, None, None)
         .isSuccess shouldBe false
@@ -69,7 +76,7 @@ final class WorkflowValidationInitializationSpec extends AnyWordSpec with Matche
     "select inferred lint only for a project that declares its command and has a managed binding" in {
       Given("a project advertising its fixCheck command and a separate host execution profile")
       val lintproject = take(WorkflowProjectDeclaration.fromC(Some("addCommandAlias(\"fixCheck\", \"Compile / scalafix --check\")"),
-        Some("validation:\n  fixCheck: true\n")))
+        Some("validation:\n  fixCheck: true\n  sharedScalaLint: false\n")))
       val nolintbinding = plan(Vector(1 -> "compile", 3 -> "test"))
       When("fallback selection resolves each execution profile")
       val bound = take(I.assembleC(root, normal, lintproject, None, None)).program.get

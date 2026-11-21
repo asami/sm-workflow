@@ -6,18 +6,17 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Path
 import io.circe.Json
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, ResolvedParameters}
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtLintInput}
-import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceReference}
+import org.goldenport.cncf.workspace.{FileReadPolicy, FileTarget, WorkspaceFilePath, WorkspaceId}
+import org.goldenport.cncf.resource.ResourceReadLimits
 import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.protocol.operation.OperationResponse
 import org.simplemodeling.scalalint.{ScalaLintDelta, ScalaLintInput, ScalaLintProfiles}
 
-/** Prepare immutable data for the existing typed FixCheck. The trusted host
-  * opts into input transport; old fixed programs and issued results stay legacy.
+/** Prepare optional typed FixCheck input from the Session candidate's lint policy.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowScalaLintAction {
@@ -25,12 +24,16 @@ private[smworkflow] object WorkflowScalaLintAction {
     Consequence.configurationInvalid("Shared Scala lint Action: " + message)
 
   def inputC(parameters: ResolvedParameters, project: Option[Config], base: String,
+    delta: Vector[ScalaLintDelta.File] = Vector.empty): Consequence[SbtLintInput] =
+    WorkflowScalaLintParameters.selectionC(parameters).flatMap(inputForSelectionC(_, project, base, delta))
+
+  private[admission] def inputForSelectionC(selection: ScalaLintProfiles.Selection, project: Option[Config], base: String,
     delta: Vector[ScalaLintDelta.File] = Vector.empty): Consequence[SbtLintInput] = for {
     _ <- if (base != null && base.matches("[0-9a-f]{40}|[0-9a-f]{64}")) Consequence.unit
       else invalid("selected lint needs its actual candidate/release Git base")
     _ <- if (project.forall(!_.hasPathOrNull(ScalaLintInput.contextKey))) Consequence.unit
       else invalid("project configuration cannot override native lint context")
-    effective <- WorkflowScalaLintParameters.resolveC(parameters, project)
+    effective <- WorkflowScalaLintParameters.resolveSelectionC(selection, project)
     context = effective.snapshot.withoutPath("configuration")
       .withValue("diffBase", ConfigValueFactory.fromAnyRef(base))
     config = ScalaLintDelta.add(effective.config.withValue(ScalaLintInput.contextKey, context.root), delta)
@@ -45,7 +48,7 @@ private[smworkflow] object WorkflowScalaLintAction {
     selected = programs.filter(p => p.hcursor.get[String]("target").contains(workspace) &&
       p.hcursor.get[String]("operation").contains("fix-check"))
     _ <- if (selected.size <= 1) Consequence.unit else invalid("ambiguous host FixCheck binding")
-    root <- if (!selected.headOption.exists(_.hcursor.get[Boolean]("lintInput").contains(true)))
+    root <- if (selected.isEmpty)
       Consequence.success(Option.empty[Path])
       else for {
         workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
@@ -58,48 +61,63 @@ private[smworkflow] object WorkflowScalaLintAction {
       } yield Some(path)
   } yield root
 
-  def prepareC(core: ActionCall.Core, workspace: String, base: Option[String]): Consequence[Option[SbtLintInput]] = for {
+  def prepareC(core: ActionCall.Core, workspace: String, base: Option[String],
+    candidateGitWorkspace: Option[String] = None): Consequence[Option[SbtLintInput]] = for {
     _ <- if (core != null && core.executionContext != null) Consequence.unit else invalid("owning call is absent")
-    raw = core.component.flatMap(_.subsystem).flatMap(host =>
-      GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.configuration.values,
-        CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY))
-    root <- raw match {
-      case None => Consequence.success(Option.empty[Path])
-      case Some(ConfigurationValue.StringValue(text)) => io.circe.parser.parse(text).fold(e => invalid(e.message),
-        json => rootC(json, workspace))
-      case _ => invalid("typed host plan is not JSON text")
-    }
-    input <- root match {
-      case None => Consequence.success(Option.empty[SbtLintInput])
-      case Some(path) => for {
-        selectedbase <- base.map(Consequence.success).getOrElse(invalid("selected lint has no captured Git base"))
-        actualroot <- RepositorySyncManagedGitObservation.rootC(core)
-        _ <- if (Path.of(actualroot).normalize == path) Consequence.unit
-          else invalid("selected lint and native delta must share the actual owning source workspace")
-        oid <- GitObjectId.parseC(selectedbase)
-        captured <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.PendingDiff(oid)).flatMap(_.valueC)
-        _ <- if (!captured.isBinary) Consequence.unit else invalid("binary native delta cannot establish Scala lint attribution")
-        delta <- scala.util.Try(ScalaLintDelta.fromDiff(captured.text)).fold(e => invalid(e.getMessage), Consequence.success)
-        project <- new Reader(core).projectC(path.resolve(".scalafix.conf"))
-        input <- inputC(core.executionContext.resolvedParameters, project, selectedbase, delta)
-      } yield Some(input)
+    input <- base.fold(Consequence.success(Option.empty[SbtLintInput])) { selectedbase =>
+      val git = candidateGitWorkspace.getOrElse(RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
+      for {
+        actual <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.Root, git).flatMap(_.valueC)
+        path <- scala.util.Try(Path.of(actual).normalize).fold(e => invalid(e.getMessage), Consequence.success)
+        _ <- if (candidateGitWorkspace.nonEmpty) Consequence.unit else _verify_root_c(core, workspace, path)
+        reader = new Reader(core, path, git)
+        lint <- reader.textC(path.resolve("project.yaml")).flatMap(WorkflowProjectDeclaration.lintTextC)
+        input <- if (!lint.enabled) Consequence.success(Option.empty[SbtLintInput]) else for {
+          oid <- GitObjectId.parseC(selectedbase)
+          captured <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.PendingDiff(oid), git).flatMap(_.valueC)
+          _ <- if (!captured.isBinary) Consequence.unit else invalid("binary native delta cannot establish Scala lint attribution")
+          delta <- scala.util.Try(ScalaLintDelta.fromDiff(captured.text)).fold(e => invalid(e.getMessage), Consequence.success)
+          project <- reader.projectC(path.resolve(".scalafix.conf"))
+          input <- inputForSelectionC(lint.selection, project, selectedbase, delta)
+        } yield Some(input)
+      } yield input
     }
   } yield input
 
-  /** HOCON includes use the same authorized bounded Resource reader as their
+  def requiresPhaseCheckC(core: ActionCall.Core, checkout: Path): Consequence[Boolean] = {
+    val workspace = RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")
+    new Reader(core, checkout, workspace).textC(checkout.resolve("project.yaml"))
+      .flatMap(WorkflowProjectDeclaration.requiresSharedLintTextC)
+  }
+
+  private def _verify_root_c(core: ActionCall.Core, workspace: String, candidate: Path): Consequence[Unit] = {
+    val raw = core.component.flatMap(_.subsystem).flatMap(host =>
+      GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.configuration.values,
+        CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY))
+    raw match {
+      case Some(ConfigurationValue.StringValue(text)) => for {
+        plan <- io.circe.parser.parse(text).fold(e => invalid(e.message), Consequence.success)
+        binding <- rootC(plan, workspace)
+        _ <- if (binding.contains(candidate)) Consequence.unit
+          else invalid("selected FixCheck binding does not match the Session candidate checkout")
+      } yield ()
+      case _ => invalid("typed FixCheck execution binding is unavailable")
+    }
+  }
+
+  /** HOCON includes use the same authorized bounded workspace as their
     * owning project file. They cannot escape into ConfigFactory's filesystem,
     * URL or ambient classloader loaders.
     */
-  private final class Reader(val core: ActionCall.Core) extends ProcedureActionCall {
-    def execute(): Consequence[OperationResponse] = invalid("configuration reader is not an Operation")
+  private final class Reader(core: ActionCall.Core, root: Path, identity: String) {
     private var remaining = 65536
-    private def textC(path: Path): Consequence[Option[String]] =
-      ResourceReference.parseC(path.toUri.toASCIIString).flatMap(reference =>
-        read_resource_text(reference, ResourceReadLimits(65536), Some(UTF_8)))
-        .map(Some(_)).recoverWith {
-          case failure if failure.status.webCode.code == 404 => Consequence.success(None)
-          case failure => Consequence.Failure(failure)
-        }
+    def textC(path: Path): Consequence[Option[String]] =
+      if (!path.startsWith(root)) invalid("project lint configuration crosses the Session candidate checkout")
+      else for {
+        workspace <- WorkspaceId.parseC(identity)
+        relative <- WorkspaceFilePath.parseC(root.relativize(path).toString)
+        result <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), relative, FileReadPolicy(ResourceReadLimits(65536)))
+      } yield result.text
     private def parseC(path: Path, depth: Int, optional: Boolean): Consequence[Option[Config]] = for {
       _ <- if (depth <= 16 && remaining > 0) Consequence.unit else invalid("project include bounds exceeded")
       text <- textC(path)

@@ -12,7 +12,7 @@ import WorkflowSbtValidation.Kind
 /** Shared initialization describes available checks and inputs, not check results.
   * Actual fetched deltas and retained native evidence still select/exempt work.
   * @since   Nov.  9, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowValidationInitialization {
@@ -31,8 +31,7 @@ private[smworkflow] object WorkflowValidationInitialization {
       }
       project = discovery.toOption.flatten
       ordinary <- if (program.nonEmpty) Consequence.success(None)
-        else RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, plan, project.exists(_.providesFixCheck),
-          project.exists(_.sharedScalaLint))
+        else RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, plan, project.exists(_.providesFixCheck))
       initialized <- assembleC(root, plan, project, program.orElse(ordinary), documents)
       bound <- initialized.program match {
         case Some(policy) if policy.checks.exists(check => check.ordinaryDiscovery || check.metadata.nonEmpty) =>
@@ -46,7 +45,7 @@ private[smworkflow] object WorkflowValidationInitialization {
   /** This inventory narrows existing declarations. Managed execution remains the
     * authority boundary, including workspace, capability and process limits.
     */
-  private def _checks(root: Path, plan: Json, fixcheck: Boolean, sharedLint: Boolean = false): Vector[V.Check] = {
+  private def _checks(root: Path, plan: Json, fixcheck: Boolean): Vector[V.Check] = {
     def array(key: String) = plan.hcursor.get[Vector[Json]](key).getOrElse(Vector.empty)
     def text(value: Json, key: String) = value.hcursor.get[String](key).toOption
     val component = "org.simplemodeling.textus.SmWorkflow"
@@ -62,7 +61,6 @@ private[smworkflow] object WorkflowValidationInitialization {
       ordinal <- target.drop(prefix.length).toIntOption.filter(_ > 0)
       capability <- text(p, "capability").filter(capabilities)
       operation <- text(p, "operation")
-      if operation != "fix-check" || !sharedLint || p.hcursor.get[Boolean]("lintInput").contains(true)
     } yield (ordinal, operation) }
     Vector("compile" -> Kind.Compile, "fix-check" -> Kind.FixCheck, "test" -> Kind.Test)
       .filter((_, kind) => kind != Kind.FixCheck || fixcheck)
@@ -75,7 +73,7 @@ private[smworkflow] object WorkflowValidationInitialization {
   def assembleC(root: Path, plan: Json, project: Option[WorkflowProjectDeclaration.Project],
     explicitProgram: Option[RepositorySyncProgramImpact.Policy], explicitDocuments: Option[RepositorySyncDocumentInputs.Policy]): Consequence[Repository] = {
     val inferred = project.flatMap { p =>
-      val selected = _checks(root, plan, p.providesFixCheck, p.sharedScalaLint)
+      val selected = _checks(root, plan, p.providesFixCheck)
       Option.when(selected.exists(_.kind == Kind.Compile) && selected.exists(_.kind == Kind.Test)) {
         val reason = p.reason + "; no declared narrower test coverage, use actual managed FULL checks"
         RepositorySyncProgramImpact.Policy(selected.map(c => RepositorySyncProgramImpact.Coverage(c, p.inputs, p.inputs, reason)),
@@ -92,9 +90,10 @@ private[smworkflow] object WorkflowValidationInitialization {
       if (consumed.size > 128) None else Some(RepositorySyncDocumentInputs.Policy(p.documents, consumed, p.reason))
     })
     for {
-      _ <- if (!project.exists(_.sharedScalaLint) || project.exists(p => p.providesFixCheck &&
-        _checks(root, plan, fixcheck = true, sharedLint = true).exists(_.kind == Kind.FixCheck))) Consequence.unit
-        else Consequence.configurationInvalid("Shared Scala lint project declaration requires an already trusted lintInput=true FixCheck capability for this source root; no host plan or grants were changed")
+      _ <- if (!project.exists(_.requiresSharedScalaLint) ||
+        program.exists(_.checks.exists(_.kind == Kind.FixCheck)) ||
+        _checks(root, plan, fixcheck = true).exists(_.kind == Kind.FixCheck)) Consequence.unit
+        else Consequence.configurationInvalid("The candidate's shared Scala lint policy requires an authorized FixCheck in its checkout")
       _ <- program.fold(Consequence.unit)(RepositorySyncProgramImpact.validateC)
       _ <- documents.fold(Consequence.unit)(RepositorySyncDocumentInputs.validateC)
     } yield Repository(program, documents, projectProvidesFixCheck = project.exists(_.providesFixCheck))
