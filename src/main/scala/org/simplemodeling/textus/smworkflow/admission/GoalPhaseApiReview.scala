@@ -36,6 +36,9 @@ private[smworkflow] object GoalPhaseApiReview {
           scala.util.Try(s.toInt).toOption.exists(_ <= maximum) => Consequence.success(s.toInt)
       case _ => Consequence.configurationInvalid("review package limit must be 1..524288 bytes")
     })
+  private[admission] def packageLimitC(core: ActionCall.Core): Consequence[Int] =
+    core.component.map(_.initializationParameters.resolve(maxBytes).map(_.value.getOrElse(maximum)))
+      .getOrElse(Consequence.success(maximum))
 
   private def exact(s: String): Boolean = s != null && s.nonEmpty && s.trim == s && !s.exists(_.isControl)
   private val string = Record.dataAuto("type" -> "string")
@@ -193,8 +196,7 @@ private[smworkflow] object GoalPhaseApiReview {
         actual <- port.apiReviewWorkC(input, selected)
         continuation <- actual.issuedWorkContext.map(_.continuationId).map(Consequence.success)
           .getOrElse(Consequence.stateConflict("review continuation absent"))
-        limit <- selected.component.map(_.initializationParameters.resolve(maxBytes).map(_.value.getOrElse(maximum)))
-          .getOrElse(Consequence.success(maximum))
+        limit <- packageLimitC(selected)
         reference <- NativeWorkflowResourceInput.referenceC(input.packageResource).flatMap { ref =>
           if (ref.scheme == "file") Consequence.success(ref)
           else Consequence.stateConflict("API review package requires a local file URI")

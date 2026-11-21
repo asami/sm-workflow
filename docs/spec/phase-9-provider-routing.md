@@ -49,3 +49,68 @@ role within the same Step. The runtime restores this selection from contiguous
 native history, issues each RepairStep through its ordinary Continuation, and
 admits completion against the captured role chain. The selected Plan, candidate,
 validation and repair accounting remain with their current native owners.
+
+## Selected CAR lint gate
+
+The fixed Goal Phase validation policy can declare a check with
+`kind: "car-lint"`. Select it once at the end of the primary Plan check list,
+after Compile and Test or TestOnly. A Step with an assessment policy selects
+`carLint: "required"` to make the same check mandatory. A failed or incomplete
+earlier check stops validation before the CAR lint process is invoked.
+
+The CNCF host process plan binds the check identity to the selected repository
+workspace, purpose `lint`, and the fixed Cozy argument vector
+`["car", "lint", ".", "--format", "json"]`. The runtime uses typed validation
+check admission and saves intent before dispatch. A complete report with no
+FAIL findings passes. A complete failing report retains each finding's category,
+rule, repository-relative path, location and message. Malformed and incomplete
+output cannot establish success or a repairable rule failure.
+
+The first repairable CAR lint failure uses ordinary Step repair. Two distinct
+validated repairs with the same complete failing rule and path set can select
+the next role in the already admitted dispatch chain even when the source tree
+or line positions changed. The existing Step allowance and history cover both
+editor assignments.
+
+## Explicit provider decline
+
+A delegated Step editor can return `declined` before making source edits, with a
+concrete summary and empty findings. Normal Submit records that returned
+assignment. Advance may issue another continuation of the same Step and
+generation using only the remaining roles in the captured chain. It verifies
+that the Git candidate has stayed the same and retains the original checks and
+repair counts. A changed candidate requires ordinary review of the pending work
+instead of automatic transfer. Once the chain is exhausted, the existing
+Decision route records the unresolved work.
+
+A returned `blocked` identifies an obstacle to progress and goes to Decision.
+Unknown execution remains in the transport's uncertainty handling. Old
+continuations and the departed executor cannot complete the replacement.
+
+## Compile-error input preparation
+
+Use `GoalPhaseService.resolveGoalPhaseDiagnosticInformation` against the
+current issued `RepairStep`. Select one `compile-package` for the failed check
+and one `candidate-source` for each required repository-relative file in the
+same request. The package selection's reason identifies the source of the
+complete file-set judgment. Use the capable editor when completeness cannot be
+established. The runtime checks that the request includes the recognized
+compiler locations and reads whole regular files from the validated Git tree
+through the admitted Tree and Blob operations.
+
+A successful selection retains the compact UTF-8 JSON package with the exact
+continuation, work contract, validation, candidate, both captured streams and
+whole source files. Read the package from the corresponding item in
+`EvidenceService.readEvidence`. The initial response carries its reference
+and eligibility. `sm-workflow.goal-phase.review-package-max-bytes` bounds the
+actual serialized review and compile package bytes, with a default and
+ceiling of 524,288. Incomplete or oversized material returns `agent-required`
+and leaves the current repair assignment and validation history available.
+Preparation grants no provider invocation, mutation or acceptance authority.
+
+A verified single oversized Scala or Java source can be recorded as a
+nonblocking `Hygiene` entry in the shared Journal. The repository, path and
+candidate blob identify the observation. The original entry retains the
+source size, threshold and validation reference. Generated locations and
+recognized generator headers are excluded. Package-wide excess alone produces
+no source-size entry.

@@ -10,7 +10,8 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
- * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -92,7 +93,7 @@ private[smworkflow] object GoalPhaseFixIssues {
       val repository = check.dependency.flatMap(_ => payload.dependency)
         .map(_.admission.binding.dependency.repository).getOrElse(request.selectedPlan.repository)
       issue.source == "TEST" && issue.repository == repository && issue.step == payload.step &&
-        issue.sourceIdentity.contains(check.kind.wire + ":" + check.identity) &&
+        issue.sourceIdentity.contains(check.wireKind + ":" + check.identity) &&
         !GoalPhaseNativeValidation.successful(Vector(receipt), Vector(check))
     }
   }
@@ -243,14 +244,14 @@ private[smworkflow] object GoalPhaseFixIssues {
         val actualrepository = check.dependency.flatMap(_ =>
           GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource))
           .map(_.dependency.repository).getOrElse(repository)
-        val source = check.kind.wire + ":" + check.identity
+        val source = check.wireKind + ":" + check.identity
         val existing = prior.issues.find(i => i.repository == actualrepository && i.step == payload.step &&
           i.source == "TEST" && i.sourceIdentity.contains(source))
         if (GoalPhaseNativeValidation.successful(Vector(receipt), Vector(check))) existing.fold(prior)(issue =>
           _update(prior, issue.copy(status = "RESOLVED", evidenceReference = evidence), evidence))
         else if (failed && index == payload.receipts.size - 1) {
           val diagnostics = receipt.stderr.codePoints().limit(2048).toArray.map(cp => new String(Character.toChars(cp))).mkString
-          val summary = "Selected check " + check.identity + " (" + check.kind.wire + ") failed with exit " + receipt.exitCode.get +
+          val summary = "Selected check " + check.identity + " (" + check.wireKind + ") failed with exit " + receipt.exitCode.get +
             (if (diagnostics.trim.isEmpty) "" else ": " + diagnostics)
           existing.fold(_new(prior, actualrepository, payload.step, "TEST", Some(source), summary, evidence))(issue =>
             _update(prior, issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,

@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 21, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -12,8 +12,10 @@ import java.time.Instant
 import java.util.Base64
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.processexecution.{GitObjectId, GitPath}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityRevision
 import org.simplemodeling.textus.smworkflow.value as V
@@ -23,7 +25,8 @@ import DevelopmentJournal as J
   * The single row's conditional replacement retains every previous version.
   */
 private[smworkflow] object DevelopmentJournalSemantic {
-  val kinds = Set("Decision", "Issue", "Handoff")
+  private val userKinds = Set("Decision", "Issue", "Handoff")
+  val kinds = userKinds + "Hygiene"
   val states = Set("open", "inProgress", "resolved", "closed")
   val linkKinds = Set("Finding", "Decision", "Issue", "Fix", "Validation", "Handoff")
   val relatedFields = (0 until 16).map(i => s"relatedIdentity$i").toVector
@@ -119,8 +122,36 @@ private[smworkflow] object DevelopmentJournalSemantic {
     val s = fromSource(input.sourceReference)
     val e = Entry(identity(input.kind, s), input.kind, input.repositoryIdentity, input.phaseIdentity, input.stepIdentity,
       input.sessionIdentity, Vector(Version("1", s, now.toString, None, fromPublic(input.content))))
-    check(valid(e)).map(_ => e)
+    check(userKinds(e.kind) && valid(e)).map(_ => e)
   } catch { case NonFatal(_) => Consequence.stateConflict("Invalid semantic Journal input") }
+
+  private[admission] def sourceSizeEntryC(repository: String, phase: String, step: Option[String], session: String,
+    validation: Source, observation: GoalPhaseCompilePackage.Hygiene, now: Instant): Consequence[Entry] = {
+    val s = Source(Json.arr("source-size".asJson, repository.asJson, observation.path.asJson).noSpaces, observation.blob)
+    val summary = s"${observation.path} is ${observation.bytes} UTF-8 bytes"
+    val rationale = s"Candidate source blob ${observation.blob} exceeds the ${observation.threshold}-byte source-size threshold."
+    val content = Content(summary, rationale, None, Vector(Link("Validation", validation)))
+    val e = Entry(identity("Hygiene", s), "Hygiene", repository, phase, step, session,
+      Vector(Version("1", s, now.toString, None, content)))
+    check(GitPath.parseC(observation.path).isSuccess && GitObjectId.parseC(observation.blob).isSuccess &&
+      observation.threshold > 0 && observation.bytes > observation.threshold && valid(e)).map(_ => e)
+  }
+
+  private[admission] def recordSourceSizeC(policy: Option[J.Policy], core: ActionCall.Core, repository: String,
+    phase: String, step: Option[String], session: String, validation: Source,
+    observation: GoalPhaseCompilePackage.Hygiene): Consequence[V.JournalRecordingState] =
+    sourceSizeEntryC(repository, phase, step, session, validation, observation, core.executionContext.clock.instant()).flatMap { entry =>
+      policy match {
+        case None => Consequence.success(state("disabled", entry.original.source))
+        case Some(p) =>
+          val attempted = ComponentRecordStorage.bindForCallC(core, p.storeName, p.collection, DataStore.StringEntryId(entry.identity))
+            .flatMap(bound => appendC(new J.Storage {
+              def loadC() = bound.loadC()
+              def createC(row: Record) = bound.createC(row)
+            }, entry))
+          Consequence.success(attempted.fold(_ => state("unavailable", entry.original.source), v => v))
+      }
+    }
   def publicEntry(e: Entry, v: Version): V.JournalSemanticEntry = V.JournalSemanticEntry(
     V.JournalEntryReference(e.identity, v.revision), e.kind, e.repository, e.phase, e.step, e.session,
     publicSource(e.original.source), publicSource(v.source), e.original.changedAt, v.changedAt,
@@ -151,7 +182,9 @@ private[smworkflow] object DevelopmentJournalSemantic {
         .map(_ => state("recorded", e.original.source, Some(e)))
         .fold(_ => state("indeterminate", e.original.source), v => v)
       case Some(saved) => storedC(saved, e.identity).map { retained =>
-        if (retained.copy(versions = Vector(retained.original.copy(changedAt = e.original.changedAt))) == e)
+        val sameSourceSize = e.kind == "Hygiene" && retained.repository == e.repository &&
+          retained.original.content.summary == e.original.content.summary
+        if (sameSourceSize || retained.copy(versions = Vector(retained.original.copy(changedAt = e.original.changedAt))) == e)
           state("alreadyRecorded", e.original.source, Some(retained)) else state("conflict", e.original.source)
       }.fold(_ => state("conflict", e.original.source), v => v)
     })
@@ -178,7 +211,7 @@ private[smworkflow] object DevelopmentJournalSemantic {
   }
   def validChange(id: String, repository: String, expected: String, source: Source, reason: String,
     content: Option[Content], issueState: Option[String]): Boolean = try {
-    validIdentity(id) && exact(repository) && revision(expected) && this.source(source) && text(reason) &&
+    validIdentity(id) && decodedKind(id).exists(userKinds) && exact(repository) && revision(expected) && this.source(source) && text(reason) &&
       content != null && issueState != null && (content.isDefined != issueState.isDefined) &&
       issueState.forall(states) && (issueState.isEmpty || decodedKind(id).contains("Issue")) &&
       content.forall(c => decodedKind(id).exists(validContent(_, c)))

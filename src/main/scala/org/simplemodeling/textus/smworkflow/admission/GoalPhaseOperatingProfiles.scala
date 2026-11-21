@@ -172,9 +172,14 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     profile = resolved._2
     takeover = if (input.kind == "RepairStep" && input.stepIdentity.nonEmpty && failureHistory.nonEmpty)
       profile.dispatch.map(GoalPhaseProviderTakeover.select(_, failureHistory)) else None
-    captured = input.copy(operatingProfile = Some(takeover.fold(profile) { case (dispatch, evidence) =>
+    afterValidation = takeover.fold(profile) { case (dispatch, evidence) =>
       profile.copy(dispatch = Some(dispatch), providerTakeover = evidence)
-    }))
+    }
+    _ <- if (input.providerDecline.forall(_ => profile.dispatch.exists(_.placement == "DELEGATED"))) Consequence.unit
+      else invalid("Declined Step requires its retained delegated continuation capability")
+    selected = input.providerDecline.fold(afterValidation)(route =>
+      afterValidation.copy(dispatch = Some(route.successor), providerTakeover = None))
+    captured = input.copy(operatingProfile = Some(selected))
   } yield work.copy(current = order.copy(requirement = resolved._1,
     request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
 

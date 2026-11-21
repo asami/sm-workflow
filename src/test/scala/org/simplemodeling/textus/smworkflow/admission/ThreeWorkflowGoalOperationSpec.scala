@@ -29,7 +29,8 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -135,6 +136,104 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         current(ids.head).revision shouldBe afterfirst.head.revision
       }
     }
+
+    "retain a declined delegated editor and validate the replacement through independent Step review" in {
+      val workroot = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
+      val root = Files.createTempDirectory(workroot, "goal-provider-decline-")
+      val host = ThreeWorkflowNormalHostFixture.definition(root)
+      val selection = _goal_selection_(host.goal.input, "provider-decline-plan", "host-plan-entry")
+      val plan = O.Plan("provider-decline-plan", "1", host.goal.input.phaseIdentity, host.goal.input.repositoryIdentity,
+        Vector(O.Step("step-1", "Implement the selected behavior", host.goal.candidatePaths, Vector.empty, Vector("test"))),
+        Vector("test"), repairLimit = 2)
+      val parameters = Map(GoalPhaseDispatchPolicy.declaration.name -> GoalPhaseDispatchPolicy.revision,
+        GoalPhaseNativeExecution.logicalOrigin.name -> "fixture-provider-routing-origin")
+      _with_runtime_(root, "Goal", Some(host), parameters) { (owner, component, actor, prepare) =>
+        def invoke(operation: String, properties: List[Property]) =
+          owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "GoalPhaseService", operation = operation, properties = properties), actor)
+        prepare(call => call.setupC(_setup_commands_(root, "Goal").size).flatMap(_ =>
+          call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(host.goal.input),
+            selection.participantIdentity), Record.data(ProfileSelectionJsonV1.storageField ->
+              take(ProfileSelectionJsonV1.encodeStorageC(selection)))).flatMap(_ =>
+            call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+              take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId,
+                selection.participantIdentity, plan))))))))
+        val started = read_value[V.GoalPhaseStartResult](take(invoke("startGoalPhase", NativeWorkflowOperationInputFixture.goal(host.goal.input))))
+        val id = InstanceIdentity(started.sessionId)
+        def advance() = read_value[V.GoalPhaseAdvanceResult](take(invoke("advanceGoalPhase",
+          NativeWorkflowOperationInputFixture.advance(id.value))))
+        def current() = {
+          var recorded = Option.empty[InstanceRecord]
+          prepare(call => call.goalCurrentC(id).map(value => { recorded = Some(value); () }))
+          recorded.get
+        }
+        def work() = {
+          var returned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
+          prepare(call => call.goalWorkC(id).map(value => { returned = Some(value); () }))
+          returned.get
+        }
+        def order(value: WorkflowInteraction[S.Request, Nothing]) = value.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]]
+        def input(value: WorkflowInteraction[S.Request, Nothing]) = order(value).request.input.get.value
+        def result(value: WorkflowInteraction[S.Request, Nothing], outcome: String, executor: String) = {
+          val request = order(value).request
+          val selected = input(value).operatingProfile.get.dispatch.get
+          val disposition = order(value).requirement.disposition.get
+          val reference = ContextReference("fixture-result:" + request.continuationId.value, "1")
+          ContinuationResult(value.handle, request.runId, request.continuationId, request.expectedRevision, request.context.snapshot,
+            TypedValue(S.resultCodec.typeIdentity, S.Result(outcome, "Fixture " + outcome, Vector.empty)), reference, Vector.empty,
+            ExecutionEvidence(Vector(reference), Some(executor), execution = Some(ExecutionObservation(
+              disposition.placement, disposition.originContextIdentity, executor, selected.role))))
+        }
+        def submit(value: ContinuationResult[S.Result]) =
+          invoke("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(value)))
+
+        val first = advance()
+        val original = work()
+        val rolled = result(original, "declined", "fixture-declining-editor")
+        read_value[V.GoalPhaseWorkSubmissionResult](take(submit(rolled))).accepted shouldBe true
+        val retained = current()
+        retained.currentProgression shouldBe Some(ProgressionReference("phase.Implementation"))
+        retained.suspension shouldBe empty
+        val replacement = advance()
+        val next = work()
+        input(next).operatingProfile.get.dispatch.get.candidates shouldBe
+          input(original).operatingProfile.get.dispatch.get.candidates.drop(1)
+        input(next).candidate shouldBe input(original).candidate
+        input(next).selectedPlan shouldBe input(original).selectedPlan
+        input(next).generation shouldBe input(original).generation
+        input(next).repairProgress shouldBe input(original).repairProgress
+        replacement.sessionId shouldBe first.sessionId
+        order(next).request.continuationId should not be order(original).request.continuationId
+        current().history.take(retained.history.size) shouldBe retained.history
+        submit(rolled).isSuccess shouldBe false
+        submit(result(next, "completed", "fixture-declining-editor")).isSuccess shouldBe false
+
+        Files.writeString(root.resolve("repository").resolve(host.goal.candidatePaths.head), "object ReplacedEditor\n")
+        read_value[V.GoalPhaseWorkSubmissionResult](take(submit(result(next, "completed", "fixture-replacement-editor")))).accepted shouldBe true
+        val review = advance()
+        val reviewWork = work()
+        input(reviewWork).kind shouldBe "ReviewStep"
+        input(reviewWork).review.get.changedPaths shouldBe Vector(host.goal.candidatePaths.head)
+        _assert_product_check_(root, input(reviewWork).review.get.checks.last.stdout)
+        val accepted = result(reviewWork, "accept", "fixture-independent-reviewer")
+        val reference = V.WorkflowArtifactReference(accepted.resultReference.identity, accepted.resultReference.revision)
+        val observed = accepted.evidence.execution.get
+        val evidence = V.WorkflowExecutionEvidence(Vector(reference), accepted.evidence.workerIdentity, None,
+          Some(V.WorkflowExecutionObservation(observed.placement.value, observed.originContextIdentity,
+            observed.executorContextIdentity, observed.profileIdentity)))
+        submit(accepted).isSuccess shouldBe false
+        prepare(call => for {
+          verdict <- V.GoalPhaseWorkResult.createC(Record.data("outcome" -> "accept", "summary" -> accepted.result.value.summary))
+          saved <- NativeReviewPreparation.goalC(review.work.get.review.get.reviewContext.get,
+            verdict,
+            reference, evidence, "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+          _ <- call.createC("host_evidence", saved.recordIdentity, saved.record)
+        } yield ())
+        read_value[V.GoalPhaseWorkSubmissionResult](take(submit(accepted))).accepted shouldBe true
+        current().currentProgression shouldBe Some(ProgressionReference("phase.Closing"))
+      }
+    }
+
     for ((withDecisions, mapped, boundary, renewWindow) <- Vector((false, false, false, false), (true, false, false, false),
       (true, true, false, false), (true, true, true, false), (false, false, false, true))) {
     // Trace: spec:native-host-review-preparation, example:E1, rules:R1,R3,R4,R5, phase:6;

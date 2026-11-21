@@ -9,7 +9,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Diagnostic prefixes have distinct output identities; neither storage nor
   * extraction changes the original action outcome or repair accounting.
   * @since   Oct. 20, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeEvidence {
@@ -25,14 +26,15 @@ private[smworkflow] object GoalPhaseNativeEvidence {
       .map(_.admission.binding.dependency.repository).getOrElse(repository)
     CommonEvidence.Source(reference, actualrepository, phase,
       Option(payload.step).filterNot(_.startsWith("phase:")), session, output,
-      if (RepositorySyncNativeMergeValidation.productSuccessful(receipt, payload.selected(index).kind)) "passed" else "failed")
+      if (GoalPhaseNativeValidation.successful(Vector(receipt), Vector(payload.selected(index)))) "passed" else "failed")
   }
   def selected(payload: GoalPhaseNativeValidation.Payload, session: String, repository: String, phase: String): Option[Selected] =
     selectedAll(payload, session, repository, phase).headOption
   def selectedAll(payload: GoalPhaseNativeValidation.Payload, session: String, repository: String, phase: String): Vector[Selected] = {
     val selected = payload.receipts.zipWithIndex.filter { (r, i) =>
       r.termination == "exited" && r.exitCode.nonEmpty && payload.selected.lift(i).exists(c =>
-        c.identity == r.identity && (c.kind == WorkflowSbtValidation.Kind.Test || c.kind == WorkflowSbtValidation.Kind.TestOnly))
+        c.identity == r.identity && !c.carLint &&
+          (c.kind == WorkflowSbtValidation.Kind.Test || c.kind == WorkflowSbtValidation.Kind.TestOnly))
     }
     selected.map { (receipt, index) => Selected(receipt, _source(payload, index, session, repository, phase, "stdout")) }
   }
@@ -46,9 +48,9 @@ private[smworkflow] object GoalPhaseNativeEvidence {
     val legacy = selectedAll(payload, session, repository, phase)
     val diagnostic = payload.receipts.zipWithIndex.flatMap { (receipt, index) =>
       payload.selected.lift(index).filter(c => c.identity == receipt.identity &&
-        receipt.sbt.exists(f => f.outcome == WorkflowSbtValidation.Outcome.Failed ||
-          f.outcome == WorkflowSbtValidation.Outcome.Incomplete)).toVector.flatMap { _ =>
-        receipt.processObservation.toVector.flatMap { process =>
+        (receipt.carLint.exists(o => !o.passed) || receipt.sbt.exists(f => f.outcome == WorkflowSbtValidation.Outcome.Failed ||
+          f.outcome == WorkflowSbtValidation.Outcome.Incomplete))).toVector.flatMap { _ =>
+        receipt.processObservation.orElse(receipt.carLint.map(_.process)).toVector.flatMap { process =>
           Vector("stdout" -> process.stdout, "stderr" -> process.stderr).flatMap { (stream, capture) =>
             val text = WorkflowSbtCapture.text(capture)
             Option.when(text.textStatus != "unavailable" && text.value.nonEmpty)(

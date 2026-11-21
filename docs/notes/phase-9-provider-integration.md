@@ -35,3 +35,56 @@ establish deployed availability, a binary's source identity, live transport,
 independence, uncertainty recovery, or implementation/repair Takeover. These
 remain R1/R2 verification and delivery work; P9-01 stays unchecked pending
 assessment of this handoff and its missing connection.
+
+## Integrated handoff after R1 and R2
+
+The P9-01 inventory above is retained as the dated source observation. The
+following later evidence updates its connection gaps; it does not establish
+formal completion of CNCF Phase 80 or availability in another deployment. R1
+and R2 were recorded in native commits `6cd7da94cde71924240861bca6883b257c2ba889`
+and `b653569b38c26ebf04cba069eaed18fa42f7a978`, respectively.
+
+The supported supplied-review routes are the explicit
+`GoalPhaseService.runGoalPhaseApiReview` operation through the host-composed
+CNCF `AiRunnerSocketSet`, and the existing host-dispatched Agent Continuation
+prepared by `scripts/goal-phase-dispatch.py`. The API route requires a
+configured runner, current issued review and complete bounded package; the
+agent route requires an available delegated independent reviewer. Both use the
+existing typed Submit and Admission. The default package limit is 512 KiB;
+incomplete or oversized input takes the capable-agent route rather than being
+truncated. Configuration and requested profile describe selection, not proof of
+actual provider identity or availability. In particular, an inference API is
+not an editor. See [the routing specification](../spec/phase-9-provider-routing.md)
+for the configuration and attempt-state contract.
+
+The retained [paired review evidence](../../target/sm-workflow/tasks/phase9-main-20261121-01a0f928/p9-r1-paired-admission-fixture/api-agent-paired-admission-evidence.json)
+records isolated reviews with distinct issued continuations and equivalent
+material, identified by common SHA-256
+`edecc9797f4c8aa26c159d67ba5d0096c7163231a6b09cd86dd597ee799b193a`.
+Both returned reviews were accepted by ordinary native Admission. The API
+result recorded provider `gemma`, model `gpt-oss:20b`, and reported token
+usage; those are observations of that invocation, not deployment guarantees.
+The agent admission establishes the connected agent review in that fixture; it
+does not by itself establish a provider or model identity. Earlier API
+observations retained alongside it include a completed result rejected by
+Admission and a separate uncertain attempt; neither is a successful admission.
+
+The retained [editor takeover evidence](../../target/sm-workflow/tasks/phase9-main-20261121-01a0f928/p9-r2-live-editor-takeover-evidence.json)
+records real delegated actors in an isolated development fixture. Actual Compile
+failures led from `ordinary` to `difficult` on a subsequent RepairStep; the
+record identifies the departed executor, candidate, prior results and both
+validation references. Repair counts progressed from 0 to 1 to 2 under the
+same limit of 3 and remained 2 at ReviewStep. Replacement was submitted and
+ordinary independent review admitted; the departed continuation's stale Submit
+was rejected. This demonstrates that connected scenario, not every provider,
+failure mode or deployment.
+
+The selected R3 native validation receipt
+`1e38cd27b85901b813c8287578a48c2a:ordered-validation:596:validation` records
+successful Compile, FULL Test (3,085 tests), and FixCheck. FULL did not execute
+the new connected decline case in `ThreeWorkflowGoalOperationSpec` or the R2
+connected takeover CLI test: they are HEAVY tests and their execution is not
+established by that receipt. The observed isolated fixture evidence above is
+separate from those tests. No claim is made that all adapters or HEAVY tests
+have run, that all configured providers are available, or that a returned
+result bypasses normal Admission.

@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -90,8 +90,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     sbt: Option[WorkflowSbtValidation.Facts] = None,
     processObservation: Option[ProcessExecutionResult] = None,
     group: Option[RepositorySyncProgramImpact.Group] = None,
-    externalCapture: Option[WorkflowSbtCapture.ExternalReference] = None)
+    externalCapture: Option[WorkflowSbtCapture.ExternalReference] = None,
+    carLint: Option[GoalPhaseCarLint.Observation] = None)
   object Receipt {
+    private val _car_lint_schema = "sm-workflow.native-car-lint-receipt.v1"
+
     // Public Record serialization omits null-valued optional fields. Restrict
     // equivalence to these two legacy Facts fields; all other fields, including
     // unknown or nested fields, must still match the typed encoding exactly.
@@ -104,7 +107,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       facts.asJson == normalized
     }
     given Encoder[Receipt] = Encoder.instance(value => {
-      if (value.externalCapture.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.externalReceiptSchema.asJson,
+      if (value.carLint.nonEmpty) {
+        val observation = value.carLint.get
+        Json.obj("schemaVersion" -> _car_lint_schema.asJson, "identity" -> value.identity.asJson,
+          "root" -> observation.root.asJson, "process" -> WorkflowSbtCapture.encode(observation.process))
+      } else if (value.externalCapture.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.externalReceiptSchema.asJson,
         "identity" -> value.identity.asJson, "sbt" -> value.sbt.get.asJson,
         "externalCapture" -> value.externalCapture.get.asJson)
       else if (value.group.nonEmpty) Json.obj("schemaVersion" -> Json.fromString("sm-workflow.native-sbt-validation-group.v1"),
@@ -118,7 +125,17 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       value.sbt.fold(fields)(facts => fields.mapObject(_.add("sbt", facts.asJson)))
       }
     })
-    given Decoder[Receipt] = Decoder.instance(cursor => if (cursor.get[String]("schemaVersion").contains("sm-workflow.native-sbt-validation-group.v1")) for {
+    given Decoder[Receipt] = Decoder.instance(cursor => if (cursor.get[String]("schemaVersion").contains(_car_lint_schema)) for {
+      _ <- Either.cond(cursor.keys.exists(_.toSet == Set("schemaVersion", "identity", "root", "process")), (),
+        DecodingFailure("Malformed CAR lint receipt", cursor.history))
+      identity <- cursor.get[String]("identity")
+      rawRoot <- cursor.get[String]("root")
+      root <- scala.util.Try(java.nio.file.Path.of(rawRoot)).toEither.left.map(_ => DecodingFailure("Invalid CAR lint root", cursor.history))
+      raw <- cursor.get[Json]("process")
+      process <- WorkflowSbtCapture.decode(raw).left.map(DecodingFailure(_, cursor.history))
+      receipt <- carLintReceiptC(identity, root, process).toOption.toRight(DecodingFailure("Invalid CAR lint process", cursor.history))
+    } yield receipt
+    else if (cursor.get[String]("schemaVersion").contains("sm-workflow.native-sbt-validation-group.v1")) for {
       identity <- cursor.get[String]("identity")
       group <- cursor.get[RepositorySyncProgramImpact.Group]("group")
       _ <- Either.cond(id(identity) && group.valid, (), DecodingFailure("Invalid ordinary validation group", cursor.history))
@@ -158,7 +175,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
     /** The historical merge-repair parent derived six fields, including sbt:null. */
     val mergeRepairEncoder: Encoder[Receipt] = Encoder.instance(value =>
-      if (value.processObservation.nonEmpty || value.group.nonEmpty || value.externalCapture.nonEmpty) summon[Encoder[Receipt]].apply(value)
+      if (value.processObservation.nonEmpty || value.group.nonEmpty || value.externalCapture.nonEmpty ||
+          value.carLint.nonEmpty) summon[Encoder[Receipt]].apply(value)
       else Json.obj("identity" -> value.identity.asJson, "termination" -> value.termination.asJson,
         "exitCode" -> value.exitCode.asJson, "stdout" -> value.stdout.asJson,
         "stderr" -> value.stderr.asJson, "sbt" -> value.sbt.asJson))
@@ -646,8 +664,15 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   } yield Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
     WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value, Some(facts), Some(process))
 
+  private[admission] def carLintReceiptC(identity: String, root: java.nio.file.Path,
+    process: ProcessExecutionResult): Consequence[Receipt] =
+    if (!id(identity)) N.uncertain("Invalid CAR lint receipt identity")
+    else GoalPhaseCarLint.observationC(root, process).map(observation =>
+      Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
+        WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value, carLint = Some(observation)))
+
   private def _receipt_kind(receipt: Receipt, expected: WorkflowSbtValidation.Kind): Boolean =
-    receipt != null && expected != null && receipt.sbt != null && receipt.group != null &&
+    receipt != null && expected != null && receipt.sbt != null && receipt.group != null && receipt.carLint.isEmpty &&
       (if (receipt.group.nonEmpty) expected == WorkflowSbtValidation.Kind.TestOnly && receipt.group.exists(_.valid)
       else receipt.sbt match {
       case None => expected == WorkflowSbtValidation.Kind.Test
@@ -666,7 +691,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
   /** CNCF bounds acquisition; retained historical and typed text preserve complete results. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
-    receipt != null && receipt.sbt != null && receipt.processObservation != null && receipt.group != null && receipt.externalCapture != null &&
+    receipt != null && receipt.sbt != null && receipt.processObservation != null && receipt.group != null &&
+      receipt.externalCapture != null && receipt.carLint != null &&
+      (if (receipt.carLint.nonEmpty) receipt.carLint.exists(observation =>
+        scala.util.Try(java.nio.file.Path.of(observation.root)).toOption.exists(root =>
+          carLintReceiptC(receipt.identity, root, observation.process).toOption.contains(receipt)))
+      else _stored_sbt_output_valid(receipt))
+
+  private def _stored_sbt_output_valid(receipt: Receipt): Boolean =
       (receipt.externalCapture.isEmpty || (receipt.group.isEmpty && receipt.processObservation.exists(p =>
         receipt.sbt.exists(f => WorkflowSbtCapture.externalMatches(receipt.externalCapture.get, f, p))))) &&
       (if (receipt.group.nonEmpty) receipt.group.exists(group => group.valid &&
