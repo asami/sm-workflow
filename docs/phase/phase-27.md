@@ -10,6 +10,12 @@ Checklist: [Phase 27 acceptance](phase-27-checklist.md)
 
 Extend the proven common sm-workflow Server and CLI client boundary from Phase 26 to practical selection among Codex, Claude Code, and optionally GitHub Copilot, with **separate execution route, provider/model and billing/allowance identity**. Choose suitable routes based on capability, availability, quality/convergence and verifiable cost constraints. Reuse existing provider and usage capabilities; do not create a parallel router or ledger.
 
+## AI Capability Pool and surplus-capacity allocation
+
+Treat all eligible AI execution routes as a **capability pool**, not a fixed Local -> API -> CLI hierarchy. After capability, quality, security, authorization and convergence constraints, choose the route with lowest **expected total incremental cost**, including retries, validation, latency constraints and the opportunity cost of consuming scarce allowance. Favor otherwise-expiring surplus capacity (e.g., eligible Copilot free allowance, subscription headroom or promotional API credits) when actually available, permitted for automation, and fit for the task; preserve scarce capacity for forecast demand. Never spend or exhaust allowances merely to use them.
+
+Track per route: provider/model, execution interface, account and shared quota pool, remaining allowance and reset/expiry when observable, confidence/unknown status, expected demand, measured success/retry cost, and whether incremental paid billing is authorized. Do not invent balances or assume free Copilot automation/SDK entitlements. Unknown capacity cannot be treated as verified free. Do not silently use paid overage or violate provider terms. Use deterministic scheduling, not an AI call to decide routing.
+
 ## Execution and billing model
 
 | Route | Execution boundary | Billing/allowance category |
@@ -35,11 +41,11 @@ SDK is **not** assumed to be an independent inference API or separate quota. Dis
 ### R2 — Practical additional route and cost policy
 - Preserve Codex/Claude CLI operation from Phase 26.
 - Qualify at least one additional real route from an available API, Copilot CLI or Copilot SDK using a bounded real task; choose based on actual accessible entitlement and supported execution.
-- Apply a deterministic policy combining task suitability, availability, quota eligibility and bounded cost; avoid an AI call solely for routing.
+- Apply a deterministic pool scheduler combining task suitability, quality, availability, shared quota eligibility, expiring surplus capacity, forecast demand, opportunity cost and bounded expected total cost; avoid an AI call solely for routing.
 - Reuse textus-ai provider adapters and existing Phase 9 Take Over semantics. A CLI agent continuation is not interchangeable with a stateless API inference response.
 
 ### R3 — Evidence and fallback
-- Measure attributable per-task route, observed token/credit usage (where provided), cost, latency, outcome and validation quality. Keep subscription allowance and billed dollars separate.
+- Measure attributable per-task route, observed token/credit usage (where provided), cost, latency, outcome and validation quality; record observed versus unknown allowance and whether surplus-capacity selection actually avoided incremental spend. Keep subscription allowance and billed dollars separate.
 - Demonstrate safe refusal/decline or a finite switch at an authorized continuation boundary when a route is unavailable/limited; preserve Workspace ownership, Admission and repair limits.
 - Verify that exhausted or unknown quota never silently causes paid execution; require explicit approval for paid routes.
 - Record reproducible evidence and independent review, with unverified scenarios clearly identified.
