@@ -1152,8 +1152,11 @@ inputs or AI validation. Those require their separate actual evidence.
 
 For actual runtime-issued implementation or repair with a current Step identity,
 return `decision-needed` with a complete raw `planRevision` Proposal, a fresh
-Plan revision and the actual causal reason when concrete necessary files are
-missing from that Step's inventory. Append only literal current-Step
+Plan revision when concrete necessary files are missing from that Step's
+inventory. Explain why those paths are needed in `planRevision.reason`. Use
+`"findings": []` when the result only proposes the inventory append. Reserve
+`findings` for independent concerns and preserve any actual findings in a mixed
+result. Append only literal current-Step
 `ownedPaths`; preserve Component, repository, purpose, Usage, acceptance,
 checks, dependencies, permitted effects and every other Plan value. Omit derived
 `effectiveAcceptance`.
