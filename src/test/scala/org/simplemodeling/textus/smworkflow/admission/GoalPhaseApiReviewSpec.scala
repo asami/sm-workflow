@@ -5,6 +5,9 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.resource.{InMemoryUrlResourceProvider, ResourceAccessTestProfile, ResourceReference, ResourceUrlPolicy}
+import java.nio.file.Path
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -68,6 +71,27 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
     }
     "decline an oversized UTF-8 package before looking up review material" in {
       GoalPhaseApiReview.packageC("あ" * 200000, null, "sm-workflow-work:fixture", 512 * 1024).toOption shouldBe Some(false)
+    }
+    "decline a bounded acquisition refusal without invoking the provider and retain other failures" in {
+      val url = "file:///private/tmp/review-package.json"
+      val reference = ResourceReference.parseC(url).toOption.get
+      val text = "{\"content\":\"日本\"}"
+      val context = ExecutionContext.withResourceAccessTestProfile(ExecutionContext.create(), ResourceAccessTestProfile(
+        urlPolicy = ResourceUrlPolicy(fileRoots = Vector(Path.of("/private/tmp"))),
+        urlProviders = Vector(new InMemoryUrlResourceProvider("file", Map(url -> text)))))
+      val input = V.GoalPhaseApiReviewInput("session", "work", "attempt", url)
+      var invoked = false
+      def run(s: String): Consequence[V.GoalPhaseApiReviewResult] = {
+        invoked = true
+        Consequence.stateConflict("provider must not run")
+      }
+      val size = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+      val declined = GoalPhaseApiReview.acquireAndReviewC(context, reference, size - 1, null, input, "continuation", run)
+      declined.toOption.map(_.status) shouldBe Some("DECLINED")
+      invoked shouldBe false
+      val missing = ResourceReference.parseC("file:///private/tmp/missing.json").toOption.get
+      GoalPhaseApiReview.acquireAndReviewC(context, missing, size, null, input, "continuation", run).isFaillure shouldBe true
+      invoked shouldBe false
     }
     "derive compact check facts and keep issue evidence references" in {
       val check = io.circe.parser.parse("""[{"identity":"test","termination":"exited","exitCode":0,"sbt":{"outcome":"succeeded"},"stdout":"large"}]""").toOption.get

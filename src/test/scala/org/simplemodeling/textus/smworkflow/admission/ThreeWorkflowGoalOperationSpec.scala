@@ -208,7 +208,9 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         submit(rolled).isSuccess shouldBe false
         submit(result(next, "completed", "fixture-declining-editor")).isSuccess shouldBe false
 
-        Files.writeString(root.resolve("repository").resolve(host.goal.candidatePaths.head), "object ReplacedEditor\n")
+        val replacementPath = root.resolve("repository").resolve(host.goal.candidatePaths.head)
+        Files.createDirectories(replacementPath.getParent)
+        Files.writeString(replacementPath, "object ReplacedEditor\n")
         read_value[V.GoalPhaseWorkSubmissionResult](take(submit(result(next, "completed", "fixture-replacement-editor")))).accepted shouldBe true
         val review = advance()
         val reviewWork = work()

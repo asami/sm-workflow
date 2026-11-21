@@ -13,7 +13,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.config.{ComponentParameterDecoder, ComponentParameterKey}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.resource.ResourceReadLimits
+import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceReference}
 import org.goldenport.cncf.provider.{ProviderCall, ProviderEngine, ProviderRequest}
 import org.goldenport.cncf.spi.ai.runner.{AiRecordRequest, AiRunnerRequirement, AiRunnerSocketSet}
 import org.goldenport.cncf.unitofwork.ExecUowM
@@ -201,12 +201,23 @@ private[smworkflow] object GoalPhaseApiReview {
           if (ref.scheme == "file") Consequence.success(ref)
           else Consequence.stateConflict("API review package requires a local file URI")
         }
-        packageJson <- selected.executionContext.readResourceText(reference, ResourceReadLimits(limit), Some(UTF_8))
-        eligible <- packageC(packageJson, actual, input.workResource, limit)
-        result <- if (!eligible) Consequence.success(V.GoalPhaseApiReviewResult("DECLINED", input.attemptIdentity,
-          continuation, None, None, None, None, "Incomplete, oversized or crossed supplied package", None))
-        else runC(selected, input, continuation, packageJson)
+        result <- acquireAndReviewC(selected.executionContext, reference, limit, actual, input, continuation,
+          text => runC(selected, input, continuation, text))
       } yield NativeWorkflowOperationOutput.response(result)
+    }
+  }
+  private[admission] def acquireAndReviewC(context: ExecutionContext, reference: ResourceReference, limit: Int,
+    actual: V.GoalPhaseAdvanceResult, input: V.GoalPhaseApiReviewInput, continuation: String,
+    run: String => Consequence[V.GoalPhaseApiReviewResult]): Consequence[V.GoalPhaseApiReviewResult] = {
+    def declined = Consequence.success(V.GoalPhaseApiReviewResult("DECLINED", input.attemptIdentity,
+      continuation, None, None, None, None, "Incomplete, oversized or crossed supplied package", None))
+    context.readResourceText(reference, ResourceReadLimits(limit), Some(UTF_8)) match {
+      case Consequence.Failure(conclusion) if conclusion.observation.taxonomy == Taxonomy.resourceInvalid &&
+          conclusion.observation.getMessage.contains("resource exceeds the runtime byte limit") => declined
+      case Consequence.Failure(conclusion) => Consequence.Failure(conclusion)
+      case Consequence.Success(text) => packageC(text, actual, input.workResource, limit).flatMap { eligible =>
+        if (eligible) run(text) else declined
+      }
     }
   }
   // Only the runner's typed budget refusals are attributable policy blocks.
