@@ -28,3 +28,7 @@ AI execution is not a Local -> API -> CLI hierarchy. After deterministic fixes, 
 
 ## Adopted development sequence (2026-11-22)
 After currently running Phases 7 and 9: **24 -> 28 -> 18 -> 23 -> 26 -> 27 -> 22 -> 17 -> 21 -> 15 -> 14**. Phase 26 common Server and multiple CLI integration, and Phase 27 AI Capability Pool cost optimization, are intentionally scheduled after Phase 23 to avoid premature heavy architecture work. No Phase 27.1/27.2 split is adopted. Phase 25 remains deferred; only proven bounded prerequisites may be scheduled through their owners. Existing Phase states and acceptance are unchanged.
+
+## Development order refinement — 2026-11-22
+
+Adopted order after active 7/9: **24 -> 28 -> 18 -> 23 -> 25 -> 26 -> 27 -> 22 -> 17 -> 21 -> 15 -> 14**. Move Phase 25 ahead of Phase 26 so its generic textus-ai Task API and provider capability contract is qualified before common Server/multi-CLI integration. Phase 27 then optimizes the combined AI Capability Pool, including otherwise-expiring eligible allowances. Prior sequence entries in this journal are historical and superseded for scheduling only; no status, Session, scope or acceptance changes.
