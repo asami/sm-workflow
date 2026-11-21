@@ -61,3 +61,7 @@ Completion requires T1–T3 and the selected connected routes through normal
 validation/independent review/closure. Unsupported providers and unknown quotas
 are explicit limits, not fabricated success or implicit paid fallback. Phase 25
 does not delay Phase 24 adoption and this plan starts no Goal/Session or retry.
+
+## Adopted scheduling update — 2026-11-22
+
+Phase 25 now follows Phase 23 and **precedes Phase 26** in the adopted sequence 24 -> 28 -> 18 -> 23 -> **25** -> 26 -> 27. Deliver the generic textus-ai Task API/provider boundary before common Server and multi-CLI expansion. Existing T1–T3 and P25 acceptance remain unchanged; no Session starts by this planning edit.
