@@ -65,7 +65,7 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 /** Strict v3 classification continuation, preserved historical codecs and real
   * production eligibility predicates. Native process evidence is separate.
   * @since   Nov.  3, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -146,6 +146,45 @@ final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with M
       R.decodeTarget(target.copy(phase = phase).asJson).isLeft shouldBe true
       R.decodeTarget(remote.copy(phase = Some("other-phase")).asJson).isLeft shouldBe true
       R.decodeTarget(target.asJson.mapObject(_.add("phase", Json.Null))).isLeft shouldBe true
+    }
+
+    "continue a local-main repair review with tracked worktree changes confined to its historical candidate" in {
+      Given("a local-main-local repair-614 candidate with historical MM and UU entries and a staged-only repaired observation")
+      val phase = Some("local-main-local")
+      val namespace = "repair-614"
+      val modified = G.DirtyPath('M', 'M', "ai/directive", None)
+      val conflict = G.DirtyPath('U', 'U', "src/Input.scala", None)
+      val before = observed.copy(dirty = Vector(modified, conflict))
+      val repaired = target.copy(phase = phase, namespace = namespace,
+        candidate = target.candidate.copy(before = before, pending = target.candidate.pending.copy(
+          reference = ContextReference("session:native-" + S.phaseKey(phase, namespace, "pending-merge"), "1"))),
+        validated = target.validated.copy(reference = ContextReference(
+          "session:native-" + S.phaseKey(phase, namespace, "merge-validated"), "1")))
+      val result = M.Result("decision-needed", "Technical mapping only", Vector.empty, Some(mapping))
+      val dirtylive = observed.copy(dirty = observed.dirty :+ modified)
+      val invalidstatus = Vector(('?', '?'), ('!', '!'), ('D', 'M')).map { (index, worktree) =>
+        val invalidbefore = before.copy(dirty = Vector(modified.copy(index = index, worktree = worktree), conflict))
+        repaired.copy(candidate = repaired.candidate.copy(before = invalidbefore))
+      }
+      val crossed = Vector(repaired.copy(namespace = "repair-615"), repaired.copy(phase = Some("local-main-remote")))
+      val invalid = Vector(repaired.copy(candidate = repaired.candidate.copy(after = dirtylive), actual = dirtylive)) ++
+        invalidstatus ++ crossed
+
+      When("the target decoder and retained semantic review classify the exact candidate and crossed variants")
+      val wire = repaired.asJson
+      val decoded = R.decodeTarget(wire)
+      val direction = take(R.semanticDirectionC(repaired, result, repaired.review.result))
+      val invalidtargets = invalid.map(value => R.decodeTarget(value.asJson))
+      val invaliddirections = invalid.map(value => R.semanticDirectionC(value, result, value.review.result))
+
+      Then("the canonical target and technical direction preserve the historical entries and refuse current dirt and crossed sources")
+      decoded shouldBe Right(repaired)
+      decoded.map(_.asJson) shouldBe Right(wire)
+      direction.target shouldBe repaired
+      direction.reference shouldBe repaired.review.result
+      direction.asJson.as[R.Direction] shouldBe Right(direction)
+      invalidtargets.foreach(_.isLeft shouldBe true)
+      invaliddirections.foreach(_.isSuccess shouldBe false)
     }
   }
 

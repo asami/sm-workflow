@@ -7208,6 +7208,11 @@ on = human-conflict-cancelled
 
 ##### TRANSITION
 
+to = MergeValidated
+on = native-review-diff-refresh-admitted
+
+##### TRANSITION
+
 to = RequiredLintContinuationAdmitted
 on = native-required-lint-continuation-admitted
 

@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.ComponentCreate
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeIdentity, *}
@@ -222,6 +223,31 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
             ContextReference(source.store.identity + ":native-" + failed.causation.value.stripPrefix(prefix), "1"))
         })
 
+    /** Examine both accepted merge parents against the retained candidate tree.
+      * Gitlinks, symbolic links and deletions belong to the candidate and its
+      * review, but have no ordinary worktree text to hand to FIX.
+      */
+    private def _regular_merge_paths_c(source: Source, paths: Vector[String]): Consequence[Vector[String]] =
+      if (paths.isEmpty) Consequence.success(paths)
+      else for {
+        local <- GitObjectId.parseC(source.basis.input.localTip)
+        remote <- GitObjectId.parseC(source.basis.input.remoteTip)
+        tree <- GitObjectId.parseC(source.basis.input.indexTree)
+        core = source.store.core
+        localdelta <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.TreeChanges(local, tree)).flatMap(_.valueC)
+        remotedelta <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.TreeChanges(remote, tree)).flatMap(_.valueC)
+        deltas = (localdelta ++ remotedelta).groupBy(_.path.value)
+        selected <- paths.foldLeft(Consequence.success(Vector.empty[String])) { (previous, path) => for {
+          values <- previous
+          entries = deltas.getOrElse(path, Vector.empty).map(row => row.newMode -> row.newBlob).distinct
+          next <- entries match {
+            case Vector((mode, Some(_))) if mode == "100644" || mode == "100755" => Consequence.success(values :+ path)
+            case Vector(("120000" | "160000", Some(_))) | Vector(("000000", None)) => Consequence.success(values)
+            case _ => N.invalid("failed merge repair has missing or contradictory candidate entry: " + path)
+          }
+        } yield next }
+      } yield selected
+
     /** Deleted and binary paths are outside the existing ordinary-text repair
       * capability. Read failures remain failures; they never become permission. */
     private[admission] def permittedPathsC(source: Source): Consequence[Vector[String]] = {
@@ -231,11 +257,16 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
         _ <- selectedpolicy.validateC
         _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
         target <- RepositorySyncFileEffect.targetC(source.store.core)
-        paths <- source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted
-          .foldLeft(Consequence.success(Vector.empty[String])) { (prior, name) => for {
+        requested = source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted
+        eligible <- if (source.basis.validationFailure.nonEmpty && source.basis.validated.payload.purposes.isEmpty)
+          _regular_merge_paths_c(source, requested) else Consequence.success(requested)
+        paths <- eligible.foldLeft(Consequence.success(Vector.empty[String])) { (prior, name) => for {
             values <- prior
             path <- WorkspaceFilePath.parseC(name)
             value <- WorkflowFileExecution.readBytesC(source.store.core, target, path, FileRepresentation.Identity)
+            _ <- if (value.bytes.nonEmpty || source.basis.validationFailure.isEmpty ||
+                source.basis.validated.payload.purposes.nonEmpty) Consequence.unit
+              else N.invalid("failed merge repair cannot read the regular candidate file: " + name)
             ordinary = value.bytes.exists { bytes => scala.util.Try {
               val decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
@@ -286,12 +317,17 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           RepositorySyncRepairInventory.valid(value, source.basis.input, source.basis.validationFailure))) Consequence.unit
         else N.invalid("automatic capture requires the actual admitted failed-candidate inventory")
       selectedpolicy = _current_policy(source, scope)
-      paths = selected.getOrElse(if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
+      requested = selected.getOrElse(if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
         else source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted)
+      paths <- if (source.basis.validationFailure.nonEmpty && selected.isEmpty && scope.isEmpty)
+        _regular_merge_paths_c(source, requested) else Consequence.success(requested)
       _ <- M.admitRequestC(M.Request(source.basis.input, findings, paths.map(M.File(_, "")), source.basis.validationFailure, scope), selectedpolicy)
       request = P.Request(source.store.identity, source.basis.next.revision.value.toString,
         paths.map(path => P.File(path, None, "")))
-      captured <- P.captureC(source.store.core, selectedpolicy, request)
+      captured <- P.captureC(source.store.core, selectedpolicy, request).recoverWith { reason =>
+        if (source.basis.validationFailure.nonEmpty) N.invalid("failed to read assigned merge repair text: " + reason.show)
+        else Consequence.Failure(reason)
+      }
       _ <- if (captured.instance == request.instance && captured.revision == request.revision &&
           captured.status == "captured" && captured.files.map(_.copy(expected = None)) == request.files &&
           captured.files.forall(_.expected.nonEmpty)) Consequence.unit

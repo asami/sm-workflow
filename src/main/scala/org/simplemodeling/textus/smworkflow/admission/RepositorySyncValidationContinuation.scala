@@ -19,6 +19,7 @@ import RepositorySyncManagedFetch as F
 import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as C
+import RepositorySyncReviewDiffRefresh as Refresh
 import RepositorySyncPurposeTestInterruption as T
 import RepositorySyncPurposeTestOnlyContinuation as AdditionalTest
 
@@ -205,6 +206,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncReviewInputContinuation.availableChoices(value)
   }
+  final case class RefreshReviewDiffTarget(value: Refresh.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = Refresh.choices
+  }
   final case class FormalFailureTarget(value: RepositorySyncFormalFailureContinuation.Target) extends AnyTarget {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncFormalFailureContinuation.availableChoices(value)
@@ -238,6 +243,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncRequiredLintContinuation.policy => RepositorySyncRequiredLintContinuation.decodeTarget(wire).map(RequiredLintTarget(_))
       case RepositorySyncReviewInputContinuation.policy | RepositorySyncReviewInputContinuation.supplementalPolicy =>
         RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
+      case Refresh.policy => Refresh.decodeTarget(wire).map(RefreshReviewDiffTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.reconstructionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
@@ -255,6 +261,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case OriginalTarget(_) => decodeAnswer(value)
     case RequiredLintTarget(_) => RepositorySyncRequiredLintContinuation.decodeAnswer(value)
     case ReviewInputsTarget(_) => RepositorySyncReviewInputContinuation.decodeAnswer(value)
+    case RefreshReviewDiffTarget(_) => Refresh.decodeAnswer(value)
     case FormalFailureTarget(target) => RepositorySyncFormalFailureContinuation.decodeAnswer(target, value).flatMap(answer =>
       Either.cond(RepositorySyncFormalFailureContinuation.validAssertions(target, answer.choice,
         answer.priorExecutionEnded, answer.acceptOriginalUncertainty), answer,
@@ -276,6 +283,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case RequiredLintTarget(value) => RepositorySyncRequiredLintContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case ReviewInputsTarget(value) => RepositorySyncReviewInputContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case RefreshReviewDiffTarget(value) => Refresh.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case FormalFailureTarget(value) => RepositorySyncFormalFailureContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
@@ -502,7 +511,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
           case None => _describe_v1_c(identity, d, definition, core, policy, acknowledge)
         }
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.MergeValidated")))
-        RepositorySyncRequiredLintContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+        Refresh.describeC(session, d, core, policy, acknowledge).flatMap {
+          case Some(value) => Consequence.success(value)
+          case None => RepositorySyncRequiredLintContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+        }
       else _describe_v1_c(identity, d, definition, core, policy, acknowledge)
   } yield result
 
@@ -540,6 +552,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RequiredLintTarget(_) => RepositorySyncRequiredLintContinuation.adoptC(input, d, definition, core, policy, installation, acknowledge)
       case ReviewInputsTarget(_) => review.map(port => RepositorySyncReviewInputContinuation.adoptC(input, d, definition,
         core, policy, installation, acknowledge, port)).getOrElse(N.invalid("review-input adoption requires the installed independent review Port"))
+      case RefreshReviewDiffTarget(value) => Refresh.adoptC(input, value, d, definition, core, policy, installation, acknowledge)
       case FormalFailureTarget(_) => RepositorySyncFormalFailureContinuation.adoptC(input, d, definition, core,
         policy, installation, acknowledge)
       case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,

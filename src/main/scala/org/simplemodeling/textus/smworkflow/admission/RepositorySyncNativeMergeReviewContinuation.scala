@@ -21,7 +21,7 @@ import RepositorySyncNativeProgressStore as N
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
@@ -57,7 +57,8 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       work <- existing match {
         case Some(work) => Consequence.success(work)
         case None => for {
-          captured <- I.captureC(source.store, source.validated, policy)
+          captured <- I.captureC(source.store, source.validated, policy,
+            requireCompleteParents = RepositorySyncReviewDiffRefresh.requiresCompleteDiffs(source.validated))
           signals <- _uncertainties_c(source)
           followup <- RepositorySyncReviewInputContinuation.followUpC(source.store, source.validated)
           input = captured.copy(judgmentMode = mode, uncertainties = (captured.uncertainties ++ signals ++ followup).distinct)

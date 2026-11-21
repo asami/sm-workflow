@@ -23,7 +23,7 @@ import RepositorySyncPostReviewValidation as P
 /** Append-only correction of input classification, followed by fresh independent
   * review. Native references retain the old checks and decision-needed result.
   * @since   Nov.  3, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object RepositorySyncReviewInputContinuation {
   val policy = "sm-workflow.repository-sync-review-input-continuation.v3"
@@ -137,6 +137,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     value.gitlinkPaths.forall(path => value.consumedPaths.contains(path) &&
       !value.unknownPaths.contains(path) && !value.binaryPaths.contains(path)) &&
     value.reason != null && value.reason.trim.nonEmpty
+  // The authenticated pre-repair snapshot can include tracked worktree changes.
+  // The repaired candidate and live observation still require staged-only status.
   private def _observed(value: G.Observed, historicalconflict: Boolean = false): Boolean = value != null && _text(value.branch) &&
     GitBranchName.parseC(value.branch).isSuccess &&
     _oid(value.head) && _oid(value.tree) && value.trackingTip != null && value.trackingTip.exists(_oid) &&
@@ -145,7 +147,10 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     value.dirty.forall(p => p != null && RepositorySyncNativeConflictInput.relative(p.path) &&
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative) &&
       ((!p.unmerged && p.worktree == ' ' && " MADRCT".contains(p.index)) ||
-        (historicalconflict && Set("DD", "AU", "UD", "UA", "DU", "AA", "UU").contains(s"${p.index}${p.worktree}"))))
+        (historicalconflict && (
+          Set("DD", "AU", "UD", "UA", "DU", "AA", "UU").contains(s"${p.index}${p.worktree}") ||
+          ("MTARC".contains(p.index) && "MTD".contains(p.worktree)) ||
+          (p.index == ' ' && "AMTDRC".contains(p.worktree))))))
   private def _identity(identity: String, namespace: String, key: String, phase: Option[String] = None): String =
     identity + ":native-" + N.phaseKey(phase, namespace, key)
   private def _historyPrefix(store: N.Store): String =
@@ -657,7 +662,14 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     } yield (progress.native, Some(evidence))
   }
 
-  def latestValidatedC(store: N.Store, current: InstanceRecord, candidate: N.Candidate): Consequence[Option[N.Stage]] = {
+  def latestValidatedC(store: N.Store, current: InstanceRecord, candidate: N.Candidate): Consequence[Option[N.Stage]] =
+    classifiedValidationC(store, current, candidate).flatMap {
+      case Some(base) => RepositorySyncReviewDiffRefresh.latestC(store, current, candidate, base).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
+  private[admission] def classifiedValidationC(store: N.Store, current: InstanceRecord,
+    candidate: N.Candidate): Consequence[Option[N.Stage]] = {
     val prefix = _historyPrefix(store)
     store.phaseHistory(current).reverse.find(e => e.currentProgression.contains(ProgressionReference("sync.MergeValidated")) &&
       e.revision.value > candidate.pending.record.revision.value && e.causation.value.startsWith(prefix + "review-inputs-")) match {

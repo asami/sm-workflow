@@ -16,7 +16,7 @@ import WorkflowManagedProcessExecution as E
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -64,30 +64,43 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       else policy.validateC
   }
 
-  def captureC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
+  def captureC(store: N.Store, source: N.Stage, policy: Policy,
+    requireCompleteParents: Boolean = false): Consequence[Request] = for {
     _ <- if (Set("MergeValidated", "PurposeChecked")(source.payload.stage)) Consequence.unit
       else invalid("review has no actual native selected validation")
-    request <- if (source.payload.purposes.nonEmpty) capturePurposeC(store, source, policy) else captureCandidateC(store, source, policy)
+    request <- if (source.payload.purposes.nonEmpty) capturePurposeC(store, source, policy)
+      else captureCandidateC(store, source, policy, requireCompleteParents)
   } yield request
 
   /** The same actual candidate facts also bound check-origin repair. Capturing
     * a failed batch neither issues a review nor manufactures review findings. */
-  private[admission] def captureCandidateC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
+  private[admission] def captureCandidateC(store: N.Store, source: N.Stage, policy: Policy,
+    requireCompleteParents: Boolean = false): Consequence[Request] = for {
     _ <- policy.validateC
     _ <- if (source.payload.validation.nonEmpty &&
         source.payload.indexTree.nonEmpty && source.payload.mergeHead.nonEmpty) Consequence.unit
       else invalid("candidate has no actual native selected validation")
     _ <- V.preconditionsC(store, source)
     state = source.payload.validation.get
-    localDiff <- diffC(store, source, source.payload.before.head, "local-diff", policy.maximumDiffBytes)
-    remoteDiff <- diffC(store, source, source.payload.mergeHead.get, "remote-diff", policy.maximumDiffBytes)
+    localcapture <- _capture_diff_c(store, source.payload.before.head)
+    remotecapture <- _capture_diff_c(store, source.payload.mergeHead.get)
+    _ <- if (requireCompleteParents && (!localcapture.complete || !remotecapture.complete))
+      N.invalid("the replacement review requires complete Git captures for both candidate parents")
+      else Consequence.unit
     localPaths <- pathsC(store.core, source.payload.before.head)
     remotePaths <- pathsC(store.core, source.payload.mergeHead.get)
     paths = (localPaths ++ remotePaths).distinct.sorted
-    _ <- V.preconditionsC(store, source)
-    prior <- source.payload.repairContext match {
+    repaircapture <- source.payload.repairContext match {
       case None => Consequence.success(None)
-      case Some(context) => diffC(store, source, context.indexTree, "repair-delta", policy.maximumDiffBytes)
+      case Some(context) => _capture_diff_c(store, context.indexTree).map(diff => Some(context -> diff))
+    }
+    _ <- V.preconditionsC(store, source)
+    localDiff <- _present_diff_c(store, source, source.payload.before.head, "local-diff", policy.maximumDiffBytes, localcapture)
+    remoteDiff <- _present_diff_c(store, source, source.payload.mergeHead.get, "remote-diff", policy.maximumDiffBytes, remotecapture)
+    prior <- repaircapture match {
+      case None => Consequence.success(None)
+      case Some((context, capture)) =>
+        _present_diff_c(store, source, context.indexTree, "repair-delta", policy.maximumDiffBytes, capture)
         .map(delta => Some(PriorReview(context, delta.text)))
     }
     input = Request(store.identity, source.record.revision.value.toString, source.payload.before.head,
@@ -135,13 +148,15 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       else invalid("review result has unknown decision, missing rationale or out-of-coverage findings")
   } yield ()
 
+  private final case class CapturedDiff(text: String, complete: Boolean, binary: Boolean)
   private final case class Diff(text: String, uncertainties: Vector[String])
 
-  /** The policy byte count bounds the inline preview, not semantic eligibility.
-    * CNCF still owns actual capture/resource limits. Truncation and binary facts
-    * remain explicit and cannot be accepted as an examined text review. */
   private def diffC(store: N.Store, source: N.Stage, parent: String,
-    output: String, inlineBytes: Int, workspace: Option[String] = None): Consequence[Diff] = for {
+    output: String, inlineBytes: Int, workspace: Option[String] = None): Consequence[Diff] =
+    _capture_diff_c(store, parent, workspace).flatMap(_present_diff_c(store, source, parent, output, inlineBytes, _))
+
+  private def _capture_diff_c(store: N.Store, parent: String,
+    workspace: Option[String] = None): Consequence[CapturedDiff] = for {
     oid <- GitObjectId.parseC(parent)
     captured <- workspace.fold(E.executeGitC(store.core, GitOperation.PendingDiff(oid)))(value => E.executeGitC(store.core, GitOperation.PendingDiff(oid), value))
     decoded = captured.valueC.toOption
@@ -150,11 +165,18 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
         java.nio.ByteBuffer.wrap(captured.processResult.stdout.content.toArray)).toString
       catch { case scala.util.control.NonFatal(_) => "Git diff text is unavailable; the managed capture is not complete UTF-8." }
     }
-    complete = decoded.nonEmpty
-    binary = decoded.exists(_.isBinary)
-    uncertainties = (if (!complete) Vector("Unexamined " + output + ": incomplete Git capture; no full coverage or semantic acceptance is claimed") else Vector.empty) ++
+  } yield CapturedDiff(text, decoded.nonEmpty, decoded.exists(_.isBinary))
+
+  /** The policy byte count bounds the inline preview. CNCF owns the actual
+    * capture/resource limits. Presentation retains truncation and binary facts. */
+  private def _present_diff_c(store: N.Store, source: N.Stage, parent: String,
+    output: String, inlinebytes: Int, captured: CapturedDiff): Consequence[Diff] = {
+    val text = captured.text
+    val complete = captured.complete
+    val binary = captured.binary
+    val uncertainties = (if (!complete) Vector("Unexamined " + output + ": incomplete Git capture; no full coverage or semantic acceptance is claimed") else Vector.empty) ++
       (if (binary) Vector("Unexamined binary content in " + output + ": textual diff reports metadata only; appropriate binary evidence is required") else Vector.empty)
-    archived <- if (text.getBytes(UTF_8).length <= inlineBytes || store.declaration.evidencePolicy.isEmpty)
+    val archived = if (text.getBytes(UTF_8).length <= inlinebytes || store.declaration.evidencePolicy.isEmpty)
       Consequence.success(None)
       else {
         val policy = store.declaration.evidencePolicy.get
@@ -167,17 +189,17 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
           case _ => None // Keep the captured text inline when storage is unconfirmed.
         }
       }
-    presented = archived match {
+    archived.map {
       case None => text
       case Some(reference) =>
-        val preview = text.codePoints().toArray.take(math.min(inlineBytes / 4, 4096))
+        val preview = text.codePoints().toArray.take(math.min(inlinebytes / 4, 4096))
         "Retained " + output + ": parent=" + parent + "; complete=" + complete + "; binary=" + binary +
           "; UTF-8 bytes=" + text.getBytes(UTF_8).length + ". Preview only; this is not full review coverage.\n" +
           "Read EvidenceService.readEvidenceRange with input {identity: \"" + reference.identity +
           "\", revision: \"1\", startCharacter: 0, characterCount: 16384}; offsets count Unicode code points.\n" +
           new String(preview, 0, preview.length)
-    }
-  } yield Diff(presented, uncertainties)
+    }.map(Diff(_, uncertainties))
+  }
 
   private def pathsC(core: ActionCall.Core, parent: String): Consequence[Vector[String]] = for {
     oid <- GitObjectId.parseC(parent)

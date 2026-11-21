@@ -569,6 +569,46 @@ real repair creates its own candidate and drops the old classification
 direction. This section defines source behavior; validation and installed
 qualification results are recorded separately.
 
+## Refresh an incomplete pending detailed review
+
+The existing `describeRepositorySyncValidationContinuation` operation can
+describe `sm-workflow.repository-sync-review-diff-refresh.v1` from an active
+`MergeValidated` frontier. It requires a previously classified v3 validation
+source and its actual pending, unsubmitted detailed review with an incomplete
+retained parent diff. The existing adoption DTO and
+`adoptRepositorySyncValidationContinuation` operation carry
+`RefreshIncompleteReviewDiffs` or passive `Defer`.
+
+Set the numeric `cncf.git.diff.maximum-bytes` and the applicable Git
+repository program's `gitRepositories` entry `limits.stdoutBytes` high
+enough for both parent-to-index diffs. The effective output bound is
+the smaller of the two. If `stdoutBytes` is omitted, the stream inherits
+`cncf.io.default-maximum-bytes` or the built-in default of 1,048,576
+bytes. Apply the settings to the actual workspace and fixed Git diff
+program used by this Session.
+
+For `RefreshIncompleteReviewDiffs`, independently provision the ordinary
+`repository-sync-validation-continuation` evidence for the exact target,
+choice, rationale, participant and reference. The lifecycle assertions
+are `priorExecutionEnded=true` and `acceptOriginalUncertainty=false`.
+The evidence must establish that the earlier review worker ended or no
+worker was launched. An absent submission alone does not establish either
+fact. A fully captured old review, a submitted result, uncertain review work,
+changed candidate or parent/index, crossed Session or participant,
+different classification lineage or validation receipt, and Purpose and
+triage work are outside the admitted scope.
+
+Adoption records the supersession through
+`native-review-diff-refresh-admitted` and remains in `MergeValidated`.
+The original review request and read reference, accepted classification
+result and successful validation receipts remain in native history.
+Then run ordinary `advanceRepositorySync`. It requalifies the unchanged
+candidate and prior checks, captures both parent diffs under the active
+host settings, and issues a new independent detailed review only when
+both diffs are complete. The earlier WorkOrder remains readable through
+its retained reference. The refresh reuses the native receipts without
+entering SBT validation.
+
 ## Post-review supplemental input validation
 
 An existing, unsuspended decision-needed merge with missing coverage can
