@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public raw control and explicit native detail consumers, including a new
   * runtime over the same retained store. Fixture authorship is not execution.
   * @since   Nov.  8, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   * The suite identity follows the frozen reference-continuation check selection.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -276,6 +276,20 @@ final class WorkflowResponseArtifactReferencesSpec extends AnyWordSpec with Give
       WorkflowRetainedSnapshot.decodeResourceC(WorkflowRetainedSnapshot.resource(reference) + "x").isSuccess shouldBe false
       WorkflowRetainedSnapshot.expandTextC(descriptor.noSpaces, _ => Consequence.stateConflict("selected native material unavailable"))
         .isSuccess shouldBe false
+    }
+
+    "expand serialized snapshot descriptors returned in the installed CLI's JSON spelling" in {
+      Given("the public RepositorySync preparation view with a selected snapshot descriptor")
+      val reference = WorkflowRetainedSnapshot.Reference(WorkflowRetainedSnapshot.schema, "component", "RepositorySyncWorkflow",
+        "revision", "session", "session:native-receipt", "1", "2", "purpose-progress", "serialized-json")
+      val public = DevelopmentOperationalView.json(WorkflowRetainedSnapshot.publicReference(reference).toRecord())
+      val snapshot = Json.obj("effects" -> Json.arr(Json.obj("retained_value" -> Json.Null)))
+      val description = Json.obj("target" -> Json.obj("progress_snapshot" -> Json.obj("retained_snapshot" -> public)))
+      When("normal Workflow Resource reads expand the exact returned reference")
+      val restored = take(WorkflowRetainedSnapshot.expandTextC(description.noSpaces, _ => Consequence.success(snapshot.noSpaces)))
+      Then("the surrounding CLI field names and the opaque snapshot contents remain exact")
+      io.circe.parser.parse(restored).toOption.get.hcursor.downField("target").get[String]("progress_snapshot").toOption shouldBe
+        Some(snapshot.noSpaces)
     }
   }
 }

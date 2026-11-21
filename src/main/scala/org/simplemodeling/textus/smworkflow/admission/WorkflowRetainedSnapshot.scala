@@ -25,7 +25,7 @@ import RepositorySyncNativeProgressStore as N
   * target codecs/admission. It neither authenticates Human consent nor changes
   * any historical target, accepted result, uncertainty or execution counter.
   * @since   Nov.  8, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object WorkflowRetainedSnapshot {
   val schema = "sm-workflow.retained-snapshot-reference.v1"
@@ -230,11 +230,11 @@ private[smworkflow] object WorkflowRetainedSnapshot {
   } yield GoalPhaseNativeMetadata.record(result)
 
   def expandTextC(text: String, read: ResourceReference => Consequence[String]): Consequence[String] =
-    if (text == null || !text.contains("retainedSnapshot")) Consequence.success(text)
+    if (text == null || !(text.contains("retainedSnapshot") || text.contains("retained_snapshot"))) Consequence.success(text)
     else io.circe.parser.parse(text).fold(_ => Consequence.success(text), json => expandC(json, read).map(_.noSpaces))
   private def expandC(json: Json, read: ResourceReference => Consequence[String]): Consequence[Json] = json.asObject match {
-    case Some(fields) if fields.keys.toSet == Set("retainedSnapshot") => for {
-      public <- NativeWorkflowOperationInput.decodeValueC[V.WorkflowRetainedSnapshotReference](fields("retainedSnapshot").get, "retainedSnapshot")
+    case Some(fields) if fields.size == 1 && (fields.contains("retainedSnapshot") || fields.contains("retained_snapshot")) => for {
+      public <- NativeWorkflowOperationInput.decodeValueC[V.WorkflowRetainedSnapshotReference](fields.toVector.head._2, "retainedSnapshot")
       reference <- fromPublicC(public)
       uri <- ResourceReference.parseC(public.resource)
       material <- read(uri)
