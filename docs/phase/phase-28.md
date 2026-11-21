@@ -10,10 +10,14 @@ Decision: [Deterministic-first development strategy](../journal/2026/11/2026-11-
 ## Goal
 Reduce AI calls, repair latency and unnecessary edits by applying proven programmatic compiler-diagnostic and lint fixes before AI repair. Preserve existing Candidate–Admission, workspace permissions, finite retries, test evidence and Take Over. No AI inference is permitted in the deterministic stage.
 
+## Architecture and initial language scope
+
+Provide a language-neutral deterministic repair interface for diagnostics, code actions, scoped edits and verification. The initial connected implementation is **Scala only**, through a Metals/LSP adapter and applicable Scalafix/Scalafmt tools. Java (JDT LS/OpenRewrite), TypeScript (TypeScript language server/ESLint), Python (Pyright-family/Ruff), and Dart are future adapters, **not** Phase 28 delivery or acceptance gates. LSP capability discovery is required; do not assume all servers support the same actions or edits. The existing `project.yaml` remains the configuration authority; Metals defaults to enabled (`true`) and may be disabled explicitly. Unavailable Metals falls back to other supported diagnostics without silently enabling AI.
+
 ## Delivery
 - D1 Inventory actual Scala 2.12/3 compiler diagnostics, Metals/LSP code actions, Scalafix/Scalafmt and current scala-lint/car-lint integration. Measure baseline error categories and costs. Do not assume every diagnostic has a safe code action.
 - D1a Define optional Metals usage in each project's `project.yaml` (enabled/disabled, executable or server configuration, timeout and resource limits). Default enabled (`true`) unless explicitly disabled; validate schema and configuration, and gracefully fall back to non-Metals diagnostics when unavailable. Never launch a server merely because it is installed.
-- D2 Implement a typed diagnostic -> candidate patch -> validation adapter. Select only unambiguous, semantics-preserving and explicitly allowlisted fixes; check revision, workspace scope and overlapping edits; fail closed on ambiguity.
+- D2 Implement a language-neutral diagnostic/code-action/patch interface with a Scala Metals adapter, and a typed diagnostic -> candidate patch -> validation adapter. Select only unambiguous, semantics-preserving and explicitly allowlisted fixes; check revision, workspace scope and overlapping edits; fail closed on ambiguity.
 - D3 Deliver useful deterministic fixes for imports, formatting, safe syntax/API migrations and other verified compile-error/hygiene categories. Integrate existing Scalafix/Scalafmt where compatible. Preserve original diagnostic and patch provenance.
 - D4 Strengthen scala-lint/car-lint warnings as Bad Smell candidates. A warning is resolved by a code fix or justified source-local annotation that the linter itself validates. Detect invalid, stale and unnecessary annotations. Do not automatically insert a justification annotation: AI/human judgement is required for acceptance.
 - D5 Recompile/re-lint and run impact-appropriate focused tests after each bounded patch batch. Revert unsafe/failed patches; preserve errors, history and counters. Route unresolved cases through existing AI Fix/Admission, without creating a second repair loop.
@@ -28,4 +32,6 @@ Reduce AI calls, repair latency and unnecessary edits by applying proven program
 - A fix is not successful merely because a diagnostic disappeared; compile, lint, focused tests and admission remain authoritative.
 
 ## Exit
+The common interface must be exercised by the real Scala implementation; interfaces alone or hypothetical other-language adapters do not satisfy acceptance.
+
 Demonstrate at least one real compiler-diagnostic deterministic fix, one lint/hygiene fix, correct unresolved-warning annotation validation, a safe refusal/fallback, and measurable before/after outcomes. Preserve all existing Phase/Session states. Planning does not start execution.
