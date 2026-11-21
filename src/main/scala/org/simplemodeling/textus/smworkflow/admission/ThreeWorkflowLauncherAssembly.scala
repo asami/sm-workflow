@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -95,6 +95,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitRepositorySyncPolicyDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   private val _standard_operations = publishedMcpOperations ++ Set(
+    "GoalPhaseService.runGoalPhaseApiReview",
     "GoalPhaseService." + GoalPhaseCandidateRecovery.describeOperation,
     "GoalPhaseService." + GoalPhaseCandidateRecovery.recoveryOperation,
     "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.describeOperation,

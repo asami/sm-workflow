@@ -691,6 +691,25 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
     } yield (controller.plan, extended)
 
+    def apiReviewWorkC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseApiReviewInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+      source <- F.retainedSessionC(input.sessionId, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      prepared <- located match {
+        case Work(value) if Set("ReviewStep", "ReviewPhase")(value.input.kind) => Consequence.success(value)
+        case _ => F.invalid("API review requires the current issued review")
+      }
+      mode <- NativeWorkflowIssuedWorkContext.goalModeC(prepared.input.kind)
+      actual <- NativeWorkflowIssuedWorkContext.fromIssuedC(prepared.work, mode, S.inputCodec)
+      reference <- WorkflowRetainedWork.referenceC(actual, core)
+      _ <- if (WorkflowRetainedWork.resource(reference) == input.workResource &&
+        source.current.suspension.exists(s => s.continuationIdentity.value == reference.identity &&
+          s.expectedRevision.value.toString == reference.revision)) Consequence.unit
+        else F.invalid("API review differs from the current native suspension")
+      result <- NativeWorkflowOperationOutput.goalWorkRequestC(prepared.work, core)
+    } yield result
+
     def diagnosticInformationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationResult] = for {
       _ <- IncrementalSbtDiagnosisInformation.validateC(input)

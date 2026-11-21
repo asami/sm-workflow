@@ -26,6 +26,135 @@ import tomllib
 
 SCHEMA = 'sm-workflow.caller-dispatch.v1'
 REVISION = 'standard-2026-11-01'
+REVIEW_PACKAGE_MAX = 512 * 1024
+
+REVIEW_RESULT_INSTRUCTIONS = (
+    'Return GoalPhaseWorkResult JSON with outcome, summary and findings. Use accept only with empty findings '
+    'and no relevant unresolved issues; repair requires findings; decision-needed identifies unresolved decisions. '
+    'Apply the issued acceptance and instructions; report each applicable required condition in acceptance. '
+    'For every relevant REVIEW issue, issueReport.dispositions must contain issueIdentity, disposition and rationale: '
+    'RESOLVED, RECURRING or NOT_REVIEWED. RECURRING requires a unique 1-based findingOrdinal; other dispositions '
+    'omit it. Report relevant non-REVIEW issues when needed to resolve them. Do not claim unobserved resolution. '
+    'Only an issued ReviewStep purposeRepair contract permits original-purpose repair findings: repairFindingSources '
+    'is {sources:[...]} with one 1-based findingOrdinal per finding; required-condition uses conditionIdentity; '
+    'step-purpose uses stepIdentity, rationale and affectedPaths. Cover every required failure. '
+    'reviewObservations uses {items:[{identity,category,summary,rationale}]}. '
+    'Only a ReviewStep repair whose sole remaining findings are terminal-LF corrections may use '
+    'completionConditions {kind:"terminal-lf",paths:[...]}, one owned path per finding. '
+    'Only ReviewPhase decision-needed with findings may propose planRevision {identity,revision,reason,plan}; '
+    'a review may instead request dependencyProposal for a decision, never both proposals. '
+    'Omit inapplicable optional fields instead of null, and identify evidence gaps.\n'
+)
+
+
+def compact_issues(value):
+    value = copy.deepcopy(value)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or not isinstance(value.get('issues'), list):
+        raise ValueError('Malformed issue context')
+    for issue in value['issues']:
+        summary = issue.get('summary')
+        if isinstance(summary, str) and len(summary) > 1024:
+            ref = alias(issue, 'evidenceReference', 'evidence_reference')
+            if not isinstance(ref, str) or not ref:
+                raise ValueError('Long issue diagnostic requires its retained evidence reference')
+            issue['summary'] = '[Diagnostic retained at evidenceReference]'
+    return value
+
+
+def check_facts(checks):
+    keys = ('identity', 'termination', 'exitCode', 'sbt')
+    result = []
+    for check in checks:
+        if not isinstance(check, dict) or not isinstance(check.get('identity'), str) or not check['identity']:
+            raise ValueError('Malformed issued check')
+        result.append({k: copy.deepcopy(alias(check, k, 'exit_code') if k == 'exitCode' else check.get(k))
+                       for k in keys})
+    return result
+
+
+def review_work_resource(original, request):
+    reference = (original.get('reference') if original is not request else
+                 alias(request, 'retainedWork', 'retained_work'))
+    resource = reference.get('resource') if isinstance(reference, dict) else None
+    if not isinstance(resource, str) or not resource.startswith('sm-workflow-work:'):
+        raise ValueError('Supplied review requires the retained work Resource')
+    return resource
+
+
+def review_package(request, files, complete, completeness_source, max_bytes=REVIEW_PACKAGE_MAX):
+    """Create the exact supplied review input; completeness is a caller attestation.
+
+    The byte limit applies to the canonical UTF-8 package, independently of any
+    provider token, output, capability or cost policy. No content is truncated.
+    """
+    original = request
+    request = selected_request(request)
+    if not isinstance(request, dict) or request.get('kind') != 'Request':
+        raise ValueError('An actual issued review Request is required')
+    work = request.get('work')
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    if not isinstance(work, dict) or work.get('kind') not in ('ReviewStep', 'ReviewPhase') or not isinstance(issued, dict):
+        raise ValueError('Supplied package requires issued review work')
+    result_type = alias(request, 'resultType', 'result_type')
+    if (result_type != 'GoalPhaseWorkResult' or
+            alias(issued, 'resultType', 'result_type') != result_type):
+        raise ValueError('Supplied review requires the actual issued result type')
+    requirement = alias(issued, 'executionRequirement', 'execution_requirement') or {}
+    if not isinstance(requirement, dict):
+        raise ValueError('Malformed review execution requirement')
+    disposition = requirement.get('disposition', {})
+    if (not isinstance(disposition, dict) or disposition.get('placement') != 'DELEGATED' or disposition.get('independence') != 'REQUIRED'
+            or not alias(disposition, 'originContextIdentity', 'origin_context_identity')
+            or not alias(issued, 'continuationId', 'continuation_id')):
+        raise ValueError('Supplied review requires a distinct delegated independent continuation')
+    candidate, review = work.get('candidate'), work.get('review')
+    if (not isinstance(candidate, dict) or not all(isinstance(candidate.get(k), str) and candidate[k] for k in ('head', 'tree'))
+            or not isinstance(review, dict) or not isinstance(review.get('diff'), str) or not review['diff']
+            or not isinstance(review.get('checks'), list) or not review['checks']):
+        raise ValueError('Issued review must contain the actual candidate, diff and checks')
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 0 < max_bytes <= REVIEW_PACKAGE_MAX:
+        raise ValueError('Package limit must be between 1 and 512 KiB')
+    if complete is not True or not isinstance(completeness_source, str) or not completeness_source.strip():
+        return dict(status='DECLINED', reason='completeness-unconfirmed')
+    if (not isinstance(files, list) or not files or any(
+            not isinstance(f, dict) or set(f) != {'name', 'content'} or
+            not isinstance(f['name'], str) or not f['name'].strip() or
+            not isinstance(f['content'], str) for f in files)
+            or len({f['name'] for f in files}) != len(files)):
+        return dict(status='DECLINED', reason='missing-or-ambiguous-supplied-files')
+    receipt = alias(work, 'checksReceipt', 'checks_receipt')
+    if not isinstance(receipt, str) or not receipt:
+        raise ValueError('Issued checks require retained receipt reference')
+    plan = alias(work, 'selectedPlan', 'selected_plan') or {}
+    context = issued.get('context') or {}
+    contract = dict(selectedPlan=alias(work, 'selectedPlan', 'selected_plan'), stepIdentity=alias(work, 'stepIdentity', 'step_identity'),
+                    effectiveAcceptance=alias(plan, 'effectiveAcceptance', 'effective_acceptance'),
+                    acceptance=plan.get('acceptance'), purposeRepair=alias(work, 'purposeRepair', 'purpose_repair'),
+                    issues=compact_issues(work.get('issues')), repairDirective=alias(work, 'repairDirective', 'repair_directive'),
+                    releaseRepairContract=alias(work, 'releaseRepairContract', 'release_repair_contract'),
+                    instructions=context.get('summary'), requiredFacts=alias(context, 'requiredFacts', 'required_facts'),
+                    completion=issued.get('completion'), evidence=issued.get('evidence'))
+    review_context = dict(metadata=review.get('metadata', []),
+                          priorReviews=alias(review, 'priorReviews', 'prior_reviews') or [],
+                          dependencyValidations=alias(review, 'dependencyValidations', 'dependency_validations') or [],
+                          triageJudgment=alias(review, 'triageJudgment', 'triage_judgment'),
+                          qualification=review.get('qualification'))
+    packet = dict(schema='sm-workflow.supplied-review.v1',
+                  workResource=review_work_resource(original, request),
+                  continuationId=alias(issued, 'continuationId', 'continuation_id'),
+                  resultType=result_type,
+                  kind=work['kind'], purpose=work.get('purpose'),
+                  candidate={k: candidate[k] for k in ('head', 'tree')},
+                  contract=contract, reviewContext=review_context, checksReceipt=receipt,
+                  review=dict(diff=review['diff'], checks=check_facts(review['checks']),
+                              changedPaths=copy.deepcopy(alias(review, 'changedPaths', 'changed_paths'))),
+                  files=copy.deepcopy(files), completenessSource=completeness_source)
+    encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    if len(encoded) > max_bytes:
+        return dict(status='DECLINED', reason='package-too-large', bytes=len(encoded), limit=max_bytes)
+    return dict(status='READY', packet=packet, bytes=len(encoded), limit=max_bytes)
 
 
 def alias(value, camel, snake):
@@ -54,8 +183,9 @@ def selected_request(value):
     return request
 
 
-def prepare(request, mapping, capabilities, root=None, repository=None, request_artifact=None):
+def prepare(request, mapping, capabilities, root=None, repository=None, request_artifact=None, supplied_review=None):
     """Capabilities are caller-exposed facts, not guessed from this table."""
+    original = request
     request = selected_request(request)
     issued = request.get('issued_work_context', request.get('issuedWorkContext'))
     if request.get('kind') != 'Request' or not isinstance(issued, dict):
@@ -74,6 +204,8 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
     if disposition.get('placement') != policy['placement']:
         raise ValueError('Logical policy contradicts issued disposition')
     if policy['placement'] == 'INLINE':
+        if supplied_review is not None:
+            raise ValueError('Supplied review requires delegated independent execution')
         if disposition.get('independence') == 'REQUIRED' or alias(requirement, 'reviewRequired', 'review_required'):
             raise ValueError('Independent work cannot run inline')
         return dict(schema=SCHEMA, request=copy.deepcopy(request), mapping=copy.deepcopy(mapping),
@@ -114,6 +246,16 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
             'DeliveryAcceptance': 'implementation'}.get(work['kind'])
     if role is None:
         raise ValueError('Unsupported semantic role')
+    if supplied_review is not None:
+        if role != 'review' or not isinstance(supplied_review, dict):
+            raise ValueError('Supplied package is only available to review')
+        packet = supplied_review.get('packet', {})
+        if not isinstance(packet, dict):
+            raise ValueError('Malformed supplied review package')
+        verified = review_package(original, packet.get('files'), True, packet.get('completenessSource'),
+                                  supplied_review.get('limit'))
+        if verified != supplied_review:
+            raise ValueError('Supplied package differs from its issued review or measured bytes')
     root = Path(root) if root else Path(__file__).resolve().parents[1]
     if repository is None:
         raise ValueError('Caller must supply the admitted working repository path')
@@ -127,11 +269,13 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
             raise ValueError('Public Request artifact differs from the unchanged issued Request')
         artifact = str(supplied)
     contract = tomllib.loads((root / 'agents' / ('sm_workflow_' + role + '.toml')).read_text())['developer_instructions']
-    if artifact is None and len(json.dumps(request, ensure_ascii=False)) > 131072:
+    if supplied_review is None and artifact is None and len(json.dumps(request, ensure_ascii=False)) > 131072:
         raise ValueError('Large issued Requests require their verified caller-retained request_artifact')
     state = dict(schema=SCHEMA, request=copy.deepcopy(request), mapping=copy.deepcopy(mapping),
                  policy=copy.deepcopy(policy), role=role, contract=contract, repository=repository,
                  requestArtifact=artifact, attempts=[], status='READY', launch=None)
+    if supplied_review is not None:
+        state['suppliedReview'] = copy.deepcopy(supplied_review)
     return resolve(state, capabilities)
 
 
@@ -158,17 +302,27 @@ def resolve(state, capabilities):
         if not continuation:
             raise ValueError('Missing native continuation identity')
         state['resolved'] = dict(candidate=candidate, concrete=concrete, source=fact['source'])
-        if state.get('requestArtifact'):
+        if state.get('suppliedReview'):
+            input_message = ('Review only the complete supplied package below. Do not read the repository, '
+                             'other files, tools, conversation history or external sources. Do not edit or execute commands. ' +
+                             REVIEW_RESULT_INSTRUCTIONS +
+                             json.dumps(state['suppliedReview']['packet'], ensure_ascii=False, sort_keys=True, separators=(',', ':')))
+        elif state.get('requestArtifact'):
             input_message = ('Read the exact caller-retained public Request artifact: ' + state['requestArtifact'] +
                              '\nFor an explicit native detail response, response is the selected original Request. '
                              'Preserve that unchanged Request, its issued context and return contract. '
                              'Read only the scope and evidence needed for this assignment; no private workflow storage.')
         else:
             input_message = ('Actual issued Request (unchanged):\n' + json.dumps(state['request'], ensure_ascii=False))
+        instructions = state['contract'] if not state.get('suppliedReview') else (
+            'Perform an independent read-only review using only the supplied package. '
+            'Do not invoke tools, access repository or network, mutate anything, or submit the result. '
+            'Return the typed semantic result required by the unchanged issued Request.')
         state['launch'] = dict(agent_type='default', fork_turns='none',
             task_name='sm_' + state['role'] + '_' + hashlib.sha256(continuation.encode('utf-8')).hexdigest()[:12],
             model=concrete['model'], reasoning_effort=concrete['effort'],
-            message=state['contract'] + '\n\nAdmitted working repository: ' + state['repository'] + '\n\n' + input_message)
+            message=instructions + ('\n\n' if state.get('suppliedReview') else
+                                   '\n\nAdmitted working repository: ' + state['repository'] + '\n\n') + input_message)
         state['status'] = 'PREPARED'
         return state
     state['status'] = 'UNAVAILABLE'
@@ -190,6 +344,11 @@ def launched(state, arguments, result):
     if state['status'] != 'PREPARED' or arguments != state['launch']:
         raise ValueError('Actual launch arguments and returned agent identity are required')
     identity = launch_identity(result)
+    if state.get('suppliedReview'):
+        issued = alias(state['request'], 'issuedWorkContext', 'issued_work_context')
+        disposition = alias(issued, 'executionRequirement', 'execution_requirement')['disposition']
+        if identity == alias(disposition, 'originContextIdentity', 'origin_context_identity'):
+            raise ValueError('Independent review requires a distinct actual executor context')
     state = copy.deepcopy(state)
     state['status'] = 'STARTED'
     state['launchReturn'] = copy.deepcopy(result)
@@ -278,7 +437,7 @@ def returned_result(request, value):
 
 
 def complete(state, agent_id, semantic_result, observed=None, resources=None):
-    if state['status'] != 'STARTED' or launch_identity(state['launchReturn']) != agent_id:
+    if state['status'] not in ('STARTED', 'UNCERTAIN') or launch_identity(state['launchReturn']) != agent_id:
         raise ValueError('Only the actual launched agent can supply its return')
     semantic_result = returned_result(state['request'], semantic_result)
     state = copy.deepcopy(state)
@@ -288,6 +447,106 @@ def complete(state, agent_id, semantic_result, observed=None, resources=None):
                                                        for k in ('model', 'effort')))
     # A semantic decision-needed/DECLINED is a returned result, never availability.
     return state
+
+
+def uncertain(state, agent_id, reason):
+    """Retain a lost response after a real start; it cannot select a fallback."""
+    if (state.get('status') != 'STARTED' or launch_identity(state.get('launchReturn')) != agent_id
+            or not isinstance(reason, str) or not reason.strip()):
+        raise ValueError('Uncertainty requires the actual started agent and a reason')
+    state = copy.deepcopy(state)
+    state.update(status='UNCERTAIN', uncertainty=reason)
+    return state
+
+
+def api_prepare(request, supplied_review, work_resource, attempt_identity, package_path):
+    """Prepare one explicit API operation; retaining this state is caller-owned."""
+    original = request
+    request = selected_request(request)
+    if not isinstance(supplied_review, dict) or not isinstance(supplied_review.get('packet'), dict):
+        raise ValueError('A ready supplied review package is required')
+    packet = supplied_review['packet']
+    if review_package(original, packet.get('files'), True, packet.get('completenessSource'),
+                      supplied_review.get('limit')) != supplied_review:
+        raise ValueError('Supplied package differs from issued review')
+    if (work_resource != packet['workResource'] or not isinstance(attempt_identity, str)
+            or not attempt_identity.strip() or attempt_identity.strip() != attempt_identity):
+        raise ValueError('Actual work resource and explicit attempt identity are required')
+    package_json = json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    path = Path(package_path)
+    if not path.is_absolute() or path.read_bytes() != package_json.encode('utf-8'):
+        raise ValueError('Retained package file must match canonical package bytes')
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    session = alias(issued, 'runId', 'run_id')
+    if not isinstance(session, str) or not session.strip():
+        raise ValueError('Issued review session identity is required')
+    return dict(schema='sm-workflow.api-review-attempt.v1', status='PREPARED', request=copy.deepcopy(request),
+                suppliedReview=copy.deepcopy(supplied_review), operation='GoalPhaseService.runGoalPhaseApiReview',
+                arguments=dict(input=dict(sessionId=session, workResource=work_resource,
+                                          attemptIdentity=attempt_identity, packageResource=path.as_uri())))
+
+
+def api_started(state, arguments, invocation_identity):
+    if (state.get('status') != 'PREPARED' or arguments != state.get('arguments') or
+            not isinstance(invocation_identity, str) or not invocation_identity.strip()):
+        raise ValueError('The actual API start and prepared arguments are required')
+    state = copy.deepcopy(state)
+    state.update(status='STARTED', invocationIdentity=invocation_identity)
+    return state
+
+
+def api_complete(state, invocation_identity, response):
+    if (state.get('status') not in ('STARTED', 'UNCERTAIN') or state.get('invocationIdentity') != invocation_identity
+            or not isinstance(response, dict)):
+        raise ValueError('Only the actual API invocation may return')
+    attempt = state['arguments']['input']['attemptIdentity']
+    packet = state['suppliedReview']['packet']
+    if (alias(response, 'attemptIdentity', 'attempt_identity') != attempt or
+            alias(response, 'continuationId', 'continuation_id') != packet['continuationId'] or
+            response.get('status') not in ('COMPLETED', 'DECLINED', 'UNAVAILABLE', 'FAILED', 'BLOCKED', 'UNCERTAIN')):
+        raise ValueError('API response crosses the issued attempt or continuation')
+    if response['status'] == 'BLOCKED' and response.get('message') not in ('ai.input-budget', 'ai.cost-budget'):
+        raise ValueError('BLOCKED requires an attributable policy reason')
+    if response['status'] == 'COMPLETED':
+        project_result(state['request'], response.get('result'))
+    state = copy.deepcopy(state)
+    state.update(status=response['status'] if response['status'] in ('UNCERTAIN', 'BLOCKED') else 'RETURNED',
+                 response=copy.deepcopy(response))
+    return state
+
+
+def api_uncertain(state, invocation_identity, reason):
+    if (state.get('status') != 'STARTED' or state.get('invocationIdentity') != invocation_identity
+            or not isinstance(reason, str) or not reason.strip()):
+        raise ValueError('Uncertainty requires the actual started invocation')
+    state = copy.deepcopy(state)
+    state.update(status='UNCERTAIN', uncertainty=reason)
+    return state
+
+
+def api_execution_evidence(state, references):
+    """Project only actual completed invocation and caller-retained references."""
+    if (state.get('status') != 'RETURNED' or state.get('response', {}).get('status') != 'COMPLETED'
+            or not references or any(not isinstance(ref, dict) or set(ref) != {'identity', 'revision'} or
+                                     not all(isinstance(v, str) and v for v in ref.values()) for ref in references)):
+        raise ValueError('Completed API review and actual retained references are required')
+    request = state['request']
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    disposition = alias(issued, 'executionRequirement', 'execution_requirement')['disposition']
+    origin = alias(disposition, 'originContextIdentity', 'origin_context_identity')
+    invocation = state.get('invocationIdentity')
+    capture = alias(request['work'], 'operatingProfile', 'operating_profile')
+    profile = capture.get('dispatch', {}).get('role') if isinstance(capture, dict) else None
+    if not all(isinstance(v, str) and v for v in (origin, invocation, profile)) or invocation == origin:
+        raise ValueError('Actual distinct invocation, origin and captured profile are required')
+    project_result(request, state['response'].get('result'))
+    evidence = dict(references=copy.deepcopy(references), workerIdentity=invocation,
+                    execution=dict(placement=disposition['placement'], originContextIdentity=origin,
+                                   executorContextIdentity=invocation, profileIdentity=profile))
+    model = state['response'].get('model')
+    if isinstance(model, str) and model:
+        evidence['modelIdentity'] = model
+    return evidence
 
 
 def inline_complete(state, origin_context, semantic_result, observed=None, resources=None):
@@ -330,9 +589,17 @@ def execution_evidence(state, references):
 
 
 def restore(state, request):
+    original = request
     request = selected_request(request)
     if state.get('schema') != SCHEMA or state.get('request') != request:
         raise ValueError('Retained resolution belongs to a different issued Request')
+    if state.get('suppliedReview'):
+        supplied = state['suppliedReview']
+        if not isinstance(supplied, dict) or not isinstance(supplied.get('packet'), dict):
+            raise ValueError('Malformed retained supplied review package')
+        packet = supplied.get('packet', {})
+        if review_package(original, packet.get('files'), True, packet.get('completenessSource'), supplied.get('limit')) != supplied:
+            raise ValueError('Retained supplied review package differs from its issued work')
     capture = alias(request['work'], 'operatingProfile', 'operating_profile')
     if not capture or state.get('policy') != capture.get('dispatch') or state['mapping']['revision'] != state['policy']['revision']:
         raise ValueError('Retained state contradicts its issued policy or mapping revision')
@@ -367,7 +634,7 @@ def dispatch(request, mapping, capabilities, launch, root=None, repository=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['prepare', 'launched', 'rejected', 'complete', 'inline_complete', 'execution_evidence', 'restore'])
+    parser.add_argument('operation', choices=['prepare', 'review_package', 'launched', 'rejected', 'complete', 'uncertain', 'api_prepare', 'api_started', 'api_complete', 'api_uncertain', 'api_execution_evidence', 'inline_complete', 'execution_evidence', 'restore'])
     parser.add_argument('input', help='JSON object containing operation arguments; output is stdout only')
     args = parser.parse_args()
     values = json.loads(Path(args.input).read_text())
