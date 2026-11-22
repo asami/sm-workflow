@@ -2612,6 +2612,16 @@ OperationResult
 | name | type | multiplicity |
 |------+------|--------------|
 | dispositions | GoalPhaseIssueDisposition | * |
+| deferredIssues | GoalPhaseIssueDeferral | * |
+
+## GoalPhaseIssueDeferral
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issueIdentity | string | 1 |
+| conditionIdentities | string | * |
 
 ## GoalPhaseFixChangeAssessment
 

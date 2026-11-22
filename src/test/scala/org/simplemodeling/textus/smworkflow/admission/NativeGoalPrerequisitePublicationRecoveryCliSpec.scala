@@ -884,7 +884,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
     When("the actual failed-check Repair requests the 31 missing documents through the ordinary scope Human")
     _submit(scenario, repair, Json.obj("outcome" -> "decision-needed".asJson,
       "summary" -> "SPECIFICATION-OWNED missing dependency document scope".asJson, "findings" -> Json.arr(),
-      "dependencyProposal" -> scopeproposal.asJson, "issueReport" -> json(V.GoalPhaseIssueReport(pending).toRecord())),
+      "dependencyProposal" -> scopeproposal.asJson, "issueReport" -> json(V.GoalPhaseIssueReport(pending, Vector.empty).toRecord())),
       "failed-check-scope-request")
     val questionoutput = scenario.advance(task)
     val question = questionoutput.business[V.GoalPhaseAdvanceResult]
@@ -912,7 +912,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
     When("that actual Repair requests source integration and normal Advance reaches an unanswered Human")
     _submit(scenario, resumed, Json.obj("outcome" -> "decision-needed".asJson,
       "summary" -> "SPECIFICATION-OWNED committed dependency source integration requires direction".asJson,
-      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord())),
+      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked, Vector.empty).toRecord())),
       "failed-check-source-request")
     val human = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
     Then("the source successor starts from a real pending Human and preserves prior failed facts")
@@ -1048,7 +1048,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
     Files.writeString(primarysource, primarybefore + "// The selected committed dependency includes the required integration document.\n")
     _submit(scenario, next, Json.obj("outcome" -> "completed".asJson,
       "summary" -> "SPECIFICATION-OWNED primary consumes the formally adopted committed integration source; runtime qualification remains required".asJson,
-      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord())),
+      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions, Vector.empty).toRecord())),
       "failed-check-current-source-completion")
     val callsbefore = _lines(scenario.root.resolve("primary-all-sbt-invocations.txt"))
     val publicationsbefore = _lines(scenario.root.resolve("primary-publication-attempts.txt"))
@@ -1308,7 +1308,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
     When("the actual RepairStep requests additional dependency scope while retaining every unresolved issue as BLOCKED")
     _submit(scenario, repair, Json.obj("outcome" -> "decision-needed".asJson,
       "summary" -> "SPECIFICATION-OWNED additional dependency document scope".asJson, "findings" -> Json.arr(),
-      "dependencyProposal" -> scopeproposal.asJson, "issueReport" -> json(V.GoalPhaseIssueReport(pending).toRecord())),
+      "dependencyProposal" -> scopeproposal.asJson, "issueReport" -> json(V.GoalPhaseIssueReport(pending, Vector.empty).toRecord())),
       "primary-history-scope-request")
     val questionoutput = scenario.advance(task)
     val question = questionoutput.business[V.GoalPhaseAdvanceResult]
@@ -1336,7 +1336,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
     When("that issued RepairStep honestly requests source integration and Advance emits an unanswered Human")
     _submit(scenario, resumed, Json.obj("outcome" -> "decision-needed".asJson,
       "summary" -> "SPECIFICATION-OWNED committed dependency source integration requires direction".asJson,
-      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord())),
+      "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked, Vector.empty).toRecord())),
       "primary-history-source-request")
     val human = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
     Then("the source description has a real pending Human frontier")

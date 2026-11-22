@@ -150,6 +150,7 @@ class DispatchSpec(unittest.TestCase):
         self.assertEqual(packet['contract']['selectedPlan']['effective_acceptance']['conditions'], ['required'])
         self.assertEqual(packet['contract']['issues']['issues'][0]['status'], 'OPEN')
         self.assertIn('RECURRING requires a unique 1-based findingOrdinal', A.REVIEW_RESULT_INSTRUCTIONS)
+        self.assertIn('issueReport.deferredIssues', A.REVIEW_RESULT_INSTRUCTIONS)
         self.assertEqual(packet['contract']['instructions'], 'Evaluate all required conditions')
         state = A.prepare(detail, self.mapping, self.facts, ROOT, ROOT, supplied_review=supplied)
         self.assertEqual(A.restore(state, detail), state)

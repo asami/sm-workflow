@@ -1310,6 +1310,11 @@ against the actual test diagnostics and review findings, including every require
 `REVIEW` issue. Return its typed coverage as `RESOLVED`, `RECURRING` or
 `NOT_REVIEWED`. A recurring issue's `findingOrdinal` is the actual one-based
 correspondence to the returned finding, never a made-up receipt or an issue index.
+For an accepting `ReviewPhase` after an actual adopted Phase deferral, keep
+`NOT_REVIEWED` and the observed unmet conditions for any original OPEN issue
+entirely attributable to that deferral. Include each such issue's
+`{issueIdentity,conditionIdentities}` in `issueReport.deferredIssues`. An
+unrelated or partially covered issue remains a blocker.
 An empty or absent report does not automatically accept the work. Keep actual
 reviewer/provider identity and observed coverage honest; passing tests alone do
 not supply independent review. Names, comments, examples and Given/When/Then

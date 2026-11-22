@@ -111,7 +111,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
       work.issues.get.issues.filter(issue => issue.repository == work.selectedPlan.repository &&
         work.stepIdentity.contains(issue.step) && issue.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "UNRESOLVED",
-          "The assigned value.txt still differs from the required expected newline; this batch did not correct it", None))))
+          "The assigned value.txt still differs from the required expected newline; this batch did not correct it", None)), Vector.empty))
     report.foreach(_.dispositions should not be empty)
     val assessment = Option.when(stalled)(V.GoalPhaseFixAssessment(
       V.GoalPhaseFixChangeAssessment("STANDARD_LOGIC", Vector("value.txt product input"), false, false,

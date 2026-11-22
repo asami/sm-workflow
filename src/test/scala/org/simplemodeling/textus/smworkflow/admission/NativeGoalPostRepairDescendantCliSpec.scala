@@ -62,7 +62,7 @@ final class NativeGoalPostRepairDescendantCliSpec extends AnyWordSpec with Match
       val work = actual.business[V.GoalPhaseAdvanceResult]
       val unresolved = work.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED")
       val issues = Option.when(unresolved.nonEmpty)(V.GoalPhaseIssueReport(unresolved.map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED", "Independent fixture review confirms the assigned correction", None))))
+        V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED", "Independent fixture review confirms the assigned correction", None)), Vector.empty))
       val result = _result("accept", issues)
       val reference = V.WorkflowArtifactReference(name, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)
@@ -114,7 +114,7 @@ final class NativeGoalPostRepairDescendantCliSpec extends AnyWordSpec with Match
       val open = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
       open should not be empty
       val fixed = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "FIXED",
-        "Assigned source now returns 42", None)))
+        "Assigned source now returns 42", None)), Vector.empty)
       Files.writeString(source, "object HistoryExample { val value: Int = 42 }\n")
       cli.submit(repair, _result("completed", Some(fixed), Some(manifest)), "descendant-accepted-release-repair")
 

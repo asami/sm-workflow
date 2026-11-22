@@ -121,6 +121,21 @@ it. `GoalPhaseNativeCandidateBoundarySpec` supplies focused codec obligations
 for this finite compatibility boundary; execution and installed old-to-new
 qualification remain parent-owned evidence.
 
+R8. The fresh independently evidenced `ReviewPhase` may accept with an
+original review issue still `OPEN`. In an accepting result, each such issue
+requires a `NOT_REVIEWED` disposition and an entry in
+`issueReport.deferredIssues` containing its `issueIdentity` and the nonempty
+set of `conditionIdentities` that account for the entire issue. The runtime
+reconstructs the exact Human adoption and checks the same Session, successor
+Plan, candidate, checks and retained original review. The issue must have
+been opened by that original decision-needed review. The fresh review must
+preserve the actual unmet observations for the adopted conditions.
+
+An issue without complete attribution, or one that also concerns a required
+or unrelated condition, continues to block acceptance. An attributed issue
+stays open in the retained issue ledger. Acceptance and subsequent recording
+use the existing review authority and closure rules.
+
 ## Executable examples
 
 E1. `GoalPhasePlanRevisionSpec` closes the accepted prefix, consumes one normal
@@ -147,6 +162,13 @@ episode with the explicitly selected old image, switches only its installation
 selector, and completes ordinary deferral adoption and fresh independent
 review with the new image. The same database, Session, candidate, checks,
 accepted prefix and counters must survive the switch.
+
+E4. `NativeGoalPhaseDeferredIssuesCliSpec` drives the old installed runtime
+through ordinary Plan adoption and a rejected acceptance with a retained
+open issue. Selecting the new locally published CAR preserves the same
+issued review. The runtime refuses mixed attribution, then accepts a new
+independently evidenced result with complete attribution and reaches normal
+local completion with the previous checks and repair count.
 
 These are authored specification obligations, not execution results or genuine
 Human direction for a consumer Session. The parent owns generation, focused

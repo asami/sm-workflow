@@ -615,6 +615,45 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       adoptedC(adopted, captured, "duplicate-direction") shouldBe a[Consequence.Failure[?]]
     }
 
+    "keep an attributed issue open and reject required issues or a reused prior evidence identity" in {
+      import GoalPhaseFixIssues as I
+      val phase = _deferral_review
+      val request = _review_request(phase)
+      val result = _deferral_result(phase)
+      val submitted = _submitted(request, result)
+      val prior = _take(GoalPhaseNativeReview.retainPriorC(Vector.empty, request, submitted))
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, submitted.resultReference.identity, phase))
+      val captured = _take(captureSemanticProposalC(paused, result.planRevision.get, None))
+      val adopted = _take(adoptedC(paused, captured, "SPECIFICATION-OWNED independent Human direction"))
+      val state = _take(I.completedC(request, result, submitted.resultReference.identity))
+      val issue = state.get.issues.head
+      val successor = _review_request(adopted)
+      val followup = successor.copy(review = successor.review.map(_.copy(priorReviews = prior)), issues = state)
+      val disposition = I.Disposition(issue.identity, "NOT_REVIEWED", "The original finding is wholly deferred", None)
+      val deferral = I.Deferral(issue.identity, Vector("closure"))
+      val report = I.Report(Vector(disposition), Some(Vector(deferral)))
+      val acceptance = result.copy(outcome = "accept", findings = Vector.empty, planRevision = None, issueReport = Some(report))
+      val proof = _take(I.adoptedDeferralC(request, result, submitted.resultReference, paused, adopted, state))
+
+      val settled = _take(I.completedC(followup, acceptance, "fresh-review", Some(proof))).get
+      settled.issues.head shouldBe issue.copy(latestDisposition = Some("NOT_REVIEWED"))
+      settled.history shouldBe state.get.history
+      S.resultCodec.decode(S.resultCodec.encode(acceptance)) shouldBe Right(acceptance)
+      I.completedC(followup, acceptance, "fresh-review").isSuccess shouldBe false
+
+      val mixed = report.copy(deferredIssues = Some(Vector(deferral.copy(conditionIdentities = Vector("closure", "behavior")))))
+      I.completedC(followup, acceptance.copy(issueReport = Some(mixed)), "fresh-review", Some(proof)).isSuccess shouldBe false
+
+      val repeatedRequest = request.copy(issues = state)
+      val repeated = result.copy(issueReport = Some(I.Report(Vector(disposition.copy(disposition = "RECURRING",
+        findingOrdinal = Some(1))))))
+      val repeatedState = _take(I.completedC(repeatedRequest, repeated, submitted.resultReference.identity))
+      val repeatedPrior = _take(GoalPhaseNativeReview.retainPriorC(Vector.empty, repeatedRequest, _submitted(repeatedRequest, repeated)))
+      val repeatedProof = _take(I.adoptedDeferralC(repeatedRequest, repeated, submitted.resultReference, paused, adopted, repeatedState))
+      val repeatedFollowup = followup.copy(issues = repeatedState, review = successor.review.map(_.copy(priorReviews = repeatedPrior)))
+      I.completedC(repeatedFollowup, acceptance, "fresh-review", Some(repeatedProof)).isSuccess shouldBe false
+    }
+
     "admit 64-character candidate Git object IDs and refuse malformed head or tree IDs" in {
       Given("an actual-shaped SPECIFICATION-OWNED unmet Phase review and its exact captured deferral")
       val review = _deferral_review

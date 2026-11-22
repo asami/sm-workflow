@@ -134,7 +134,7 @@ final class NativeGoalStepReviewRequestCliSpec extends AnyWordSpec with Matchers
       "Specification-owned exact issue disposition", None))
     V.GoalPhaseWorkResult(outcome, "Specification-owned " + work.kind + " " + outcome,
       if (outcome == "repair") Vector("Correct the selected documentation cleanup defect") else Vector.empty, acceptance,
-      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)),
+      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions, Vector.empty)),
       None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   }
   private def _checks(scenario: F.Scenario): Vector[String] =

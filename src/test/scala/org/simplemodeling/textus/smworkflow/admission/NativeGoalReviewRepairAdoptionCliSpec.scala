@@ -156,7 +156,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       if (work.kind == "RepairStep") "FIXED" else if (outcome == "accept") "RESOLVED" else "NOT_REVIEWED",
       "SPECIFICATION-OWNED exact issue coverage", None))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + work.kind + " " + outcome, findings, acceptance,
-      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)), None, None, None, None,
+      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions, Vector.empty)), None, None, None, None,
       GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None, diagnosticRepair = None)
   }
   private def _review(cli: Cli, issued: Invocation, value: V.GoalPhaseWorkResult, name: String): V.GoalPhaseAdvanceResult = {
@@ -495,7 +495,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
         V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED actual correction", None))
       val repaired = completed.copy(acceptance = Some(V.GoalPhaseAcceptanceReport(Vector(
         V.GoalPhaseAcceptanceObservation(added.identity, "satisfied", "SPECIFICATION-OWNED correction observed")), Vector.empty)),
-        issueReport = Some(V.GoalPhaseIssueReport(fixed)))
+        issueReport = Some(V.GoalPhaseIssueReport(fixed, Vector.empty)))
       When("normal installed Submit completes the repair and Advance performs current checks")
       cli.submit(repair, repaired, V.WorkflowArtifactReference("installed-repaired-step", "1"))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true

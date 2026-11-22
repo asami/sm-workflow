@@ -133,7 +133,7 @@ final class NativeGoalStepTestReportRepairCliSpec extends AnyWordSpec with Match
     val result = Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-OWNED tiny fixture work".asJson,
       "findings" -> Json.arr())
     if (request.work.get.kind == "ImplementStep") result
-    else result.mapObject(_.add("issueReport", json(V.GoalPhaseIssueReport(dispositions).toRecord())))
+    else result.mapObject(_.add("issueReport", json(V.GoalPhaseIssueReport(dispositions, Vector.empty).toRecord())))
   }
   private def _evidence(scenario: F.Scenario, purpose: String, described: F.Result,
     answer: Json, reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence, label: String,

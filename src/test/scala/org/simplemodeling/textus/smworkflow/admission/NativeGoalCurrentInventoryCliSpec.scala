@@ -486,7 +486,7 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       val result = _configuredResult("decision-needed", Some(proposal)).copy(
         fixAssessment = GoalPhaseFixAssessment.publicReport(Some(progressing)),
         issueReport = Some(V.GoalPhaseIssueReport(assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-          "BLOCKED", "SPECIFICATION-OWNED existing issue remains unresolved while needed files are supplied", None)))))
+          "BLOCKED", "SPECIFICATION-OWNED existing issue remains unresolved while needed files are supplied", None)), Vector.empty)))
       When("the actual Repair returns its required report, descriptive findings, retained BLOCKED issues and progressing metadata")
       _submit(scenario, repair, result, "actual-progressing-inventory")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
@@ -583,7 +583,7 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       repair.work.get.review should not be empty
       val assigned = repair.work.get.issues.get.issues.filter(issue => issue.status != "RESOLVED" && issue.status != "DECLINED")
       val blocked = V.GoalPhaseIssueReport(assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-        "BLOCKED", "The original issue awaits the required inventory", None)))
+        "BLOCKED", "The original issue awaits the required inventory", None)), Vector.empty)
       val dependency = GoalPhaseDependencyScope.Proposal("specification-dependency-concern", "1", "REPAIR",
         GoalPhaseDependencyScope.Component("SmWorkflow", scenario.plan.repository, "repository"),
         GoalPhaseDependencyScope.Component("OtherComponent", "other-library", "repository"),
@@ -687,7 +687,7 @@ class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers with G
       _advance(scenario, task) shouldBe rereview
       val reviewedissues = rereview.work.get.issues.get.issues.filter(issue => issue.status != "RESOLVED" && issue.status != "DECLINED")
       val resolved = V.GoalPhaseIssueReport(reviewedissues.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-        "RESOLVED", "Independent review covers the corrected behavior", None)))
+        "RESOLVED", "Independent review covers the corrected behavior", None)), Vector.empty)
       _review_(rereview, rechecked, _result("accept").copy(issueReport = Some(resolved)), "review-inventory-final-review")
       val waiting = scenario.advance(task)
       val closure = _advance(scenario, waiting)

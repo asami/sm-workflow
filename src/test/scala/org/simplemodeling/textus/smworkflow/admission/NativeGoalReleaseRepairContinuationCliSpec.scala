@@ -256,14 +256,14 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
     open should not be empty
     Files.writeString(repo.resolve("docs/usage.md"), "The accepted input is exactly expected followed by LF.\n")
     val fixed = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "FIXED",
-      "Corrected the actual usage contract", None)))
+      "Corrected the actual usage contract", None)), Vector.empty)
     cli.submit(repair, _result(s, repair, "completed", issues = Some(fixed)), V.WorkflowArtifactReference("terminal-release-fix", "1"))
     val rereviewcall = cli.advance(started.sessionId)
     val rereview = rereviewcall.business[V.GoalPhaseAdvanceResult]
     rereview.work.get.kind shouldBe "ReviewPhase"
     rereview.work.get.completed shouldBe integrated.work.get.completed
     val resolved = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED",
-      "Independent fixture review confirms the unchanged accepted input", None)))
+      "Independent fixture review confirms the unchanged accepted input", None)), Vector.empty)
     cli.review(rereviewcall, _result(s, rereview, "accept", issues = Some(resolved)), "terminal-release-rereview")
     val finalwait = cli.advance(started.sessionId)
     finalwait.business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
@@ -685,7 +685,7 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         val repo = Path.of(s.host.target.root)
         Files.writeString(repo.resolve("docs/usage.md"), "The accepted input is exactly expected followed by LF.\n")
         val fixed = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "FIXED",
-          "Corrected the exact original usage-contract blocker", None)))
+          "Corrected the exact original usage-contract blocker", None)), Vector.empty)
         cli.submit(repair, _result(s, repair, "completed", issues = Some(fixed)), V.WorkflowArtifactReference("fixture-release-fix", "1"))
         val rereviewcall = cli.advance(session)
         val rereview = rereviewcall.business[V.GoalPhaseAdvanceResult]
@@ -695,7 +695,7 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         rereview.work.get.review.get.priorReviews.exists(value => take(value.toJsonStringC).contains("fixture-integrated-review")) shouldBe true
         _checks(s).size shouldBe oldchecks.size + 1
         val resolved = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED",
-          "Scoped independent fixture review confirms the required condition", None)))
+          "Scoped independent fixture review confirms the required condition", None)), Vector.empty)
         cli.review(rereviewcall, _result(s, rereview, "accept", issues = Some(resolved)), "fixture-release-rereview")
         val finalwait = cli.advance(session)
         finalwait.business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"

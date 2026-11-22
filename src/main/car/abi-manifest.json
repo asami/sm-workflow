@@ -5129,6 +5129,30 @@
               "type": "GoalPhaseIssueDisposition",
               "multiplicity": "*",
               "required": false
+            },
+            {
+              "name": "deferredIssues",
+              "type": "GoalPhaseIssueDeferral",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueDeferral",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issueIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "conditionIdentities",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },

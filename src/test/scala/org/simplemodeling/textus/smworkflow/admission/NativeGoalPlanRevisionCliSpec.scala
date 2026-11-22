@@ -221,7 +221,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
 
       Given("a separately observed SPECIFICATION-OWNED independent acceptance of this exact candidate and its successful checks")
       val reviewresult = V.GoalPhaseWorkResult("accept", "SPECIFICATION-OWNED independent remaining-purpose acceptance",
-        Vector.empty, None, None, review.work.get.issues.map(_ => V.GoalPhaseIssueReport(Vector.empty)), None, None, None, None, None,
+        Vector.empty, None, None, review.work.get.issues.map(_ => V.GoalPhaseIssueReport(Vector.empty, Vector.empty)), None, None, None, None, None,
         dependencyValidation = None, diagnosticRepair = None)
       val reviewreference = _reference("remaining-review")
       val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("specification-independent-reviewer"), None, None)

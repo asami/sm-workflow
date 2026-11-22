@@ -82,7 +82,7 @@ final class StandardWorkflowStartOperationSpec extends AnyWordSpec with Matchers
           None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
           .copy(planRevision = GoalPhasePlanRevision.publicProposal(proposal), issueReport = Some(V.GoalPhaseIssueReport(
             assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-              if (outcome == "decision-needed") "BLOCKED" else "FIXED", "Exact assigned test correction", None)))))
+              if (outcome == "decision-needed") "BLOCKED" else "FIXED", "Exact assigned test correction", None)), Vector.empty)))
       }
       Given("standard public Start, an accepted Step and a real failed whole-Phase Test in an isolated repository")
       Fixture.inKnownEpisode(root, initialize = true) { episode =>

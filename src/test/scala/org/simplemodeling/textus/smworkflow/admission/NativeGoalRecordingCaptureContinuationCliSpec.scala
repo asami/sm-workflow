@@ -60,7 +60,7 @@ final class NativeGoalRecordingCaptureContinuationCliSpec extends AnyWordSpec wi
       val work = actual.business[V.GoalPhaseAdvanceResult]
       val unresolved = work.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED")
       val issues = Option.when(unresolved.nonEmpty)(V.GoalPhaseIssueReport(unresolved.map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED", "Independent fixture review confirms the assigned correction", None))))
+        V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED", "Independent fixture review confirms the assigned correction", None)), Vector.empty))
       val result = _result("accept", issues)
       val reference = V.WorkflowArtifactReference(name, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)

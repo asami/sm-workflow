@@ -30,11 +30,15 @@ REVIEW_PACKAGE_MAX = 512 * 1024
 
 REVIEW_RESULT_INSTRUCTIONS = (
     'Return GoalPhaseWorkResult JSON with outcome, summary and findings. Use accept only with empty findings '
-    'and no relevant unresolved issues; repair requires findings; decision-needed identifies unresolved decisions. '
+    'and no blocking unresolved issues; repair requires findings; decision-needed identifies unresolved decisions. '
     'Apply the issued acceptance and instructions; report each applicable required condition in acceptance. '
     'For every relevant REVIEW issue, issueReport.dispositions must contain issueIdentity, disposition and rationale: '
     'RESOLVED, RECURRING or NOT_REVIEWED. RECURRING requires a unique 1-based findingOrdinal; other dispositions '
     'omit it. Report relevant non-REVIEW issues when needed to resolve them. Do not claim unobserved resolution. '
+    'An accepting ReviewPhase may carry an original OPEN finding wholly within the actual adopted Phase deferral. '
+    'Keep its NOT_REVIEWED disposition and unmet observations, and supply issueReport.deferredIssues with '
+    '{issueIdentity,conditionIdentities} for each entirely covered issue. An uncertain, partial or required-scope '
+    'finding remains blocking. '
     'Only an issued ReviewStep purposeRepair contract permits original-purpose repair findings: repairFindingSources '
     'is {sources:[...]} with one 1-based findingOrdinal per finding; required-condition uses conditionIdentity; '
     'step-purpose uses stepIdentity, rationale and affectedPaths. Cover every required failure. '

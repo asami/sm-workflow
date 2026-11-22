@@ -98,7 +98,7 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
         "SPECIFICATION-OWNED assigned repair requires the exact inventory or Human direction before completion"
       else "SPECIFICATION-OWNED assigned correction is submitted for fresh native checks and independent review"
       result.copy(issueReport = Some(V.GoalPhaseIssueReport(assigned.map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, disposition, rationale, None)))))
+        V.GoalPhaseIssueDisposition(issue.identity, disposition, rationale, None)), Vector.empty)))
     }
   }
 
@@ -200,7 +200,7 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
         issue.repository == work.work.get.selectedPlan.repository && issue.source == "REVIEW")
       val result = _result(outcome).copy(findings = findings, issueReport = Option.when(outcome == "accept" && known.nonEmpty)(
         V.GoalPhaseIssueReport(known.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED",
-          "SPECIFICATION-OWNED independent Phase review confirms the issued finding is resolved", None)))))
+          "SPECIFICATION-OWNED independent Phase review confirms the issued finding is resolved", None)), Vector.empty)))
       prepare("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "review", issued.invocation.stdout.toUri.toASCIIString,
         file("review", result), file("reference", reference), file("execution", execution), "normal-development-host",
         Instant.now().minusSeconds(1).toString, "entity:smworkflow.cli.host_evidence", None))

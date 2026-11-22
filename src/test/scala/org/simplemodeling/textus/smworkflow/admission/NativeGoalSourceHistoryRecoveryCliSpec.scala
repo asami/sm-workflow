@@ -417,7 +417,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends NativeGoalSourceHisto
           issue.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "Test-owned observation of the assigned source maintenance", None))
       val repairresult = V.GoalPhaseWorkResult("completed", "Test-owned ordinary repair of the assigned former prefix source",
-        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions)), None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions, Vector.empty)), None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val repairreference = V.WorkflowArtifactReference("later-ordinary-repair-completed", "1")
       When("ordinary RepairStep completion is followed by a fresh normal Advance")
       _goal(fixture, repair.submitOperation.get, Vector("--sessionId", repair.submitSessionId.get,

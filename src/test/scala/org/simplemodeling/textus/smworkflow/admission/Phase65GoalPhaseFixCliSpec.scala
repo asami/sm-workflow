@@ -298,7 +298,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
             if (pendingrepair.nonEmpty) Files.readString(repo.resolve("value.txt")) shouldBe "expected\n"
             else Files.writeString(repo.resolve("value.txt"), "expected\n")
             val fixed = V.GoalPhaseIssueReport(issues.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-              "FIXED", "Corrected the retained original REVIEW and newly failed Phase TEST issue", None)))
+              "FIXED", "Corrected the retained original REVIEW and newly failed Phase TEST issue", None)), Vector.empty)
             When("the new repair is submitted once and the next Advance executes only its new fifth check")
             _submit(s, repair, _result("completed", report = Some(fixed)), V.WorkflowArtifactReference(
               if (pendingrepair.nonEmpty) "retained-second-release-fix-r3" else "retained-second-release-fix-r2", "1"))
@@ -313,7 +313,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
             _executions(s).size shouldBe 5
             _executions(s).last should not be oldchecks.last
             val resolved = V.GoalPhaseIssueReport(originalissues.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-              "RESOLVED", "The scoped independent fixture review confirms the original blocker is resolved", None)))
+              "RESOLVED", "The scoped independent fixture review confirms the original blocker is resolved", None)), Vector.empty)
             Vector("result", "reference", "execution").foreach(name =>
               require(!Files.exists(root.resolve("retained-scoped-release-review-r2-" + name + ".json")), "Never replace a retained review sidecar"))
             When("the remaining scoped review is independently prepared and submitted once")
@@ -405,7 +405,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         Files.writeString(repo.resolve("value.txt"), "expected\n")
         val stepissues = steprepair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
         val stepfixed = V.GoalPhaseIssueReport(stepissues.map(i => V.GoalPhaseIssueDisposition(i.identity,
-          "FIXED", "Corrected the selected actual failed product input", None)))
+          "FIXED", "Corrected the selected actual failed product input", None)), Vector.empty)
         _submit(s, steprepair, _result("completed", report = Some(stepfixed)), V.WorkflowArtifactReference("fixture-step-fix", "1"))
         val stepreview = _advance(s, task)
         stepreview.business[V.GoalPhaseAdvanceResult].work.get.kind shouldBe "ReviewStep"
@@ -456,7 +456,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         Given("only the assigned release finding is corrected within the original ownership")
         Files.writeString(repo.resolve("docs/usage.md"), "The accepted input is exactly expected followed by LF.\n")
         val fixed = V.GoalPhaseIssueReport(open.map(i => V.GoalPhaseIssueDisposition(i.identity,
-          "FIXED", "Corrected the exact accepted-input description; validation and review remain pending", None)))
+          "FIXED", "Corrected the exact accepted-input description; validation and review remain pending", None)), Vector.empty)
         if (failedphase) Files.writeString(repo.resolve("value.txt"), "incorrect after the first Release correction\n")
         _submit(s, repair, _result("completed", report = Some(fixed)), V.WorkflowArtifactReference("fixture-release-fix", "1"))
         val rereviewcall = if (!failedphase) _advance(s, task) else {
@@ -492,7 +492,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
           _advance(s, task).business[V.GoalPhaseAdvanceResult] shouldBe failedrepair
           Files.writeString(repo.resolve("value.txt"), "expected\n")
           val corrected = V.GoalPhaseIssueReport(assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-            "FIXED", "Corrected the exact original REVIEW issue and actual failed Phase TEST issue", None)))
+            "FIXED", "Corrected the exact original REVIEW issue and actual failed Phase TEST issue", None)), Vector.empty)
           _submit(s, failedrepair, _result("completed", report = Some(corrected)), V.WorkflowArtifactReference("fixture-second-release-fix", "1"))
           Then("exact legitimate dispositions are accepted and the next separate Advance executes only the remaining fresh check")
           _advance(s, task)
@@ -516,7 +516,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
           Files.readString(repo.resolve("docs/journal.md")) shouldBe F.findingRecordingBaseline.toMap.apply("docs/journal.md")
         }
         val covered = V.GoalPhaseIssueReport(open.map(i => V.GoalPhaseIssueDisposition(i.identity,
-          "RESOLVED", "Scoped review confirms the usage contract now matches the unchanged product input", None)))
+          "RESOLVED", "Scoped review confirms the usage contract now matches the unchanged product input", None)), Vector.empty)
         val acceptedreview = _result("accept", report = Some(covered))
         _review(s, rereviewcall, if (recording) acceptedreview.copy(reviewObservations = _observations_("accepted-phase-note", "DEVELOPMENT_CANDIDATE"))
           else acceptedreview, "fixture-scoped-release-review")

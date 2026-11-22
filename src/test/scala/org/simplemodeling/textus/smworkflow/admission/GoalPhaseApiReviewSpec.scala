@@ -31,6 +31,10 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
       val schema = io.circe.parser.parse(GoalPhaseApiReview.schema.toJsonStringC.toOption.get).toOption.get
       schema.hcursor.downField("properties").downField("outcome").get[Vector[String]]("enum").toOption shouldBe
         Some(Vector("accept", "repair", "decision-needed"))
+      val deferral = schema.hcursor.downField("properties").downField("issueReport").downField("properties")
+        .downField("deferredIssues").downField("items")
+      deferral.get[Vector[String]]("required").toOption shouldBe Some(Vector("issueIdentity", "conditionIdentities"))
+      GoalPhaseApiReview.reviewResultInstructions should include ("issueReport.deferredIssues")
       GoalPhaseApiReview.reviewResultInstructions should include ("do not use \"accepted\"")
       val facts = Map("ai.execution.provider" -> "ollama", "ai.usage.tokens" -> "42", "secret" -> "hidden")
       for (outcome <- Vector("accept", "repair", "decision-needed", "accepted", "Accept", "accept ")) {
@@ -45,6 +49,14 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
         metadata should include ("ai.usage.tokens")
         metadata should not include ("secret")
       }
+      val report = V.GoalPhaseIssueReport(
+        Vector(V.GoalPhaseIssueDisposition("issue-1", "NOT_REVIEWED", "Wholly within the adopted deferral", None)),
+        Vector(V.GoalPhaseIssueDeferral("issue-1", Vector("usage-contract"))))
+      val response = Record.dataAuto("outcome" -> "accept", "summary" -> "review", "findings" -> Vector.empty[String],
+        "issueReport" -> report.toRecord())
+      val result = GoalPhaseApiReview.providerResult("attempt", "continuation", response, Some("gpt-oss:20b"), facts)
+      result.status shouldBe "COMPLETED"
+      result.result.flatMap(_.issueReport) shouldBe Some(report)
     }
     "retain the original provider record when typed conversion fails" in {
       val record = Record.dataAuto("unexpected" -> "original provider content")
