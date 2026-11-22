@@ -43,6 +43,13 @@ A destination is a *proposal*, not an accepted reassignment. A transferred findi
 5. Submit the proposal to the existing Human/Admission or external planning authority as appropriate. No automatic acceptance-boundary change or autonomous Phase file rewrite.
 6. After authorized adoption, record/reconcile canonical Journal and development-candidate references, preserving identities, provenance, open/closed state and actual evidence. Continue current Phase only against its genuine remaining blockers.
 
+For steps 3–5 reuse the request construction, typed-result handling and
+Japanese user presentation qualified by [Phase 24 Q1](phase-24.md#q1-language-verification-within-p24-05).
+Write the assessment instructions and disposition rationale in English. Carry
+approval quotations and log excerpts verbatim and retain finding IDs and
+disposition values. Present the recommendation and any question to the user in
+Japanese through the same path.
+
 ## Safety and cost constraints
 
 - Required checks, tests, security and Usage Contract behavior cannot be deferred solely to accelerate closure.

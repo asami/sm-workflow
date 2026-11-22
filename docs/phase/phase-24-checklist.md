@@ -14,6 +14,8 @@ Plan: [Phase 24](phase-24.md)
 - [ ] P24-04: Deterministic reproducible packaging includes sufficient scoped context/provenance, size/token estimates and conservative completeness. Multi-file input is supported within configured bounds; normal packaging uses no AI and records its overhead.
 - [ ] P24-05: A real supplied-input review runs through existing textus-ai/OpenAI and returns a typed result to normal Admission with independent context, actual issued/result references and provider/model/usage evidence. The supported configuration can be reused in ordinary work without parent-AI request assembly.
 
+  For P24-05, verify the [Q1 language round trip](phase-24.md#q1-language-verification-within-p24-05) in the actual request, typed result and user presentation. Check English request/result prose, Japanese reports/questions, unchanged approval and log excerpts, and stable typed values and references.
+
 ## Q2: patch and retained-work handoff
 
 - [ ] P24-06: A bounded actual code task returns a patch candidate and passes runtime-owned scope/application/checks and ordinary acceptance; provider credentials grant no implicit shell/Git/commit privileges.
