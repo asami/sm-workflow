@@ -2,7 +2,7 @@
 
 ## Adopted development priority — 2026-11-21
 
-The user selected this **execution order** after the currently running Phases 7 and 9:
+The user selected this **execution order** to follow completion of Phases 7 and 9:
 
 1. **Phase 24** — practical OpenAI API-credit use (first usable review/patch route).
 2. **Phase 18** — tool-neutral validation and Flutter integration.
@@ -15,17 +15,17 @@ The user selected this **execution order** after the currently running Phases 7 
 
 **Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), 13/20 (AI usage measurement and summaries), 25/26/27 (generic provider, multi-CLI and cost-aware expansion), and 16 (experimentation). Deferral is scheduling only: preserve all scope, ownership, dependencies and acceptance conditions.
 
-Phases **7 and 9 are currently in execution**, as reported by the user; this roadmap edit does not claim their completion or alter their Sessions. Phase 24 is the first new priority after both complete. Preserve only concrete producer/setup prerequisites required for the selected usable API-credit route; do not make entire unrelated Phases prerequisites. Phase 18/23/22 then strengthen the platform before further development-support features. Phase 21 precedes Phase 15 as required for its related-repository operations. If a blocking dependency is discovered, record and resolve its bounded prerequisite without silently reordering this adopted roadmap.
+[Phase 7](phase-7.md) and [Phase 9](phase-9-checklist.md#actual-local-completion) have since completed locally. Phase 24 is the first new priority. Preserve only concrete producer/setup prerequisites required for the selected usable API-credit route; do not make entire unrelated Phases prerequisites. Phase 18/23/22 then strengthen the platform before further development-support features. Phase 21 precedes Phase 15 as required for its related-repository operations. If a blocking dependency is discovered, record and resolve its bounded prerequisite without silently reordering this adopted roadmap.
 
 This decision supersedes older priority sequences in this README and individual Phase files **for scheduling only**. Historical status, scope, evidence and explicit acceptance remain unchanged. No new Phase or Workflow Session is started by this documentation change.
 
 
-Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
+Previous consumer development priority — 2026-11-19 (sm-workflow-dev開発):
 **stabilization -> remaining [Phase 7](phase-7.md) ->
 [necessary producer/setup prerequisites](phase-24.md#prerequisites-and-development-schedule) ->
 [Phase 24: practical API-credit use](phase-24.md)**.
 [Phase 25](phase-25.md) follows with generic textus-ai Task API and selected
-provider expansion. This is the user's latest priority for this consumer chat;
+provider expansion. The 2026-11-21 scheduling decision above now governs;
 the earlier 8.1 -> 9 -> 18 producer/feature sequence below remains recorded with
 its original ownership. Whole Phases 8.1/9/13/20/22/23/25 are not added ahead of
 Phase 24; concrete missing producer capabilities are named and scheduled in its
@@ -48,7 +48,7 @@ management issues are recorded in [Phase 22](phase-22.md), P22-01–06, and its
 [checklist](phase-22-checklist.md). Historical successes, failed/UNKNOWN outcomes,
 accepted Steps and repair count 10/10 are retained. Native Session reconciliation
 remains Phase 22 work and does not invalidate this accepted release. The
-release-time sequence was 8.1 -> 9 -> 18; the latest consumer-chat priority is
+release-time sequence was 8.1 -> 9 -> 18; the adopted 2026-11-21 priority is
 recorded above. Phase 22 does not interrupt API-use priority. No
 successor is started and no push is selected by this release.
 
@@ -76,7 +76,7 @@ connects saved worker envelopes to the actual issued public DTO through typed
 caller/dispatch construction. Preserve complete payloads, references and required
 validation; remove parent-AI JSON reconstruction. Planned only, with no current
 Session/submission change. See the
-[related observation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md#related-submission-format-gap--2026-11-12).
+[related observation](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md#related-submission-format-gap--2026-11-12).
 
 Phase 8 host-startup simplification selected 2026-11-12:
 [program-owned host initialization and Evidence setup](phase-8.md#program-owned-host-initialization-and-evidence-setup--2026-11-12)
@@ -84,7 +84,7 @@ reuses the Phase 15 early initialization route for normal settings, admitted
 storage bindings and existing-installation reuse. Routine Phase startup must
 not require parent-AI source/CAR inspection or manual CommonEvidence wiring.
 Existing overrides, data and Sessions remain intact; this is planned work.
-See the [decision record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md).
+See the [decision record](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md).
 
 AI efficiency allocation adopted 2026-11-13: Phase 9 refines comparable
 quality/time/consumption evaluation and developer-led operating-profile feedback;
@@ -760,6 +760,16 @@ records the remaining gaps and safe adoption sequence.
 | Phase | Delivery boundary | Scheduling |
 | --- | --- | --- |
 | [10: CBD Review Integration](phase-10.md) | CBD prepare/external execution/result acceptance, then integrated review, affected repair and Final reuse; P6-SQ01..05 | After initial production adoption and required bounded producer handoffs; no dependency on whole 7/8/9 completion and no initial-use gate |
+
+## Practical API use and subsequent expansion — 2026-11-18
+
+| Phase | Delivery boundary | Scheduling |
+| --- | --- | --- |
+| [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, one existing textus-ai/OpenAI route, normal acceptance, bounded Codex handoff and attributable usage | First new priority after Phases 7 and 9, with its concrete producer/setup prerequisites. See the [checklist](phase-24-checklist.md). |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Generic task contract, capability/quota-aware provider selection and selected additional-provider integration | Deferred by the 2026-11-21 roadmap. Its expansion follows Phase 24's usable delivery. See the [checklist](phase-25-checklist.md). |
+
+Existing Phase 9 routing/convergence and Phase 13 usage acquisition are reused
+under their actual acceptance boundaries, without duplicate implementation.
 
 ## Scope and implementation policy
 
