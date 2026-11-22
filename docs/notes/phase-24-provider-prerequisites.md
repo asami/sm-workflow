@@ -1,14 +1,14 @@
 # Phase 24: provider connection and prerequisite inventory
 
 This is a source and retained-evidence assessment for P24-PRE, not permission to
-invoke a provider or a claim of Phase 24 acceptance. The adopted sequence remains
-current stabilization, **remaining Phase 7**, these prerequisites, then Phase 24
-consumer delivery. The Phase 7 [plan](../phase/phase-7.md) and its
+invoke a provider or a claim of Phase 24 acceptance. The current sequence is
+current stabilization, these prerequisites, then Phase 24 consumer delivery.
+Formal Phase 7 completion is no longer a prerequisite. The Phase 7 [plan](../phase/phase-7.md) and its
 [dependency delivery](../phase/phase-7-dependency-delivery-checklist.md) and
 [artifact overlay](../phase/phase-7-artifact-overlay-checklist.md) ledgers retain
 their existing identities and unresolved conditions. This inventory does not
-restart or close Phase 7. Reconcile its actual completion before treating it as a
-satisfied predecessor. An attributable observation from the owning parent says
+restart or close Phase 7. The original P24-PRE issued purpose retained the
+then-selected predecessor, and its acceptance remains in history. The owning parent reported that
 `sm-workflow-dev開発` (chat `01a1555d-b4a7-7be3-8232-5396c2f5e293`, turn
 `01a1ffaa-e6d2-7a23-84fc-75c19632d85d`) is resuming Human2903 for CNCF/Cozy
 real-workspace verification; no formal completion was observed. This report is
@@ -70,18 +70,23 @@ The operator must confirm the selected organization/project has eligible API
 access and an enabled credit benefit, with credentials managed outside chat.
 The operator and runtime configuration owner must also establish an enforceable
 no-paid-overage boundary for the selected route, including concurrent and
-in-flight requests where relevant. Capture the mechanism and its verified scope;
-a per-call estimate, configured cost cap, account balance assumption or unknown
-credit status alone does not establish that boundary. OpenAI’s [project management guidance](https://help.openai.com/en/articles/9186755-managing-projects-in-the-api-platform)
-states that tracked hard limits take effect with delay and recorded spend can
-slightly exceed the limit. The owning parent also reports that OpenAI’s
-“Sharing feedback, evaluation and fine-tuning data, and API inputs and outputs
-with OpenAI” guidance says a request exceeding the daily quota for the
-applicable complimentary data-sharing token benefit is billed in full at
-standard rates. The benefit type itself is unverified. These observations make
-a project hard limit or assumed daily quota insufficient evidence of this
-Phase’s no-overage requirement. Actual access, eligible credit and enforcement
-remain **unverified** in this inventory.
+in-flight requests where relevant. A per-call cost estimate, project hard limit
+or prepaid balance alone cannot establish that boundary. Project limit
+enforcement and prepaid balance cutoff can lag. Under the daily complimentary
+token benefit, a request that crosses the quota is billed in full. The public
+Responses API `service_tier` selects processing tiers, with no documented
+credit-only value. See [prepaid billing](https://help.openai.com/en/articles/8264644-setting-up-and-managing-prepaid-api-billing),
+[project limits](https://help.openai.com/en/articles/9186755-managing-projects-in-the-api-platform),
+[data sharing benefits](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai),
+and the [Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create).
+
+The checked workstation sources did not show a bound OpenAI credential and model
+for this route. Actual access, eligible credit and enforcement remain
+**unverified**. A local admission guard can proceed only with a verified eligible
+balance covering the conservative bound for the complete request and an
+exclusive or synchronized claim on that balance, including in-flight usage.
+Confirm that the selected runtime can send at most one OpenAI request without
+automatic retry or fallback. GoalPhase supplies a record retry limit of zero.
 
 Until both live access and the cost guard are confirmed, do not invoke the
 provider. If the guard cannot be established, leave the API route disabled and

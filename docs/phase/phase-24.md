@@ -26,8 +26,9 @@ Design inputs:
 
 ## Prerequisites and development schedule
 
-The adopted order is **current stabilization -> remaining Phase 7 -> necessary
-producer/setup work below -> Phase 24 -> Phase 25 expansion**. These are
+The current order is **current stabilization -> necessary producer/setup work
+below -> Phase 24 -> Phase 25 expansion**. Formal completion of Phase 7 is not
+a prerequisite for Phase 24. These are
 dependency-ordered development units, not invented calendar estimates or new
 replacement Goals. During prerequisite assessment, inspect the actual delivered
 version and retained evidence; a planned document or source symbol alone is not
@@ -36,8 +37,8 @@ connected acceptance. Ready capabilities are consumed without reimplementation.
 | Order / unit | Required outcome and owner | Current evidence and scheduling rule |
 | --- | --- | --- |
 | 1: current stabilization | Consume the stabilization delivery and its normally installed control runtime through the existing owner. | Phase 8 closed on 2026-11-19 as a Human-approved FORMAL release with additional validation/review NOT RUN — USER-APPROVED. Preserve its actual Session/history and remaining assurance in canonical Phase 22; native reconciliation is not a retrospective release gate. |
-| 2: remaining Phase 7 | Finish the existing managed-development Phase in sm-workflow-dev開発, retaining accepted work/history/counters. | Phase 7 remains unfinished; this plan does not restart or operate it. |
-| PRE-1: connection inventory | sm-workflow-dev開発 identifies the concrete caller -> runtime dispatcher -> textus-ai SPI/adapter -> typed result -> Admission path and existing agent Continuation route. | Assess after 7, before consumer implementation. Record exact reusable contracts and missing capabilities; no second execution engine. |
+| Phase 7 | Continue the existing managed-development Phase under its owner, retaining accepted work/history/counters. | Phase 7 remains unfinished; its formal completion is not a Phase 24 gate. This plan does not restart or operate it. |
+| PRE-1: connection inventory | sm-workflow-dev開発 identifies the concrete caller -> runtime dispatcher -> textus-ai SPI/adapter -> typed result -> Admission path and existing agent Continuation route. | Assess before consumer implementation. Record exact reusable contracts and missing capabilities; no second execution engine. |
 | PRE-2: minimum CNCF producer work, if missing | CNCF開発 qualifies only the required generic API/agent dispatch, context-independence and one-shot lifecycle capabilities from CNCF Phase 80 P80-A/B/C. | Phase 80's selected interface slice is planned, not proven delivered by that status. Reconcile actual code/evidence first; develop only demonstrated gaps in canonical goldenport-cncf/main. Full Phase 80 extension coverage is not required. |
 | PRE-3: minimum textus-ai adapter readiness, if missing | The textus-ai owner confirms or repairs existing AiRunner/OpenAI request/result handling, configured limits and usage/cost attribution needed for the selected bounded calls. | Local textus-ai-core has OpenAI adapters, AiRunner, token metadata and cost calculation; installed consumer readiness is unverified. Reuse them; do not require Phase 25's generic task API. PRE-2/3 may proceed independently after PRE-1 when their contracts permit. |
 | PRE-4: usable API configuration | Confirm eligible organization/project access, operator-managed credentials, enabled credit benefit and enforceable no-paid-overage configuration for the selected route. Owner: operator with runtime configuration support. | Account activation, available credits and end-to-end enforcement are unverified. Never request secrets in chat or label unknown credit as free; if enforcement cannot be established, keep API execution disabled with a precise setup gap. |
@@ -46,8 +47,8 @@ connected acceptance. Ready capabilities are consumed without reimplementation.
 
 The [P24-PRE connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
 records the applicable Phase 9 evidence, named owner gaps, and the unverified
-access and no-paid-overage gate. It does not satisfy or replace the remaining
-Phase 7 predecessor.
+access and no-paid-overage gate. Phase 7 history and unresolved conditions
+remain in their own records.
 
 PRE-2/3 are conditional development work, not assumed completed prerequisites.
 Any required dependency change uses its normal owner and applicable approval
@@ -56,7 +57,9 @@ publication or shared-installation authority. Do not insert whole Phases 8.1, 9,
 10, 13, 20, 22 or 23 ahead of Phase 24 merely because related work exists there.
 
 The latest user-selected consumer lane takes priority over earlier schedules for
-this chat: stabilization -> Phase 7 -> the concrete prerequisites -> Phase 24.
+this chat: stabilization -> the concrete prerequisites -> Phase 24. Formal
+Phase 7 completion is no longer a prerequisite; its existing work and history
+remain intact.
 Existing Phase 22 is runtime stabilization, and existing Phase 23 is strategic
 convergence; both keep their own plans, condition IDs and history. This API plan
 formerly used unpublished number 22. Its P24 IDs map one-to-one from those

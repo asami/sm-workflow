@@ -9,7 +9,7 @@ conditions remain unchecked pending their actual acceptance evidence.
 
 ## Pre-development dependencies
 
-- [ ] P24-01: After current stabilization and remaining Phase 7, PRE-1 identifies the concrete dispatcher, textus-ai/OpenAI and agent adapters, existing typed completion and applicable accepted evidence; gaps have named owners.
+- [ ] P24-01: After current stabilization, PRE-1 identifies the concrete dispatcher, textus-ai/OpenAI and agent adapters, existing typed completion and applicable accepted evidence; gaps have named owners.
 - [ ] P24-02: PRE-2/3 consume or qualify the required CNCF Phase 80 slice and existing textus-ai adapter, including actual supported contracts, bounded lifecycle/outcomes, required producer checks/review and necessary delivery. No entire-producer-Phase gate or duplicate implementation is added.
 - [ ] P24-03: PRE-4 establishes usable operator-managed API access and verifies enforceable no-paid-overage operation; unknown credit is not treated as available free balance. Missing enforcement prevents enabling API calls and has a precise prerequisite disposition.
 
