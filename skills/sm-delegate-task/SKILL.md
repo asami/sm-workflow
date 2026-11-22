@@ -148,6 +148,15 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
+For a fresh request, use the intent already established during selection to
+author `workClassification` with separate `implementation`, `repair` and
+`review` members. Use the fields and values in the
+[bounded Task work classification](../../docs/spec/native-host-execution.md#bounded-task-work-classification).
+Record `mechanical` only when the coding work explicitly has that nature.
+The requester passes the assignment through the existing dispatch. The
+destination uses it for fresh issuance and follows the retained assignment for
+pending work.
+
 At dispatch, include the return chat identity, permitted information, covered
 work and a verifiable reference to the original user approval in the handoff.
 Carry the same authority into covered follow-up repairs. At return, send the

@@ -2202,9 +2202,9 @@ completion metrics and reused by recollection. They do not authorize an effect,
 change native outcomes or replace independent evidence preparation. Missing or
 crossed attribution stays unavailable; metrics never trigger workflow repair.
 
-GoalTask and destination DelegateTask Start preflight both implementation/repair
-and possible independent Review through the same pure operating-profile capture
-used by GoalPhase. A destination requires a valid actual logical origin with the
+New GoalTask and destination DelegateTask Starts preflight their prospective
+semantic stages through the same pure operating-profile capture used by GoalPhase.
+A destination requires a valid actual logical origin with the
 standard dispatch policy, or the existing complete concrete mapping/origin pair.
 Invalid logical origins, partial concrete pairs and contradictory contexts refuse
 before Start effects. Component initialization through
@@ -2215,10 +2215,23 @@ GoalTask and destination DelegateTask support both the configured
 routes require the actual typed configured origin and standard dispatch policy;
 the deferred route also retains its existing concrete execution path.
 
+### Bounded Task work classification
+
+Fresh GoalTask and DelegateTask inputs may provide `workClassification`. It
+contains `implementation`, `repair` and `review`, each with `kind`, `complexity`,
+`domain`, `footprint` and optional `nature`. Use `CODING` for code implementation
+and repair, `DESIGN` for documentation implementation and repair, and `REVIEW`
+for independent review. Complexity is `TRIVIAL`, `SIMPLE`, `STANDARD` or
+`COMPLEX`, domain is `PROGRAMMING` or `ENGINEERING`, and footprint is `SMALL`,
+`MEDIUM` or `LARGE`. The policy supports `hardest` and `parent-inline`, with
+`mechanical` reserved for explicitly mechanical coding. Classification supplies
+semantic intent. The existing operating policy selects the execution profile.
+
 Fresh bounded `Implement`, `Repair`, `Review` and `DeliveryAcceptance` Work retains the optional
 `operatingProfile` capture together with its resolved native requirement before
-suspension. Code uses CODING, documentation uses DESIGN and Review uses REVIEW,
-with STANDARD/PROGRAMMING/SMALL classification. Review is isolated.
+suspension. An explicit Task assignment supplies the Implement, Repair and Review
+classification. Older inputs that omit it use STANDARD/PROGRAMMING/SMALL with
+CODING for code, DESIGN for documentation and REVIEW for isolated Review.
 DeliveryAcceptance uses the implementation capability class for read-only
 post-delivery judgment after actual checks, required independent review, commit
 and selected publication. It is separate from independent Review and owns no
@@ -2226,8 +2239,9 @@ delivery effects. The finite
 caller maps those names to the deployed implementation, repair and review roles
 using the same unchanged Request, policy and actual tool observations as Phase
 work. It owns no validation, commit, publication or retry progression.
-Before each fresh missing-row bounded issuance, the actual input and host repeat
-destination preflight. Removing the logical origin or standard policy after
+After Start, fresh bounded issuance checks host readiness and resolves only its
+current stage. Exact DelegateTask Start redelivery uses the retained admission.
+Removing the logical origin or standard policy after
 Start refuses first Advance before issuing a row or changing the native frontier
 or history.
 

@@ -186,6 +186,13 @@ checks, ordered conditions and original source references as `GoalTaskInput`. No
 management files are required. Freeze that input; later suggestions do not expand
 scope. Existing Phase repair stays in its current Session. Preserve other edits.
 
+For a fresh Task, use the intent already established during selection to author
+`workClassification` with separate `implementation`, `repair` and `review`
+members. Use the fields and values in the
+[bounded Task work classification](../../docs/spec/native-host-execution.md#bounded-task-work-classification).
+Record `mechanical` only when the coding work explicitly has that nature.
+Pending work uses its retained assignment.
+
 Keep the target repository distinct from the sm-workflow runtime host. Follow
 the [runtime configuration boundary](../../docs/spec/native-host-execution.md#runtime-configuration-boundary):
 Cozy and other development targets need no local `.textus/config.json` or
