@@ -1,6 +1,6 @@
 # Phase 24: Context Packaging and Practical API-Credit Use
 
-Status: planned
+Status: in progress; local work handed off for operational verification
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 24 on 2026-11-19; unpublished API Phase 22 renamed without accepting any condition
 Owner: SimpleModeling開発 (dedicated sm-workflow worktree)
@@ -37,7 +37,7 @@ connected acceptance. Ready capabilities are consumed without reimplementation.
 | Order / unit | Required outcome and owner | Current evidence and scheduling rule |
 | --- | --- | --- |
 | 1: current stabilization | Consume the stabilization delivery and its normally installed control runtime through the existing owner. | Phase 8 closed on 2026-11-19 as a Human-approved FORMAL release with additional validation/review NOT RUN — USER-APPROVED. Preserve its actual Session/history and remaining assurance in canonical Phase 22; native reconciliation is not a retrospective release gate. |
-| Phase 7 | Continue the existing managed-development Phase under its owner, retaining accepted work/history/counters. | Phase 7 remains unfinished; its formal completion is not a Phase 24 gate. This plan does not restart or operate it. |
+| Phase 7 | Preserve its local completion and any remaining operational qualification under its existing owners. | Its formal completion is not a Phase 24 gate. See the [Phase 7 operational follow-up](phase-7.md#operational-release-follow-up--2026-11-22). |
 | PRE-1: connection inventory | sm-workflow-dev開発 identifies the concrete caller -> runtime dispatcher -> textus-ai SPI/adapter -> typed result -> Admission path and existing agent Continuation route. | Assess before consumer implementation. Record exact reusable contracts and missing capabilities; no second execution engine. |
 | PRE-2: minimum CNCF producer work, if missing | CNCF開発 qualifies only the required generic API/agent dispatch, context-independence and one-shot lifecycle capabilities from CNCF Phase 80 P80-A/B/C. | Phase 80's selected interface slice is planned, not proven delivered by that status. Reconcile actual code/evidence first; develop only demonstrated gaps in canonical goldenport-cncf/main. Full Phase 80 extension coverage is not required. |
 | PRE-3: minimum textus-ai adapter readiness, if missing | The textus-ai owner confirms or repairs existing AiRunner/OpenAI request/result handling, configured limits and usage/cost attribution needed for the selected bounded calls. | Local textus-ai-core has OpenAI adapters, AiRunner, token metadata and cost calculation; installed consumer readiness is unverified. Reuse them; do not require Phase 25's generic task API. PRE-2/3 may proceed independently after PRE-1 when their contracts permit. |
@@ -130,6 +130,25 @@ call or Human approval. Q2 uses the same request/result and presentation paths.
   publication remain with existing owners and actual authorization boundaries.
 
 ## Completion and exclusions
+
+### Local handoff — 2026-11-22
+
+The operator moved further verification to actual use. Local delivery covers the
+bounded review package, runner SPI, provider HTTP evidence and redaction, and
+FixCheck bound to the Session checkout. The live connectivity exercise used a
+synthetic Scala compiler error and the existing sm-workflow review path through
+the Textus AI SPI. OpenAI returned HTTP 200 and a typed result with its response
+body, request ID, and usage. The suggested correction compiled and passed three
+assertions. The Japanese quotations and the fixture reference survived the round
+trip.
+
+The connectivity exercise used a separate fixture. Phase 24's existing
+GoalPhase Session remains the source of its acceptance history. Retain the
+earlier uncertain provider attempt with its original disposition. In actual
+use, verify the configured installed route through normal Admission, the
+runtime-owned application and checks for a bounded patch, and the configured
+billing boundary. Collect the resulting native references before claiming Q1–Q3
+or formal Phase completion.
 
 Completion requires Q1–Q3's bounded practical route and
 [P24-01–11](phase-24-checklist.md), with actual integration, necessary checks,

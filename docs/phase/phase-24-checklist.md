@@ -1,11 +1,13 @@
 # Phase 24 delivery checklist
 
-Status: planned; all new delivery conditions remain unverified.
+Status: in progress; local connectivity verified, operational acceptance pending.
 Plan: [Phase 24](phase-24.md)
 
 The [connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
 records source and retained evidence and outstanding prerequisites. Checklist
-conditions remain unchecked pending their actual acceptance evidence.
+conditions remain unchecked pending their actual acceptance evidence. The
+[local handoff](phase-24.md#local-handoff--2026-11-22) records the verified
+coverage and the work deferred to actual use.
 
 ## Pre-development dependencies
 
