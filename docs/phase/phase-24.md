@@ -1,6 +1,6 @@
 # Phase 24: Context Packaging and Practical API-Credit Use
 
-Status: planned
+Status: closed
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 24 on 2026-11-19; unpublished API Phase 22 renamed without accepting any condition
 Owner: SimpleModeling開発 (dedicated sm-workflow worktree)
@@ -26,8 +26,9 @@ Design inputs:
 
 ## Prerequisites and development schedule
 
-The adopted order is **current stabilization -> remaining Phase 7 -> necessary
-producer/setup work below -> Phase 24 -> Phase 25 expansion**. These are
+The current order is **current stabilization -> necessary producer/setup work
+below -> Phase 24 -> Phase 25 expansion**. Formal completion of Phase 7 is not
+a prerequisite for Phase 24. These are
 dependency-ordered development units, not invented calendar estimates or new
 replacement Goals. During prerequisite assessment, inspect the actual delivered
 version and retained evidence; a planned document or source symbol alone is not
@@ -36,13 +37,18 @@ connected acceptance. Ready capabilities are consumed without reimplementation.
 | Order / unit | Required outcome and owner | Current evidence and scheduling rule |
 | --- | --- | --- |
 | 1: current stabilization | Consume the stabilization delivery and its normally installed control runtime through the existing owner. | Phase 8 closed on 2026-11-19 as a Human-approved FORMAL release with additional validation/review NOT RUN — USER-APPROVED. Preserve its actual Session/history and remaining assurance in canonical Phase 22; native reconciliation is not a retrospective release gate. |
-| 2: remaining Phase 7 | Finish the existing managed-development Phase in sm-workflow-dev開発, retaining accepted work/history/counters. | Phase 7 remains unfinished; this plan does not restart or operate it. |
-| PRE-1: connection inventory | sm-workflow-dev開発 identifies the concrete caller -> runtime dispatcher -> textus-ai SPI/adapter -> typed result -> Admission path and existing agent Continuation route. | Assess after 7, before consumer implementation. Record exact reusable contracts and missing capabilities; no second execution engine. |
+| Phase 7 | Preserve its local completion and any remaining operational qualification under its existing owners. | Its formal completion is not a Phase 24 gate. See the [Phase 7 operational follow-up](phase-7.md#operational-release-follow-up--2026-11-22). |
+| PRE-1: connection inventory | sm-workflow-dev開発 identifies the concrete caller -> runtime dispatcher -> textus-ai SPI/adapter -> typed result -> Admission path and existing agent Continuation route. | Assess before consumer implementation. Record exact reusable contracts and missing capabilities; no second execution engine. |
 | PRE-2: minimum CNCF producer work, if missing | CNCF開発 qualifies only the required generic API/agent dispatch, context-independence and one-shot lifecycle capabilities from CNCF Phase 80 P80-A/B/C. | Phase 80's selected interface slice is planned, not proven delivered by that status. Reconcile actual code/evidence first; develop only demonstrated gaps in canonical goldenport-cncf/main. Full Phase 80 extension coverage is not required. |
 | PRE-3: minimum textus-ai adapter readiness, if missing | The textus-ai owner confirms or repairs existing AiRunner/OpenAI request/result handling, configured limits and usage/cost attribution needed for the selected bounded calls. | Local textus-ai-core has OpenAI adapters, AiRunner, token metadata and cost calculation; installed consumer readiness is unverified. Reuse them; do not require Phase 25's generic task API. PRE-2/3 may proceed independently after PRE-1 when their contracts permit. |
 | PRE-4: usable API configuration | Confirm eligible organization/project access, operator-managed credentials, enabled credit benefit and enforceable no-paid-overage configuration for the selected route. Owner: operator with runtime configuration support. | Account activation, available credits and end-to-end enforcement are unverified. Never request secrets in chat or label unknown credit as free; if enforcement cannot be established, keep API execution disabled with a precise setup gap. |
 | 3: Phase 24 consumer delivery | Implement Q1 -> Q2 -> Q3 below using the qualified producer interfaces and normal installed control version. | Required producer changes receive their ordinary owner validation/review and necessary publication/delivery; only changed connections need consumer qualification. |
 | 4: Phase 25 | Expand the usable route with a generic task contract and selected provider policies. | Separately planned; no Phase 25 gate on Phase 24 completion. |
+
+The [P24-PRE connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
+records the applicable Phase 9 evidence, named owner gaps, and the unverified
+access and no-paid-overage gate. Phase 7 history and unresolved conditions
+remain in their own records.
 
 PRE-2/3 are conditional development work, not assumed completed prerequisites.
 Any required dependency change uses its normal owner and applicable approval
@@ -51,7 +57,9 @@ publication or shared-installation authority. Do not insert whole Phases 8.1, 9,
 10, 13, 20, 22 or 23 ahead of Phase 24 merely because related work exists there.
 
 The latest user-selected consumer lane takes priority over earlier schedules for
-this chat: stabilization -> Phase 7 -> the concrete prerequisites -> Phase 24.
+this chat: stabilization -> the concrete prerequisites -> Phase 24. Formal
+Phase 7 completion is no longer a prerequisite; its existing work and history
+remain intact.
 Existing Phase 22 is runtime stabilization, and existing Phase 23 is strategic
 convergence; both keep their own plans, condition IDs and history. This API plan
 formerly used unpublished number 22. Its P24 IDs map one-to-one from those
@@ -123,9 +131,46 @@ call or Human approval. Q2 uses the same request/result and presentation paths.
 
 ## Completion and exclusions
 
-Completion requires Q1–Q3's bounded practical route and
-[P24-01–11](phase-24-checklist.md), with actual integration, necessary checks,
-independent review and normal local closure. Claim only the qualified capabilities.
+### Formal local release — 2026-11-22
+
+The operator approved release after the successful OpenAI connectivity exercise
+and directed that further operational verification follow the release.
+Additional release validation and independent review are
+**NOT RUN — USER-APPROVED**. The local release Step plan contains the two
+already accepted Steps, P24-PRE (`05198fa9`) and P24-Q1 (`df121adf`).
+The release also includes the delivered review transport, response evidence,
+redaction, and Session checkout binding through `00a95795`.
+
+The native Plan `phase-24-practical-api-credit-use@7` and Session
+`114f350805ca6722eddc6897c4b225fa` retain their existing history. At release,
+P24-Q2 is at Review revision 289 with repair count 7/10. P24-Q2's live review
+and ordinary Admission and P24-Q3's bounded API patch and installed-route
+qualification remain post-release work. The earlier `UNCERTAIN` attempt and
+its original disposition remain in history. The release does not record a
+native Step acceptance for either pending Step or a native Phase terminal.
+
+### Local handoff — 2026-11-22
+
+Local delivery covers the
+bounded review package, runner SPI, provider HTTP evidence and redaction, and
+FixCheck bound to the Session checkout. The live connectivity exercise used a
+synthetic Scala compiler error and the existing sm-workflow review path through
+the Textus AI SPI. OpenAI returned HTTP 200 and a typed result with its response
+body, request ID, and usage. The suggested correction compiled and passed three
+assertions. The Japanese quotations and the fixture reference survived the round
+trip.
+
+The connectivity exercise used a separate fixture. In actual use, verify the
+configured installed route through normal Admission, the runtime-owned
+application and checks for a bounded patch, and the configured billing
+boundary. The issued review is tied to the pre-integration candidate.
+Reconcile that pending request in the original Session before using the
+current candidate, and retain the resulting native evidence.
+
+Operational acceptance still requires Q1–Q3's bounded practical route and
+[P24-01–11](phase-24-checklist.md), with actual integration, necessary checks
+and independent review. The release decision leaves these verification
+requirements in place.
 Provider breadth, generic task services, auto-learning routing, Local LLM setup,
 all-provider comparisons and a new budget/telemetry platform are excluded.
 This plan starts no Goal/Session and preserves existing accepted results,

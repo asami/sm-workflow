@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -23,10 +23,10 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
     parse(Files.readString(Paths.get(path))).fold(error => fail(error.message), identity)
 
   private def array(value: Json, field: String): Vector[Json] =
-    value.hcursor.get[Vector[Json]](field).fold(error => fail(error.message), identity)
+    value.hcursor.downField(field).as[Vector[Json]].fold(error => fail(error.message), identity)
 
   private def text(value: Json, field: String): String =
-    value.hcursor.get[String](field).fold(error => fail(error.message), identity)
+    value.hcursor.downField(field).as[String].fold(error => fail(error.message), identity)
 
   "The authored packaging descriptor" should {
     "accept the emitted retained importer reference directly as the generated detail input" in {
@@ -45,7 +45,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       withClue(s"The emitted retained importer must decode as the detail input: $decoded. ") {
         decoded.isSuccess shouldBe true
       }
-      val input = decoded.toOption.get
+      val input = decoded.toOption.getOrElse(fail("Missing decoded retained importer"))
       input shouldBe reference
       input.componentInstance shouldBe "spec-component"
       input.participantIdentity shouldBe "spec-participant"
@@ -56,13 +56,15 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
 
     "E67 expose the bounded native chain and optional closed Step field in authored ABI and generated values" in {
       Given("docs/spec/goal-phase-closure-recovery.md R8 E67: the authored ABI and normally generated public value constructors")
-      val types = array(readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports").focus.get, "types")
-      val chain = types.find(v => text(v, "name") == "GoalPhaseStepCommitChain").get
-      val closed = types.find(v => text(v, "name") == "GoalPhaseClosedStep").get
+      val exports = readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports")
+        .focus.getOrElse(fail("Missing exports"))
+      val types = array(exports, "types")
+      val chain = types.find(v => text(v, "name") == "GoalPhaseStepCommitChain").getOrElse(fail("Missing Step commit chain"))
+      val closed = types.find(v => text(v, "name") == "GoalPhaseClosedStep").getOrElse(fail("Missing closed Step"))
       When("the declared shape and ordinary absent optional constructor are consumed")
       val fields = array(chain, "fields")
       val closedFields = array(closed, "fields")
-      val optional = closedFields.find(v => text(v, "name") == "partialCompletion").get
+      val optional = closedFields.find(v => text(v, "name") == "partialCompletion").getOrElse(fail("Missing partial completion"))
       val ordinary = V.GoalPhaseClosedStep("S1", V.GoalPhaseNativeCommit("d", "p", "t"), Some("review"), None, None,
         qualifiedCheckpoint = None)
       val legacy = summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(
@@ -71,29 +73,30 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         V.GoalPhaseNativeCommit("c", "p", "ct"), V.GoalPhaseNativeCommit("d", "c", "t"))
       Then("the new field is optional while every native chain member is required and ordinary absence remains representable")
       fields.map(v => text(v, "name")) shouldBe Vector("originalParent", "partial", "completion")
-      fields.forall(_.hcursor.get[Boolean]("required").contains(true)) shouldBe true
+      fields.forall(_.hcursor.downField("required").as[Boolean].contains(true)) shouldBe true
       closedFields.map(field => (text(field, "name"), text(field, "type"), text(field, "multiplicity"),
-        field.hcursor.get[Boolean]("required").toOption.get)) shouldBe Vector(
+        field.hcursor.downField("required").as[Boolean].fold(error => fail(error.message), identity))) shouldBe Vector(
         ("step", "string", "1", true),
         ("commit", "GoalPhaseNativeCommit", "1", true),
         ("review", "string", "?", false),
         ("admission", "org.goldenport.record.Record", "?", false),
         ("partialCompletion", "GoalPhaseStepCommitChain", "?", false),
         ("qualifiedCheckpoint", "org.goldenport.record.Record", "?", false))
-      optional.hcursor.get[Boolean]("required") shouldBe Right(false)
+      optional.hcursor.downField("required").as[Boolean] shouldBe Right(false)
       text(optional, "type") shouldBe "GoalPhaseStepCommitChain"
       ordinary.partialCompletion shouldBe None
       ordinary.qualifiedCheckpoint shouldBe None
       ordinary.copy(partialCompletion = Some(publicchain)).partialCompletion shouldBe Some(publicchain)
       withClue(s"Legacy ClosedStep without optional fields must decode: $legacy. ") { legacy.isSuccess shouldBe true }
-      legacy.toOption.get.review shouldBe None
-      legacy.toOption.get.admission shouldBe None
-      legacy.toOption.get.partialCompletion shouldBe None
-      legacy.toOption.get.qualifiedCheckpoint shouldBe None
+      val legacystep = legacy.toOption.getOrElse(fail("Missing decoded legacy closed Step"))
+      legacystep.review shouldBe None
+      legacystep.admission shouldBe None
+      legacystep.partialCompletion shouldBe None
+      legacystep.qualifiedCheckpoint shouldBe None
       val admission = org.goldenport.record.Record.data("policy" -> "specification-passive-admission")
       val withAdmission = ordinary.copy(admission = Some(admission))
       summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(withAdmission.toRecord())
-        .toOption.get.admission shouldBe Some(admission)
+        .toOption.getOrElse(fail("Missing decoded closed Step admission")).admission shouldBe Some(admission)
     }
 
     "provide the canonical project identity without granting runtime authority" in {
@@ -108,7 +111,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
 
       Then("exactly the project Component identity and version are retained")
       descriptors.size shouldBe 1
-      val descriptor = descriptors.head
+      val descriptor = descriptors.headOption.getOrElse(fail("Missing project descriptor"))
       descriptor.schemaVersion shouldBe Some(3)
       descriptor.componentId shouldBe Some(ComponentId("org.simplemodeling.textus.SmWorkflow"))
       descriptor.version shouldBe Some("0.1.1-SNAPSHOT")
@@ -125,8 +128,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
     "retain current Task, standalone, preparation and delivery CML signatures in the distributed contract" in {
       Given("the current consumer CML and the authored ABI selected for CAR packaging")
       val cml = Files.readString(Paths.get("src/main/cozy/sm-workflow.cml"))
-      val sections = "(?ms)^## (\\w+)\\n(.*?)(?=^## |\\z)".r.findAllMatchIn(cml)
-        .map(m => m.group(1) -> m.group(2)).toMap
+      val pattern = "(?ms)^## (\\w+)\\n(.*?)(?=^## |\\z)".r
+      val sections = Map.from(pattern.findAllMatchIn(cml).map(m => m.group(1) -> m.group(2)))
       val exports = readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports")
         .focus.getOrElse(fail("Missing exports"))
       val services = Vector("StandaloneFixService", "StandaloneFixRepairService", "StandaloneFixReviewService",
@@ -202,10 +205,10 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
 
       Then("the distribution identifies this component and exactly the authored Phase, Split and Repository participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
-      abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
-      abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
-      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.1-SNAPSHOT")
-      abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
+      abi.hcursor.downField("component").downField("namespace").as[String] shouldBe Right("org.simplemodeling.textus")
+      abi.hcursor.downField("component").downField("id").as[String] shouldBe Right("SmWorkflow")
+      abi.hcursor.downField("component").downField("version").as[String] shouldBe Right("0.1.1-SNAPSHOT")
+      abi.hcursor.downField("abi").downField("version").as[Int] shouldBe Right(1)
       names("GoalPhaseService") should contain theSameElementsAs Vector(
         "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
         "describeGoalPhaseStepReview", "requestGoalPhaseStepReview",
@@ -250,7 +253,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         text(operation("NativeWorkflowPreparationService", name), "input") shouldBe input
         text(operation("NativeWorkflowPreparationService", name), "output") shouldBe "WorkflowPreparationResult"
       }
-      callerinformation.foreach { case (name, (input, output)) =>
+      callerinformation.foreach { entry =>
+        val (name, (input, output)) = entry
         text(operation("NativeWorkflowPreparationService", name), "kind") shouldBe "COMMAND"
         text(operation("NativeWorkflowPreparationService", name), "input") shouldBe input
         text(operation("NativeWorkflowPreparationService", name), "output") shouldBe output
@@ -266,10 +270,10 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "executionEvidence", "issuer", "occurredAt", "collection", "participant")
 
       And("nominal input types describe the consumed business values, not additional control envelopes")
-      val participantServices = Set("GoalPhaseService", "SplitPhaseService", "RepositorySyncService")
-      val participantInputs = operations.filter(op => participantServices.contains(text(op, "service")))
-        .map(op => text(op, "name") -> op.hcursor.get[Option[String]]("input")
-          .fold(error => fail(error.message), identity)).toMap
+      val participantServices = Vector("GoalPhaseService", "SplitPhaseService", "RepositorySyncService")
+      val participants = operations.iterator.filter(op => participantServices.exists(_.equals(text(op, "service"))))
+      val participantInputs = Map.from(participants.map(op => text(op, "name") -> op.hcursor.downField("input").as[Option[String]]
+        .fold(error => fail(error.message), identity)))
       participantInputs shouldBe Map(
         "advanceGoalPhase" -> "GoalPhaseAdvanceInput",
         "reconstructGoalPhaseDevelopment" -> "GoalPhaseDevelopmentReconstructionInput",
@@ -311,7 +315,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         ("RepositorySyncService", "submitRepositoryPurposeResult", "RepositorySyncConflictSubmissionResult"),
         ("RepositorySyncService", "describeRepositorySyncPushContinuation", "RepositorySyncPushContinuationDescriptionResult"),
         ("RepositorySyncService", "adoptRepositorySyncPushContinuation", "RepositorySyncPushContinuationAdoptionResult")
-      ).foreach { case (service, name, output) =>
+      ).foreach { signature =>
+        val (service, name, output) = signature
         text(operation(service, name), "kind") shouldBe "COMMAND"
         text(operation(service, name), "output") shouldBe output
       }
@@ -334,8 +339,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("GoalPhaseReleaseRepairContinuationRecoveryInput") shouldBe Vector("sessionId", "target", "choice", "rationale", "reference")
       valueFields("GoalPhaseReleaseRepairContinuationRecoveryResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
       Vector("GoalPhaseWorkRequest", "GoalPhaseWorkView").foreach { name =>
-        val field = array(types.find(value => text(value, "name") == name).get, "fields")
-          .find(value => text(value, "name") == "releaseRepairContract").get
+        val value = types.find(value => text(value, "name") == name).getOrElse(fail(s"Missing $name"))
+        val field = array(value, "fields").find(value => text(value, "name") == "releaseRepairContract")
+          .getOrElse(fail(s"Missing $name.releaseRepairContract"))
         text(field, "type") shouldBe "string"
         text(field, "multiplicity") shouldBe "?"
       }
@@ -351,7 +357,16 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("SplitPhaseStartInput") should contain theSameElementsAs Vector(
         "sourcePhaseIdentity", "invocationMode", "proposalReference")
       valueFields("RepositorySyncStartInput") should contain theSameElementsAs Vector(
-        "repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch", "remoteEndpointIdentity", "syncMode")
+        "repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch", "remoteEndpointIdentity", "syncMode",
+        "mainIntegration", "uncommittedPolicy")
+      val syncstartfields = array(types.find(value => text(value, "name") == "RepositorySyncStartInput")
+        .getOrElse(fail("Missing RepositorySyncStartInput")), "fields")
+      Vector("mainIntegration", "uncommittedPolicy").foreach { name =>
+        val field = syncstartfields.find(value => text(value, "name") == name).getOrElse(fail(s"Missing $name"))
+        text(field, "type") shouldBe "string"
+        text(field, "multiplicity") shouldBe "?"
+        field.hcursor.downField("required").as[Boolean] shouldBe Right(false)
+      }
       types.map(value => text(value, "name")) should not contain "GoalPhaseStartCommand"
       types.map(value => text(value, "name")) should not contain "SplitPhaseStartCommand"
       types.map(value => text(value, "name")) should not contain "RepositorySyncStartCommand"

@@ -1,11 +1,22 @@
 # Phase 24 delivery checklist
 
-Status: planned; all new delivery conditions remain unverified.
+Status: closed
 Plan: [Phase 24](phase-24.md)
+
+The [formal local release](phase-24.md#formal-local-release--2026-11-22)
+retains the accepted P24-PRE and P24-Q1 commits and the successful synthetic
+OpenAI connectivity evidence. Additional release validation and independent
+review are **NOT RUN — USER-APPROVED**. The unchecked items below remain
+operational acceptance requirements. P24-Q2 and P24-Q3 remain in the existing
+Session for post-release work, as described in the
+[local handoff](phase-24.md#local-handoff--2026-11-22).
+
+The [connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
+retains the original source evidence and prerequisites.
 
 ## Pre-development dependencies
 
-- [ ] P24-01: After current stabilization and remaining Phase 7, PRE-1 identifies the concrete dispatcher, textus-ai/OpenAI and agent adapters, existing typed completion and applicable accepted evidence; gaps have named owners.
+- [ ] P24-01: After current stabilization, PRE-1 identifies the concrete dispatcher, textus-ai/OpenAI and agent adapters, existing typed completion and applicable accepted evidence; gaps have named owners.
 - [ ] P24-02: PRE-2/3 consume or qualify the required CNCF Phase 80 slice and existing textus-ai adapter, including actual supported contracts, bounded lifecycle/outcomes, required producer checks/review and necessary delivery. No entire-producer-Phase gate or duplicate implementation is added.
 - [ ] P24-03: PRE-4 establishes usable operator-managed API access and verifies enforceable no-paid-overage operation; unknown credit is not treated as available free balance. Missing enforcement prevents enabling API calls and has a precise prerequisite disposition.
 
