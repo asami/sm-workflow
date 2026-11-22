@@ -8,6 +8,11 @@ actual operator decisions; they do not construct per-Session slot/check-policy
 objects. The finite caller keeps only the opaque routing and issued references
 needed for supported continuation. See the [Session candidate resource contract](repository-sync-directory-list.md#session-candidate-resource-admission).
 
+In bounded GoalTask, DelegateTask and StandaloneFix work, the runtime resolves
+an explicit `fix-check` against the Session's admitted checkout and configured
+check binding. Its position in the requested check list does not select a
+workspace. Use the runtime's reported binding and retained result.
+
 For GoalPhase/GoalTask semantic results, the normal caller projects supported
 worker artifacts through `projectSemanticWorkResult` and forwards its complete
 public JSON Resource with the original issued context. Direct public results

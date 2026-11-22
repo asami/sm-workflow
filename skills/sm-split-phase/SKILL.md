@@ -3,6 +3,10 @@ name: sm-split-phase
 description: Supply unknown estimates and semantic boundaries explicitly requested by SplitPhaseWorkflow in sm-workflow. Return its typed semantic result; do not calculate or apply the mechanical Phase partition.
 ---
 
+Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
+Default to English for new workflow/AI requests and results. Use Japanese for
+user-facing reports and questions. Preserve approvals and logs in their original language and wording.
+
 ## Shared Journal operations
 
 For a concrete Journal recording or lookup purpose, use the

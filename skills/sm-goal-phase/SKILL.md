@@ -3,6 +3,10 @@ name: sm-goal-phase
 description: Route explicit Phase start/resume requests through the caller and perform semantic work issued by GoalPhaseWorkflow in sm-workflow. The caller registers the Codex Goal; semantic work returns its typed result, and the runtime owns execution and closure.
 ---
 
+Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
+Default to English for new workflow/AI requests and results. Use Japanese for
+user-facing reports and questions. Preserve approvals and logs in their original language and wording.
+
 ## Shared Journal operations
 
 For a concrete Journal recording or lookup purpose, use the
@@ -702,19 +706,24 @@ checks the saved profile against actual execution evidence.
 
 For an issued independent `ReviewStep` or `ReviewPhase`, the current
 `goal-phase-dispatch.py review_package` prepares a package from the retained
-work, candidate, diff, checks and complete supplied files. Retain the original
-Request and the source of the completeness judgment. Use the ordinary capable
-reviewer when completeness is unconfirmed or the canonical UTF-8 JSON package
-exceeds the configured bound of at most 512 KiB.
+work, candidate, diff, checks and complete supplied files. To assemble the
+files offline, use `assemble_review_package` with the admitted repository,
+included paths, exclusions with reasons and the completeness judgment. It reads
+the issued candidate tree, which can differ from both HEAD and the live
+checkout. Retain the original Request and local provenance. Use the ordinary
+capable reviewer when the package is declined or completeness is unconfirmed.
 
 A READY package can be passed as `supplied_review` to the ordinary delegated
-reviewer. For an explicitly selected API review, use `api_prepare` with the
-actual work Resource and canonical package file to prepare
-`GoalPhaseService.runGoalPhaseApiReview` through the configured provider. Use
+reviewer. Offline assembly returns it as `suppliedReview`. For an explicitly
+selected API review under the configured provider and usage policy, use
+`api_prepare` with the actual work Resource and canonical package file to
+prepare `GoalPhaseService.runGoalPhaseApiReview`. Use
 `api_started`, `api_complete` or `api_uncertain` to retain the real invocation
 and its disposition. A started or uncertain invocation stays with its original
-attempt. A typed completed result and `api_execution_evidence` go through the
-original review's normal Submit and Admission. For detail, see
+attempt. Retain the returned model, provider and usage where supplied. A
+conversion failure may return `providerRecord` for diagnosis. Submit only a
+typed completed result with `api_execution_evidence` through the original
+review's normal Admission. For detail, see
 `docs/spec/phase-9-provider-routing.md` in the product repository.
 
 ## Journal results and purpose-driven lookup
@@ -1310,11 +1319,15 @@ against the actual test diagnostics and review findings, including every require
 `REVIEW` issue. Return its typed coverage as `RESOLVED`, `RECURRING` or
 `NOT_REVIEWED`. A recurring issue's `findingOrdinal` is the actual one-based
 correspondence to the returned finding, never a made-up receipt or an issue index.
-For an accepting `ReviewPhase` after an actual adopted Phase deferral, keep
-`NOT_REVIEWED` and the observed unmet conditions for any original OPEN issue
-entirely attributable to that deferral. Include each such issue's
-`{issueIdentity,conditionIdentities}` in `issueReport.deferredIssues`. An
-unrelated or partially covered issue remains a blocker.
+For an accepting `ReviewPhase` after Human adopts a Phase deferral, use the
+retained decision review and issue ledger. A carried `OPEN` issue must have
+been opened by that review or explicitly marked `RECURRING` there while already
+`OPEN`, with its finding ordinal and updated evidence matching the retained
+issue. If the whole issue belongs to the adopted deferral, keep its
+`NOT_REVIEWED` disposition and actual unmet observations, and provide
+`{issueIdentity,conditionIdentities}` in `issueReport.deferredIssues`.
+Partial attribution, unrelated findings and unmet required conditions remain
+blocking.
 An empty or absent report does not automatically accept the work. Keep actual
 reviewer/provider identity and observed coverage honest; passing tests alone do
 not supply independent review. Names, comments, examples and Given/When/Then
