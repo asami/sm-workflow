@@ -1,11 +1,29 @@
 # Phase 28: Deterministic Diagnostics and Lint Auto-Fix
 
-Status: planned
+Status: closed
+Closed: 2026-11-22 (Asia/Tokyo)
 Planned: 2026-11-22 (Asia/Tokyo)
 Scheduled: immediately after Phase 24; before Phases 18, 23, 22
 Depends on: Phase 24 practical API-credit route
 Checklist: [Phase 28 acceptance](phase-28-checklist.md)
 Decision: [Deterministic-first development strategy](../journal/2026/11/2026-11-22-deterministic-first-auto-fix-strategy.md)
+
+## Formal local release
+
+The existing GoalPhase Session `518200dde8be2daf6fa5237dbf01e7cb` closed at
+revision 1120 under Plan 6 (`6-required-condition-deferral-review-1110`).
+The local release commit is `b7a712a65095208248e4a75aa5d0bdd78174a2c9`.
+Validation 1103 passed Compile, FixCheck, and all 3,169 tests. Independent
+ReviewPhase 1114 (issued at revision 1115) accepted the released tree. D1–D6
+and their validation and repair history remain in the Session.
+
+The released Scala path applies the qualified Circe compiler correction,
+revalidates it, and rolls it back on a failed check. Affected lint warnings
+enter the ordinary repair path. Human1112 adopted the five open conditions in
+the [deferred checklist](phase-28-checklist.md#deferred-from-the-local-release)
+so this qualified path could be released locally. The two incomplete
+implementations and three unmeasured or unverified areas retain their original
+review dispositions. Repository synchronization is deferred.
 
 ## Goal
 Reduce AI calls, repair latency and unnecessary edits by applying proven programmatic compiler-diagnostic and lint fixes before AI repair. Preserve existing Candidate–Admission, workspace permissions, finite retries, test evidence and Take Over. No AI inference is permitted in the deterministic stage.
@@ -59,7 +77,7 @@ validation and Admission; preserve diagnostic and candidate history.
 - Source-local annotations must be readable and validated in ordinary standalone lint runs, not just sm-workflow.
 - A fix is not successful merely because a diagnostic disappeared; compile, lint, focused tests and admission remain authoritative.
 
-## Exit
+## Original exit criteria
 The common interface must be exercised by the real Scala implementation; interfaces alone or hypothetical other-language adapters do not satisfy acceptance.
 
 Demonstrate at least one real compiler-diagnostic deterministic fix, one lint/hygiene fix, correct unresolved-warning annotation validation, a safe refusal/fallback, and measurable before/after outcomes. Preserve all existing Phase/Session states. Planning does not start execution.
