@@ -38,6 +38,22 @@ is planned with no selected delivery slot; the existing adopted execution
 priority and active Goals/Sessions are unchanged. See the
 [restoration and allocation](phase-21.md#restoration-and-allocation) in the plan.
 
+Phase 8 result-submission simplification selected 2026-11-12:
+[program-owned semantic result submission](phase-8.md#program-owned-semantic-result-submission--2026-11-12)
+connects saved worker envelopes to the actual issued public DTO through typed
+caller/dispatch construction. Preserve complete payloads, references and required
+validation; remove parent-AI JSON reconstruction. Planned only, with no current
+Session/submission change. See the
+[related observation](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md#related-submission-format-gap--2026-11-12).
+
+Phase 8 host-startup simplification selected 2026-11-12:
+[program-owned host initialization and Evidence setup](phase-8.md#program-owned-host-initialization-and-evidence-setup--2026-11-12)
+reuses the Phase 15 early initialization route for normal settings, admitted
+storage bindings and existing-installation reuse. Routine Phase startup must
+not require parent-AI source/CAR inspection or manual CommonEvidence wiring.
+Existing overrides, data and Sessions remain intact; this is planned work.
+See the [decision record](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md).
+
 Phase 6.11 closed with unverified items — 2026-11-11:
 [plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
 The user ended this Phase without whole-Phase validation. Its existing Session
