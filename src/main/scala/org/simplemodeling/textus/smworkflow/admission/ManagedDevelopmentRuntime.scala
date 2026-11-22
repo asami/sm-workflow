@@ -34,6 +34,13 @@ private[smworkflow] object ManagedDevelopmentRuntime {
   final case class Policy(storeName: String, collection: String, definition: Definition,
     repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None, delivery: Option[Vector[DependencyDevelopmentDelivery.Binding]] = None,
     repositorySyncInputs: Option[Vector[Input]] = None)
+  final case class MachinePrograms(publication: String, consumer: String, discovery: SbtValidationDiscovery.Binding, jarWorkspace: String)
+  object MachinePrograms {
+    private given io.circe.Encoder[SbtValidationDiscovery.Binding] = io.circe.generic.semiauto.deriveEncoder
+    private given io.circe.Decoder[SbtValidationDiscovery.Binding] = io.circe.generic.semiauto.deriveDecoder
+    given io.circe.Encoder[MachinePrograms] = io.circe.generic.semiauto.deriveEncoder
+    given io.circe.Decoder[MachinePrograms] = io.circe.generic.semiauto.deriveDecoder
+  }
   val declaration = ComponentParameterKey.optional("sm-workflow.managed-development",
     ComponentParameterDecoder[Policy] {
       case ConfigurationValue.StringValue(text) => io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text)
@@ -65,6 +72,64 @@ private[smworkflow] object ManagedDevelopmentRuntime {
   def workspaceRootC(core: ActionCall.Core, workspace: String): Consequence[String] = rootsC(core).flatMap(roots =>
     roots.get(workspace).map(Consequence.success).getOrElse(invalid("unregistered workspace: " + workspace)))
 
+  def machineTargetC(edge: Edge, configured: Option[LocalPublicationRuntime.Policy]): Consequence[LocalPublication.Target] = for {
+    jar <- edge.machineLocalJar.filter(_ => machineJarValid(edge)).map(Consequence.success)
+      .getOrElse(invalid("dependency edge has no explicit machine-common local JAR binding"))
+    policy <- configured.map(Consequence.success).getOrElse(invalid("machine-common local publication policy is unavailable"))
+    _ <- LocalPublicationRuntime.validateC(policy)
+    target <- policy.targets.find(t => t.identity == jar.publicationTarget && t.component == edge.provider.identity &&
+      t.workspace == edge.provider.workspace).map(Consequence.success)
+      .getOrElse(invalid("machine-common local publication target does not own the declared provider Component/workspace"))
+  } yield target
+
+  def machineProgramsC(edge: Edge, plan: Json): Consequence[MachinePrograms] = for {
+    provider <- _granted_sbt_c(plan, edge.provider.workspace, "publish-local")
+    consumer <- _granted_sbt_c(plan, edge.consumer.workspace, "test-compile")
+    publication <- provider.hcursor.get[String]("identity").fold(e => invalid(e.message), Consequence.success)
+    compilation <- consumer.hcursor.get[String]("identity").fold(e => invalid(e.message), Consequence.success)
+    discovery = consumer.hcursor.downField("validationDiscovery")
+    binding <- (for {
+      component <- discovery.get[String]("componentIdentity")
+      artifact <- discovery.get[String]("artifactIdentity")
+      revision <- discovery.get[String]("artifactRevision")
+      prefix <- discovery.get[String]("packagePrefix")
+    } yield SbtValidationDiscovery.Binding(component, artifact, revision, prefix)).fold(
+      _ => invalid("consumer test-compile has no validationDiscovery binding"), _.validateC)
+    _ <- if (binding.componentIdentity == edge.consumer.identity) Consequence.unit
+      else invalid("test-compile discovery crosses the declared consumer Component")
+    workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
+    jar <- edge.machineLocalJar.filter(_ => machineJarValid(edge)).map(Consequence.success)
+      .getOrElse(invalid("machine-common JAR binding is unavailable"))
+    root = Path.of(jar.consumerJar).getParent.toString
+    candidates = workspaces.filter(_.hcursor.get[String]("root").contains(root))
+      .flatMap(_.hcursor.get[String]("identity").toOption).filter(id => _workspace_access(plan, id, Set("read-only", "manage")))
+    jarworkspace <- candidates match {
+      case Vector(id) => Consequence.success(id)
+      case _ => invalid("machine-common JAR directory requires one registered File workspace with read access")
+    }
+  } yield MachinePrograms(publication, compilation, binding, jarworkspace)
+
+  private def _workspace_access(plan: Json, workspace: String, access: Set[String]): Boolean =
+    plan.hcursor.get[Vector[Json]]("workspaceGrants").toOption.toVector.flatten.exists(grant =>
+      grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+      grant.hcursor.get[String]("workspaceId").contains(workspace) && grant.hcursor.get[String]("access").exists(access))
+
+  private def _granted_sbt_c(plan: Json, workspace: String, operation: String): Consequence[Json] = for {
+    programs <- plan.hcursor.get[Vector[Json]]("sbtPrograms").fold(_ => invalid("SBT programs are unregistered"), Consequence.success)
+    selected <- programs.filter(program => program.hcursor.get[String]("target").contains(workspace) &&
+      program.hcursor.get[String]("operation").contains(operation)) match {
+      case Vector(value) => Consequence.success(value)
+      case _ => invalid("workspace " + workspace + " does not declare one " + operation + " program")
+    }
+    capability <- selected.hcursor.get[String]("capability").fold(e => invalid(e.message), Consequence.success)
+    _ <- if (plan.hcursor.get[Vector[Json]]("grants").toOption.toVector.flatten.exists(grant =>
+      grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+      grant.hcursor.get[Vector[String]]("capabilities").toOption.exists(_.contains(capability)))) Consequence.unit
+      else invalid(operation + " capability for " + workspace + " has no Component grant")
+    _ <- if (_workspace_access(plan, workspace, Set("manage"))) Consequence.unit
+      else invalid(operation + " workspace " + workspace + " has no managed Component grant")
+  } yield selected
+
   def publicationC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[Option[Publication]] = for {
     roots <- rootsC(core)
     edge <- edgeC(policy.definition, input)
@@ -79,6 +144,110 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     roots <- rootsC(core)
     source <- new NativePort(core, policy, roots).consumerSourceC(edge)
   } yield source
+
+  def machineJarObservationC(core: ActionCall.Core, edge: Edge, programs: MachinePrograms): Consequence[LocalPublication.ArtifactObservation] = for {
+    jar <- edge.machineLocalJar.filter(_ => machineJarValid(edge)).map(Consequence.success)
+      .getOrElse(invalid("machine-common JAR binding is unavailable"))
+    path = Path.of(jar.consumerJar)
+    root <- workspaceRootC(core, programs.jarWorkspace)
+    _ <- if (path.getParent.toString == root) Consequence.unit else invalid("machine-common JAR crosses its retained File workspace")
+    workspace <- WorkspaceId.parseC(programs.jarWorkspace)
+    name <- WorkspaceFilePath.parseC(path.getFileName.toString)
+    limits <- WorkflowArtifactBudget.limitsC(core)
+    target = FileTarget(workspace)
+    observed <- WorkflowFileExecution.readBytesC(core, target, name, FileRepresentation.Identity, FileReadPolicy(limits))
+    bytes <- Option(observed).filter(r => r.target == target && r.path == name && r.representation == FileRepresentation.Identity)
+      .flatMap(_.bytes).filter(_.nonEmpty).map(Consequence.success)
+      .getOrElse(invalid("machine-common JAR is absent from its retained File workspace"))
+    digest = MessageDigest.getInstance("SHA-256").digest(bytes.toArray).map(b => f"${b & 0xff}%02x").mkString
+  } yield LocalPublication.ArtifactObservation(jar.consumerJar, digest, bytes.size)
+
+  def machineConsumerC(core: ActionCall.Core, policy: Policy, capture: GoalPhaseDependencyValidation.ManagedCapture,
+    programs: MachinePrograms, publication: LocalPublication.Result, requestIdentity: String): Consequence[Result] = for {
+    roots <- rootsC(core)
+    edge = capture.edge
+    workspace <- WorkspaceId.parseC(edge.consumer.workspace)
+    target = SbtTarget(workspace, validationDiscovery = true)
+    port = new NativePort(core, policy, roots)
+    input = Input(edge.identity, requestIdentity, requestIdentity, requestIdentity)
+    expected <- publication.artifact.filter(a => a.valid && edge.machineLocalJar.exists(_.consumerJar == a.path))
+      .map(Consequence.success).getOrElse(invalid("ordinary publication lacks the exact retained JAR observation"))
+    binding = Json.obj("capture" -> capture.asJson, "programs" -> programs.asJson, "publication" -> publication.request.asJson,
+      "artifact" -> expected.asJson)
+    beforejar <- machineJarObservationC(core, edge, programs).map(Option(_)).recoverWith(_ => Consequence.success(None))
+    stored <- if (!beforejar.contains(expected)) Consequence.success(Result("unverified",
+      Json.obj("reason" -> "Machine-common JAR differs from the retained provider publication".asJson)))
+    else attemptC(policy.definition, edge, input, "machine-consumer-compile", port, Some(binding)) {
+      _machine_source_c(core, port, edge) match {
+        case Consequence.Failure(failure) => Consequence.success(Result("admission-rejected", failure.show.asJson))
+        case Consequence.Success(before) => new ExecutionCall(core).runC(target, SbtOperation.TestCompile).flatMap {
+        case SbtExecutionAttempt.Observed(actual) if actual != null && actual.target == target &&
+            actual.operation == SbtOperation.TestCompile && actual.processResult != null &&
+            actual.processResult.safeProgramIdentity == programs.consumer =>
+          val receipt = Json.obj("workspace" -> workspace.value.asJson, "operation" -> "test-compile".asJson,
+            "process" -> WorkflowSbtCapture.encode(actual.processResult))
+          _machine_classpath(edge, workspace, programs, actual.processResult).filter(paths =>
+            actual.outcome == SbtExecutionOutcome.Succeeded && actual.discovery.exists {
+              case SbtValidationDiscovery.Result.Available(build) =>
+                build.workspaceId == workspace && build.binding == programs.discovery && build.fullClasspath.map(_.toString) == paths
+              case _ => false
+            }) match {
+            case Some(paths) => (for {
+              after <- _machine_source_c(core, port, edge)
+              actualjar <- machineJarObservationC(core, edge, programs)
+              _ <- if (actualjar == expected && before == after) Consequence.unit
+                else invalid("consumer source or the machine-common JAR changed during compilation")
+            } yield Result("verified", receipt.deepMerge(Json.obj(
+              "fullClasspath" -> paths.asJson, "consumerSource" -> after, "artifact" -> actualjar.asJson))))
+              .recoverWith(failure => Consequence.success(Result("unverified", receipt.mapObject(_.add("reason", failure.show.asJson)))))
+            case None => Consequence.success(Result(actual.outcome match {
+              case SbtExecutionOutcome.NotExecuted => "not-started"
+              case SbtExecutionOutcome.Failed(_) => "failed"
+              case SbtExecutionOutcome.Incomplete(_) => "unknown"
+              case _ => "unverified"
+            }, receipt))
+          }
+        case SbtExecutionAttempt.AdmissionRejected(selected, SbtOperation.TestCompile, reason) if selected == target =>
+          Consequence.success(Result("admission-rejected", reason.show.asJson))
+        case SbtExecutionAttempt.Uncertain(selected, SbtOperation.TestCompile, reason) if selected == target =>
+          Consequence.success(Result("unknown", reason.show.asJson))
+        case _ => Consequence.success(Result("unknown", "SBT result crosses the exact ordinary consumer program, target or operation".asJson))
+        }
+      }
+    }
+    result <- if (stored.status != "verified") Consequence.success(stored) else
+      _machine_source_c(core, port, edge).map { current =>
+        val receipt = stored.detail.hcursor
+        val paths = for {
+          raw <- receipt.get[Json]("process").toOption
+          actual <- WorkflowSbtCapture.decode(raw).toOption
+          resolved <- _machine_classpath(edge, workspace, programs, actual)
+        } yield resolved
+        if (receipt.get[String]("workspace").contains(workspace.value) && receipt.get[String]("operation").contains("test-compile") &&
+          paths.exists(receipt.get[Vector[String]]("fullClasspath").contains(_)) &&
+          receipt.downField("artifact").focus.contains(expected.asJson) &&
+          receipt.downField("consumerSource").focus.contains(current)) stored
+        else Result("unverified", stored.detail.mapObject(_.add("reason", "retained consumer verification is stale or incomplete".asJson)))
+      }.recoverWith(failure => Consequence.success(Result("unverified", stored.detail.mapObject(_.add("reason", failure.show.asJson)))))
+  } yield result
+
+  private def _machine_classpath(edge: Edge, workspace: WorkspaceId, programs: MachinePrograms,
+    process: ProcessExecutionResult): Option[Vector[String]] =
+    if (process.safeProgramIdentity != programs.consumer) None else SbtValidationDiscovery.decode(workspace, programs.discovery, process) match {
+      case SbtValidationDiscovery.Result.Available(build) if build.workspaceId == workspace =>
+        val paths = build.fullClasspath.map(_.toString)
+        Option.when(edge.machineLocalJar.exists(jar => paths.contains(jar.consumerJar)))(paths)
+      case _ => None
+    }
+
+  private def _machine_source_c(core: ActionCall.Core, port: NativePort, edge: Edge): Consequence[Json] = for {
+    index <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.IndexTree, edge.consumer.workspace).flatMap(_.valueC)
+    before <- port.consumerSourceC(edge)
+    repeated <- port.consumerSourceC(edge)
+    after <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.IndexTree, edge.consumer.workspace).flatMap(_.valueC)
+    _ <- if (before != Json.Null && before == repeated && index == after) Consequence.unit
+      else invalid("consumer source changed during observation")
+  } yield before.mapObject(_.add("indexTree", index.value.asJson))
 
   /** Read an existing admitted consumer invocation. This never creates input,
     * selects an artifact, builds a provider, or treats protection as selection. */

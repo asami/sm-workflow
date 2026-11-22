@@ -132,7 +132,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   // hands the original pending A Request back to the caller.
   private def managedIntegrationPending(h: Host, payload: Payload): Boolean = delegation &&
     payload.state.stage == "Adopted" && DelegateTask.requester(payload.state.input) &&
-    h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)
+    (payload.managedDependency.exists(_.edge.machineLocalJar.nonEmpty) || h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty))
   private def closureComplete(h: Host, payload: Payload): Boolean = terminal(payload.state.stage) &&
     !managedIntegrationPending(h, payload) &&
     !(payload.state.stage == "NoChange" && recordPaths(h, payload).nonEmpty && payload.records.isEmpty)
@@ -408,9 +408,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- if (delegation && prior.isEmpty) _preflight_execution_c(input, h) else Consequence.unit
     configuredpolicy = h.managedDevelopment.map(p => priorPayload.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_)))))
     _ <- if (!requester && input.delegation.exists(_.providerPhase.nonEmpty)) invalid("Declared provider Phase uses its existing GoalPhase owner; no bounded destination Start or duplicate lifecycle is allowed") else Consequence.unit
+    _ <- if (prior.isEmpty && requester && input.delegation.exists(_.providerPhase.nonEmpty) && h.managedDevelopment.exists(p =>
+      p.definition.edges.exists(e => p.dependencyWorkEdge.contains(e.identity) && e.machineLocalJar.nonEmpty)))
+      invalid("Provider Phase delivery requires its existing scoped publication interface") else Consequence.unit
     managed = delegation && !requester && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)
-    _ <- if (managed) ManagedDevelopmentBoundedWork.publicationInputC(h.managedDevelopment.get, input).map(_ => ()) else Consequence.unit
-    _ <- (if (requester || managed) None else input.delegation.flatMap(_.publicationTarget)).fold(Consequence.unit) { target =>
+    _ <- (if (prior.nonEmpty || requester || managed) None else input.delegation.flatMap(_.publicationTarget)).fold(Consequence.unit) { target =>
       if (h.publication.exists(p => LocalPublicationRuntime.validateC(p).isSuccess && p.targets.exists(t =>
           t.identity == target && t.component == input.delegation.get.componentIdentity && t.workspace == "sm-workflow-repository")))
         Consequence.unit else invalid("Required delegated publication target is not installed for this Component/workspace")
@@ -438,8 +440,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     capture <- if (delegation && !requester && prior.isEmpty) ManagedDevelopmentBoundedWork.captureSelectedC(h, input, core)
       else Consequence.success(Option.empty[ManagedDevelopmentBoundedWork.Captured])
     requesterroute <- if (requester && prior.isEmpty) ManagedDevelopmentBoundedWork.requesterRouteC(h, input, core)
-      else Consequence.success(Option.empty[DependencyDevelopmentDelivery.Route])
-    deliverypolicy = configuredpolicy.map(p => capture.flatMap(_.route).orElse(requesterroute)
+      else Consequence.success(Option.empty[ManagedDevelopmentBoundedWork.Captured])
+    deliverypolicy = configuredpolicy.map(p => capture.flatMap(_.route).orElse(requesterroute.flatMap(_.route))
       .fold(p)(route => p.copy(delivery = Some(Vector(route.binding)))))
     _ <- if (delegation) deliverypolicy.fold(Consequence.unit)(DependencyDevelopmentDelivery.admitC(_, input)) else Consequence.unit
     deliverybinding = deliverypolicy.flatMap(DependencyDevelopmentDelivery.binding)
@@ -463,7 +465,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           else Consequence.unit
         dependency <- if (requester && input.delegation.exists(_.providerPhase.nonEmpty))
           ManagedDevelopmentBoundedWork.captureC(h, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))), core)
-          else Consequence.success(capture.map(_.capture))
+          else Consequence.success(capture.orElse(requesterroute.filter(_.capture.edge.machineLocalJar.nonEmpty)).map(_.capture))
         initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
           CorrelationReference(key), CausationReference("standalone-started"), None, None, None, Vector.empty).validateC
         _ <- instances.createC(initial)(using core.executionContext)
@@ -877,7 +879,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     val s = payload.state
     s.stage match {
       case "DependencyChangeRequired" => Consequence.success(view(record, s, "DependencyChangeRequired", s.message))
-      case "AwaitResult" if delegation && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) => for {
+      case "AwaitResult" if delegation && (payload.managedDependency.exists(_.edge.machineLocalJar.nonEmpty) ||
+          h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)) => for {
         next <- ManagedDevelopmentBoundedWork.collectC(h, store, definition, s, core)
         saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, payload.copy(state = next), core)
       } yield view(saved, next, "Wait", next.message)
@@ -885,10 +888,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       // passively exposes it until the existing explicit delivery owner acts.
       case "AwaitResult" | "ResultReceived" if delegation =>
         Consequence.success(view(record, s, "Wait", s.message))
-      case "Adopted" if delegation && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) => for {
+      case "Adopted" if managedIntegrationPending(h, payload) => for {
         _ <- if (record.lifecycle == Lifecycle.Active) Consequence.unit else invalid(
           "Managed requester integration requires its retained active adoption frontier; a historical completed adoption cannot be reopened by Advance")
-        resumed <- ManagedDevelopmentBoundedWork.continuationC(h, store, definition, s, core)
+        resumed <- ManagedDevelopmentBoundedWork.continuationC(h, store, definition, s, core, payload.managedDependency)
         next = resumed._1
         saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, payload.copy(state = next), core)
         retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
@@ -1351,7 +1354,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     commit = payload.state.commit.getOrElse(S.Commit(existing.identity, existing.parents.headOption.getOrElse(existing.identity), existing.tree))
     _ <- if (payload.state.candidate.exists(_.tree == commit.tree)) Consequence.unit else invalid("No-change source is not the checked existing commit")
     delivery = payload.state.delivery.getOrElse(DelegateTask.Delivery())
-    managed <- h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty) match {
+    machine = payload.managedDependency.exists(_.edge.machineLocalJar.nonEmpty)
+    managed <- (if (machine || payload.managedDependency.isEmpty) None else h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty)) match {
       case Some(policy) => for {
         input <- ManagedDevelopmentBoundedWork.publicationInputC(policy, payload.state.input)
         capture <- payload.managedDependency.map(Consequence.success).getOrElse(invalid("Managed delivery has no original A capture"))
@@ -1370,9 +1374,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         }
           else Consequence.success(Option.empty[ManagedDevelopment.Publication])
       } yield Some(result -> publication)
+      case None if !machine && payload.managedDependency.nonEmpty => invalid("Retained scoped delivery has no current managed dependency policy")
       case None => Consequence.success(Option.empty[(ManagedDevelopment.Result, Option[ManagedDevelopment.Publication])])
     }
-    publication <- (if (managed.nonEmpty) None else contract.publicationTarget) match {
+    publication <- if (machine) for {
+      _ <- if (observed.head == commit.identity && observed.tree == commit.tree && observed.dirty.isEmpty) Consequence.unit
+        else invalid("Machine-common publication source is not B's clean accepted commit/tree")
+      result <- ManagedDevelopmentBoundedWork.machinePublicationC(h, payload, commit, from.identity.value, core)
+    } yield Some(result) else (if (managed.nonEmpty) None else contract.publicationTarget) match {
       case None => Consequence.success(Option.empty[LocalPublication.Result])
       case Some(target) => h.publication.map { policy => for {
         selected <- policy.targets.find(t => t.identity == target && t.component == contract.componentIdentity && t.workspace == "sm-workflow-repository")
@@ -1380,7 +1389,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         result <- LocalPublicationRuntime.ensureDeliveryC(core, policy, DelegateTask.publicationInput(from.identity.value, payload.state))
       } yield Some(result) }.getOrElse(invalid("Required runtime-owned publication capability is not configured"))
     }
-    ready = managed.fold(publication.forall(_.ready))(_._2.nonEmpty)
+    ready = if (machine) publication.exists(_.status == "published") else managed.fold(publication.forall(_.ready))(_._2.nonEmpty)
     sync <- if (ready && contract.synchronization.nonEmpty && managed.flatMap(_._2).nonEmpty)
       DevelopmentDeliverySynchronization.ensureC(core, h.managedDevelopment.get,
         ManagedDevelopment.Input(managed.get._2.get.edge.identity, payload.state.input.requestIdentity,

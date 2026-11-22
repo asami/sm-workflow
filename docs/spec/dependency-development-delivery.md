@@ -409,6 +409,42 @@ Historical configurations without `delivery` retain their existing managed subtr
 route. Existing Sessions retain the mode captured at their original Start; later
 configuration does not move them to a new queue or remove queue exclusion.
 
+### Parent JAR consumption
+
+The delivery owner and parent build connection are independent. Recommend a
+project-private local JAR. The existing `localJar=true` route publishes scoped
+development coordinates and verifies the parent's explicit scoped selection.
+The parent enables its applicable sbt-cozy overlay once. Subsequent publication
+and selection use the existing runtime Operations.
+
+A developer may explicitly select a machine-common local JAR by setting the
+edge's `machineLocalJar` with `publicationTarget` and `consumerJar`.
+`publicationTarget` names the provider's existing ordinary local publication
+registration. `consumerJar` is the absolute expected Ivy local JAR path on
+the parent's ordinary classpath for the original coordinates. This edge uses
+`localJar=false` and has no source-project or private batch selection. The
+parent's normal dependency declaration and local resolver supply the JAR.
+The host registers ordinary provider `publish-local`, parent TestCompile
+with classpath discovery, and a CNCF File workspace with read access rooted at
+the expected JAR directory. No parent build plugin is needed for this route.
+
+The bounded provider records the actual normal publication result, verifies the
+accepted local source after execution and retains the SHA-256 of the JAR reported
+by the publisher. The parent attaches the receipt and original coordinates
+through ordinary requester adoption. For this mode the selection reference
+identifies the actual LocalPublication request at revision `1`. The following
+ordinary Advance retains the parent compile and its observed test classpath and
+recollects the original WorkOrder once the expected JAR's contents match. Recording a
+delivery or adopting its receipt does not prove parent use. A machine-common
+SNAPSHOT can be replaced by another local publication. The runtime checks the
+digest around compilation and before reusing the saved success. Verification
+describes the observed classpath and contents, without reserving the shared JAR.
+
+Existing issued requests retain their captured edge and published effects.
+Missing private setup leaves the private route unavailable. The separate
+provider-Phase delivery retains its existing scoped route. Phase 7.1 owns the
+deferred source-project integration.
+
 ### Selecting a route from GoalPhase
 
 A fresh implementation or repair result can request managed delivery through its
@@ -422,9 +458,8 @@ GoalPhase Human question retains the proposal and exposes optional
 - `AssignedChat` is labeled **Assigned development chat**. It needs a matching
   existing chat registration on the same dependency edge.
 
-Both alternatives require the registered provider worktree and branch, the
-scope-private artifact workspace, and a declared and granted scoped-publish
-program for the edge's local JAR route. An unavailable alternative explains its
+Both alternatives require the registered provider worktree and branch and the
+prerequisites for the selected JAR use. An unavailable alternative explains its
 missing or disabled prerequisite. If no active managed edge matches the
 proposal, both alternatives report the missing repository registration and the
 chat alternative also reports the missing assigned chat. Fixed dependencies
@@ -447,12 +482,13 @@ preserves that route while identifying the effective approved inventory.
 The existing requester Start reads the pending WorkOrder and retains the selected
 binding for ordinary dispatch. The bounded destination Start reads that exact pending WorkOrder and
 checks the original owner, current registration, source root and branch,
-scope-private artifact workspace, approved paths and actual answer reference.
+workspace and host prerequisites for the selected JAR route, approved paths and
+actual answer reference.
 Local worktree uses `managed-worktree:<provider workspace>` as the destination.
 Assigned development chat uses the exact registered identity and existing FIFO.
 Reconnection uses the original saved Start binding. Either route still requires
 the existing independent Start selection and normal execution, validation,
-review, commit and scoped publication authority. Selecting a route performs no
+review, commit and the selected publication authority. Selecting a route performs no
 dispatch, installation, publication or repository synchronization.
 
 Destination scope correction may add only literal paths from the exact approved
@@ -484,11 +520,11 @@ Advance claims the first eligible request before issuing implementation. An
 active request in Human/wait retains its place. On the first claim the runtime
 records the actual current clean provider base, allowing an already queued request
 to follow a predecessor's accepted commit without capturing that predecessor's
-uncommitted work. Accepted local commit plus required scoped publication and
+uncommitted work. Accepted local commit plus the required publication and
 post-publication acceptance release the place at `ReturnReady`; transport return,
 consumer adoption and separate synchronization do not retain the queue place.
 Failed/unverified publication stays pending, preserving the existing accepted
-commit/checks and scoped operation's no-blind-replay behavior.
+commit/checks and the publication owner's replay protections.
 
 The original `DelegateTaskContract.permittedOperations` may explicitly include
 `queue-hold`, `queue-cancel` and `queue-resume`. The existing delivery observation

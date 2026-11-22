@@ -12,7 +12,7 @@ import org.goldenport.record.io.RecordDecoder
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {
@@ -73,23 +73,30 @@ private[smworkflow] object LocalPublication {
       publicationpolicy <- cursor.get[String]("publicationPolicy")
     } yield ConfirmedFailureSuccessor(direction, previous, source, sourcecapture, processpolicy, publicationpolicy) }
   }
+  final case class ArtifactObservation(path: String, sha256: String, byteCount: Int) {
+    def valid: Boolean = path != null && path.nonEmpty && sha256 != null && sha256.matches("[0-9a-f]{64}") && byteCount > 0
+  }
   final case class Result(status: String, reason: String, request: Request,
     process: Option[Json] = None, nextPreparation: Option[String] = None,
-    applicability: Option[LocalPublicationSourceApplicability.Fact] = None) {
+    applicability: Option[LocalPublicationSourceApplicability.Fact] = None,
+    artifact: Option[ArtifactObservation] = None) {
     def ready: Boolean = status == "published" || status == "unnecessary"
   }
   object Result {
-    given Encoder[Result] = io.circe.generic.semiauto.deriveEncoder[Result].mapJson(_.mapObject(fields =>
-      if (fields("applicability").contains(Json.Null)) fields.remove("applicability") else fields))
+    given Encoder[Result] = io.circe.generic.semiauto.deriveEncoder[Result].mapJson(_.mapObject(_.filter {
+      case ("applicability" | "artifact", value) => !value.isNull
+      case _ => true
+    }))
     private val _decoder: Decoder[Result] = io.circe.generic.semiauto.deriveDecoder
     given Decoder[Result] = Decoder.instance(c =>
-      if (c.downField("applicability").focus.exists(_.isNull) ||
-          !c.value.asObject.exists(_.keys.forall(Set("status", "reason", "request", "process", "nextPreparation", "applicability"))))
+      if (Vector("applicability", "artifact").exists(field => c.downField(field).focus.exists(_.isNull)) ||
+          !c.value.asObject.exists(_.keys.forall(Set("status", "reason", "request", "process", "nextPreparation", "applicability", "artifact"))))
         Left(io.circe.DecodingFailure("Invalid publication applicability field", c.history))
       else _decoder(c).flatMap(r => if (r.applicability.forall(f => r.status == "unnecessary" &&
           r.process.isEmpty && r.nextPreparation.isEmpty && LocalPublicationSourceApplicability.valid(f) &&
           r.request.source == f.current && r.request.target == f.original.target &&
-          r.request.participant == f.original.participant && r.request.input.ownerSessionId == f.original.input.ownerSessionId)) Right(r)
+          r.request.participant == f.original.participant && r.request.input.ownerSessionId == f.original.input.ownerSessionId) &&
+          r.artifact.forall(a => r.status == "published" && r.process.nonEmpty && a.valid)) Right(r)
         else Left(io.circe.DecodingFailure("Crossed publication applicability decision", c.history))))
   }
   enum Necessity {
@@ -146,6 +153,8 @@ private[smworkflow] object LocalPublication {
     def createC(key: String, value: Json): Consequence[Unit]
     def sourceC(target: Target): Consequence[Source]
     def executeC(target: Target): Consequence[SbtExecutionAttempt]
+    def observeArtifactC(request: Request, actual: ProcessExecutionResult): Consequence[Option[ArtifactObservation]] =
+      Consequence.success(None)
     def newIdentity(): String
     def sourceApplicabilityC(target: Target, previous: Result, current: Source):
       Consequence[Option[LocalPublicationSourceApplicability.Fact]] = Consequence.success(None)
@@ -840,9 +849,12 @@ private[smworkflow] object LocalPublication {
               case SbtExecutionOutcome.Failed(_) => "failed"
               case _ => "uncertain"
             }
-            Consequence.success(Result(status, "Actual runtime-owned typed publishLocal outcome", request,
+            val saved = Result(status, "Actual runtime-owned typed publishLocal outcome", request,
               Some(WorkflowSbtCapture.encode(actual.processResult)),
-              Option.when(preparation && status == "not-started")(port.newIdentity())))
+              Option.when(preparation && status == "not-started")(port.newIdentity()))
+            if (status != "published") Consequence.success(saved)
+            else port.observeArtifactC(request, actual.processResult).map(artifact => saved.copy(artifact = artifact))
+              .recoverWith(failure => Consequence.success(saved.copy(status = "uncertain", reason = failure.show)))
           case SbtExecutionAttempt.AdmissionRejected(target, SbtOperation.PublishLocal, conclusion)
               if target.workspaceId.value == request.target.workspace =>
             Consequence.success(Result("admission-rejected", conclusion.toString, request))

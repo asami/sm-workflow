@@ -507,6 +507,73 @@ authorized route; do not make this gap a stop condition for unrelated ongoing
 work. Genuine new effects or unresolved authority use the normal public decision
 path, while applicable existing authorization is carried forward.
 
+## Dependency development delivery choice
+
+When dependency development needs a delivery choice, present both
+**ローカルworktree（既定）** (`DevelopmentSubtree`) and **担当チャット**
+(`AssignedChat`). Reuse an actual user selection or configured/captured mode
+without asking again. The managed local route is the default for a new
+participating dependency without an explicit mode; retain explicit `Fixed`,
+repository-owner restrictions and existing Session bindings.
+
+A missing managed-dependency registration or a response without delivery choices
+does not select `AssignedChat` or require a chat identity/new-chat permission.
+Explain the two delivery methods separately from dependency-scope approval;
+do not append them to a closed Human answer DTO. Carry the selected method
+through supported runtime configuration/admission. If setup is missing, use
+the normal program-owned setup route; if it cannot represent or apply the choice,
+report that concrete gap while preserving the Session and pending work.
+
+For the local method, use the runtime-managed dependency worktree in the
+project's standard development area. For the chat method, use the configured
+existing owner and the authorized DelegateTask route below. Both methods
+retain the separately selected JAR consumption binding. An already
+dispatched request keeps its original delivery owner and binding.
+
+### Parent SBT build prerequisites
+
+Choose consumption separately from `DevelopmentSubtree` and `AssignedChat`.
+Present **プロジェクト専用ローカルJAR（推奨）** first and **マシン共通ローカルJAR**
+as an explicit selection. The captured choice stays with the Session.
+
+For a project-private JAR, retain the supported `localJar=true` configuration.
+Inspect the actual parent's `build.sbt` and `project/plugins.sbt`:
+
+- A supported effective sbt-cozy version and enabled
+  `CozyDevelopmentArtifactsPlugin`. Existing `CozyPlugin` enablement can already
+  require it; do not demand duplicate enablement or infer support from a version
+  declaration without considering actual overrides and the delivered adapter.
+- The selected original direct dependencies use `cozyDevelopmentDependency`,
+  and `cozyDevelopmentModules` declares the expected original coordinates,
+  including transitive-only modules. Inspect dependency helpers and effective
+  project/configuration settings. Do not inject a transitive-only module as a
+  direct dependency or assume registration puts an absent module in the graph.
+- The runtime supplies the exact scoped selection input for the parent build,
+  and the selected publication, resolved coordinates and Compile/Test classpath
+  have actual applicable adapter evidence. Configuration alone is not validation.
+
+Apply private JAR configuration once. Publication, selection, update, rollback
+and detach use the existing runtime and leave baseline build declarations in
+place.
+
+For a machine-common JAR, explicitly configure `machineLocalJar` on the
+managed edge with the existing normal `publicationTarget` and the declared
+consumer `consumerJar` path in Ivy local at the original dependency coordinates. Keep
+`localJar=false` and omit `localProject` and private batch settings for that
+edge. The parent uses its ordinary dependency and local repository resolver.
+This route needs no sbt-cozy opt-in or development overlay declarations.
+Register the expected JAR directory as a CNCF File workspace with read access.
+The runtime retains the ordinary publication result and the exact JAR's content
+digest. The parent checks the digest and the actual SBT test classpath. The same
+coordinates, especially SNAPSHOT, can be replaced by another local publication
+and affect other consumers. A replacement invalidates reuse of the saved check
+until the expected contents are available again.
+
+Report the selected mode, missing setup, actual publication, and parent build
+verification separately. Missing private JAR setup leaves that route pending.
+Machine-common publication requires its explicit selection and approved scope.
+Phase 7.1 source-project integration remains on hold.
+
 ## Independent dependency delivery
 
 When an authorized parent task needs changes in a dependency repository, the

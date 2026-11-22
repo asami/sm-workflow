@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * There is no shell, external AI execution runner or caller-selected argv here.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationRuntime {
@@ -108,7 +108,11 @@ private[smworkflow] object LocalPublicationRuntime {
     }
   } yield projected
 
-  private[admission] def _port(core: ActionCall.Core, policy: Policy): LocalPublication.Port = new LocalPublication.Port {
+  final case class MachinePublication(source: LocalPublication.Source, edge: ManagedDevelopment.Edge,
+    programs: ManagedDevelopmentRuntime.MachinePrograms)
+
+  private[admission] def _port(core: ActionCall.Core, policy: Policy,
+    machine: Option[MachinePublication] = None): LocalPublication.Port = new LocalPublication.Port {
     private def _bound(key: String) = ComponentRecordStorage.bindForCallC(core, policy.storeName,
       policy.collection, DataStore.StringEntryId(key))
     def loadC(key: String): Consequence[Option[Json]] = _bound(key).flatMap(_.loadC()).flatMap {
@@ -132,9 +136,32 @@ private[smworkflow] object LocalPublicationRuntime {
         change.worktree.toString, change.renamedFrom) }
       after <- RepositorySyncManagedGitObservation.observeInWorkspaceC(core, target.workspace)
       _ <- if (observed == after) Consequence.unit else Consequence.stateConflict("Publication source changed during observation")
-    } yield LocalPublication.Source(observed.head, tree.value, dirty)
+      source = LocalPublication.Source(observed.head, tree.value, dirty)
+      _ <- if (machine.forall(expected => source == expected.source && after.dirty.isEmpty)) Consequence.unit
+        else Consequence.stateConflict("Machine-common publication source differs from the accepted clean commit/tree")
+    } yield source
     def executeC(target: LocalPublication.Target): Consequence[SbtExecutionAttempt] =
-      WorkflowManagedProcessExecution.publishLocalAttemptC(core, target.workspace)
+      if (machine.isEmpty) WorkflowManagedProcessExecution.publishLocalAttemptC(core, target.workspace)
+      else sourceC(target) match {
+        case Consequence.Failure(failure) => WorkspaceId.parseC(target.workspace).map(workspace =>
+          SbtExecutionAttempt.AdmissionRejected(SbtTarget(workspace), SbtOperation.PublishLocal, failure))
+        case Consequence.Success(_) => WorkflowManagedProcessExecution.publishLocalAttemptC(core, target.workspace)
+      }
+    override def observeArtifactC(request: LocalPublication.Request, actual: ProcessExecutionResult):
+        Consequence[Option[LocalPublication.ArtifactObservation]] = machine match {
+      case None => Consequence.success(None)
+      case Some(bound) => for {
+        source <- sourceC(request.target)
+        jar <- bound.edge.machineLocalJar.map(Consequence.success)
+          .getOrElse(Consequence.stateConflict("Machine-common publication has no retained JAR binding"))
+        output = WorkflowSbtCapture.text(actual.stdout)
+        reported = "published " + bound.edge.requested.module + " to " + jar.consumerJar
+        _ <- if (source == request.source && actual.safeProgramIdentity == bound.programs.publication &&
+          output.textStatus == "complete" && output.value.linesIterator.exists(_.stripPrefix("[info]").trim == reported))
+          Consequence.unit else Consequence.stateConflict("Ordinary publication could not attribute the expected JAR to the accepted source")
+        artifact <- ManagedDevelopmentRuntime.machineJarObservationC(core, bound.edge, bound.programs)
+      } yield Some(artifact)
+    }
     override def sourceApplicabilityC(target: LocalPublication.Target, previous: LocalPublication.Result,
       current: LocalPublication.Source): Consequence[Option[LocalPublicationSourceApplicability.Fact]] =
       policy.artifactInputs.find(_.targetIdentity == target.identity) match {
@@ -158,12 +185,13 @@ private[smworkflow] object LocalPublicationRuntime {
     fact <- LocalPublication.collectApplicabilityC(result, _port(core, policy))
   } yield fact
 
-  def ensureC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input): Consequence[LocalPublication.Result] = for {
+  def ensureC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input,
+    machine: Option[MachinePublication] = None): Consequence[LocalPublication.Result] = for {
     _ <- validateC(policy)
     target <- policy.targets.find(_.identity == input.targetIdentity).map(Consequence.success)
       .getOrElse(Consequence.configurationInvalid("Publication target is not declared by this host"))
     participant = SecuritySubject.from(core.executionContext.security).subjectId
-    result <- LocalPublication.ensureC(input, target, participant, _port(core, policy))
+    result <- LocalPublication.ensureC(input, target, participant, _port(core, policy, machine))
   } yield result
 
   def ensureDeliveryC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input): Consequence[LocalPublication.Result] = for {

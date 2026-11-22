@@ -266,6 +266,12 @@ asking the consumer to freeze each edit or relay each reviewer question. This
 organizes responsibility; it does not merge native issued work types or grant
 semantic workers command authority. Normal Phase validation remains runtime-owned.
 
+For dependency development, choose the
+[delivery owner](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice)
+separately from [parent JAR use](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
+Recommend project-private JAR use and offer machine-common JAR use as an
+explicit alternative. Reuse the captured choice for issued work.
+
 Route a new authorized development deliverable to another chat through
 [sm-delegate-task](../sm-delegate-task/SKILL.md), following the
 [new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations).

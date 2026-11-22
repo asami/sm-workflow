@@ -149,6 +149,12 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
+Carry the already selected JAR use separately from the
+[delivery owner](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice).
+Follow the [parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
+for the selected private or explicitly chosen machine-common JAR. Report the
+actual publication and parent verification independently.
+
 For a fresh request, use the intent already established during selection to
 author `workClassification` with separate `implementation`, `repair` and
 `review` members. Use the fields and values in the

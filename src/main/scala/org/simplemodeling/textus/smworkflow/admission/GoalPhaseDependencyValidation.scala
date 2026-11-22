@@ -16,7 +16,7 @@ import GoalPhaseNativeValidation as V
 /** References select business context, never execution permission or observations.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyValidation {
@@ -47,7 +47,10 @@ private[smworkflow] object GoalPhaseDependencyValidation {
   private given Decoder[O.Snapshot] = _closed(Set("head", "tree"), deriveDecoder)
   private given Encoder[ManagedDevelopment.Coordinate] = deriveEncoder
   private given Decoder[ManagedDevelopment.Coordinate] = deriveDecoder
-  private given Encoder[ManagedDevelopment.Edge] = deriveEncoder
+  private given Encoder[ManagedDevelopment.Edge] = deriveEncoder[ManagedDevelopment.Edge].mapJson(_.mapObject(_.filter {
+    case ("machineLocalJar", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[ManagedDevelopment.Edge] = deriveDecoder
   given Encoder[ManagedCapture] = deriveEncoder
   given Decoder[ManagedCapture] = deriveDecoder

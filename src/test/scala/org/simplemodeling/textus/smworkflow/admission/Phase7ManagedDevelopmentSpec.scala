@@ -1456,6 +1456,12 @@ allowedKinds = ["text"]
     }
   }
 
+  private[admission] def exerciseMachineLocalJarDelivery(): Unit = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+      "machine-local-").toRealPath()
+    ConnectedFixture.exercise(root, "RouteMachineLocal")
+  }
+
   private object ConnectedFixture extends ThreeWorkflowManagedRepositoryFixture {
     override protected def standard_runtime = true
     private val connectedEdge = edge.copy(provider = edge.provider.copy(workspace = "managed-b"),
@@ -1463,6 +1469,51 @@ allowedKinds = ["text"]
     private val connectedDefinition = definition.copy(scope = "connected", edges = Vector(connectedEdge))
     private val connectedPolicy = policy.copy(definition = connectedDefinition, dependencyWorkEdge = Some(connectedEdge.identity))
     private val suite = "example.ProviderSpec"
+    private val _provider_path = "src/main/scala/example/Provider.scala"
+    private val _machine_target = "fixture-common-publication"
+    private val _machine_consumer_program = "sm-workflow-repository-test-compile"
+    private val _machine_publication_program = "managed-b-publish-local"
+    private val _machine_jar_workspace = "machine-local-jar"
+    private def _machine_edge(root: Path): Edge = {
+      val coordinate = connectedEdge.requested.copy(organization = connectedEdge.requested.organization + "." + root.getFileName.toString)
+      val jar = Path.of(System.getProperty("user.home"), ".ivy2/local", coordinate.organization, coordinate.module,
+        coordinate.version, "jars", coordinate.module + ".jar").toAbsolutePath.normalize()
+      connectedEdge.copy(localJar = false, requested = coordinate, machineLocalJar = Some(MachineLocalJar(_machine_target, jar.toString)))
+    }
+
+    private def _prepare_plain_build(root: Path, producer: Boolean, coordinate: Coordinate): Unit = {
+      Files.createDirectories(root.resolve("project"))
+      Files.createDirectories(root.resolve("src/main/scala/example"))
+      Files.writeString(root.resolve("project/build.properties"), "sbt.version=1.9.7\n")
+      Files.writeString(root.resolve(".gitignore"), "target/\nproject/target/\nproject/project/\n")
+      val build = s"""scalaVersion := "2.12.18"
+        |organization := "${coordinate.organization}"
+        |name := "${if (producer) "provider" else "consumer"}"
+        |version := "${coordinate.version}"
+        |""".stripMargin
+      val options = if (producer)
+        """publishLocal := {
+          |  val result = publishLocal.value
+          |  IO.append(baseDirectory.value.getParentFile / "publications.txt", "published\n")
+          |  result
+          |}
+          |""".stripMargin
+      else s"""resolvers += Resolver.defaultLocal
+        |libraryDependencies += "${coordinate.organization}" %% "provider" % "${coordinate.version}"
+        |Test / compile := {
+        |  val result = (Test / compile).value
+        |  IO.append(baseDirectory.value.getParentFile / "parent-checks.txt", "compiled" + System.lineSeparator())
+        |  result
+        |}
+        |""".stripMargin
+      Files.writeString(root.resolve("build.sbt"), build + options)
+      if (producer)
+        Files.writeString(root.resolve(_provider_path), "package example\nobject Provider { def answer: Int = 41 }\n")
+      else
+        Files.writeString(root.resolve("src/main/scala/example/Consumer.scala"),
+          "package example\nobject Consumer { val answer: Int = Provider.answer }\n")
+    }
+
     private def array(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
     private def remap(value: Json, workspace: String, prefix: String): Json = value.mapString { text =>
       if (text == TypedGitHostPlanFixture.workspace) workspace
@@ -1472,7 +1523,10 @@ allowedKinds = ["text"]
     override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
       val producer = root.getFileName.toString == "b"
       if (!Files.exists(root.resolve("repository/build.sbt"))) {
-        prepareBuild(root.resolve("repository"), producer)
+        if (scenario == "RouteMachineLocal") {
+          val fixtureroot = if (producer || root.getFileName.toString == "other") root.getParent else root
+          _prepare_plain_build(root.resolve("repository"), producer, _machine_edge(fixtureroot).requested)
+        } else prepareBuild(root.resolve("repository"), producer)
         Files.createDirectories(root.resolve("repository/src/test/scala"))
         Files.writeString(root.resolve("repository/src/test/scala/ProductCheck.scala"), "object ProductCheck\n")
         Files.writeString(root.resolve("repository/value.txt"), "fixture baseline\n")
@@ -1489,16 +1543,18 @@ allowedKinds = ["text"]
     }
     override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {
       val original = super._setup_commands_(root, "Goal")
+      val sources = if (scenario == "RouteMachineLocal") Vector("src") else Vector("src", "project/plugins.sbt")
       original.patch(original.indexWhere(_.contains("commit")), Vector(Vector("-C", root.resolve("repository").toString,
-        "add", "--", "src", "project/plugins.sbt")), 0)
+        "add", "--") ++ sources), 0)
     }
     override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
       val a = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
         goalPaths = goal.candidatePaths)
       val bRoot = root.resolve("b/repository")
+      val bpaths = if (scenario == "RouteMachineLocal") Vector(_provider_path) else Vector("src/main/scala", "src/test/scala")
       val originalB = remap(TypedGitHostPlanFixture.plan(Programs.Target(bRoot, "main", "origin", "main", root.resolve("b/upstream.git").toString),
-        goalPaths = Vector("src/main/scala", "src/test/scala"), goalMessages = Vector("Managed B accepted source"),
-        goalSelections = Vector(Vector("src/main/scala", "src/test/scala"))), "managed-b", "b-")
+        goalPaths = bpaths, goalMessages = Vector("Managed B accepted source"),
+        goalSelections = Vector(bpaths)), "managed-b", "b-")
       val b = originalB.mapObject(_.add("gitPrograms", array(originalB, "gitPrograms")
         .map(p => if (p.hcursor.get[String]("selectionId").contains("goal-step-1")) p.mapObject(_.add("selectionId", "delegate-task".asJson)) else p).asJson))
       val validationRoot = if (scenario == "CanonicalAliases") root.resolve("canonical") else root.resolve("b")
@@ -1506,17 +1562,26 @@ allowedKinds = ["text"]
       val focused = TypedSbtHostPlanFixture.plan(validationRoot, TypedSbtHostPlanFixture.normalExecutable, Vector(2),
         operation = SbtOperation.TestOnly, testClasses = Vector(suite))
       val template = array(compile, "sbtPrograms").head
-      val artifacts = Vector("managed-b" -> "scoped-publish", "sm-workflow-repository" -> "compile").map { (workspace, operation) =>
-        template.mapObject(_.add("target", workspace.asJson).add("operation", operation.asJson)
+      val operations = if (scenario == "RouteMachineLocal") Vector("managed-b" -> "publish-local", "sm-workflow-repository" -> "test-compile")
+        else Vector("managed-b" -> "scoped-publish", "sm-workflow-repository" -> "compile")
+      val artifacts = operations.map { (workspace, operation) =>
+        val program = template.mapObject(_.add("target", workspace.asJson).add("operation", operation.asJson)
           .add("capability", (workspace + "-" + operation).asJson).add("identity", (workspace + "-" + operation).asJson))
+        if (operation == "test-compile") program.mapObject(_.add("validationDiscovery", Json.obj(
+          "componentIdentity" -> connectedEdge.consumer.identity.asJson,
+          "artifactIdentity" -> "machine-local-parent".asJson,
+          "artifactRevision" -> "1".asJson,
+          "packagePrefix" -> "example".asJson))) else program
       }
       val owner = Json.obj("identity" -> connectedDefinition.ownerWorkspace.asJson,
         "root" -> root.resolve(".textus/sm-workflow/work.d").toString.asJson)
       val other = Json.obj("identity" -> "other-consumer".asJson, "root" -> root.resolve("other/repository").toString.asJson)
       val capture = Json.obj("identity" -> "sm-workflow-validation-artifacts".asJson,
         "root" -> root.resolve("validation-captures").toString.asJson)
+      val jarWorkspace = Option.when(scenario == "RouteMachineLocal")(Json.obj("identity" -> _machine_jar_workspace.asJson,
+        "root" -> Path.of(_machine_edge(root).machineLocalJar.get.consumerJar).getParent.toString.asJson))
       val workspaces = array(a, "workspaces") ++ array(b, "workspaces") ++ array(compile, "workspaces") ++
-        array(focused, "workspaces") ++ Vector(owner, other, capture)
+        array(focused, "workspaces") ++ Vector(owner, other, capture) ++ jarWorkspace
       // V5 repository declarations own the ordinary Git family. Keep only the
       // explicitly selected programs; declaring both families for one target
       // would overlap the native repository expansion.
@@ -1535,22 +1600,35 @@ allowedKinds = ["text"]
       a.mapObject(_.add("schema", "cncf.runtime-process-execution.v5".asJson)
         .add("workspaces", workspaces.asJson).add("gitPrograms", git.asJson).add("sbtPrograms", sbt.asJson)
         .add("gitRepositories", repositories.asJson)
-        .add("workspaceGrants", workspaces.map(w => Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
-          "workspaceId" -> w.hcursor.get[String]("identity").toOption.get.asJson, "access" -> "manage".asJson)).asJson)
+        .add("workspaceGrants", workspaces.map { w =>
+          val id = w.hcursor.get[String]("identity").toOption.get
+          Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson, "workspaceId" -> id.asJson,
+            "access" -> (if (id == _machine_jar_workspace) "read-only" else "manage").asJson)
+        }.asJson)
         .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
           "capabilities" -> (git ++ sbt ++ repositories).map(_.hcursor.get[String]("capability").toOption.get).distinct
             .filterNot(capability => scenario == "DirtyPostCommit" && capability == "managed-b-scoped-publish").asJson))))
     }
 
     def exercise(root: Path, mode: String = "Connected"): Unit = {
+      val machine = mode == "RouteMachineLocal"
+      val offerededge = if (machine) _machine_edge(root) else connectedEdge
+      offerededge.machineLocalJar.foreach(jar => Files.createDirectories(Path.of(jar.consumerJar).getParent))
       Files.createDirectories(root.resolve("b/repository"))
       Files.createDirectories(root.resolve("other/repository"))
       Files.createDirectories(root.resolve(".textus/sm-workflow/work.d"))
       Files.createDirectories(root.resolve("validation-captures/validation"))
       if (mode == "CanonicalAliases") TypedSbtHostPlanFixture.build(root.resolve("canonical"), true)
+      val publicationcollection = ThreeWorkflowNormalHostFixture.collection("local_publication")
+      val storagecollections = Vector(collection) ++ Option.when(machine)(publicationcollection)
       val storage = ThreeWorkflowNormalHostFixture.storagePlan.mapObject(fields => fields.add("records",
-        (fields("records").get.asArray.get :+ Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
-          "storeName" -> "workflow".asJson, "collection" -> collection.asJson)).asJson))
+        (fields("records").get.asArray.get ++ storagecollections.map(name =>
+          Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+            "storeName" -> "workflow".asJson, "collection" -> name.asJson))).asJson))
+      val publicationparameters = if (machine) Map(LocalPublicationRuntime.declaration.name -> Json.obj(
+        "storeName" -> "workflow".asJson, "collection" -> publicationcollection.asJson,
+        "targets" -> Vector(LocalPublication.Target(_machine_target, offerededge.provider.identity, offerededge.provider.workspace)).asJson).noSpaces)
+      else Map.empty[String, String]
       val settings = ThreeWorkflowNormalHostFixture.definition(root)
       val selection = _goal_selection_(settings.goal.input, "connected-plan", "connected-start")
       val coding = GoalPhaseWorkClassification.Classification(GoalPhaseWorkClassification.Kind.CODING,
@@ -1564,11 +1642,12 @@ allowedKinds = ["text"]
       else if (mode == "RouteMissingEdge")
         connectedPolicy.copy(definition = connectedDefinition.copy(edges = Vector(
           connectedEdge.copy(provider = connectedEdge.provider.copy(identity = "org.example.DifferentProvider")))))
+      else if (machine) connectedPolicy.copy(definition = connectedDefinition.copy(edges = Vector(offerededge)))
       else connectedPolicy
       val selectedPolicy = if (mode == "RouteFixed") configuredpolicy.copy(delivery = Some(Vector(
         DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.fixed))))
       else if (mode == "Assigned" || mode.startsWith("AssignedPhase") ||
-          Set("RouteSubtree", "RouteAssignedChat", "RouteMissingRepository")(mode)) configuredpolicy.copy(delivery = Some(Vector(
+          Set("RouteSubtree", "RouteAssignedChat", "RouteMissingRepository", "RouteMachineLocal")(mode)) configuredpolicy.copy(delivery = Some(Vector(
         DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.assignedChat,
           Some(DelegateTaskRequesterRoutingFixture.input("owner").delegation.destinationIdentity))))) else configuredpolicy
       // This provider Plan explicitly defers synchronization until scoped publication.
@@ -1578,7 +1657,8 @@ allowedKinds = ["text"]
       var reconnect = Option.empty[(V.DelegateTaskInput, String)]
       var unavailable = Option.empty[(String, V.GoalPhaseHumanQuestion, GoalPhaseDependencyScope.Proposal)]
       _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
-        "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++ completionParameters) { (owner, component, actor, prepare) =>
+        "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++
+        completionParameters ++ publicationparameters, componentInstance = if (machine) "default" else "repository-spec") { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("b"), mode).size, Some(root.resolve("b")), mode)).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("other"), mode).size, Some(root.resolve("other")), mode)).flatMap(_ =>
@@ -1610,8 +1690,9 @@ allowedKinds = ["text"]
                 NonEmptyVector.fromVectorUnsafe(c.permittedOperations.toVector :+ "repository-sync") else c.permittedOperations,
               synchronization = Option.when(mode == "Connected")(V.DelegateDeliverySynchronization(connectedEdge.provider.repository,
                 "main", "origin", "main", root.resolve("b/upstream.git").toString, "FULL_STATE")),
-              publicationTarget = Some(connectedEdge.identity), artifactCoordinates = Vector(connectedEdge.requested.organization + ":" +
-                connectedEdge.requested.module + ":" + version(connectedEdge.requested.version, connectedDefinition.scope, request))),
+              publicationTarget = Some(if (machine) _machine_target else connectedEdge.identity),
+              artifactCoordinates = Vector(coordinateString(if (machine) offerededge.requested else connectedEdge.requested.copy(
+                version = version(connectedEdge.requested.version, connectedDefinition.scope, request))))),
             if (mode == "Connected") Vector.empty else Vector("behavior"), None)
         }
         def start(value: V.DelegateTaskInput, suffix: String): Consequence[org.goldenport.protocol.operation.OperationResponse] = {
@@ -1626,14 +1707,61 @@ allowedKinds = ["text"]
           invoke("DelegateTaskService", "startDelegateTask", List(Property("input", value, None), Property("selectionId", selected, None),
             Property("participant", "participant", None), Property("idempotencyKey", selected, None)))
         }
+        def _prepare_adoption_(adoption: V.DelegateTaskObservationInput, artifact: Record): Unit = {
+          val context = read_value[V.DelegateTaskAdoptionContext](take(invoke("DelegateTaskDeliveryService", "describeDelegateTaskAdoption",
+            List(Property("sessionId", adoption.sessionId, None)))))
+          // The exact public target and selection must survive the evidence boundary.
+          def _assert_record_json_(value: Any, path: String): Unit = value match {
+            case record: Record =>
+              withClue("Connected adoption Record keys at " + path + ": ") {
+                record.fields.map(_.key).distinct.size shouldBe record.fields.size
+              }
+              record.fields.foreach(field => _assert_record_json_(field.value.single, path + "." + field.key))
+              withClue("Connected adoption Record serialization at " + path + ": ") {
+                record.toJsonStringC.isSuccess shouldBe true
+              }
+            case values: Seq[?] => values.zipWithIndex.foreach { (member, index) =>
+              _assert_record_json_(member, path + "[" + index + "]")
+            }
+            case other =>
+              val actualtype = Option(other).map(_.getClass.getName).getOrElse("null")
+              withClue("Connected adoption leaf at " + path + " (" + actualtype + "): ") {
+                Record.data("value" -> other).toJsonStringC.isSuccess shouldBe true
+              }
+          }
+          _assert_record_json_(context.target, "context.target")
+          _assert_record_json_(artifact, "artifactSelection")
+          prepare(call => for {
+            prepared <- NativeDelegateTaskAdoptionPreparation.prepareC(context, adoption, adoption.sourceReference,
+              V.WorkflowExecutionEvidence(Vector(adoption.sourceReference), Some("participant"), None, None), "normal-development-host", call.executionContext.clock.instant().minusSeconds(1))
+              .recoverWith(error => Consequence.stateConflict("Connected native adoption preparation failed before host-evidence write: " + error.print))
+            _ = _assert_record_json_(prepared.record, "prepared.hostEvidence")
+            _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+              .recoverWith(error => Consequence.stateConflict("Connected native adoption host-evidence write failed: " + error.print))
+          } yield ())
+        }
+        def _requester_record_(session: String): InstanceRecord = {
+          var actual = Option.empty[InstanceRecord]
+          prepare(call => call.delegateCurrentC(InstanceIdentity(session)).map { current => actual = Some(current); () })
+          actual.get
+        }
         if (mode.startsWith("Route")) {
           val local = DependencyDevelopmentDelivery.subtree
           val assigned = DependencyDevelopmentDelivery.assignedChat
-          val providerpath = "src/main/scala/example/Provider.scala"
+          val providerpath = _provider_path
           Given("an actual implementation WorkOrder and a typed provider proposal requesting source edits and local publication")
+          if (machine) {
+            val unlinked = input("destination", "unlinked-machine-delivery")
+            val contract = unlinked.delegation.copy(destinationIdentity = "managed-worktree:" + offerededge.provider.workspace,
+              authorizationReferences = NonEmptyVector.of(source.get))
+            val bounded = unlinked.copy(ownedPaths = NonEmptyVector.of(providerpath), delegation = contract)
+            start(bounded.copy(delegation = contract.copy(role = "requester")), "unlinked-machine-requester").isSuccess shouldBe false
+            start(bounded, "unlinked-machine-destination").isSuccess shouldBe false
+          }
           val proposal = GoalPhaseDependencyScope.Proposal("managed-delivery-proposal", "1", "IMPLEMENTATION",
-            connectedEdge.consumer, connectedEdge.provider, ContextReference("selected-usage", "1"),
-            "Produce the scoped provider correction for this exact consumer",
+            offerededge.consumer, offerededge.provider, ContextReference("selected-usage", "1"),
+            if (machine) "Produce the machine-local provider correction for this exact consumer"
+            else "Produce the scoped provider correction for this exact consumer",
             Vector(providerpath), Vector("Preserve the required consumer API"),
             Vector(ContextReference(source.get.identity, source.get.revision)), Vector.empty,
             Some(GoalPhaseDependencyScope.AuthorizationBoundary(GoalPhaseDependencyScope.authorizationSchema,
@@ -1661,7 +1789,7 @@ allowedKinds = ["text"]
           val alternatives = array(offer, "alternatives")
           alternatives.map(_.hcursor.get[String]("choice").toOption.get) shouldBe Vector(local, assigned)
           alternatives.map(_.hcursor.get[String]("label").toOption.get) shouldBe Vector("Local worktree", "Assigned development chat")
-          val both = Set("RouteSubtree", "RouteAssignedChat")(mode)
+          val both = Set("RouteSubtree", "RouteAssignedChat", "RouteMachineLocal")(mode)
           val worktree = both || mode == "RouteMissingChat"
           offer.hcursor.get[String]("defaultChoice").toOption shouldBe Option.when(worktree)(local)
           alternatives.map(_.hcursor.get[Boolean]("available").toOption.get) shouldBe Vector(worktree, both)
@@ -1670,7 +1798,7 @@ allowedKinds = ["text"]
           val retainedquestion = _advance_goal_()
           retainedquestion.human.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
             question.human.map(value => DevelopmentOperationalView.json(value.toRecord()))
-          val chosen = if (mode == "RouteSubtree") local else assigned
+          val chosen = if (mode == "RouteSubtree" || machine) local else assigned
           val answer = V.GoalPhaseOrderedDecisionAnswer(chosen, "SPECIFICATION-OWNED independent Human route direction")
           val reference = V.WorkflowArtifactReference("route-human", "1")
           val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
@@ -1710,6 +1838,11 @@ allowedKinds = ["text"]
             val route = DevelopmentOperationalView.json(direction.deliveryRoute.get)
             route.hcursor.get[String]("mode").contains(chosen) shouldBe true
             if (mode == "RouteSubtree") route.hcursor.downField("edge").get[String]("localProject").contains("managed-b") shouldBe true
+            if (machine) {
+              route.hcursor.get[Edge]("edge").toOption shouldBe Some(offerededge)
+              route.hcursor.downField("machinePrograms").get[String]("publication").toOption shouldBe Some(_machine_publication_program)
+              route.hcursor.downField("machinePrograms").get[String]("consumer").toOption shouldBe Some(_machine_consumer_program)
+            }
             val destination = if (chosen == local) "managed-worktree:" + connectedEdge.provider.workspace
               else selectedPolicy.delivery.get.head.chat.get
             route.hcursor.get[String]("destinationIdentity").contains(destination) shouldBe true
@@ -1719,7 +1852,10 @@ allowedKinds = ["text"]
             prepare(call => call.goalWorkC(InstanceIdentity(a.sessionId)).map { work =>
               val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]]
               source = Some(V.WorkflowArtifactReference(order.request.continuationId.value, order.request.expectedRevision.value))
-              order.request.input.get.value.decisionContext.flatMap(_.deliveryRoute).map(_.mode) shouldBe Some(chosen); ()
+              val retainedroute = order.request.input.get.value.decisionContext.flatMap(_.deliveryRoute)
+              retainedroute.map(_.mode) shouldBe Some(chosen)
+              if (machine) retainedroute.map(_.edge) shouldBe Some(offerededge)
+              ()
             })
             def _destination_(identity: String) = {
               val value = input("destination", identity)
@@ -1751,29 +1887,148 @@ allowedKinds = ["text"]
               "SPECIFICATION-OWNED caller observed the exact saved destination", None)
             take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", observed, None))))
             advance(requester.sessionId).kind shouldBe "Wait"
-            val second = read_value[V.DelegateTaskView](take(start(_destination_("route-second"), "route-second")))
+            val queued = Option.when(!machine)(read_value[V.DelegateTaskView](take(start(_destination_("route-second"), "route-second"))))
             val work = advance(first.sessionId)
-            Then("only the selected assigned chat queues its second destination")
             work.kind shouldBe "Request"
-            advance(second.sessionId).kind shouldBe (if (chosen == assigned) "Wait" else "Request")
-            When("the destination asks for a scope description outside the approved provider inventory")
-            val outside = V.DelegateTaskScopeCorrectionDescriptionInput(first.sessionId, work.issuedWorkContext.get.continuationId,
-              Vector("src/test/scala/ProductCheck.scala"), Vector.empty)
-            val denied = invoke("DelegateTaskService", "describeDelegateTaskScopeCorrection", List(Property("input", outside, None)))
-            Then("the shared correction owner refuses the additional path before superseding the WorkOrder")
-            denied match {
-              case Consequence.Failure(reason) => reason.displayMessage should include ("exact approved GoalPhase dependency inventory")
-              case Consequence.Success(_) => fail("The destination scope correction accepted a path outside the approved inventory")
+            if (machine) {
+              val jar = Path.of(offerededge.machineLocalJar.get.consumerJar)
+              val publisherlog = root.resolve("b/publications.txt")
+              val consumerlog = root.resolve("parent-checks.txt")
+              Files.exists(jar) shouldBe false
+              Files.exists(consumerlog) shouldBe false
+              When("the destination submits its approved source correction and the runtime validates, commits and publishes it")
+              Files.writeString(root.resolve("b/repository").resolve(providerpath),
+                "package example\nobject Provider { def answer: Int = 42 }\n")
+              val result = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED approved provider correction",
+                Vector.empty, NonEmptyVector.of(V.DelegateTaskCondition("behavior", true, "Provider returns the expected answer")),
+                Vector.empty, None, None)
+              val providerreference = V.WorkflowArtifactReference("machine-provider-semantic", "1")
+              delegate("submitDelegateTaskWorkResult", List(Property("sessionId", first.sessionId, None), Property("result", result, None),
+                Property("issuedWorkContext", work.issuedWorkContext.get, None), Property("resultReference", providerreference, None),
+                Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(providerreference), Some("specification-machine-implementer"), None,
+                  Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                    BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
+              val delivered = advance(first.sessionId)
+              Then("the destination retains ordinary successful checks and one publication on its clean accepted source")
+              withClue(delivered.message + ": ") { delivered.kind shouldBe "Return" }
+              val state = DelegateTaskRequesterRoutingFixture.state(delivered)
+              state.receipts.map(receipt => receipt.identity -> receipt.externalCapture.fold(receipt.exitCode)(_.exitCode)) shouldBe
+                Vector("compile" -> Some(0), "test-only" -> Some(0))
+              state.commitExecution.map(_.exitCode) shouldBe Some(Some(0))
+              val delivery = state.delivery.get
+              delivery.managedContinuation.map(_.edge) shouldBe Some(offerededge)
+              delivery.managedPublication shouldBe None
+              val publication = delivery.publication.get
+              publication.status shouldBe "published"
+              publication.request.target shouldBe LocalPublication.Target(_machine_target, offerededge.provider.identity, offerededge.provider.workspace)
+              publication.request.input.explicit shouldBe true
+              publication.request.source.clean shouldBe true
+              publication.request.source.head shouldBe state.commit.get.identity
+              publication.request.source.tree shouldBe state.commit.get.tree
+              WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(publication.process.get).fold(fail(_), identity)) shouldBe Some(0)
+              state.input.delegation.get.artifactCoordinates shouldBe Vector(coordinateString(offerededge.requested))
+              Files.isRegularFile(jar) shouldBe true
+              val jarbytes = Files.readAllBytes(jar)
+              val digest = java.security.MessageDigest.getInstance("SHA-256").digest(jarbytes).map(b => f"${b & 0xff}%02x").mkString
+              publication.artifact shouldBe Some(LocalPublication.ArtifactObservation(jar.toString, digest, jarbytes.length))
+              Files.readString(publisherlog) shouldBe "published\n"
+              Files.exists(root.resolve(".textus/sm-workflow/work.d/artifacts")) shouldBe false
+              Files.exists(consumerlog) shouldBe false
+
+              When("the requester collects and adopts the actual ordinary publication")
+              val received = advance(requester.sessionId)
+              DelegateTaskRequesterRoutingFixture.state(received).stage shouldBe "ResultReceived"
+              val artifact = Record.data("sourceCommit" -> state.commit.get.identity,
+                "coordinates" -> firstinput.delegation.artifactCoordinates,
+                "selectionReference" -> Record.data("identity" -> publication.request.input.requestIdentity, "revision" -> "1"),
+                "consumerCheckReferences" -> Vector.empty[Record])
+              val adoption = V.DelegateTaskObservationInput(requester.sessionId, "adopt",
+                V.WorkflowArtifactReference("machine-adoption", "1"), Some(first.sessionId), None, Some(artifact),
+                "SPECIFICATION-OWNED requester adopts the retained ordinary publication", None)
+              def _adoption_() = read_value[V.DelegateTaskView](take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+                List(Property("input", adoption, None)))))
+              _prepare_adoption_(adoption, artifact)
+              val adopted = _adoption_()
+              DelegateTaskRequesterRoutingFixture.state(adopted).stage shouldBe "Adopted"
+              Files.exists(consumerlog) shouldBe false
+
+              When("ordinary requester Advance compiles the parent with its own dependency declaration")
+              val recollected = advance(requester.sessionId)
+              Then("the retained actual parent classpath proves use of the declared JAR before recollecting the same WorkOrder")
+              withClue(recollected.message + ": ") { recollected.kind shouldBe "Request" }
+              def _work_context_(context: Option[V.WorkflowIssuedWorkContext]) = context.map(value => DevelopmentOperationalView.json(value.toRecord()))
+              recollected.submitSessionId shouldBe Some(a.sessionId)
+              recollected.submitOperation shouldBe resumed.submitOperation
+              recollected.resultType shouldBe Some("GoalPhaseWorkResult")
+              _work_context_(recollected.issuedWorkContext) shouldBe _work_context_(resumed.issuedWorkContext)
+              recollected.work.map(DevelopmentOperationalView.json) shouldBe resumed.work.map(value => DevelopmentOperationalView.json(value.toRecord()))
+              val verified = DelegateTaskRequesterRoutingFixture.state(_adoption_()).delivery.get
+              verified.publication shouldBe Some(publication)
+              verified.managedContinuation.map(_.edge) shouldBe Some(offerededge)
+              val proof = verified.managedConsumer.get
+              proof.status shouldBe "verified"
+              proof.detail.hcursor.get[String]("workspace").toOption shouldBe Some(offerededge.consumer.workspace)
+              proof.detail.hcursor.get[String]("operation").toOption shouldBe Some("test-compile")
+              val process = proof.detail.hcursor.get[Json]("process").toOption.get
+              WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(process).fold(fail(_), identity)) shouldBe Some(0)
+              proof.detail.hcursor.get[Vector[String]]("fullClasspath").toOption.get should contain (jar.toString)
+              Files.isRegularFile(root.resolve("repository/target/scala-2.12/classes/example/Consumer.class")) shouldBe true
+              val parentchecks = Files.readString(consumerlog)
+              parentchecks should not be empty
+              val retained = take(WorkflowInstanceRecordJsonV1.encodeC(_requester_record_(requester.sessionId)))
+              val again = advance(requester.sessionId)
+              again.kind shouldBe "Request"
+              again.submitSessionId shouldBe recollected.submitSessionId
+              again.submitOperation shouldBe recollected.submitOperation
+              _work_context_(again.issuedWorkContext) shouldBe _work_context_(recollected.issuedWorkContext)
+              again.work.map(DevelopmentOperationalView.json) shouldBe recollected.work.map(DevelopmentOperationalView.json)
+              take(WorkflowInstanceRecordJsonV1.encodeC(_requester_record_(requester.sessionId))) shouldBe retained
+              DelegateTaskRequesterRoutingFixture.state(_adoption_()).delivery.get.managedConsumer shouldBe Some(proof)
+              Files.readString(publisherlog) shouldBe "published\n"
+              Files.readString(consumerlog) shouldBe parentchecks
+              When("the common repository replaces the same SNAPSHOT path")
+              val alternate = root.resolve("alternate.jar")
+              val archive = new java.util.jar.JarOutputStream(Files.newOutputStream(alternate))
+              try {
+                archive.putNextEntry(new java.util.jar.JarEntry("replacement.txt"))
+                archive.write(1)
+                archive.closeEntry()
+              } finally archive.close()
+              Files.copy(alternate, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+              try {
+                val changed = advance(requester.sessionId)
+                changed.kind shouldBe "Wait"
+                DelegateTaskRequesterRoutingFixture.state(changed).delivery.get.publication shouldBe Some(publication)
+                Files.readString(publisherlog) shouldBe "published\n"
+                Files.readString(consumerlog) shouldBe parentchecks
+              } finally Files.write(jar, jarbytes)
+              advance(requester.sessionId).kind shouldBe "Request"
+              Files.readString(consumerlog) shouldBe parentchecks
+              Files.writeString(root.resolve("machine-local-delivery.json"), Json.obj(
+                "root" -> root.toString.asJson, "goalSessionId" -> a.sessionId.asJson,
+                "requesterSessionId" -> requester.sessionId.asJson, "destinationSessionId" -> first.sessionId.asJson).spaces2)
+            } else {
+              Then("only the selected assigned chat queues its second destination")
+              advance(queued.get.sessionId).kind shouldBe (if (chosen == assigned) "Wait" else "Request")
+              When("the destination asks for a scope description outside the approved provider inventory")
+              val outside = V.DelegateTaskScopeCorrectionDescriptionInput(first.sessionId, work.issuedWorkContext.get.continuationId,
+                Vector("src/test/scala/ProductCheck.scala"), Vector.empty)
+              val denied = invoke("DelegateTaskService", "describeDelegateTaskScopeCorrection", List(Property("input", outside, None)))
+              Then("the shared correction owner refuses the additional path before superseding the WorkOrder")
+              denied match {
+                case Consequence.Failure(reason) => reason.displayMessage should include ("exact approved GoalPhase dependency inventory")
+                case Consequence.Success(_) => fail("The destination scope correction accepted a path outside the approved inventory")
+              }
+              val replay = read_value[V.DelegateTaskView](take(invoke("DelegateTaskService", "startDelegateTask", List(
+                Property("input", firstinput, None), Property("sessionId", first.sessionId, None),
+                Property("selectionId", "connected-route-first", None), Property("participant", "participant", None),
+                Property("idempotencyKey", "connected-route-first", None)))))
+              replay.sessionId shouldBe first.sessionId
+              advance(first.sessionId).issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+                work.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+              _advance_goal_().issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+                resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
             }
-            val replay = read_value[V.DelegateTaskView](take(invoke("DelegateTaskService", "startDelegateTask", List(
-              Property("input", firstinput, None), Property("sessionId", first.sessionId, None),
-              Property("selectionId", "connected-route-first", None), Property("participant", "participant", None),
-              Property("idempotencyKey", "connected-route-first", None)))))
-            replay.sessionId shouldBe first.sessionId
-            advance(first.sessionId).issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
-              work.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
-            _advance_goal_().issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
-              resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
           }
         } else if (mode.startsWith("PhasePolicy")) {
           var activeWork = original
@@ -2121,48 +2376,12 @@ allowedKinds = ["text"]
               "consumerCheckReferences" -> Vector.empty[Record])
             val adoption = V.DelegateTaskObservationInput(requester.sessionId, "adopt", V.WorkflowArtifactReference("connected-adopt-" + requester.sessionId, "1"),
               Some(destination.sessionId), None, Some(artifact), "SPECIFICATION-OWNED caller observation", None)
-            val context = read_value[V.DelegateTaskAdoptionContext](take(invoke("DelegateTaskDeliveryService", "describeDelegateTaskAdoption",
-              List(Property("sessionId", requester.sessionId, None)))))
-            // Keep preparation failures attributable to their actual boundary.
-            // Do not normalize or replace the public target/selection to make
-            // independently admitted adoption evidence appear valid.
-            def assertRecordJson(value: Any, path: String): Unit = value match {
-              case record: Record =>
-                withClue("Connected adoption Record keys at " + path + ": ") {
-                  record.fields.map(_.key).distinct.size shouldBe record.fields.size
-                }
-                record.fields.foreach(field => assertRecordJson(field.value.single, path + "." + field.key))
-                withClue("Connected adoption Record serialization at " + path + ": ") {
-                  record.toJsonStringC.isSuccess shouldBe true
-                }
-              case values: Seq[?] => values.zipWithIndex.foreach { (member, index) =>
-                assertRecordJson(member, path + "[" + index + "]")
-              }
-              case other =>
-                val actualType = Option(other).map(_.getClass.getName).getOrElse("null")
-                withClue("Connected adoption leaf at " + path + " (" + actualType + "): ") {
-                  Record.data("value" -> other).toJsonStringC.isSuccess shouldBe true
-                }
-            }
-            assertRecordJson(context.target, "context.target")
-            assertRecordJson(artifact, "artifactSelection")
-            prepare(call => for {
-              prepared <- NativeDelegateTaskAdoptionPreparation.prepareC(context, adoption, adoption.sourceReference,
-                V.WorkflowExecutionEvidence(Vector(adoption.sourceReference), Some("participant"), None, None), "normal-development-host", call.executionContext.clock.instant().minusSeconds(1))
-                .recoverWith(error => Consequence.stateConflict("Connected native adoption preparation failed before host-evidence write: " + error.print))
-              _ = assertRecordJson(prepared.record, "prepared.hostEvidence")
-              _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
-                .recoverWith(error => Consequence.stateConflict("Connected native adoption host-evidence write failed: " + error.print))
-            } yield ())
+            _prepare_adoption_(adoption, artifact)
             val before = tree(root.resolve(".textus/sm-workflow/work.d"))
             val adopted = observe(requester.sessionId, "adopt", Some(artifact))
             tree(root.resolve(".textus/sm-workflow/work.d")) shouldBe before
             adopted.kind shouldBe "Wait"
-            def requesterRecord(): InstanceRecord = {
-              var actual = Option.empty[InstanceRecord]
-              prepare(call => call.delegateCurrentC(InstanceIdentity(requester.sessionId)).map { current => actual = Some(current); () })
-              actual.get
-            }
+            def requesterRecord(): InstanceRecord = _requester_record_(requester.sessionId)
             // Reopening admits a fresh DefinitionBinding object. Compare the
             // complete persisted record, including its definition reference and
             // history, rather than that object's reference identity.

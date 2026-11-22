@@ -3,12 +3,14 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
+import java.nio.file.Path
 import org.goldenport.Consequence
+import scala.util.Try
 
 /** A dependency edge selects source, JAR and project independently. Publications
   * and selections are immutable Component records, never a work.d JSON ledger.
   * @since   Nov. 12, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopment {
@@ -34,11 +36,17 @@ private[smworkflow] object ManagedDevelopment {
   }
   final case class Member(requested: Coordinate, selected: Coordinate, jar: String, ivy: String, completion: Json)
   final case class PublishedBatch(members: Vector[Member], completion: Json, artifacts: Json)
+  final case class MachineLocalJar(publicationTarget: String, consumerJar: String)
+  object MachineLocalJar {
+    given io.circe.Encoder[MachineLocalJar] = io.circe.generic.semiauto.deriveEncoder
+    given io.circe.Decoder[MachineLocalJar] = io.circe.generic.semiauto.deriveDecoder
+  }
   final case class Edge(identity: String, provider: GoalPhaseDependencyScope.Component, consumer: GoalPhaseDependencyScope.Component,
-    localRepository: String, localJar: Boolean, localProject: Option[String], requested: Coordinate, batch: Option[Batch] = None)
+    localRepository: String, localJar: Boolean, localProject: Option[String], requested: Coordinate, batch: Option[Batch] = None,
+    machineLocalJar: Option[MachineLocalJar] = None)
   object Edge {
     given io.circe.Encoder[Edge] = io.circe.generic.semiauto.deriveEncoder[Edge].mapJson(_.mapObject(_.filter {
-      case ("batch", value) => !value.isNull
+      case ("batch" | "machineLocalJar", value) => !value.isNull
       case _ => true
     }))
     given io.circe.Decoder[Edge] = io.circe.generic.semiauto.deriveDecoder
@@ -101,13 +109,28 @@ private[smworkflow] object ManagedDevelopment {
   def id(value: String): Boolean = value != null && value != "." && value != ".." && value.matches("[A-Za-z0-9_.-]{1,128}")
   private def coordinate(value: Coordinate): Boolean = value != null &&
     Vector(value.organization, value.module, value.version).forall(id)
+  def coordinateString(value: Coordinate): String =
+    value.organization + ":" + value.module + ":" + value.version
+
+  def machineJarValid(edge: Edge): Boolean = edge != null && !edge.localJar && edge.localProject == None &&
+    edge.batch == None && coordinate(edge.requested) && Option(edge.machineLocalJar).flatten.exists { jar =>
+      jar != null && jar.publicationTarget != null && jar.publicationTarget.nonEmpty &&
+        jar.publicationTarget.trim == jar.publicationTarget && !jar.publicationTarget.exists(_.isControl) &&
+        Option(jar.consumerJar).filterNot(_.exists(_.isControl)).flatMap(value => Try(Path.of(value)).toOption).exists { path =>
+          val requested = edge.requested
+          val ivy = Path.of(requested.organization, requested.module, requested.version, "jars", requested.module + ".jar")
+          path.isAbsolute && path.normalize == path && path.toString == jar.consumerJar && path.endsWith(ivy)
+        }
+    }
+
   def validateC(d: Definition): Consequence[Unit] =
     if (d != null && id(d.scope) && workspace(d.ownerWorkspace) && relative(d.repository) && relative(d.staging) &&
       d.repository != d.staging && !d.repository.startsWith(d.staging + "/") && !d.staging.startsWith(d.repository + "/") &&
       d.edges != null && d.edges.nonEmpty && d.edges.map(_.identity).distinct.size == d.edges.size &&
       d.edges.forall(e => e != null && id(e.identity) && component(e.provider) && component(e.consumer) &&
         e.provider.workspace != e.consumer.workspace && e.localRepository == d.ownerWorkspace &&
-        e.localProject != null && e.localProject.forall(workspace) && coordinate(e.requested) && validBatch(e))) Consequence.unit
+        e.localProject != null && e.localProject.forall(workspace) && coordinate(e.requested) && validBatch(e) &&
+        e.machineLocalJar != null && (e.machineLocalJar.isEmpty || machineJarValid(e)))) Consequence.unit
     else invalid("explicit scope, independent dependency bindings or resource membership is invalid")
 
 
@@ -148,7 +171,7 @@ private[smworkflow] object ManagedDevelopment {
   private def relative(value: String): Boolean = org.goldenport.cncf.workspace.WorkspaceRelativePath.parseC(value).isSuccess
   private def decodeC[A: io.circe.Decoder](value: Json): Consequence[A] =
     value.as[A].fold(e => invalid(e.message), Consequence.success)
-  private def samePublisher(a: Edge, b: Edge): Boolean = a.provider == b.provider &&
+  private def samePublisher(a: Edge, b: Edge): Boolean = a.localJar && b.localJar && a.provider == b.provider &&
     a.localRepository == b.localRepository && a.requested == b.requested && a.batch == b.batch
   private def publicationEdgeC(d: Definition, e: Edge, input: Input): Consequence[Edge] =
     d.edges.find(_.identity == input.publicationEdge.getOrElse(e.identity)).filter(samePublisher(_, e))
@@ -531,22 +554,23 @@ private[smworkflow] object ManagedDevelopment {
     }
 
   /** An interrupted effect is observable UNKNOWN, never an automatic rerun. */
-  private def attemptC(d: Definition, e: Edge, input: Input, kind: String, p: Port)
+  private[admission] def attemptC(d: Definition, e: Edge, input: Input, kind: String, p: Port, binding: Option[Json] = None)
     (execute: => Consequence[Result]): Consequence[Result] = for {
     previous <- p.loadC(key(d, e, kind + "-result", input.requestIdentity))
+    expected = binding.fold(intentJson(input, p))(value => intentJson(input, p).mapObject(_.add("binding", value)))
     result <- previous match {
       case Some(raw) => for {
         intent <- p.loadC(key(d, e, kind + "-intent", input.requestIdentity))
-        _ <- if (intent.contains(intentJson(input, p))) Consequence.unit else invalid("request redelivery crosses its participant or immutable input")
+        _ <- if (intent.contains(expected)) Consequence.unit else invalid("request redelivery crosses its participant or immutable input")
         result <- decodeC[Result](raw)
       } yield result
       case None => for {
         intent <- p.loadC(key(d, e, kind + "-intent", input.requestIdentity))
         result <- intent match {
-          case Some(raw) => if (raw == intentJson(input, p)) Consequence.success(Result("unknown", raw))
+          case Some(raw) => if (raw == expected) Consequence.success(Result("unknown", raw))
             else invalid("request identity is already owned by another input or participant")
           case None => for {
-            _ <- p.createC(key(d, e, kind + "-intent", input.requestIdentity), intentJson(input, p))
+            _ <- p.createC(key(d, e, kind + "-intent", input.requestIdentity), expected)
             result <- execute
             _ <- p.createC(key(d, e, kind + "-result", input.requestIdentity), result.asJson)
           } yield result

@@ -187,6 +187,12 @@ checks, ordered conditions and original source references as `GoalTaskInput`. No
 management files are required. Freeze that input; later suggestions do not expand
 scope. Existing Phase repair stays in its current Session. Preserve other edits.
 
+For dependency work, use the shared
+[delivery choice](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice)
+and [parent SBT build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
+Recommend project-private JAR use. Machine-common JAR use requires a separate
+explicit selection and actual ordinary parent build verification.
+
 For a fresh Task, use the intent already established during selection to author
 `workClassification` with separate `implementation`, `repair` and `review`
 members. Use the fields and values in the

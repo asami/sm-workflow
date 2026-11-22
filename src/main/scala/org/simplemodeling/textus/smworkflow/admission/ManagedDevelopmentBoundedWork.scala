@@ -15,7 +15,7 @@ import GoalPhaseNativeRun as F
 import GoalPhaseNativeWork as A
 import StandaloneFixExecution as S
 
-/** Composition over existing native WorkOrders, bounded checkpoints and scoped
+/** Composition over existing native WorkOrders, bounded checkpoints and local
   * artifact operations. This owns no queue, semantic executor or repair loop.
   * @since   Nov. 12, 2026
   * @version Nov. 23, 2026
@@ -68,9 +68,23 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     coordinate = edge.requested.copy(version = version(edge.requested.version, policy.definition.scope, operation.publication))
     _ <- if (input.repositoryIdentity == edge.provider.repository && contract.componentIdentity == edge.provider.identity &&
       contract.publicationTarget.contains(edge.identity) &&
-      contract.artifactCoordinates == Vector(coordinate.organization + ":" + coordinate.module + ":" + coordinate.version))
+      contract.artifactCoordinates == Vector(coordinateString(coordinate)))
       Consequence.unit else invalid("managed destination requires its exact scoped publication target and development coordinates")
   } yield operation
+
+  private def _admit_publication_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, edge: Edge,
+    input: S.Input): Consequence[Unit] = edge.machineLocalJar match {
+    case None => publicationInputC(policy, input).map(_ => ())
+    case Some(jar) => for {
+      _ <- if (id(input.requestIdentity) && input.repositoryIdentity == edge.provider.repository &&
+        input.delegation.exists(c => DelegateTask.valid(c) && c.role == "destination" &&
+          c.componentIdentity == edge.provider.identity && c.publicationTarget.contains(jar.publicationTarget) &&
+          c.artifactCoordinates == Vector(coordinateString(edge.requested)) && c.providerPhase.isEmpty &&
+          c.synchronization.isEmpty && !c.permittedOperations.contains("repository-sync"))) Consequence.unit
+        else invalid("machine-common delivery requires its exact ordinary publication target and original coordinates")
+      _ <- ManagedDevelopmentRuntime.machineTargetC(edge, host.publication)
+    } yield ()
+  }
 
   /** Validate the actual ordinal aliases consumed by bounded validation, including
     * TestCompile/inventory preparation. Selecting B's Git workspace alone cannot
@@ -126,11 +140,17 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
       captureSelectedC(h, input, core).map(_.map(_.capture))
     else Consequence.success(None)
 
-  def requesterRouteC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[D.Route]] =
+  def requesterRouteC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[Captured]] =
     if (!input.delegation.exists(contract => contract.role == "requester" && contract.providerPhase.isEmpty))
       Consequence.success(None)
     else _selected_reference_c(h, input.sourceReferences, core).flatMap {
-      case None => Consequence.success(None)
+      case None =>
+        val machine = h.managedDevelopment.toVector.flatMap(p => p.definition.edges.filter(e =>
+          p.dependencyWorkEdge.contains(e.identity) && e.machineLocalJar.exists(jar => input.delegation.exists(c =>
+            c.publicationTarget.contains(jar.publicationTarget) || (input.repositoryIdentity == e.provider.repository &&
+              c.componentIdentity == e.provider.identity)))))
+        if (machine.isEmpty) Consequence.success(None)
+        else invalid("machine-common delivery requires the exact selected route on the actual pending A WorkOrder")
       case Some((storage, reference, issued)) => for {
         policy <- h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty).map(Consequence.success)
           .getOrElse(invalid("selected dependency delivery requires its registered managed destination"))
@@ -139,9 +159,9 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
         route <- captured._2.decisionContext.flatMap(_.deliveryRoute).map(Consequence.success)
           .getOrElse(invalid("requester has no selected route on its actual pending WorkOrder"))
         // Reuse the existing target/coordinate validator without starting the destination.
-        _ <- publicationInputC(policy, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))))
-        _ <- _admit_selected_route_c(policy, input, captured._2, route, None, core)
-      } yield Some(route)
+        _ <- _admit_publication_c(h, policy, edge, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))))
+        _ <- _admit_selected_route_c(h, policy, input, captured._2, route, None, core)
+      } yield Some(Captured(captured._1, Some(route)))
     }
 
   def captureSelectedC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[Captured]] =
@@ -152,16 +172,17 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
           case Some(_) => invalid("selected dependency delivery requires its registered managed destination")
         }
       case Some(policy) if input.delegation.exists(_.role == "destination") => for {
-        _ <- publicationInputC(policy, input)
         edge <- edgeC(policy)
+        _ <- _admit_publication_c(h, policy, edge, input)
         storage <- goalStorageC(h, core)
         found <- _find_issued_c(storage, input.sourceReferences, core)
         _ <- if (found.size == 1) Consequence.unit else invalid("managed B requires one explicit actual pending A WorkOrder reference")
         pair = found.head
         captured <- captureIssuedC(h, storage, edge, pair._1, pair._2, core)
         route <- captured._2.decisionContext.flatMap(_.deliveryRoute) match {
+          case None if edge.machineLocalJar.nonEmpty => invalid("machine-common delivery requires the exact selected route on the actual pending A WorkOrder")
           case None => Consequence.success(Option.empty[D.Route])
-          case Some(route) => _admit_selected_route_c(policy, input, captured._2, route, Some(h.root -> h.branch), core)
+          case Some(route) => _admit_selected_route_c(h, policy, input, captured._2, route, Some(h.root -> h.branch), core)
             .map(_ => Some(route))
         }
       } yield Some(Captured(captured._1, route))
@@ -200,7 +221,7 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     }
   } yield found
 
-  private def _admit_selected_route_c(policy: ManagedDevelopmentRuntime.Policy, input: S.Input,
+  private def _admit_selected_route_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, input: S.Input,
     work: A.Request, route: D.Route, providersource: Option[(String, String)], core: ActionCall.Core): Consequence[Unit] = for {
     context <- work.decisionContext.map(Consequence.success)
       .getOrElse(invalid("selected dependency route has no actual issued approval"))
@@ -212,13 +233,13 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     _ <- if (contract.providerPhase.nonEmpty)
       invalid("selected bounded route cannot start or replace a provider Phase")
       else if (contract.synchronization.nonEmpty || contract.permittedOperations.contains("repository-sync"))
-        invalid("selected bounded route allows scope-private delivery only; repository synchronization needs separate authority")
+        invalid("selected bounded route allows local delivery only; repository synchronization needs separate authority")
       else if (D.routeValid(route, context.choice, effective) &&
         providersource.forall(_ == (route.sourceRoot -> route.sourceBranch)) && route.destinationIdentity == contract.destinationIdentity &&
         context.decisionReference.exists(contract.authorizationReferences.contains) &&
         input.ownedPaths.forall(effective.paths.contains)) Consequence.unit
       else invalid("destination crosses the selected route, source, approval or approved paths")
-    _ <- D.readmittedC(route, effective, policy, core)
+    _ <- D.readmittedC(route, effective, policy, core, host.publication)
   } yield ()
 
   private def captureIssuedC(h: Host, storage: WorkflowComponentStorage, edge: Edge, reference: ContextReference,
@@ -244,6 +265,11 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     started <- starts.loadRetainedC(F.reference(current.identity.value))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(invalid("requester has no actual native Start")))
     _ <- consumerSourceC(edge, started.receipt.payload.value.root, core)
+    _ <- if (edge.machineLocalJar.isEmpty) Consequence.unit else for {
+      observed <- RepositorySyncManagedGitObservation.observeInWorkspaceC(core, edge.consumer.workspace)
+      _ <- if (observed.branch == started.receipt.payload.value.branch && work.decisionContext.flatMap(_.deliveryRoute).exists(_.edge == edge))
+        Consequence.unit else invalid("machine-common route crosses the exact consumer branch or original A WorkOrder")
+    } yield ()
     participant = started.receipt.payload.value.participantIdentity
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
   } yield ManagedCapture(core.component.get.core.instanceId.canonicalKey, participant, current.identity.value,
@@ -288,6 +314,38 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     actual <- captureIssuedC(host, storage, capture.edge, capture.work, work, core)
     _ <- if (actual._1 == capture) Consequence.unit else invalid("managed dependency callback crosses A's retained frontier")
   } yield ()
+
+  private def _machine_route_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, capture: ManagedCapture,
+    input: S.Input, providersource: Option[(String, String)], core: ActionCall.Core):
+    Consequence[(WorkflowInteraction[A.Request, Nothing], ManagedDevelopmentRuntime.MachinePrograms)] = for {
+    edge <- edgeC(policy)
+    _ <- if (edge == capture.edge && machineJarValid(edge)) Consequence.unit
+      else invalid("machine-common delivery changed its retained A/B edge or consumption mode")
+    original <- requesterC(host, capture, core)
+    work <- NativeWorkflowOperationOutput.workInputC(original)
+    route <- work.decisionContext.flatMap(_.deliveryRoute).map(Consequence.success)
+      .getOrElse(invalid("machine-common delivery has no actual selected A route"))
+    programs <- route.machinePrograms.filter(_ => route.edge == edge).map(Consequence.success)
+      .getOrElse(invalid("selected A route has a different machine-common publication or consumer recipe"))
+    _ <- _admit_publication_c(host, policy, edge, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))))
+    _ <- _admit_selected_route_c(host, policy, input, work, route, providersource, core)
+  } yield original -> programs
+
+  def machinePublicationC(h: Host, payload: BoundedWorkRuntime.Payload, commit: S.Commit, session: String,
+    core: ActionCall.Core): Consequence[LocalPublication.Result] = for {
+    capture <- payload.managedDependency.map(Consequence.success).getOrElse(invalid("machine-common delivery has no original A capture"))
+    policy <- h.managedDevelopment.map(Consequence.success).getOrElse(invalid("machine-common dependency scope is unavailable"))
+    selected <- _machine_route_c(h, policy, capture, payload.state.input, Some(payload.root -> payload.branch), core)
+    publication <- h.publication.map(Consequence.success).getOrElse(invalid("machine-common local publication policy is unavailable"))
+    target <- ManagedDevelopmentRuntime.machineTargetC(capture.edge, Some(publication))
+    input = DelegateTask.publicationInput(session, payload.state).copy(explicit = true)
+    source = LocalPublication.Source(commit.identity, commit.tree, Vector.empty)
+    machine = LocalPublicationRuntime.MachinePublication(source, capture.edge, selected._2)
+    result <- LocalPublicationRuntime.ensureC(core, publication, input, Some(machine))
+    _ <- if (result.request.input == input && result.request.target == target && result.request.source == source &&
+      (result.status != "published" || DelegateTask.machinePublicationValid(payload.state, commit, capture, result, Some(selected._2.publication))))
+      Consequence.unit else invalid("ordinary publication differs from B's exact target, recipe or clean accepted source")
+  } yield result
 
   /** Same-store result collection authenticates the native B checkpoint. A
     * pending/failed/decision-needed B remains a wait, without invoking B again. */
@@ -349,12 +407,11 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     _ <- DelegateTask.returnedC(state.input, payload.state.asJson, _ => Consequence.success(payload.state))
   } yield payload
 
-  /** Adoption attaches results only. Consumer selection/compilation must already
-    * have been explicitly executed through the existing artifact Operations.
-    * Advance reads their retained result and returns the real original A Request
-    * to the typed caller; it never completes A with an invented semantic result. */
+  /** Adoption attaches results only. Advance reads scoped selection/verification
+    * or owns the explicit machine-common verification, then returns the original A Request. */
   def continuationC(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding, state: S.State,
-    core: ActionCall.Core): Consequence[(S.State, Option[WorkflowInteraction[A.Request, Nothing]])] = for {
+    core: ActionCall.Core, requesterCapture: Option[ManagedCapture] = None):
+    Consequence[(S.State, Option[WorkflowInteraction[A.Request, Nothing]])] = for {
     policy <- h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty).map(Consequence.success)
       .getOrElse(invalid("No managed dependency scope is configured"))
     phase <- if (state.delivery.exists(_.phaseDelivery.nonEmpty)) ProviderPhaseDelivery.receivedC(h, state, core).map(Some(_))
@@ -363,19 +420,57 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
       else Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
     capture <- phase.map(_.capture).orElse(producer.flatMap(_.managedDependency)).map(Consequence.success)
       .getOrElse(invalid("B has no actual retained A capture"))
+    selected <- state.delivery.flatMap(_.artifactSelection).map(_.as[DelegateTask.ArtifactSelection]
+      .fold(e => invalid(e.message), Consequence.success)).getOrElse(invalid("No exact artifact selection was supplied"))
+    result <- if (capture.edge.machineLocalJar.nonEmpty || requesterCapture.exists(_.edge.machineLocalJar.nonEmpty)) for {
+      _ <- if (requesterCapture.contains(capture) && phase.isEmpty && machineJarValid(capture.edge)) Consequence.unit
+        else invalid("machine-common verification requires matching original A captures on the requester and bounded producer")
+      native <- producer.map(Consequence.success).getOrElse(invalid("machine-common delivery has no actual bounded producer"))
+      checked <- _machine_continuation_c(h, policy, state, native, capture, selected, core)
+    } yield checked else _scoped_continuation_c(h, policy, state, phase, producer, capture, selected, core)
+  } yield result
+
+  private def _machine_continuation_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, state: S.State,
+    producer: BoundedWorkRuntime.Payload, capture: ManagedCapture, selected: DelegateTask.ArtifactSelection,
+    core: ActionCall.Core): Consequence[(S.State, Option[WorkflowInteraction[A.Request, Nothing]])] = for {
+    native <- producer.state.delivery.filter(_.managedContinuation.contains(capture)).map(Consequence.success)
+      .getOrElse(invalid("B has no exact retained ordinary publication attachment"))
+    session <- native.destinationSessionId.filter(id => state.delivery.flatMap(_.destinationSessionId).contains(id))
+      .map(Consequence.success).getOrElse(invalid("ordinary publication crosses its actual bounded B Session"))
+    published <- native.publication.map(Consequence.success).getOrElse(invalid("B has no actual ordinary publication receipt"))
+    commit <- producer.state.commit.map(Consequence.success).getOrElse(invalid("B has no accepted native commit"))
+    admitted <- _machine_route_c(host, policy, capture, state.input, Some(producer.root -> producer.branch), core)
+    publication <- host.publication.map(Consequence.success).getOrElse(invalid("machine-common local publication policy is unavailable"))
+    input = DelegateTask.publicationInput(session, producer.state).copy(explicit = true)
+    actual <- LocalPublicationRuntime.collectC(core, publication, input)
+    _ <- if (actual.contains(published) && DelegateTask.machinePublicationValid(producer.state, commit, capture,
+      published, Some(admitted._2.publication)) && DelegateTask.machineSelectionValid(selected, published) &&
+      selected.coordinates == Vector(coordinateString(capture.edge.requested))) Consequence.unit
+      else invalid("Selection crosses B's exact ordinary publication, source, coordinates or consumer effect frontier")
+    compiled <- ManagedDevelopmentRuntime.machineConsumerC(core, policy, capture, admitted._2, published, state.input.requestIdentity)
+    _ <- requesterC(host, capture, core)
+    verified = compiled.status == "verified"
+    next = state.copy(delivery = state.delivery.map(_.copy(publication = Some(published), managedConsumer = Some(compiled),
+      managedContinuation = Some(capture))), message = if (verified)
+      "Ordinary consumer compilation observed the machine-common JAR; dispatch the original A Request through its existing typed caller"
+      else "Ordinary consumer verification is " + compiled.status + "; A's original WorkOrder remains suspended")
+  } yield next -> Option.when(verified)(admitted._1)
+
+  private def _scoped_continuation_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, state: S.State,
+    phase: Option[ProviderPhaseDelivery.Delivery], producer: Option[BoundedWorkRuntime.Payload], capture: ManagedCapture,
+    selected: DelegateTask.ArtifactSelection, core: ActionCall.Core):
+    Consequence[(S.State, Option[WorkflowInteraction[A.Request, Nothing]])] = for {
     publication <- phase.map(_.publication).orElse(producer.flatMap(_.state.delivery.flatMap(_.managedPublication))).map(Consequence.success)
       .getOrElse(invalid("B has no completed scoped publication"))
     expected <- phase.map(p => ProviderPhaseDelivery.operation(policy, p.phase.locator, state.input.requestIdentity))
       .getOrElse(publicationInputC(policy, producer.get.state.input))
-    selected <- state.delivery.flatMap(_.artifactSelection).map(_.as[DelegateTask.ArtifactSelection]
-      .fold(e => invalid(e.message), Consequence.success)).getOrElse(invalid("No exact artifact selection was supplied"))
     input = expected.copy(requestIdentity = state.input.requestIdentity, selection = state.input.requestIdentity)
     edge <- ManagedDevelopment.edgeC(policy.definition, input)
     _ <- if (capture.edge == edge && publication.edge == edge && publication.scope == policy.definition.scope &&
       publication.identity == input.publication && selected.selectionReference ==
         ContextReference(key(policy.definition, edge, "selection", input.selection), "1")) Consequence.unit
       else invalid("Consumer selection crosses the native B publication or exact retained A/B edge")
-    original <- requesterC(h, capture, core)
+    original <- requesterC(host, capture, core)
     compiled <- ManagedDevelopmentRuntime.runC(core, policy, "status", input)
     // Decode the complete selection, not a status string from caller-supplied JSON.
     selection <- if (compiled.status == "verified") compiled.detail.hcursor.get[Selection]("selection")
@@ -386,7 +481,7 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
       else Consequence.success(Option.empty[Json])
     _ <- if (source.forall(actual => compiled.detail.hcursor.downField("consumerSource").focus.contains(actual)))
       Consequence.unit else invalid("Retained consumer verification is stale for A's actual current source")
-    _ <- requesterC(h, capture, core)
+    _ <- requesterC(host, capture, core)
     next = if (selection.nonEmpty) state.copy(delivery = state.delivery.map(_.copy(
       managedPublication = Some(publication), managedConsumer = Some(compiled), managedContinuation = Some(capture))),
       message = "Exact native B publication and explicit consumer verification retained; dispatch the returned original A Request through its existing typed caller")

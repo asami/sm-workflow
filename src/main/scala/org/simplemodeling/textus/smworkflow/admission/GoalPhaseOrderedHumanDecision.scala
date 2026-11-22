@@ -347,7 +347,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             .getOrElse(F.invalid("selected dependency route was unavailable on the issued question"))
           policy <- d.managedDevelopment.map(Consequence.success)
             .getOrElse(F.invalid("selected dependency route has no current managed registration"))
-          _ <- D.readmittedC(offer, input.result.dependencyProposal.get, policy, core)
+          _ <- D.readmittedC(offer, input.result.dependencyProposal.get, policy, core, d.localPublication)
         } yield ()
       } yield () else Consequence.unit
       events <- submitted.result.value.choice match {
@@ -537,7 +537,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             _ => GoalPhaseSourceHistoryRecovery.message),
           Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery,
           d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
-          dependencyDelivery = D.offer(source.input, source.result.result.value, d.managedDevelopment, core))
+          dependencyDelivery = D.offer(source.input, source.result.result.value, d.managedDevelopment, core, d.localPublication))
       }
       _ <- if (input != null && input.result != null) Consequence.unit
         else F.invalid("saved Human question has no actual business input")

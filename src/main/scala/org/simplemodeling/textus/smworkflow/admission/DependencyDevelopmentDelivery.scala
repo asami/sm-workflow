@@ -10,7 +10,7 @@ import GoalPhaseDependencyScope as D
 import GoalPhaseNativeWork as W
 
 /** Configured ownership, separate from transport and from execution authority.
-  * The existing bounded Workflow owns execution, commit and scoped publication.
+  * The existing bounded Workflow owns execution, commit and local publication.
   * @since   Nov. 12, 2026
   * @version Nov. 23, 2026
   */
@@ -27,11 +27,14 @@ private[smworkflow] object DependencyDevelopmentDelivery {
 
   final case class Route(edge: ManagedDevelopment.Edge, scope: String, mode: String, destinationIdentity: String,
     sourceRoot: String, sourceBranch: String, artifactWorkspace: String, artifactRoot: String,
-    artifactRepository: String, artifactStaging: String) {
+    artifactRepository: String, artifactStaging: String, machinePrograms: Option[ManagedDevelopmentRuntime.MachinePrograms] = None) {
     def binding: Binding = Binding(edge.identity, mode, Option.when(mode == assignedChat)(destinationIdentity))
   }
   object Route {
-    given Encoder[Route] = deriveEncoder
+    given Encoder[Route] = deriveEncoder[Route].mapJson(_.mapObject(_.filter {
+      case ("machinePrograms", value) => !value.isNull
+      case _ => true
+    }))
     given Decoder[Route] = deriveDecoder
   }
   final case class Alternative(choice: String, label: String, available: Boolean,
@@ -55,11 +58,17 @@ private[smworkflow] object DependencyDevelopmentDelivery {
   def routeValid(route: Route, choice: String, proposal: D.Proposal): Boolean =
     route != null && route.edge != null && routeChoices.contains(choice) && route.mode == choice &&
       route.edge.consumer == proposal.requester && route.edge.provider == proposal.dependency &&
-      route.edge.localJar && route.artifactWorkspace == route.edge.localRepository &&
+      route.artifactWorkspace == route.edge.localRepository &&
       ManagedDevelopment.validateC(ManagedDevelopment.Definition(route.scope, route.artifactWorkspace,
         route.artifactRepository, route.artifactStaging, Vector(route.edge))).isSuccess &&
       Vector(route.destinationIdentity, route.sourceRoot, route.sourceBranch, route.artifactRoot).forall(_exact) &&
       Path.of(route.sourceRoot).isAbsolute && Path.of(route.artifactRoot).isAbsolute &&
+      (if (route.edge.localJar) route.machinePrograms == None
+       else ManagedDevelopment.machineJarValid(route.edge) &&
+         route.artifactRoot == Path.of(route.edge.machineLocalJar.get.consumerJar).getParent.toString &&
+         Option(route.machinePrograms).flatten.exists(p => p != null && _exact(p.publication) && _exact(p.consumer) &&
+           _exact(p.jarWorkspace) && p.discovery != null && p.discovery.componentIdentity == route.edge.consumer.identity &&
+           p.discovery.validateC.isSuccess)) &&
       (choice != subtree || route.destinationIdentity == _subtree_destination(route.edge))
 
   def offerValid(offer: Offer, work: W.Request, result: W.Result): Boolean =
@@ -75,12 +84,12 @@ private[smworkflow] object DependencyDevelopmentDelivery {
     _fresh_proposal(work, result).nonEmpty
 
   def offer(work: W.Request, result: W.Result, configured: Option[ManagedDevelopmentRuntime.Policy],
-    core: ActionCall.Core): Option[Offer] =
-    _fresh_proposal(work, result).map(_offer(_, configured, core))
+    core: ActionCall.Core, publication: Option[LocalPublicationRuntime.Policy] = None): Option[Offer] =
+    _fresh_proposal(work, result).map(_offer(_, configured, core, publication))
 
   def readmittedC(saved: Route, proposal: D.Proposal, policy: ManagedDevelopmentRuntime.Policy,
-    core: ActionCall.Core): Consequence[Unit] = {
-    val current = _offer(proposal, Some(policy), core)
+    core: ActionCall.Core, publication: Option[LocalPublicationRuntime.Policy] = None): Consequence[Unit] = {
+    val current = _offer(proposal, Some(policy), core, publication)
     if (current.route(saved.mode).contains(saved)) Consequence.unit
     else _invalid(current.alternatives.find(_.choice == saved.mode).flatMap(_.reason)
       .getOrElse("selected dependency route crosses its registered source, scope, artifact owner or destination"))
@@ -104,7 +113,8 @@ private[smworkflow] object DependencyDevelopmentDelivery {
 
   private def _subtree_destination(edge: ManagedDevelopment.Edge): String = "managed-worktree:" + edge.provider.workspace
 
-  private def _offer(proposal: D.Proposal, configured: Option[ManagedDevelopmentRuntime.Policy], core: ActionCall.Core): Offer = {
+  private def _offer(proposal: D.Proposal, configured: Option[ManagedDevelopmentRuntime.Policy], core: ActionCall.Core,
+    publication: Option[LocalPublicationRuntime.Policy]): Offer = {
     val edges = configured.toVector.flatMap(_.definition.edges.filter(_endpoints(_, proposal)))
     val active = edges match {
       case Vector(edge) if configured.exists(_.dependencyWorkEdge.contains(edge.identity)) => Some(edge)
@@ -123,39 +133,27 @@ private[smworkflow] object DependencyDevelopmentDelivery {
       current = binding(policy)
       _ <- if (current.exists(_.mode == fixed)) _invalid("Fixed dependency does not allow development delivery")
         else Consequence.unit
-      _ <- if (edge.localJar) Consequence.unit
-        else _invalid("provider has no supported localJar scoped publication route")
+      _ <- if (edge.localJar || ManagedDevelopment.machineJarValid(edge)) Consequence.unit
+        else _invalid("provider has no supported local JAR publication route")
       plan <- ManagedDevelopmentRuntime.executionPlanC(core)
       member <- ManagedDevelopmentBoundedWork.selectC(Some(policy), edge.provider.repository, plan, None)
         .recoverWith(failure => _invalid("provider Git workspace: " + failure.displayMessage))
         .flatMap(_.map(Consequence.success).getOrElse(_invalid("provider has no registered managed repository/worktree")))
-      owner <- ManagedDevelopmentRuntime.workspaceRootC(core, policy.definition.ownerWorkspace)
-      _ <- if (!Path.of(owner).normalize.startsWith(Path.of(member.root)) &&
-          !Path.of(member.root).startsWith(Path.of(owner).normalize)) Consequence.unit
-        else _invalid("scope-private artifact workspace crosses the provider source root")
-      programs <- plan.hcursor.get[Vector[io.circe.Json]]("sbtPrograms").fold(_ => _invalid("scoped publication is unregistered"), Consequence.success)
-      selected = programs.filter(program => program.hcursor.get[String]("target").contains(edge.provider.workspace) &&
-        program.hcursor.get[String]("operation").contains("scoped-publish"))
-      _ <- if (selected.size == 1) Consequence.unit
-        else _invalid("provider does not declare one scoped-publish program")
-      capability <- selected.head.hcursor.get[String]("capability").fold(
-        _ => _invalid("scoped publication has no capability"), Consequence.success)
-      _ <- if (plan.hcursor.get[Vector[io.circe.Json]]("grants").toOption.toVector.flatten.exists(grant =>
-          grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
-          grant.hcursor.get[Vector[String]]("capabilities").toOption.exists(_.contains(capability))))
-        Consequence.unit else _invalid("provider scoped-publish capability has no Component grant")
-      _ <- if (plan.hcursor.get[Vector[io.circe.Json]]("workspaceGrants").toOption.toVector.flatten.exists(grant =>
-          grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
-            grant.hcursor.get[String]("workspaceId").contains(policy.definition.ownerWorkspace) &&
-            grant.hcursor.get[String]("access").contains("manage"))) Consequence.unit
-        else _invalid("scope-private artifact workspace has no managed grant")
-    } yield (policy.definition, edge, member, owner)
+      artifact <- edge.machineLocalJar match {
+        case None => _scoped_root_c(core, plan, policy.definition, edge, member.root)
+          .map(_ -> Option.empty[ManagedDevelopmentRuntime.MachinePrograms])
+        case Some(jar) => for {
+          _ <- ManagedDevelopmentRuntime.machineTargetC(edge, publication)
+          programs <- ManagedDevelopmentRuntime.machineProgramsC(edge, plan)
+        } yield Path.of(jar.consumerJar).getParent.toString -> Some(programs)
+      }
+    } yield (policy.definition, edge, member, artifact)
     val alternatives = routeChoices.map { choice =>
-      val selected = common.flatMap { case (definition, edge, member, owner) =>
+      val selected = common.flatMap { case (definition, edge, member, (owner, programs)) =>
         val destination = if (choice == subtree) Some(_subtree_destination(edge))
           else chat
         destination.map(identity => Consequence.success(Route(edge, definition.scope, choice, identity,
-          member.root, member.localBranch, definition.ownerWorkspace, owner, definition.repository, definition.staging)))
+          member.root, member.localBranch, definition.ownerWorkspace, owner, definition.repository, definition.staging, programs)))
           .getOrElse(_invalid("no assigned development chat is registered for this edge"))
       }
       selected.map(route => Alternative(choice, _label(choice), true, None, Some(route))).fold(failure => {
@@ -168,6 +166,30 @@ private[smworkflow] object DependencyDevelopmentDelivery {
     }
     Offer(alternatives, Option.when(alternatives.head.available)(subtree))
   }
+
+  private def _scoped_root_c(core: ActionCall.Core, plan: io.circe.Json, definition: ManagedDevelopment.Definition,
+    edge: ManagedDevelopment.Edge, sourceroot: String): Consequence[String] = for {
+    owner <- ManagedDevelopmentRuntime.workspaceRootC(core, definition.ownerWorkspace)
+    _ <- if (!Path.of(owner).normalize.startsWith(Path.of(sourceroot)) &&
+        !Path.of(sourceroot).startsWith(Path.of(owner).normalize)) Consequence.unit
+      else _invalid("scope-private artifact workspace crosses the provider source root")
+    programs <- plan.hcursor.get[Vector[io.circe.Json]]("sbtPrograms").fold(_ => _invalid("scoped publication is unregistered"), Consequence.success)
+    selected = programs.filter(program => program.hcursor.get[String]("target").contains(edge.provider.workspace) &&
+      program.hcursor.get[String]("operation").contains("scoped-publish"))
+    _ <- if (selected.size == 1) Consequence.unit
+      else _invalid("provider does not declare one scoped-publish program")
+    capability <- selected.head.hcursor.get[String]("capability").fold(
+      _ => _invalid("scoped publication has no capability"), Consequence.success)
+    _ <- if (plan.hcursor.get[Vector[io.circe.Json]]("grants").toOption.toVector.flatten.exists(grant =>
+        grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+        grant.hcursor.get[Vector[String]]("capabilities").toOption.exists(_.contains(capability))))
+      Consequence.unit else _invalid("provider scoped-publish capability has no Component grant")
+    _ <- if (plan.hcursor.get[Vector[io.circe.Json]]("workspaceGrants").toOption.toVector.flatten.exists(grant =>
+        grant.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+          grant.hcursor.get[String]("workspaceId").contains(definition.ownerWorkspace) &&
+          grant.hcursor.get[String]("access").contains("manage"))) Consequence.unit
+      else _invalid("scope-private artifact workspace has no managed grant")
+  } yield owner
   def validateC(definition: ManagedDevelopment.Definition, bindings: Option[Vector[Binding]]): Consequence[Unit] =
     if (bindings != null && bindings.forall(rows => rows != null && rows.forall(_ != null) && rows.map(_.edge).distinct == rows.map(_.edge) &&
       rows.forall(row => row != null && definition.edges.exists(_.identity == row.edge) &&

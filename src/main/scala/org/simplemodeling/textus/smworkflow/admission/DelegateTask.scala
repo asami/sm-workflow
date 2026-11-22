@@ -233,25 +233,51 @@ private[smworkflow] object DelegateTask {
     _ <- checksC(state.input, state.selected)
     _ <- if ((!state.input.reviewRequired || state.reviewReference.nonEmpty) && S.committedResultValid(state)) Consequence.unit
       else invalid("delivery effects require the retained required review and accepted local commit")
-    _ <- if (state.delivery.exists(d => _publication_ready(contract, state.commit.get, d))) Consequence.unit
+    _ <- if (state.delivery.exists(d => _publication_ready(state, contract, state.commit.get, d))) Consequence.unit
       else invalid("delivery effects lack the required publication for the accepted source and route")
   } yield ()
 
-  private def _publication_ready(contract: Contract, commit: S.Commit, delivery: Delivery): Boolean =
+  private def _publication_ready(state: S.State, contract: Contract, commit: S.Commit, delivery: Delivery): Boolean =
     (contract.publicationTarget, delivery.publication, delivery.managedPublication) match {
       case (None, None, None) => delivery.managedContinuation.isEmpty
       case (Some(target), Some(publication), None) =>
-        delivery.managedContinuation.isEmpty && _local_publication_valid(publication) && publication.request.target.identity == target &&
-          publication.request.target.component == contract.componentIdentity && publication.request.source.head == commit.identity &&
-          publication.request.source.tree == commit.tree
+        delivery.managedContinuation match {
+          case None => _local_publication_valid(publication) && publication.request.target.identity == target &&
+            publication.request.target.component == contract.componentIdentity && publication.request.source.head == commit.identity &&
+            publication.request.source.tree == commit.tree
+          case Some(capture) => machinePublicationValid(state, commit, capture, publication) &&
+            delivery.destinationSessionId.exists(session => publication.request.input == publicationInput(session, state).copy(explicit = true))
+        }
       case (Some(target), None, Some(publication)) =>
-        publication.edge.identity == target && publication.edge.provider.identity == contract.componentIdentity &&
+        publication.edge.localJar && publication.edge.identity == target && publication.edge.provider.identity == contract.componentIdentity &&
           delivery.managedContinuation.forall(_.edge == publication.edge) &&
           ManagedDevelopmentBoundedWork.acceptedPublicationSource(publication.source, commit) &&
           contract.artifactCoordinates == Vector(publication.selected.organization + ":" + publication.selected.module + ":" + publication.selected.version) &&
           ManagedDevelopmentRuntime.retainedPublicationValid(publication)
       case _ => false
     }
+
+  def machinePublicationValid(state: S.State, commit: S.Commit,
+    capture: GoalPhaseDependencyValidation.ManagedCapture, publication: LocalPublication.Result,
+    program: Option[String] = None): Boolean = {
+    val edge = capture.edge
+    val target = publication.request.target
+    ManagedDevelopment.machineJarValid(edge) && publication.status == "published" && _local_publication_valid(publication) &&
+      state.input.repositoryIdentity == edge.provider.repository && publication.request.participant == state.participant &&
+      target.workspace == edge.provider.workspace && target.component == edge.provider.identity &&
+      edge.machineLocalJar.exists(jar => jar.publicationTarget == target.identity &&
+        publication.artifact.exists(a => a.valid && a.path == jar.consumerJar)) &&
+      publication.request.source == LocalPublication.Source(commit.identity, commit.tree, Vector.empty) &&
+      state.input.delegation.exists(c => c.componentIdentity == target.component && c.publicationTarget.contains(target.identity) &&
+        c.artifactCoordinates == Vector(ManagedDevelopment.coordinateString(edge.requested)) && c.providerPhase.isEmpty &&
+        c.synchronization.isEmpty && !c.permittedOperations.contains("repository-sync")) &&
+      program.forall(name => publication.process.flatMap(WorkflowSbtCapture.decode(_).toOption).exists(_.safeProgramIdentity == name))
+  }
+
+  def machineSelectionValid(selected: ArtifactSelection, publication: LocalPublication.Result): Boolean =
+    selected.selectionReference == ContextReference(publication.request.input.requestIdentity, "1") &&
+      selected.sourceCommit == publication.request.source.head && selected.activationReference.isEmpty &&
+      selected.consumerCheckReferences.isEmpty
 
   private def _local_publication_valid(publication: LocalPublication.Result): Boolean =
     publication.nextPreparation.isEmpty && (publication.status match {
@@ -335,6 +361,10 @@ private[smworkflow] object DelegateTask {
             reference(selected.selectionReference) && selected.activationReference != null && selected.activationReference.forall(reference) &&
             selected.consumerCheckReferences != null && selected.consumerCheckReferences.forall(reference)) Consequence.unit
             else invalid("Artifact selection crosses the returned source/coordinates or lacks attributable selection references")
+          _ <- if (producer.flatMap(_.delivery).forall(delivery =>
+            !delivery.managedContinuation.exists(_.edge.machineLocalJar.nonEmpty) ||
+              delivery.publication.exists(machineSelectionValid(selected, _)))) Consequence.unit
+            else invalid("Machine-common adoption requires the actual ordinary publication request reference and no preclaimed consumer effects")
         } yield state.copy(stage = "Adopted", delivery = Some(d.copy(artifactSelection = observation.artifactSelection, adoptionScope = Some("result-and-selection-attachment-only"),
             observations = d.observations :+ observation)), message = "Requester adopted the attributed result/selection attachment; this does not execute or certify consumer activation or checks")
         case "defer" if c.role == "requester" && Set("AwaitResult", "ResultReceived")(state.stage) =>
