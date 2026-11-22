@@ -1,6 +1,6 @@
 # Phase 24: Context Packaging and Practical API-Credit Use
 
-Status: in progress; local work handed off for operational verification
+Status: closed
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 24 on 2026-11-19; unpublished API Phase 22 renamed without accepting any condition
 Owner: SimpleModeling開発 (dedicated sm-workflow worktree)
@@ -131,9 +131,27 @@ call or Human approval. Q2 uses the same request/result and presentation paths.
 
 ## Completion and exclusions
 
+### Formal local release — 2026-11-22
+
+The operator approved release after the successful OpenAI connectivity exercise
+and directed that further operational verification follow the release.
+Additional release validation and independent review are
+**NOT RUN — USER-APPROVED**. The local release Step plan contains the two
+already accepted Steps, P24-PRE (`05198fa9`) and P24-Q1 (`df121adf`).
+The release also includes the delivered review transport, response evidence,
+redaction, and Session checkout binding through `00a95795`.
+
+The native Plan `phase-24-practical-api-credit-use@7` and Session
+`114f350805ca6722eddc6897c4b225fa` retain their existing history. At release,
+P24-Q2 is at Review revision 289 with repair count 7/10. P24-Q2's live review
+and ordinary Admission and P24-Q3's bounded API patch and installed-route
+qualification remain post-release work. The earlier `UNCERTAIN` attempt and
+its original disposition remain in history. The release does not record a
+native Step acceptance for either pending Step or a native Phase terminal.
+
 ### Local handoff — 2026-11-22
 
-The operator moved further verification to actual use. Local delivery covers the
+Local delivery covers the
 bounded review package, runner SPI, provider HTTP evidence and redaction, and
 FixCheck bound to the Session checkout. The live connectivity exercise used a
 synthetic Scala compiler error and the existing sm-workflow review path through
@@ -142,17 +160,17 @@ body, request ID, and usage. The suggested correction compiled and passed three
 assertions. The Japanese quotations and the fixture reference survived the round
 trip.
 
-The connectivity exercise used a separate fixture. Phase 24's existing
-GoalPhase Session remains the source of its acceptance history. Retain the
-earlier uncertain provider attempt with its original disposition. In actual
-use, verify the configured installed route through normal Admission, the
-runtime-owned application and checks for a bounded patch, and the configured
-billing boundary. Collect the resulting native references before claiming Q1–Q3
-or formal Phase completion.
+The connectivity exercise used a separate fixture. In actual use, verify the
+configured installed route through normal Admission, the runtime-owned
+application and checks for a bounded patch, and the configured billing
+boundary. The issued review is tied to the pre-integration candidate.
+Reconcile that pending request in the original Session before using the
+current candidate, and retain the resulting native evidence.
 
-Completion requires Q1–Q3's bounded practical route and
-[P24-01–11](phase-24-checklist.md), with actual integration, necessary checks,
-independent review and normal local closure. Claim only the qualified capabilities.
+Operational acceptance still requires Q1–Q3's bounded practical route and
+[P24-01–11](phase-24-checklist.md), with actual integration, necessary checks
+and independent review. The release decision leaves these verification
+requirements in place.
 Provider breadth, generic task services, auto-learning routing, Local LLM setup,
 all-provider comparisons and a new budget/telemetry platform are excluded.
 This plan starts no Goal/Session and preserves existing accepted results,

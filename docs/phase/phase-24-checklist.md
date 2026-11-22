@@ -1,13 +1,18 @@
 # Phase 24 delivery checklist
 
-Status: in progress; local connectivity verified, operational acceptance pending.
+Status: closed
 Plan: [Phase 24](phase-24.md)
 
+The [formal local release](phase-24.md#formal-local-release--2026-11-22)
+retains the accepted P24-PRE and P24-Q1 commits and the successful synthetic
+OpenAI connectivity evidence. Additional release validation and independent
+review are **NOT RUN — USER-APPROVED**. The unchecked items below remain
+operational acceptance requirements. P24-Q2 and P24-Q3 remain in the existing
+Session for post-release work, as described in the
+[local handoff](phase-24.md#local-handoff--2026-11-22).
+
 The [connection and readiness inventory](../notes/phase-24-provider-prerequisites.md)
-records source and retained evidence and outstanding prerequisites. Checklist
-conditions remain unchecked pending their actual acceptance evidence. The
-[local handoff](phase-24.md#local-handoff--2026-11-22) records the verified
-coverage and the work deferred to actual use.
+retains the original source evidence and prerequisites.
 
 ## Pre-development dependencies
 
