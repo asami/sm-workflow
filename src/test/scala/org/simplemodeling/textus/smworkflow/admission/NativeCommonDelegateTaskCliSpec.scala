@@ -273,7 +273,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
           Some(NativeCommonDelegateTaskFixture.publication),
           Vector("org.example.sm-workflow-common-delegate-fixture:common-delegate-fixture_3:0.0.1-SNAPSHOT"),
-          "SPECIFICATION-OWNED artifact return; consumer selection and activation remain separate"), Vector.empty)
+          "SPECIFICATION-OWNED artifact return; consumer selection and activation remain separate", None, None, None), Vector.empty)
       def _start_(input: V.DelegateTaskInput): V.DelegateTaskView = {
         val role = input.delegation.role
         val file = root.resolve(role + "-input.json")
@@ -290,7 +290,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       def _observe_(id: String, event: String, destination: String, result: Option[org.goldenport.record.Record] = None) =
         _view(scenario, _call(scenario, "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", _json(
           V.DelegateTaskObservationInput(id, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
-            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified")))))
+            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified", None)))))
       def _submit_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, name: String): F.Result = {
         val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + name, "1")
         val worker = "SPECIFICATION-OWNED-" + name
@@ -697,7 +697,7 @@ private[admission] trait NativeDelegateTaskTestOnlyQualification extends AnyWord
       NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-source", "1")), true, "code", "off", 10, "direct-instruction", Vector.empty,
       V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination", "localized",
         NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
-        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request-authority", "1")), None, Vector.empty, "SPEC-only"), Vector("behavior"))
+        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None), Vector("behavior"))
     if (prior.isEmpty) Files.writeString(inputfile, _json(input))
     val preparation = V.WorkflowDelegateTaskStartPreparationInput(inputfile.toUri.toASCIIString,
       "SPEC-TestOnly-selection", "participant", "ExplicitHuman", "SPEC-TestOnly-key", "entity:smworkflow.cli.goal_selection")

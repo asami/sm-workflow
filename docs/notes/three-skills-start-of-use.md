@@ -188,3 +188,41 @@ delivery alignment. The current Release documentation FIX, fresh affected checks
 independent scoped review and ordinary native Final/local closure remain pending;
 Phase completion requires the actual native Terminal result. See the
 [actual evidence and Phase 7 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).
+
+## Phase 7 related workspace use — 2026-11-21
+
+Select exact already registered directories in normal configuration and invoke
+`RepositorySyncService.syncRepositoryDirectories` with `FULL_STATE`. Reuse the
+returned aggregate Session/result revision to recollect; use each child's
+retained public work reference for its existing semantic/Human continuation.
+The existing managed-development edges determine provider order for selected
+consumers; directory order grants no dependency or effect authority. A selected
+consumer requires its explicitly registered provider endpoints in the batch.
+
+The current dependency gate can retain `AttentionRequired` with the consumer in
+`notStarted`, even when both providers converge. Read its `configuration`
+diagnostic: `DependencyValidationPending` retains unfinished provider work;
+`DependencyIntegrationApplicabilityUnknown` retains the missing consumer-input
+validation subject. Do not treat either as a complete workspace, retry effects,
+or run improvised FULL checks to manufacture closure. Ordinary single-source and
+historical unbound batches keep their existing route. Source synchronization
+never builds/publishes a provider or changes a consumer artifact selection.
+
+For the supported overlay operations and process-refresh limits, use the
+[overlay guide](../spec/development-artifact-overlay.md#p7-d-supported-use-and-qualification-limits--2026-11-21).
+Phase7 remains incomplete pending its integrated driver and the attributable
+CNCF owner Phase101 full closure in the documented order.
+
+The P7-D authored repair can additionally bind an explicitly named existing
+immutable ManagedDevelopment consumer invocation through `repositorySyncInputs`.
+Known before/after input applicability can release the consumer and select
+required native checks. Missing/multiple envelopes and localProject without an
+execution adapter remain explicit unknowns. Native child jobs are joined by
+the foreground owner, including every confirmed Job after a different submit
+or wait becomes unconfirmed. Uncertain attempts retain their original identity
+and cannot be resubmitted. The adopted CNCF dependency supplies scoped
+TestCompile/TestOnly and trusted `textus.job.scheduler.worker-count` (default 1,
+range 1..64); select sufficient capacity on the intended realtime host at engine
+construction. The [repair contract](../spec/repository-sync-local-main-integration.md#p7-d-consumer-input-continuation-repair--2026-11-21)
+records exact build/owner/operation grants and remaining runtime qualification.
+Neither source changes nor a configuration value prove observed overlap.

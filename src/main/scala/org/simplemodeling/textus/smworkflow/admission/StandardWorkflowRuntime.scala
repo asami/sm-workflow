@@ -50,8 +50,11 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some("JournalService") => Consequence.success(Vector(DevelopmentJournalService.bind(shared.journal)))
       case Some("EvidenceService") => Consequence.success(Vector(CommonEvidenceService.bind(shared.evidence, shared.journal)))
       case Some("StandaloneFixService") | Some("GoalTaskService") | Some("DelegateTaskService") | Some("DelegateTaskDeliveryService") => boundedC(creation, parameters, shared, request, core).map(Vector(_))
-      case Some("ManagedDevelopmentService") => parameters.resolve(ManagedDevelopmentRuntime.declaration)
-        .map(value => Vector(ManagedDevelopmentService.bind(value.value)))
+      case Some("ManagedDevelopmentService") => for {
+        value <- parameters.resolve(ManagedDevelopmentRuntime.declaration)
+        route <- parameters.resolve(ManagedDevelopmentRepositorySync.mainIntegration)
+      } yield Vector(ManagedDevelopmentService.bind(value.value, Some(ProviderPhaseDelivery.Storage(shared.persistence.configuration,
+        shared.persistence.instances, shared.persistence.continuations)), route.value))
       case Some("LocalPublicationService") => for {
         policy <- Consequence.success(shared.publication)
         definition <- GoalPhaseRuntimeCatalog.loadC().map(_.definition)
@@ -134,13 +137,19 @@ private[smworkflow] object StandardWorkflowRuntime {
       plans <- GoalPhaseNativeInputReadPolicy.decodeC(creation.configuration)
       plan <- new GoalPhaseSelectedPlanDataStorePort(plans.storeName, plans.plans).loadForCallC(selected.selectionId, core)
         .flatMap(_.map(Consequence.success).getOrElse(invalid("Start requires its selected complete Plan")))
-    } yield (plan.plan, Some(plan), Some(selected))
+    } yield (plan.plan, Some(plan), Some(selected), Option.empty[GoalPhaseNativeRun.Payload])
     else for {
       retained <- retainedGoalC(creation, shared.persistence, catalog.definition, session.get, core)
-    } yield (retained.plan, Option.empty[GoalPhaseNativeRun.SelectedPlan], Option.empty[ProfileStartAdmission.Selection])
-    target <- targetC(creation)
+    } yield (retained.plan, Option.empty[GoalPhaseNativeRun.SelectedPlan], Option.empty[ProfileStartAdmission.Selection], Some(retained))
+    development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
+    execution <- ManagedDevelopmentRuntime.executionPlanC(core)
+    managed <- ManagedDevelopmentBoundedWork.selectC(development, loaded._1.repository, execution, loaded._4.map(p => p.root -> p.branch))
+    target <- managed.map(m => Consequence.success(RepositoryGitRuntimePrograms.Target(Paths.get(m.root), m.localBranch,
+      m.remote, m.remoteBranch, m.endpoint))).getOrElse(targetC(creation))
     settings <- goalSettingsC(loaded._1, target)
     initial <- ThreeWorkflowRuntimeParameters.decodeSettingsC(creation, parameters, core.executionContext, settings)
+    _ <- managed.fold(Consequence.unit)(m => ManagedDevelopmentBoundedWork.validationBindingsC(execution, m,
+      (initial.goal.validationPolicy.toVector.flatMap(_.checks) ++ initial.goal.phaseValidationPolicy.toVector.flatMap(_.checks)).distinct))
     binding <- session match {
       case None => Consequence.success(loaded._1 -> initial.goal.candidatePaths)
       case Some(identity) => for {
@@ -157,13 +166,15 @@ private[smworkflow] object StandardWorkflowRuntime {
     plans = new GoalPhaseNativeRun.PlanPort {
       def loadForCallC(identity: String, call: ActionCall.Core) = Consequence.success(loaded._2)
     }
-    service <- GoalPhaseNativeServiceAssembly.bindC(creation, composition.goal, plans)
+    declaration = composition.goal.copy(managedDevelopment = composition.goal.managedDevelopment.map(p =>
+      loaded._4.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_))))))
+    service <- GoalPhaseNativeServiceAssembly.bindC(creation, declaration, plans)
     described = if (request.service.contains("DevelopmentObservationService"))
-      DevelopmentObservationService.bind(composition.goal, catalog.definition)
-    else NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(service, creation, composition.goal, catalog.definition),
-      creation, composition.goal, catalog.definition, loaded._3)
+      DevelopmentObservationService.bind(declaration, catalog.definition)
+    else NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(service, creation, declaration, catalog.definition),
+      creation, declaration, catalog.definition, loaded._3)
     selected <- RuntimeGitSelections.goalC(described, binding._1, binding._2)
-  } yield selected
+  } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def goalSessionC(request: Request): Consequence[String] =
     NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
@@ -226,6 +237,15 @@ private[smworkflow] object StandardWorkflowRuntime {
       case None => _repository_target_c(creation, parameters, request, retained)
     }
     sourceTarget = binding._1
+    incomingDependency = RepositorySyncConsumedInputs.binding(core)
+    retainedDependency = retained.flatMap(_.dependencyBinding)
+    _ <- retainedDependency.fold(Consequence.unit) { value => for {
+      session <- sessionid.map(Consequence.success).getOrElse(invalid("Dependency subject requires its existing child Session"))
+      _ <- RepositorySyncConsumedInputs.checkBinding(value, session, binding._2)
+      _ <- if (incomingDependency.forall(_ == value)) Consequence.unit
+        else invalid("RepositorySync call crossed the original dependency subject")
+    } yield () }
+    selectedDependency = retainedDependency.orElse(incomingDependency)
     sourceCall = RepositorySyncDirectoryList.scopedCore(core, binding._2)
     selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, sourceTarget).map(_ -> true)
       else retained.flatMap(_.context).map { selected => Consequence.success((RepositorySyncStartInput(selected.repositoryIdentity,
@@ -266,7 +286,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     }
     target = hop.fold(sourceTarget)(_.participant.target)
     workspace = hop.fold(binding._2)(_.participant.workspace)
-    call = RepositorySyncLocalMain.scopedCore(RepositorySyncDirectoryList.scopedCore(core, workspace), hop)
+    call = RepositorySyncConsumedInputs.withBinding(
+      RepositorySyncLocalMain.scopedCore(RepositorySyncDirectoryList.scopedCore(core, workspace), hop), selectedDependency)
     input = if (request.operation == "startRepositorySync") selectedInput._1 else selectedInput._1.copy(
       localBranch = target.localBranch, trackingRemote = target.remote, trackingBranch = target.remoteBranch,
       remoteEndpointIdentity = target.endpoint)
@@ -288,9 +309,10 @@ private[smworkflow] object StandardWorkflowRuntime {
     programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
-    validation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
+    ordinaryValidation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
       initialized.projectProvidesFixCheck)
       else repositoryValidation
+    validation = ordinaryValidation.copy(dependencyInputs = RepositorySyncConsumedInputs.subject(call))
     programEvidence <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.EvidencePort]) else for {
       goal <- GoalPhaseRuntimeCatalog.loadC()
       storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
@@ -325,7 +347,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
   } yield RepositorySyncLocalMain.bindHop(RepositorySyncDirectoryList.bindWorkspace(
-    StandardRepositorySyncIntent.bindInput(selected, input), workspace), hop)
+    StandardRepositorySyncIntent.bindInput(selected, input), workspace, selectedDependency), hop)
 
   /** The same admitted host plan resolves both a directory member and the
     * ordinary lower-level repository entry. Recollection uses its original
@@ -535,13 +557,37 @@ private[smworkflow] object StandardWorkflowRuntime {
     native = if (delegation) DelegateTaskNativeRun else if (task) GoalTaskNativeRun else StandaloneFixNativeRun
     definition <- if (delegation) DelegateTaskRuntimeCatalog.loadC() else if (task) GoalTaskRuntimeCatalog.loadC() else StandaloneFixRuntimeCatalog.loadC()
     development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
-    retained <- if (request.operation.startsWith("start")) Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
-      else for {
-        session <- _bounded_session_c(request, core)
+    syncRoute <- parameters.resolve(ManagedDevelopmentRepositorySync.mainIntegration).map(_.value)
+    retained <- if (request.operation.startsWith("start")) NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
+      case None => Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
+      case Some(_) => for {
+        session <- NativeWorkflowOperationInput.startSessionC(request, core.executionContext)
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, shared.persistence.configuration,
           Vector(definition), shared.persistence.instances, shared.persistence.continuations)
-        value <- native.retainedPayloadC(storage, session, core)
-      } yield Some(value)
+        instances <- storage.bindInstancesC()(using context)
+        current <- instances.loadC(InstanceIdentity(session))(using context)
+        value <- current match {
+          case None => Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
+          case Some(actual) => for {
+            key <- NativeWorkflowOperationInput.textC(request, "idempotencyKey")
+            participant <- NativeWorkflowOperationInput.textC(request, "participant")
+            requested <- if (delegation) NativeWorkflowOperationInput.valueC[org.simplemodeling.textus.smworkflow.value.DelegateTaskInput](request, "input")
+              .flatMap(DelegateTask.inputC).map(Some(_)) else Consequence.success(Option.empty[StandaloneFixExecution.Input])
+            _ <- if (actual.definition == definition && actual.correlation == CorrelationReference(key)) Consequence.unit
+              else invalid("Redelivered Start crosses its original native definition or idempotency key")
+            payload <- native.retainedPayloadC(storage, session, core.copy(executionContext = context))
+            _ <- if (payload.state.participant == participant && requested.forall(_ == payload.state.input)) Consequence.unit
+              else invalid("Redelivered Start changes its complete request or participant")
+          } yield Some(payload)
+        }
+      } yield value
+    } else for {
+      session <- _bounded_session_c(request, core)
+      storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, shared.persistence.configuration,
+        Vector(definition), shared.persistence.instances, shared.persistence.continuations)
+      value <- native.retainedPayloadC(storage, session, core)
+    } yield Some(value)
     input <- if (request.operation.startsWith("start")) NativeWorkflowOperationInput.recordC(request, "input").map(DevelopmentOperationalView.json)
       else for {
         session <- _bounded_session_c(request, core)
@@ -584,7 +630,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     host = BoundedWorkRuntime.Host(p.configuration, p.instances, p.continuations, repository, target.root.toString,
       target.localBranch, hostPaths, checks, shared.profiles, shared.origin, Some(shared.ports.goalReview), shared.evidence, shared.journal,
       shared.publication, shared.hygienemode, shared.completionrecords, Some(shared.operatingcontext),
-      development.filter(p => p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == repository))))
+      development.filter(p => p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == repository)))
+        .map(p => if (retained.nonEmpty) p.copy(delivery = retained.get.dependencyDelivery.map(Vector(_))) else p), syncRoute)
     records <- GoalPhaseInputRecordReadPolicy.decodeC(creation.configuration)
     selections = new ProfileSelectionDataStorePort(records.storeName,
       records.collections.find(_._1 == GoalPhaseInputRecordReadPolicy.Purpose.Selection).get._2)

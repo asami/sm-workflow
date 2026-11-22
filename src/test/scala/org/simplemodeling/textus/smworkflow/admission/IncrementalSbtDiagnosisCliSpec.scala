@@ -83,7 +83,7 @@ final class IncrementalSbtDiagnosisCliSpec extends AnyWordSpec with Matchers wit
     val dispositions = request.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(i =>
       V.GoalPhaseIssueDisposition(i.identity, "FIXED", "Specification-owned correction within the assigned diagnostic scope", None))
     val result = V.GoalPhaseWorkResult("completed", "Specification-owned diagnostic correction and actual behavioral tests",
-      Vector.empty, None, None, Option.when(dispositions.nonEmpty)(V.GoalPhaseIssueReport(dispositions)),
+      Vector.empty, None, None, Option.when(dispositions.nonEmpty)(V.GoalPhaseIssueReport(dispositions, Vector.empty)),
       None, None, None, None, None, dependencyValidation = None,
       diagnosticRepair = manifest.map(m => GoalPhaseNativeMetadata.record(m.asJson)))
     s.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

@@ -41,7 +41,7 @@ final class DelegateTaskDeliveryResourceRoutingSpec extends AnyWordSpec with Mat
         "--selectionId", preparation.selectionId, "--participant", "participant", "--idempotencyKey", preparation.idempotencyKey)))
       val observation = V.DelegateTaskObservationInput(started.sessionId, "dispatch-observed",
         V.WorkflowArtifactReference("SPECIFICATION-OWNED-transport-observation", "1"),
-        Some("SPECIFICATION-OWNED-destination-session"), None, None, "SPECIFICATION-OWNED observed dispatch; no execution fact")
+        Some("SPECIFICATION-OWNED-destination-session"), None, None, "SPECIFICATION-OWNED observed dispatch; no execution fact", None)
       val input = s.root.resolve("delivery-observation.json")
       Files.writeString(input, json(observation))
       def call(arguments: Vector[String]): F.Result = s.callService("DelegateTaskDeliveryService",

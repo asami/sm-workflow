@@ -33,7 +33,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     phaseReviewClassification: Option[GoalPhaseWorkClassification.Classification] = None,
     acceptance: Option[GoalPhaseAcceptanceBoundary.Adoption] = None,
     effectiveAcceptance: Option[GoalPhaseAcceptanceBoundary.Effective] = None,
-    phaseRepairInventory: Vector[String] = Vector.empty) {
+    phaseRepairInventory: Vector[String] = Vector.empty,
+    allowDependencyRepair: Option[Boolean] = None, allowSharedCliUpdate: Option[Boolean] = None,
+    deliverySynchronization: Option[String] = None) {
     def phaseOwnedPaths: Vector[String] = (steps.flatMap(_.ownedPaths) ++ phaseRepairInventory).distinct
     def phasePathsOwned(paths: Vector[String]): Boolean =
       paths != null && paths.distinct == paths && paths.forall(path =>
@@ -42,7 +44,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   }
   object Plan {
     given Encoder[Plan] = deriveEncoder[Plan].mapJson(_.mapObject(_.filter {
-      case ("phaseReviewClassification" | "acceptance" | "effectiveAcceptance", value) => !value.isNull
+      case ("phaseReviewClassification" | "acceptance" | "effectiveAcceptance" | "allowDependencyRepair" | "allowSharedCliUpdate" | "deliverySynchronization", value) => !value.isNull
       case ("phaseRepairInventory", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -51,7 +53,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       val selected = if (cursor.downField("phaseRepairInventory").succeeded) cursor.value
         else cursor.value.mapObject(_.add("phaseRepairInventory", Json.arr()))
       _decoder.decodeJson(selected).flatMap(value =>
-        if (_valid_phase_inventory(value.phaseRepairInventory)) Right(value)
+        if (_valid_phase_inventory(value.phaseRepairInventory) &&
+          value.allowDependencyRepair != null && value.allowSharedCliUpdate != null &&
+          value.deliverySynchronization != null && value.deliverySynchronization.forall(_ == "after-scoped-publication") &&
+          !Vector("allowDependencyRepair", "allowSharedCliUpdate", "deliverySynchronization").exists(key => cursor.downField(key).focus.exists(_.isNull))) Right(value)
         else Left(io.circe.DecodingFailure("Phase repair inventory requires finite unique literal relative paths", cursor.history)))
     }
   }
@@ -101,6 +106,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case Some(proof) => qualifiedCheckpointValid(anchor, proof, value.commit)
       case None => value.partialCompletion.fold(value.commit.parent == anchor.head)(_.originalParent == anchor)
     })
+
+  private[admission] def acceptedStepPredecessor(state: State, index: Int): Snapshot =
+    if (index == 0) state.base
+    else Snapshot(state.completed(index - 1).commit.identity, state.completed(index - 1).commit.tree)
+
+  private[admission] def acceptedPredecessorsValid(state: State): Boolean =
+    state.completed.indices.forall(i => acceptedPredecessorValid(state.completed(i), acceptedStepPredecessor(state, i)))
   final case class StepCommitChain(originalParent: Snapshot, partial: Commit, completion: Commit)
   object StepCommitChain {
     given Encoder[StepCommitChain] = deriveEncoder
@@ -524,6 +536,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           proposed.phase == plan.phase && proposed.repository == plan.repository &&
           proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
           proposed.phaseRepairInventory == plan.phaseRepairInventory &&
+          proposed.deliverySynchronization == plan.deliverySynchronization &&
           proposed.phaseReviewClassification == plan.phaseReviewClassification) Consequence.unit
         else invalid("Plan adoption must retain Plan identity, Phase, repository and closure policy")
       _ <- if (current &&
@@ -602,13 +615,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     /** Explicit direction changes only the outstanding adopted Phase boundary.
       * Successful checks and the immutable accepted prefix remain actual evidence.
       */
-    private[admission] def adoptPhaseAcceptanceDeferralC(proposed: Plan, evidence: String): Consequence[State] = for {
+    private[admission] def adoptPhaseAcceptanceDeferralC(proposed: Plan, evidence: String,
+      predecessors: Option[GoalPhaseNativeCandidate.DeferralPredecessors]): Consequence[State] = for {
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseReview) && cursor == plan.steps.size && cursor == completed.size &&
           completed.map(_.step) == plan.steps.map(_.identity) && completed.forall(s =>
             validStepAcceptance(s) && validCommit(s.commit)) &&
-          completed.zipWithIndex.forall { (s, i) => acceptedPredecessorValid(s,
-            if (i == 0) base else Snapshot(completed(i - 1).commit.identity, completed(i - 1).commit.tree)) } &&
+          (acceptedPredecessorsValid(this) || predecessors.exists(_.matches(this))) &&
           validSnapshot(base) && candidate.exists(validSnapshot) && checksReceipt.exists(text) &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && releaseCommit.isEmpty && !policyRepairPending &&
@@ -1170,6 +1183,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
 
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||
+        plan.allowDependencyRepair == null || plan.allowSharedCliUpdate == null ||
+        plan.deliverySynchronization == null || plan.deliverySynchronization.exists(_ != "after-scoped-publication") ||
         plan.steps == null || plan.steps.isEmpty || plan.steps.size > 64 || !_valid_phase_inventory(plan.phaseRepairInventory) ||
         !identities(plan.phaseChecks) || plan.phaseChecks.isEmpty || plan.repairLimit < 0 || plan.repairLimit > 64 ||
         plan.phaseReviewClassification == null || plan.phaseReviewClassification.exists(value =>

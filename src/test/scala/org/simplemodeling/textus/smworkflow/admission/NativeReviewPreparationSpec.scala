@@ -487,7 +487,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
 
         Given("P62-C-NULL-FIXTURE-03; present malformed typed public issue reports")
         val malformed = Vector(publicresult.copy(issueReport = null), publicresult.copy(issueReport = Some(null)),
-          publicresult.copy(issueReport = Some(V.GoalPhaseIssueReport(Vector(null)))))
+          publicresult.copy(issueReport = Some(V.GoalPhaseIssueReport(Vector(null), Vector.empty))))
         When("public passive preparation strictly converts each present structured value")
         val failures = malformed.map(Preparation.goalC(context, _, _reference, _execution, _declared.issuer, _now))
         Then("malformed presence produces typed failure without dropping the state or coverage")

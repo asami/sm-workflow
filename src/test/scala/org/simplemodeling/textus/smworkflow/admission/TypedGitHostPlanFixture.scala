@@ -64,6 +64,7 @@ private[admission] object TypedGitHostPlanFixture {
       Json.obj((fields ++ (if (paths.isEmpty) Vector.empty else
         Vector("selectedPaths" -> Json.fromValues(paths.map(Json.fromString)))))*)
     }
+    // CheckIgnore also requires explicit selectedPaths; never emit it as a generic registration.
     val selectedkinds = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll,
       GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges,
       GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore)

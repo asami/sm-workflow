@@ -88,7 +88,13 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     documents: Option[GoalPhaseDocumentSource.Bound] = None,
     sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
     dependencyInventoryReason: Option[String] = None,
-    developmentReconstruction: Option[X.Payload] = None)
+    developmentReconstruction: Option[X.Payload] = None,
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload] = Vector.empty,
+    managementPaths: Vector[String] = Vector.empty) {
+    def deferralPredecessorsC: Consequence[Option[GoalPhaseNativeCandidate.DeferralPredecessors]] =
+      GoalPhaseNativeCandidate.deferralPredecessorsC(controller, input, candidate.map(_.payload),
+        completedCandidates, managementPaths)
+  }
 
   private[admission] def admitRevisionSourceC(controller: O.State, kind: String, result: S.Result,
     documents: Option[GoalPhaseDocumentSource.Bound]): Consequence[Unit] = {
@@ -478,7 +484,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             case Some(proposal) => for {
               _ <- admitRevisionSourceC(source.controller, source.input.kind, source.result.result.value, source.documents)
               captured <- source.documents match {
-                case None => R.captureSemanticProposalC(source.controller, proposal, d.projectAcceptance)
+                case None => R.captureSemanticProposalC(source.controller, proposal, d.projectAcceptance,
+                  predecessors = source.deferralPredecessorsC)
                 case Some(previous) => for {
                   imported <- GoalPhaseDocumentSource.loadForCallC(previous.source, core)
                   captured <- R.captureDocumentsC(source.controller, proposal, d.projectAcceptance, previous, imported)
@@ -529,7 +536,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         _ <- R.validateDocumentsC(source.controller, captured, source.documents)
         _ <- R.validatePhaseAcceptanceDeferralSourceC(input.work, input.result, captured)
         // Saved questions consume their own acceptance selection, never later host defaults/check policy.
-        _ <- R.eligibleC(source.controller, captured)
+        _ <- R.eligibleC(source.controller, captured, source.deferralPredecessorsC)
       } yield () }
     } yield input
 
@@ -543,7 +550,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case "AdoptDevelopmentReconstruction" | "KeepCurrentRequirements" if input.developmentReconstruction.nonEmpty =>
           Consequence.success(source.controller)
         case "AuthorizeNewAttempt" if input.sourceHistoryRecovery.nonEmpty => Consequence.success(source.controller)
-        case "AdoptPlanRevision" => input.planRevision.map(R.adoptedC(source.controller, _, result.resultReference.identity))
+        case "AdoptPlanRevision" => input.planRevision.map(
+          R.adoptedC(source.controller, _, result.resultReference.identity, source.deferralPredecessorsC))
           .getOrElse(F.invalid("Plan revision adoption has no saved captured proposal"))
         case "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" =>
           source.controller.acceptC(O.DecisionResumptionAdmitted(result.resultReference.identity))

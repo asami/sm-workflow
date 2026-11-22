@@ -25,7 +25,7 @@ import RepositorySyncManagedGitObservation as G
   * projects completion first and passively observes the child's own persistence.
   * @since   Oct. 23, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePostCompletionSync {
@@ -137,6 +137,23 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     } yield _output(completed, d, core, payload, synchronization, if (failure.isEmpty) observed._2 else None)
   } yield output
 
+  /** Passive canonical completion reader for declared provider delivery. */
+  def acceptedDeliveryC(storage: WorkflowComponentStorage, started: WorkflowManagedMechanicalTransition.Retained[F.Payload],
+    current: InstanceRecord, core: ActionCall.Core): Consequence[Option[Payload]] = for {
+    adapter <- storage.bindMechanicalC(F.advanceOperation, codec)
+    retained <- adapter.loadRetainedC(reference(current.identity.value))(using core.executionContext)
+    result <- retained match {
+      case None => Consequence.success(Option.empty[Payload])
+      case Some(value) => for {
+        _ <- _validate_saved_c(F.Session(storage, started, started.receipt.payload.value.participantIdentity, current),
+          value.receipt.next, value.receipt.payload.value)
+        entry <- completionEntryC(value.receipt.next, current)
+        _ <- if (entry.isEmpty && current.lifecycle == Lifecycle.Completed) Consequence.unit
+          else F.invalid("Provider Phase local completion is not yet natively terminal")
+      } yield Some(value.receipt.payload.value)
+    }
+  } yield result
+
   private def _committed(controller: O.State): Boolean = controller.candidate.contains(controller.candidateBase) &&
     controller.phaseReviewedCandidate.isEmpty && controller.phaseRecordingPaths.isEmpty
 
@@ -144,7 +161,9 @@ private[smworkflow] object GoalPhasePostCompletionSync {
   private def _select_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     input: R.Input): Consequence[(Synchronization, Boolean)] = {
     def _deferred_(reason: String) = Consequence.success(Synchronization("deferred", reason) -> false)
-    d.repositoryClosure match {
+    if (session.started.receipt.payload.value.plan.deliverySynchronization.contains("after-scoped-publication"))
+      _deferred_("Explicit original delivery composition reserves synchronization after scoped publication; no closure child was started")
+    else d.repositoryClosure match {
       case None => _deferred_("Paired RepositorySync installation is absent.")
       case Some(installation) =>
         try {

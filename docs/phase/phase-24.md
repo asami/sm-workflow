@@ -3,7 +3,7 @@
 Status: planned
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 24 on 2026-11-19; unpublished API Phase 22 renamed without accepting any condition
-Owner: sm-workflow-dev開発 (consumer development)
+Owner: SimpleModeling開発 (dedicated sm-workflow worktree)
 Checklist: [Phase 24 delivery ledger](phase-24-checklist.md)
 Successor: [Phase 25](phase-25.md)
 Decision: [development order and allocation](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md)
@@ -80,6 +80,20 @@ unaccepted local P22 IDs; they do not replace canonical stabilization P22 IDs.
 | Q1: usable API review | Existing diff/specification/check context -> deterministic package -> configured textus-ai/OpenAI call -> typed independent review -> ordinary Admission. | One real bounded review is accepted through the normal route with actual provider/model/request/result and observed usage. Setup and usage instructions permit repeated ordinary use without hand-built requests. |
 | Q2: bounded patch and agent handoff | Same packaging contract -> API patch candidate -> runtime path/scope checks, workspace application and required focused checks; known decline, unsupported context/tools or exhausted bounded attempts -> existing agent assignment. | A small actual code task reaches normal acceptance; focused scenarios prove retained candidate/history/remaining allowance and no blind replay of uncertain execution. API inference alone grants no repository or command authority. |
 | Q3: practical adoption and closure | Qualify the connected route and no-overage behavior, independent integrated review, normal local closure and operator handoff. | Supported configuration, actual accepted outcomes, API token/cost observations, packaging overhead and limitations are recorded. Savings are reported only where measured; no mandatory broad model benchmark or fixed savings percentage. |
+
+### Q1 language verification within P24-05
+
+Use the existing bounded Q1 review call to qualify the
+[workflow message language contract](../spec/native-host-execution.md#workflow-message-language).
+Inspect the actual request sent through textus-ai: newly written instructions
+and review criteria are in English, and the output instructions request English
+findings and rationale. Include a Japanese approval quotation and a log excerpt
+as supplied evidence. Compare both with the originals after packaging and
+result collection. Verify the returned typed review contains English prose and
+preserves protocol values and evidence references. Present its outcome in
+Japanese and exercise the Japanese question rendering for a decision-needed
+outcome using retained input. This presentation check requires no extra API
+call or Human approval. Q2 uses the same request/result and presentation paths.
 
 ## Minimum contract carried forward from the extension proposal
 

@@ -28,7 +28,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
     val report = if (work.kind != "RepairStep") None else Some(V.GoalPhaseIssueReport(
       work.issues.toVector.flatMap(_.issues).filter(i => i.repository == work.selectedPlan.repository &&
         work.stepIdentity.contains(i.step) && i.status != "RESOLVED").map(i =>
-          V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None))))
+          V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None)), Vector.empty))
     val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,

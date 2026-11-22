@@ -64,7 +64,8 @@ private[admission] object NativeWorkflowCliFixture {
         s.workClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
       A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
-      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))
+      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }),
+      value.allowDependencyRepair, value.allowSharedCliUpdate, value.deliverySynchronization)
 
   final case class Invocation(argv: Vector[String], pid: Long, stdout: Path, stderr: Path) {
     def logs: String = s"argv=$argv; pid=$pid; stdout=$stdout; stderr=$stderr\n" +
@@ -369,13 +370,17 @@ private[admission] object NativeWorkflowCliFixture {
 
     /** Read only the exact public references returned by this invocation. A
       * compact control is never treated as a complete issued Work request. */
-    def readGoalPhaseResult(result: Result): V.GoalPhaseAdvanceResult = {
+    def readGoalPhaseResult(result: Result): V.GoalPhaseAdvanceResult =
+      readGoalPhaseResult(result, readRetainedWork(_: V.WorkflowRetainedWorkReference), readRetainedSnapshot)
+
+    def readGoalPhaseResult(result: Result, readWork: V.WorkflowRetainedWorkReference => Result,
+      readSnapshot: V.WorkflowRetainedSnapshotReference => Result): V.GoalPhaseAdvanceResult = {
       require(_sequence.contains(result.invocation), "Read this scenario's actual invocation")
       val control = result.business[V.GoalPhaseAdvanceResult]
       val work = control.retainedWork match {
         case None => control.toRecord()
         case Some(reference) =>
-          val retained = readRetainedWork(reference).business[V.WorkflowRetainedWorkReadResult]
+          val retained = readWork(reference).business[V.WorkflowRetainedWorkReadResult]
           require(retained.availability == "available" && retained.reference == reference,
             "Read the exact available public Work reference")
           require(reference.sessionId == control.submitSessionId.getOrElse(control.sessionId),
@@ -394,7 +399,7 @@ private[admission] object NativeWorkflowCliFixture {
           retained.response
       }
       val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
-        val retained = readRetainedSnapshot(field.reference).business[V.WorkflowRetainedSnapshotReadResult]
+        val retained = readSnapshot(field.reference).business[V.WorkflowRetainedSnapshotReadResult]
         require(retained.availability == "available" && retained.reference == field.reference,
           "Read the exact available public snapshot reference")
         val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName)).getOrElse(org.goldenport.record.Record.empty)
@@ -947,7 +952,8 @@ private[admission] object NativeWorkflowCliFixture {
     denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None,
     sbtRepair: Option[Path] = None, classifiedSbtRepair: Boolean = false, sourceHistory: Boolean = false,
     repairContinuation: Boolean = false, documentRevision: Boolean = false, sbtDiagnosticBytes: Int = 0,
-    laterPlanPurpose: Option[String] = None, selectedGoalPaths: Option[Vector[String]] = None): Scenario = {
+    laterPlanPurpose: Option[String] = None, selectedGoalPaths: Option[Vector[String]] = None,
+    acceptance: Option[A.Adoption] = None): Scenario = {
     require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
       (sbtDiagnosticBytes == 0 || sbtRepair.nonEmpty),
       "Diagnostic padding requires a selected SBT build and 0..90000 or exactly 1500000 bytes")
@@ -1001,7 +1007,7 @@ private[admission] object NativeWorkflowCliFixture {
     val plan = GoalPhaseOrderedProgression.Plan("native-selected-plan", "1", host.goal.input.phaseIdentity,
       host.goal.input.repositoryIdentity, steps,
       Vector("test"), repairLimit = if (repairContinuation) 2 else if (sbtRepair.nonEmpty) 1 else 0,
-      phaseReviewClassification = classification.map(_.review))
+      phaseReviewClassification = classification.map(_.review), acceptance = acceptance)
     val port = if (remote) Some(_available_port()) else None
     val scenario = new Scenario(root, host, plan, port, sbtRepair, sourceHistory = sourceHistory,
       repairContinuation = repairContinuation, documentRevision = documentRevision, sbtDiagnosticBytes = sbtDiagnosticBytes)
@@ -1198,6 +1204,16 @@ private[admission] object NativeWorkflowCliFixture {
       (scenario.host.goal.candidatePaths == Vector("src/main/scala/HistoryExample.scala") ||
         scenario.root.getFileName.toString.startsWith("p69-release-directory-") &&
           scenario.host.goal.candidatePaths == Vector("src/test/scala", "build.sbt")), "Select the release history fixture")
+    _allow_pending_index(scenario)
+  }
+
+  def allowAcceptanceDeferralPendingIndex(scenario: Scenario): Unit = {
+    require(scenario.root.getFileName.toString.startsWith("acceptance-deferral-") &&
+      scenario.plan.acceptance.nonEmpty, "Select the isolated acceptance deferral fixture")
+    _allow_pending_index(scenario)
+  }
+
+  private def _allow_pending_index(scenario: Scenario): Unit = {
     val host = scenario.host
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)

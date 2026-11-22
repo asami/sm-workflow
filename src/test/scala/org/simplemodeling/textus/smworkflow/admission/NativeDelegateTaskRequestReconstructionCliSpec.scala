@@ -79,7 +79,7 @@ final class NativeDelegateTaskRequestReconstructionCliSpec extends AnyWordSpec w
         NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt", "publishLocal"),
         Vector("remote-push", "consumer-activation"), NonEmptyVector.one(_reference(authority)), Some(C.publication),
         Vector("org.example.sm-workflow-common-delegate-fixture:common-delegate-fixture_3:0.0.1-SNAPSHOT"),
-        "SPECIFICATION-OWNED tiny artifact result; consumer selection and activation remain separate"), Vector.empty)
+        "SPECIFICATION-OWNED tiny artifact result; consumer selection and activation remain separate", None, None, None), Vector.empty)
   }
 
   private def _prepare_start(scenario: F.Scenario, input: V.DelegateTaskInput, admission: String = "original"): F.Result = {
@@ -184,7 +184,7 @@ final class NativeDelegateTaskRequestReconstructionCliSpec extends AnyWordSpec w
     result: Option[Record] = None): V.DelegateTaskView =
     _view(scenario, _call(scenario, "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", _json(
       V.DelegateTaskObservationInput(session, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
-        Some(destination), result, None, "SPECIFICATION-OWNED actual fixture CLI result transport; no consumer effects")))))
+        Some(destination), result, None, "SPECIFICATION-OWNED actual fixture CLI result transport; no consumer effects", None)))))
 
   private def _continue_new(): Unit = {
     Given("the exact old requester, its native selection, original payload, dispatch and terminated intake captures")

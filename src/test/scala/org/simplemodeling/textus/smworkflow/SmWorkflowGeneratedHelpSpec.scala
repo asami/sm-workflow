@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -113,7 +113,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
-      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
+      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus", "verifyDevelopmentArtifact",
+      "detachDevelopmentArtifact", "pruneDevelopmentArtifact"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication",
       "describeLocalPublicationRecovery", "admitLocalPublicationRecovery", "advanceLocalPublicationRecovery"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries",
@@ -147,6 +148,15 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("ManagedDevelopmentService", "selectDevelopmentArtifact", Vector(
+      "retain=true", "retain=false", "creates no pin", "active selection"
+    )),
+    ("ManagedDevelopmentService", "detachDevelopmentArtifact", Vector(
+      "expected active selection", "concurrent newer selection", "fresh process"
+    )),
+    ("ManagedDevelopmentService", "pruneDevelopmentArtifact", Vector(
+      "CNCF FileDelete UoW", "in-flight and uncertain dependency closures", "without replay", "prune-unavailable"
+    )),
     ("RepositorySyncService", "adoptRepositorySyncValidationContinuation", Vector(
       "exactly one of input or inputResource", "finite UTF-8", "AuthorizeNewValidationAfterSelectionCorrection",
       "actual appended TestOnly", "separate Advance"
@@ -289,6 +299,15 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     }
 
     "the declared component catalog" which {
+      "expose the existing Phase 7 artifact operations to the standard launcher" in {
+        Given("the implemented verification, detachment and prune operations for managed artifacts")
+        When("the standard launcher selects its deferred operation declarations")
+        val operations = admission.ThreeWorkflowLauncherAssembly.deferredDeclarations
+          .find(_.name == "ManagedDevelopmentService").get.operations.operations.toVector.map(_.name)
+        Then("all three operations are available for standard dispatch")
+        operations should contain allOf ("verifyDevelopmentArtifact", "detachDevelopmentArtifact", "pruneDevelopmentArtifact")
+      }
+
       "retain the complete declared operation catalog alongside the canonical host services" in {
         Given("the complete public declaration catalog including repair budget, Purpose preparation and push continuations, independently of production handler installation")
         val names = _declarations.map(_._1.name).sorted

@@ -80,7 +80,7 @@ final class Phase65ConditionalLintSpec extends AnyWordSpec with Matchers with Gi
     observations: Vector[String] = Vector.empty): V.GoalPhaseWorkResult = {
     val issues = if (request.work.get.kind == "RepairStep") request.work.get.issues.map(value =>
       V.GoalPhaseIssueReport(value.issues.filter(_.status != "RESOLVED").map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", summary, None)))) else None
+        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", summary, None)), Vector.empty)) else None
     V.GoalPhaseWorkResult(outcome, summary, observations, None, None, issues, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   }
   private def submit(s: F.Scenario, request: V.GoalPhaseAdvanceResult, value: V.GoalPhaseWorkResult, name: String) =

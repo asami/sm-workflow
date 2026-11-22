@@ -68,10 +68,10 @@ issue keeps its status and updates actual evidence. Unclaimed finding ordinals
 create new REVIEW issues with unknown source correspondence.
 
 NOT_REVIEWED preserves status. An independent result's missing finding is never
-implicit resolution. Review `accept` rejects while any relevant issue remains
-unresolved. The result must instead request repair or a decision. Existing
-excluded acceptance proposals remain nonblocking acceptance observations or
-advisories; only actual required findings enter issue intake.
+implicit resolution. Review `accept` rejects while a relevant issue remains
+unresolved, except for an original OPEN issue fully attributed to the actual
+adopted Phase condition deferral under [R8](goal-phase-acceptance-deferral.md#rules).
+All other unresolved relevant issues require repair or a decision.
 
 The independent host target binds the actual selected issue state, and its
 verdict binds the actual supplied issue report alongside the existing work,

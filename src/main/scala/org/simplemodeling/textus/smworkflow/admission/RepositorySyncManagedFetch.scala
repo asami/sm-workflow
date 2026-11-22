@@ -61,9 +61,10 @@ private[smworkflow] object RepositorySyncManagedFetch {
     before: Option[Git.Observed], expectedTip: Option[String], after: Option[Git.Observed], effect: Option[String],
     policies: Option[RepositorySyncPolicies.Selection] = None,
     localMain: Option[RepositorySyncLocalMain.Plan] = None,
-    localMainSetup: Option[String] = None)
+    localMainSetup: Option[String] = None,
+    dependencyBinding: Option[RepositorySyncConsumedInputs.Binding] = None)
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("policies" | "localMain" | "localMainSetup", value) => !value.isNull
+    case ("policies" | "localMain" | "localMainSetup" | "dependencyBinding", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -80,6 +81,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     }
     original = started.receipt.payload.value
     originalContext <- original.context.map(Consequence.success).getOrElse(invalid("native Start context is missing"))
+    _ <- if (RepositorySyncConsumedInputs.binding(core).forall(original.dependencyBinding.contains))
+      Consequence.unit else invalid("RepositorySync call crossed the original dependency subject")
     context = declaration.hop.filter(h => Set("local", "remote")(h.cursor.phase)).fold(originalContext) { h =>
       originalContext.copy(localBranch = h.plan.main.branch, trackingRemote = h.plan.main.remote,
         trackingBranch = h.plan.main.remoteBranch, remoteEndpointIdentity = h.plan.main.endpoint)
@@ -142,11 +145,14 @@ private[smworkflow] object RepositorySyncManagedFetch {
     storage <- bindC(declaration, definition, core)
     _ <- if (sameTarget(input, declaration.input)) Consequence.unit
       else invalid("requested Start crosses its actual repository/tracking/effect scope")
+    dependencyBinding = RepositorySyncConsumedInputs.binding(core)
+    _ <- dependencyBinding.fold(Consequence.unit)(RepositorySyncConsumedInputs.checkBinding(_, identity.value,
+      RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")))
     context = StartContext(selected.selectionId, selected.idempotencyKey, selected.participantIdentity,
       input.repositoryIdentity, input.localBranch, input.trackingRemote, input.trackingBranch,
       input.remoteEndpointIdentity, input.syncMode)
     payload = Payload("Started", Some(context), declaration.target.root.toString, None, None, None, None,
-      declaration.policies, declaration.localMain, declaration.localMainSetup)
+      declaration.policies, declaration.localMain, declaration.localMainSetup, dependencyBinding)
     initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
       CorrelationReference(selected.idempotencyKey), CausationReference("managed-start:" + identity.value),
       None, None, None, Vector.empty).validateC

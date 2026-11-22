@@ -257,7 +257,7 @@ final class NativeGoalReleaseRepairCandidateRecoveryCliSpec extends AnyWordSpec 
         val open = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
         open should not be empty
         val issues = V.GoalPhaseIssueReport(open.map(issue => V.GoalPhaseIssueDisposition(issue.identity, "FIXED",
-          "SPECIFICATION-OWNED assigned source now supplies the required actual value", None)))
+          "SPECIFICATION-OWNED assigned source now supplies the required actual value", None)), Vector.empty)
         When("one accepted public repair Submit is followed by OLD Advance with no pending-index-check program")
         Files.writeString(source, "object HistoryExample { val value: Int = 42 }\n")
         if (_directory_owners) {

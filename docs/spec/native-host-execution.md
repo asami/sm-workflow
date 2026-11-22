@@ -17,6 +17,25 @@ Keep one visible command interval across projection, Submit and paired Advance.
 Projection does not supply execution attribution, Human consent or acceptance,
 and never authorizes replay of an accepted result. See [semantic result submission](semantic-result-submission.md).
 
+## Workflow message language
+
+Use English by default for newly authored prose exchanged between sm-workflow
+and AI, including requests, worker handoffs, acceptance criteria, findings,
+result summaries and unresolved questions for another agent. Use Japanese for
+progress updates, reports and questions addressed to the user, including Human
+decision prompts. Choose the language by the intended reader even when both
+messages pass through the same chat.
+
+Preserve the original wording of user instructions and approvals, logs and
+diagnostics when carrying them as evidence. Keep identifiers, paths and typed
+protocol values exact. When an English handoff needs to explain a Japanese
+approval, summarize its scope in English and include the original text or a
+verifiable reference to it. Apply the default when authoring new prose; accept
+existing and mixed-language payloads as issued without a language gate.
+
+For API work, apply this contract when constructing the actual provider request,
+requesting typed output and presenting the result to the user.
+
 ## Authorization in delegated delivery — 2026-10-25
 
 Delegate Component, purpose, acceptance conditions and permitted operations with

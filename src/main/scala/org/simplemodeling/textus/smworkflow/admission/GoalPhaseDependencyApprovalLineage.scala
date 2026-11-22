@@ -1,6 +1,6 @@
 /**
  * @since   Nov.  6, 2026
- * @version Nov.  8, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -40,9 +40,18 @@ private[smworkflow] object GoalPhaseDependencyApprovalLineage {
     state.entries.map(_.key.revision).sliding(2).forall(pair => pair.size < 2 || pair.head < pair.last)
 
   def appendC(state: State, key: Key, approval: V.Approval, context: W.DecisionContext,
+    issued: Option[W.DecisionContext]): Consequence[State] =
+    if (context == null || context.choice != "ApproveDependencyScope") invalid("ordinary lineage requires actual Human direction")
+    else _append_c(state, key, approval, context, issued)
+
+  def policyC(state: State, saved: GoalPhasePolicyDependencyContinuation.Saved): Consequence[State] =
+    _append_c(state, Key(saved.record.identity.value, saved.payload.authority.plan, saved.approval.step,
+      saved.source.reference.identity, saved.record.revision.value), saved.approval, saved.context, None)
+
+  private def _append_c(state: State, key: Key, approval: V.Approval, context: W.DecisionContext,
     issued: Option[W.DecisionContext]): Consequence[State] = {
     if (!_valid_state(state) || !_valid_key(key) || !V.approvalValid(approval) || !_valid_context(context) ||
-        issued == null || issued.exists(c => !_valid_context(c)) || context.choice != "ApproveDependencyScope" ||
+        issued == null || issued.exists(c => !_valid_context(c)) || !Set("ApproveDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(context.choice) ||
         context.decisionReference != Some(approval.decision) ||
         !context.requestingResult.dependencyProposal.contains(approval.proposal) || approval.step != key.step ||
         state.entries.exists(e => e.key.session != key.session || e.key.continuation == key.continuation ||

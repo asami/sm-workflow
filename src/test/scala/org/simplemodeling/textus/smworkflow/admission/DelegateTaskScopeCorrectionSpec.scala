@@ -23,6 +23,7 @@ import S.given
   * Authority is specification-owned; this does not claim an actual Human event.
   * @since Oct. 30, 2026
   *  version Nov.  7, 2026
+  *  version Nov. 18, 2026
   * @version Nov. 21, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,7 +33,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
   private val _contract = V.DelegateTaskContract("requester", "destination", "requester", "org.example.Component",
     "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
     Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("specification-human", "1")),
-    None, Vector.empty, "Retain source and native results")
+    None, Vector.empty, "Retain source and native results", None, None, None)
   private val _input = V.DelegateTaskInput("sm-workflow", "scope-correction-specification", "Correct the same SBT connection",
     NonEmptyVector.one("src/test/scala"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.one("behavior"),
     NonEmptyVector.one(V.WorkflowArtifactReference("specification-request", "1")), false, "code", "off", 10,
@@ -762,7 +763,8 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       import io.circe.syntax.*
       val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"), reviewRequired = true, submissionConditions = None,
         delegation = Some(take(DelegateTask.inputC(_input)).delegation.get.copy(publicationTarget = Some("fixture-publication"),
-          permittedOperations = _contract.permittedOperations.toVector :+ "publishLocal", artifactCoordinates = Vector("org.example:fixture:0.0.1-SNAPSHOT"))))
+          permittedOperations = _contract.permittedOperations.toVector :+ "publishLocal", exclusions = _contract.exclusions,
+          artifactCoordinates = Vector("org.example:fixture:0.0.1-SNAPSHOT"))))
       val planned = take(DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector("behavior"))))
       val initial = take(S.startC(planned, "participant", _checks))
       val pending = Vector(S.Condition("behavior", true, "SPECIFICATION-OWNED submitted behavior"),

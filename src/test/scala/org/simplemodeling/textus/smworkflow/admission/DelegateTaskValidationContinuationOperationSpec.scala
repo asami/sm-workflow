@@ -109,7 +109,7 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         val contract = V.DelegateTaskContract("fixture-requester", "fixture-destination", "fixture-requester", "repository",
           "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("push"), NonEmptyVector.one(V.WorkflowArtifactReference("specification-human", "1")), None, Vector.empty,
-          "Isolated fixture only")
+          "Isolated fixture only", None, None, None)
         val input = V.DelegateTaskInput("sm-workflow", "selected-continuation-fixture", "Retain original behavior",
           NonEmptyVector.of("docs/phase.md", _suite_path), NonEmptyVector.of("compile", "focused", "test"), NonEmptyVector.one("behavior"),
           NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), true, "code", "off", 10,

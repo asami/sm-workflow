@@ -580,7 +580,7 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       val work = callResult.business[V.GoalPhaseAdvanceResult]
       val unresolved = work.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED")
       val issues = Option.when(unresolved.nonEmpty)(V.GoalPhaseIssueReport(unresolved.map(i =>
-        V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "Specification review confirms the correction", None))))
+        V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "Specification review confirms the correction", None)), Vector.empty))
       val r = result("accept", issues)
       val ref = V.WorkflowArtifactReference(name, "1")
       val evidence = V.WorkflowExecutionEvidence(Vector(ref), Some("specification-independent-reviewer"), None, None)
@@ -654,7 +654,7 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       val issues = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
       issues should not be empty
       Files.writeString(value, "expected\n")
-      val fixed = V.GoalPhaseIssueReport(issues.map(i => V.GoalPhaseIssueDisposition(i.identity, "FIXED", "Corrected input", None)))
+      val fixed = V.GoalPhaseIssueReport(issues.map(i => V.GoalPhaseIssueDisposition(i.identity, "FIXED", "Corrected input", None)), Vector.empty)
       cli.submit(repair, result("completed", Some(fixed)), "whole-old-repair")
       Files.writeString(value, "checkpoint-incomplete\n")
       val checkpoint = s.commitUnfinishedRepairCheckpoint()

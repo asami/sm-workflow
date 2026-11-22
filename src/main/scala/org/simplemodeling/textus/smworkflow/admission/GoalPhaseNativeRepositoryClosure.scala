@@ -31,7 +31,7 @@ import RepositorySyncManagedGitObservation as G
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
@@ -216,6 +216,32 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         current.history.lastOption.contains(entry)) Consequence.success(Option.empty[HistoryEntry])
       else F.invalid("whole-Phase completion differs from the selected committed native frontier")
   } yield admitted
+
+  /** Read an actual strict native terminal; never advance or close the provider. */
+  def acceptedDeliveryC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core): Consequence[Option[Payload]] = {
+    val closed = current.history.reverseIterator.find(e => e.causation.value.startsWith("ordered-repository-closed:") &&
+      e.currentProgression.contains(ProgressionReference("phase.Closed")))
+    closed match {
+      case None => Consequence.success(None)
+      case Some(entry) => for {
+        adapter <- storage.bindMechanicalC(F.advanceOperation, codec)
+        // The terminal receipt retains exactly the same accepted closure payload.
+        child = entry.causation.value.stripPrefix("ordered-repository-closed:")
+        intent <- current.history.find(e => e.causation.value == "ordered-repository-intent:" + child && e.revision.value < entry.revision.value)
+          .map(Consequence.success).getOrElse(F.invalid("Strict completion has no original closure intent"))
+        source = (intent.revision.value - 1).toString
+        retained <- adapter.loadRetainedC(WorkflowMechanicalTransition.Reference(
+          current.identity.value + ":ordered-repository-closure:" + source + ":closed", "1"))(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Strict provider completion lacks its canonical closure receipt")))
+        payload = retained.receipt.payload.value
+        _ <- if (payload.result.nonEmpty) Consequence.unit else F.invalid("Provider strict completion has no accepted repository result")
+        completion <- completionEntryC(retained.receipt.next, current, payload.childSessionId)
+        _ <- if (completion.isEmpty && current.lifecycle == Lifecycle.Completed) Consequence.unit
+          else F.invalid("Provider strict closure is not natively terminal")
+      } yield Some(payload)
+    }
+  }
 
   /** Invoke the actually installed public Operation with named business
     * parameters. Its after-commit result is consumed directly; no native wire,

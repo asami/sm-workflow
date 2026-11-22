@@ -399,7 +399,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-OWNED removal of executable permission", None))
     val result = Json.obj("outcome" -> Json.fromString("completed"),
       "summary" -> Json.fromString("SPECIFICATION-OWNED unstaged dependency mode correction"), "findings" -> Json.arr(),
-      "issueReport" -> json(V.GoalPhaseIssueReport(fixed).toRecord()),
+      "issueReport" -> json(V.GoalPhaseIssueReport(fixed, Vector.empty).toRecord()),
       "dependencyValidation" -> selection.getOrElse(selected.selection).asJson)
     _submit(selected.scenario, request, result, V.WorkflowArtifactReference("specification-linked-repair", "1"))
   }
@@ -1142,7 +1142,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val report = V.GoalPhaseAcceptanceReport(Vector.empty, Vector.empty)
     _submit(scenario, failed, Json.obj("outcome" -> "completed".asJson,
       "summary" -> "SPECIFICATION-OWNED ordinary repair".asJson, "findings" -> Json.arr(),
-      "issueReport" -> json(V.GoalPhaseIssueReport(fixed).toRecord()), "acceptance" -> json(report.toRecord())),
+      "issueReport" -> json(V.GoalPhaseIssueReport(fixed, Vector.empty).toRecord()), "acceptance" -> json(report.toRecord())),
       V.WorkflowArtifactReference("common-real-repair", "1")).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val failedrows = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId)).toMap
     val review = scenario.advance(selected.task)
@@ -1498,7 +1498,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       val dispositions = current.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-ONLY committed canonical source", None))
       _submit(scenario, current, Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-ONLY canonical repair".asJson,
-        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord())),
+        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions, Vector.empty).toRecord())),
         V.WorkflowArtifactReference("specification-canonical-primary-completion", "1"))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val failedoutput = scenario.advance(selected.task)
@@ -2006,7 +2006,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED additional dependency scope request", None))
         val result = Json.obj("outcome" -> "decision-needed".asJson, "summary" -> proposal.reason.asJson,
           "findings" -> Json.arr(), "dependencyProposal" -> proposal.asJson,
-          "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord()))
+          "issueReport" -> json(V.GoalPhaseIssueReport(dispositions, Vector.empty).toRecord()))
         _once_(scenario, label + "-request")(_submit(scenario, request, result,
           V.WorkflowArtifactReference(label + "-request", "1"))).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
         val questionoutput = _once_(scenario, label + "-question")(scenario.advance(task))
@@ -2599,7 +2599,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       val dispositions = next.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-ONLY committed canonical correction", None))
       _submit(scenario, next, Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-ONLY canonical repair".asJson,
-        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord())),
+        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions, Vector.empty).toRecord())),
         V.WorkflowArtifactReference("specification-canonical-repair-result", "1")).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val waiting = scenario.advance(task)
       if (applicability) _finish_committed_noninput(selected, episode, saved, oldrepair, next, binding, observation,
@@ -3478,7 +3478,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED request for a new source", None))
         val decisionrequest = Json.obj("outcome" -> "decision-needed".asJson,
           "summary" -> "SPECIFICATION-OWNED request for a new source qualification".asJson,
-          "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord()))
+          "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(blocked, Vector.empty).toRecord()))
         When("a decision-needed reply incorrectly carries a completion-only dependency selection")
         val refused = _submit(scenario, selected.resumed,
           decisionrequest.mapObject(_.add("dependencyValidation", selected.selection.asJson)),
@@ -3606,7 +3606,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           val result = Json.obj("outcome" -> "completed".asJson,
             "summary" -> "SPECIFICATION-OWNED integration using adopted native direction".asJson,
             "findings" -> Json.arr()).mapObject(fields => if (work.work.get.kind == "RepairStep")
-              fields.add("issueReport", json(V.GoalPhaseIssueReport(fixed).toRecord())) else fields)
+              fields.add("issueReport", json(V.GoalPhaseIssueReport(fixed, Vector.empty).toRecord())) else fields)
           _submit(scenario, work, result, V.WorkflowArtifactReference(reference, "1"))
             .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
         }
@@ -3693,7 +3693,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           _submit(scenario, additionalrepair, Json.obj("outcome" -> "decision-needed".asJson,
             "summary" -> "SPECIFICATION-OWNED extra dependency source scope".asJson, "findings" -> Json.arr(),
             "dependencyProposal" -> additionalproposal.asJson,
-            "issueReport" -> json(V.GoalPhaseIssueReport(pending).toRecord())),
+            "issueReport" -> json(V.GoalPhaseIssueReport(pending, Vector.empty).toRecord())),
             V.WorkflowArtifactReference("source-additional-scope-request", "1"))
             .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
           val questionoutput = scenario.advance(selected.task)
@@ -3736,7 +3736,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
             When("the actual issued work requests a decision and ordinary Advance issues its new Human")
             val requested = _submit(scenario, scopedrepair, Json.obj("outcome" -> "decision-needed".asJson,
               "summary" -> "SPECIFICATION-OWNED bounded source consumption succession".asJson, "findings" -> Json.arr(),
-              "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord())),
+              "issueReport" -> json(V.GoalPhaseIssueReport(blocked, Vector.empty).toRecord())),
               V.WorkflowArtifactReference("runtime-consumption-request", "1"))
             Then("the semantic request is accepted through its existing completion owner")
             requested.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
@@ -4051,7 +4051,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           Vector("Qualify the required additional dependency source") else Vector.empty)
         val resolvedreport = Option.when(extendscope)(V.GoalPhaseIssueReport(reviewissues.map(issue =>
           V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED",
-            "SPECIFICATION-OWNED independent confirmation of the newly qualified additional source", None))))
+            "SPECIFICATION-OWNED independent confirmation of the newly qualified additional source", None)), Vector.empty))
         When("ordinary independent review explicitly resolves its actual issue and Step closure advances to whole-Phase validation")
         val phaseReview = _close_step(selected, finalreview, "source-revision-second", resolvedreport)
           .business[V.GoalPhaseAdvanceResult]
@@ -4185,7 +4185,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-OWNED clarification of the primary guide", None))
       _submit(selected.scenario, repair, Json.obj("outcome" -> "completed".asJson,
         "summary" -> "SPECIFICATION-OWNED primary guide repair retaining the dependency candidate".asJson,
-        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(fixed).toRecord()),
+        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(fixed, Vector.empty).toRecord()),
         "dependencyValidation" -> selected.selection.asJson), V.WorkflowArtifactReference("legacy-primary-repair-completion", "1"))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val repaired = selected.scenario.advance(selected.task)
@@ -4205,7 +4205,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         issue.repository == reviewwork.selectedPlan.repository && reviewwork.stepIdentity.contains(issue.step))
       When("the independent reviewer prepares explicit resolution of the actual primary guide repair")
       val resolvedreport = V.GoalPhaseIssueReport(primaryissues.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
-        "RESOLVED", "SPECIFICATION-OWNED independent confirmation that the primary guide clarification is repaired", None)))
+        "RESOLVED", "SPECIFICATION-OWNED independent confirmation that the primary guide clarification is repaired", None)), Vector.empty)
       Then("exactly the original guide review issue is covered using its actual tracked identity")
       primaryissues.map(_.summary) shouldBe Vector("Clarify the second Step guide")
 

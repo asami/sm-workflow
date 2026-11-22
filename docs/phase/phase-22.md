@@ -33,6 +33,21 @@ stay in Phase 8. Authored source, a local publication and older checks do not
 establish connected qualification. Accepted Steps, source changes, Sessions,
 failed/UNKNOWN observations and repair counts retain their actual meaning.
 
+## Phase 7 operational qualification
+
+P22-11 carries the remaining connected delivery case from the 2026-11-22
+[Phase 7 operational integration](phase-7.md#operational-release-follow-up--2026-11-22).
+The selected case is `Phase7ManagedDevelopmentSpec`'s
+“keep passing canonical checks from certifying B and attribute correctly bound
+B failure.” After admitting the fixture's owned capture workspace, its
+`DirtyPostCommit` branch reached the retained commit and blocked publication.
+The fixture still expects inline exit codes in a compact public receipt.
+Confirm actual selected check results through the owning retained-capture route,
+then verify that changing tracked or untracked B source after its accepted
+commit cannot trigger publication or certify A. Retain the independently
+observed B failure and the passing connected delivery case. Record the original
+failed test results and complete the unfinished assertions during stabilization.
+
 ## Selected residual work
 
 | Item | Work and acceptance boundary |

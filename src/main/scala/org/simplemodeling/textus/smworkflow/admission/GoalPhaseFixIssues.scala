@@ -4,8 +4,10 @@ import java.nio.charset.StandardCharsets.UTF_8
 import io.circe.{Decoder, DecodingFailure, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import org.goldenport.Consequence
+import org.goldenport.cncf.workflow.ContextReference
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseNativeWork as W
+import GoalPhaseOrderedProgression as O
 
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
@@ -53,11 +55,56 @@ private[smworkflow] object GoalPhaseFixIssues {
     private val _decoder: Decoder[Disposition] = deriveDecoder
     given Decoder[Disposition] = _strict(_decoder, Vector("findingOrdinal"))(_disposition)
   }
-  final case class Report(dispositions: Vector[Disposition])
-  object Report {
-    given Encoder[Report] = deriveEncoder
-    given Decoder[Report] = _strict(deriveDecoder[Report], Vector.empty)(value => validateReportC(value).isSuccess)
+  /** The independent reviewer attributes the entire issue to these conditions. */
+  final case class Deferral(issueIdentity: String, conditionIdentities: Vector[String])
+  object Deferral {
+    given Encoder[Deferral] = deriveEncoder
+    given Decoder[Deferral] = _strict(deriveDecoder[Deferral], Vector.empty)(_deferral)
   }
+  final case class Report(dispositions: Vector[Disposition], deferredIssues: Option[Vector[Deferral]] = None)
+  object Report {
+    given Encoder[Report] = deriveEncoder[Report].mapJson(_.mapObject(_.filter((key, value) =>
+      key != "deferredIssues" || !value.isNull)))
+    given Decoder[Report] = _strict(deriveDecoder[Report], Vector("deferredIssues"))(value => validateReportC(value).isSuccess)
+  }
+
+  /** Rebuilt only by the native walker after an actual Human Plan adoption. */
+  final class AdoptedDeferral private[GoalPhaseFixIssues] (
+    val review: W.Request, val result: W.Result, val successor: O.State, val reference: ContextReference,
+    val conditions: Set[String], val issues: Vector[Issue])
+
+  private[admission] def adoptedDeferralC(review: W.Request, result: W.Result, reference: ContextReference,
+    previous: O.State, successor: O.State, issues: Option[State]): Consequence[AdoptedDeferral] = for {
+    _ <- _check(review.kind == "ReviewPhase" && _text(review.instanceIdentity) &&
+      review.selectedPlan == previous.plan && review.originalBase == previous.base &&
+      review.completed == previous.completed && review.candidate == previous.candidate &&
+      review.checksReceipt == previous.checksReceipt && successor.base == previous.base &&
+      successor.completed == previous.completed && successor.candidate == previous.candidate &&
+      successor.checksReceipt == previous.checksReceipt && result.outcome == "decision-needed" &&
+      _text(reference.identity) && _text(reference.revision), "deferral crosses the retained Phase review")
+    conditions <- O.phaseAcceptanceDeferralConditionsC(previous.plan, successor.plan)
+    observations = result.acceptance.toVector.flatMap(_.conditions).filter(o => conditions.contains(o.identity))
+    _ <- _check(observations.map(_.identity).toSet == conditions.toSet &&
+      observations.forall(o => _unverified(o.status)), "deferral conditions have no retained unmet observations")
+    state = issues.getOrElse(_empty)
+    before = review.issues.getOrElse(_empty)
+    existing = before.issues.map(i => i.identity -> i).toMap
+    opened = state.history.collect {
+      case t if !existing.contains(t.issueIdentity) && t.previousStatus.isEmpty && t.status == "OPEN" &&
+          t.evidenceReference == reference.identity =>
+        t.issueIdentity
+    }.toSet
+    recurring = result.issueReport.toVector.flatMap(_.dispositions).filter(_.disposition == "RECURRING")
+    observed = recurring.flatMap(d => for {
+      prior <- existing.get(d.issueIdentity).filter(i => i.status == "OPEN" && i.evidenceReference != reference.identity)
+      ordinal <- d.findingOrdinal if recurring.count(_.findingOrdinal.contains(ordinal)) == 1
+      finding <- result.findings.lift(ordinal - 1)
+    } yield _recurring_review_issue(prior, finding, reference.identity)).toSet
+    selected = state.issues.filter(i => i.evidenceReference == reference.identity &&
+      i.repository == review.selectedPlan.repository && i.step == "phase:" + review.selectedPlan.phase &&
+      i.source == "REVIEW" && i.status == "OPEN" &&
+      (observed(i) || (opened(i.identity) && result.findings.contains(i.summary))))
+  } yield new AdoptedDeferral(review, result, successor, reference, conditions.toSet, selected)
 
   private val _statuses = Set("OPEN", "DECLINED", "RESOLVED", "REOPENED")
   private val _repair = Set("FIXED", "UNRESOLVED", "DECLINED", "BLOCKED")
@@ -108,30 +155,37 @@ private[smworkflow] object GoalPhaseFixIssues {
     if (value == null) _invalid("issue state option is null") else value.fold(Consequence.unit)(validateC)
   def validateReportC(value: Report): Consequence[Unit] = _check(value != null &&
     value.dispositions != null && value.dispositions.size <= 16384 && value.dispositions.forall(_disposition) &&
-    value.dispositions.map(_.issueIdentity).distinct.size == value.dispositions.size, "invalid issue report")
+    value.dispositions.map(_.issueIdentity).distinct.size == value.dispositions.size &&
+    value.deferredIssues != null && value.deferredIssues.forall(entries => entries != null && entries.nonEmpty &&
+      entries.size <= value.dispositions.size && entries.forall(_deferral) &&
+      entries.map(_.issueIdentity).distinct.size == entries.size), "invalid issue report")
   def validateReportOptionC(value: Option[Report]): Consequence[Unit] =
     if (value == null) _invalid("issue report option is null") else value.fold(Consequence.unit)(validateReportC)
 
   /** Shared by native admission and the sole actual-completion traversal. */
-  def completedC(request: W.Request, result: W.Result, evidence: String): Consequence[Option[State]] = for {
+  def completedC(request: W.Request, result: W.Result, evidence: String,
+    adopted: Option[AdoptedDeferral] = None): Consequence[Option[State]] = for {
     _ <- _check(request != null && result != null && request.selectedPlan != null &&
       request.stepIdentity != null && _text(evidence), "missing assigned issue boundary")
     _ <- validateOptionC(request.issues)
     _ <- validateReportOptionC(result.issueReport)
     current = request.issues.getOrElse(_empty)
     reports = result.issueReport.toVector.flatMap(_.dispositions)
+    deferred = result.issueReport.toVector.flatMap(_.deferredIssues.toVector.flatten)
+    _ <- _check(deferred.isEmpty || (request.kind == "ReviewPhase" && result.outcome == "accept"),
+      "deferred issues require an accepting whole-Phase review")
     next <- request.kind match {
       case "ImplementStep" | "TriageStep" => _check(result.issueReport.isEmpty,
         "initial implementation cannot supply an issue report").map(_ => current)
       case "RepairStep" => _repair_c(request, result, current, reports, evidence)
-      case "ReviewStep" | "ReviewPhase" => _review_c(request, result, current, reports, evidence)
+      case "ReviewStep" | "ReviewPhase" => _review_c(request, result, current, reports, evidence, deferred, adopted)
       case _ => _invalid("unsupported assigned issue kind")
     }
     _ <- validateC(next)
   } yield if (request.issues.isEmpty && next.issues.isEmpty) None else Some(next)
 
-  def admitC(request: W.Request, result: W.Result): Consequence[Unit] =
-    completedC(request, result, "semantic-admission").map(_ => ())
+  def admitC(request: W.Request, result: W.Result, adopted: Option[AdoptedDeferral] = None): Consequence[Unit] =
+    completedC(request, result, "semantic-admission", adopted).map(_ => ())
 
   /** Eligibility only; this never settles an issue or supplies byte evidence. */
   private[admission] def coveredIssuesC(previous: Option[State], request: W.Request,
@@ -191,7 +245,8 @@ private[smworkflow] object GoalPhaseFixIssues {
     request.stepIdentity, evidence, _correspondence(next, request.selectedPlan.repository, request.stepIdentity))
 
   private def _review_c(request: W.Request, result: W.Result, state: State,
-    entries: Vector[Disposition], evidence: String): Consequence[State] = for {
+    entries: Vector[Disposition], evidence: String, deferred: Vector[Deferral],
+    adopted: Option[AdoptedDeferral]): Consequence[State] = for {
     _ <- _check(result.findings != null && result.findings.forall(_text) &&
       entries.forall(e => _review(e.disposition)), "review requires review dispositions and actual findings")
     known = state.issues.filter(relevant(request, _))
@@ -203,14 +258,13 @@ private[smworkflow] object GoalPhaseFixIssues {
       e.findingOrdinal.exists(n => n > 0 && n <= result.findings.size) else e.findingOrdinal.isEmpty) &&
       recurring.flatMap(_.findingOrdinal).distinct.size == recurring.size,
       "review recurrence requires unique actual one-based finding ordinals")
+    carried <- _deferred_issues_c(request, result, known, entries, deferred, adopted)
     covered = entries.foldLeft(state) { (prior, entry) =>
       val issue = prior.issues.find(_.identity == entry.issueIdentity).get
       val updated = entry.disposition match {
         case "RESOLVED" => issue.copy(status = "RESOLVED", evidenceReference = evidence,
           latestDisposition = Some(entry.disposition))
-        case "RECURRING" => issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,
-          summary = result.findings(entry.findingOrdinal.get - 1), evidenceReference = evidence,
-          latestDisposition = Some(entry.disposition))
+        case "RECURRING" => _recurring_review_issue(issue, result.findings(entry.findingOrdinal.get - 1), evidence)
         case _ => issue.copy(latestDisposition = Some(entry.disposition))
       }
       _update(prior, updated, evidence)
@@ -220,11 +274,40 @@ private[smworkflow] object GoalPhaseFixIssues {
       case (prior, (finding, _)) => _new(prior, request.selectedPlan.repository,
         request.stepIdentity.getOrElse("phase:" + request.selectedPlan.phase), "REVIEW", None, finding, evidence)
     }
-    _ <- _check(result.outcome != "accept" || !next.issues.exists(i => relevant(request, i) && unresolved(i)),
+    _ <- _check(result.outcome != "accept" ||
+      !next.issues.exists(i => relevant(request, i) && unresolved(i) && !carried(i.identity)),
       "review accept cannot leave relevant unresolved issues")
     correspondence = !next.issues.exists(i => relevant(request, i) && i.source == "REVIEW" && i.sourceIdentity.isEmpty)
   } yield _movement_at(next, state.history.size, request.selectedPlan.repository,
     if (request.kind == "ReviewPhase") None else request.stepIdentity, evidence, correspondence)
+
+  private def _recurring_review_issue(issue: Issue, finding: String, evidence: String): Issue =
+    issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,
+      summary = finding, evidenceReference = evidence, latestDisposition = Some("RECURRING"))
+
+  private def _deferred_issues_c(request: W.Request, result: W.Result, known: Vector[Issue],
+    dispositions: Vector[Disposition], entries: Vector[Deferral],
+    adopted: Option[AdoptedDeferral]): Consequence[Set[String]] =
+    if (entries.isEmpty) Consequence.success(Set.empty[String])
+    else for {
+      proof <- adopted.map(Consequence.success).getOrElse(_invalid("no actual adopted Phase deferral for these issues"))
+      _ <- _check(request.kind == "ReviewPhase" && request.stepIdentity.isEmpty &&
+        request.instanceIdentity == proof.review.instanceIdentity && request.selectedPlan == proof.successor.plan &&
+        request.generation == proof.successor.generation && request.originalBase == proof.successor.base &&
+        request.completed == proof.successor.completed && request.candidate == proof.successor.candidate &&
+        request.checksReceipt == proof.successor.checksReceipt && request.review.exists(_.priorReviews.exists(prior =>
+          prior.kind == "ReviewPhase" && prior.step.isEmpty && prior.generation == proof.review.generation &&
+          prior.resultIdentity == proof.reference.identity && prior.resultRevision == proof.reference.revision &&
+          proof.review.candidate.contains(prior.candidate) && proof.review.checksReceipt.contains(prior.checksReceipt) &&
+          prior.result == proof.result)),
+        "deferred issues cross the adopted Plan, reviewed candidate or exact prior review")
+      observed = result.acceptance.toVector.flatMap(_.conditions).map(o => o.identity -> o.status).toMap
+      _ <- _check(entries.forall(entry =>
+        dispositions.exists(d => d.issueIdentity == entry.issueIdentity && d.disposition == "NOT_REVIEWED") &&
+          known.exists(i => i.identity == entry.issueIdentity && proof.issues.contains(i)) &&
+          entry.conditionIdentities.forall(id => proof.conditions(id) && observed.get(id).exists(_unverified))),
+        "deferred issue must be the original open finding and fully attributed to adopted Phase conditions")
+    } yield entries.map(_.issueIdentity).toSet
 
   /** Called once per completed native validation boundary, after its typed owner admits it. */
   def validationC(instance: String, repository: String, previous: Option[State],
@@ -307,6 +390,10 @@ private[smworkflow] object GoalPhaseFixIssues {
   private def _disposition(d: Disposition): Boolean = d != null && _text(d.issueIdentity) &&
     (_repair(d.disposition) || _review(d.disposition)) && _text(d.rationale) &&
     d.findingOrdinal != null && d.findingOrdinal.forall(_ > 0)
+  private def _deferral(d: Deferral): Boolean = d != null && _text(d.issueIdentity) &&
+    d.conditionIdentities != null && d.conditionIdentities.nonEmpty && d.conditionIdentities.forall(_text) &&
+    d.conditionIdentities.distinct == d.conditionIdentities
+  private def _unverified(status: String): Boolean = status == "unsatisfied" || status == "not-evaluated"
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
     !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value)
   private def _check(value: Boolean, reason: String): Consequence[Unit] =
@@ -333,10 +420,13 @@ private[smworkflow] object GoalPhaseFixIssues {
   }
   def publicReport(value: Option[Report]): Option[V.GoalPhaseIssueReport] = _option(value)(r =>
     V.GoalPhaseIssueReport(_map(r.dispositions)(d => V.GoalPhaseIssueDisposition(
-      d.issueIdentity, d.disposition, d.rationale, d.findingOrdinal))))
+      d.issueIdentity, d.disposition, d.rationale, d.findingOrdinal)),
+      _map(r.deferredIssues.toVector.flatten)(d => V.GoalPhaseIssueDeferral(d.issueIdentity, d.conditionIdentities))))
   def internalReportC(value: Option[V.GoalPhaseIssueReport]): Consequence[Option[Report]] = {
     val mapped = _option(value)(r => Report(_map(r.dispositions)(d => Disposition(
-      d.issueIdentity, d.disposition, d.rationale, d.findingOrdinal))))
+      d.issueIdentity, d.disposition, d.rationale, d.findingOrdinal)),
+      if (r.deferredIssues == null) null else Option.when(r.deferredIssues.nonEmpty)(
+        _map(r.deferredIssues)(d => Deferral(d.issueIdentity, d.conditionIdentities)))))
     validateReportOptionC(mapped).map(_ => mapped)
   }
   def publicStateC(value: Option[State]): Consequence[Option[V.GoalPhaseIssueState]] =

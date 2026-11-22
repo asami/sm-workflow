@@ -151,7 +151,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-source", "1")), true, "code", "off", 10,
         "direct-instruction", Vector.empty, V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
           "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
-          Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty, "SPEC-only"), Vector("behavior"))
+          Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None), Vector("behavior"))
       _with_runtime_(root, "Equal", Some(host), parameters) { (owner, component, actor, prepare) =>
         prepare(_.setupC(_setup_commands_(root, "Equal").size))
         def _call_(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -301,7 +301,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         stepValidation = initial.goal.stepValidation.copy(checks = checks)))
       val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
         "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
-        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only")
+        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None)
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-legacy-v2-capacity", "SPEC-owned actual managed Test fixture",
         NonEmptyVector.one("src"), NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.of("first", "second"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), true, "code", "off", 10,
@@ -755,7 +755,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         def observation(event: String, result: Option[Record] = None, selection: Option[Record] = None) =
           V.DelegateTaskObservationInput(requester.sessionId, event, V.WorkflowArtifactReference(
             if (installed.isEmpty && event == "result-received") session + ":standalone-state:" + producerrevision else "SPEC-" + event, "1"),
-            Some(session), result, selection, "SPEC actual requester observation")
+            Some(session), result, selection, "SPEC actual requester observation", None)
         def observe(value: V.DelegateTaskObservationInput): V.DelegateTaskView = materialize(take(
           summon[org.goldenport.convert.ValueReader[V.DelegateTaskView]].readC(publicCall("DelegateTaskDeliveryService",
             "observeDelegateTaskDelivery", List(Property("input", value, None)), Vector("--input", json(value))))))
@@ -926,7 +926,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         stepValidation = initial.goal.stepValidation.copy(checks = checks)))
       val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
         "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
-        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only")
+        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None)
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-legacy-lost-new-test", "SPEC-owned lost-result fixture",
         NonEmptyVector.one("src"), NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.of("first", "second"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), true, "code", "off", 10,
@@ -1092,7 +1092,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         stepValidation = initial.goal.stepValidation.copy(checks = checks)))
       val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
         "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
-        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only")
+        Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None)
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-lost-result", "SPEC-owned recovery fixture", NonEmptyVector.one("src"),
         NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.one("condition"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), false, "code", "off", 10,

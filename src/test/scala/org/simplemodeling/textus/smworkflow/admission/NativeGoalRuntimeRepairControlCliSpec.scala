@@ -149,7 +149,7 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
     val sources = Option.when(source)(Vector[GoalPhasePurposeRepair.Source](GoalPhasePurposeRepair.StepPurpose(1,
       work.stepIdentity.get, "Original owned documentation purpose remains unresolved", Vector("docs/phase.md"))))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + work.kind + " " + outcome, findings, acceptance,
-      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)),
+      None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions, Vector.empty)),
       None, None, None, None, GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None, diagnosticRepair = None)
   }
   private def _checks(scenario: F.Scenario): Vector[String] =

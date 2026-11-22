@@ -59,7 +59,8 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     edge <- edgeC(policy)
     contract <- input.delegation.filter(c => DelegateTask.valid(c) && c.role == "destination")
       .map(Consequence.success).getOrElse(invalid("scoped delivery requires its destination contract"))
-    operation = Input(edge.identity, input.requestIdentity, input.requestIdentity, input.requestIdentity)
+    operation = contract.providerPhase.map(p => Input(edge.identity, input.requestIdentity, p.publication, p.producerSelection))
+      .getOrElse(Input(edge.identity, input.requestIdentity, input.requestIdentity, input.requestIdentity))
     _ <- ManagedDevelopment.edgeC(policy.definition, operation)
     coordinate = edge.requested.copy(version = version(edge.requested.version, policy.definition.scope, operation.publication))
     _ <- if (input.repositoryIdentity == edge.provider.repository && contract.componentIdentity == edge.provider.identity &&
@@ -102,8 +103,10 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
   } yield ()
 
   def acceptedPublicationSource(source: Json, commit: S.Commit): Boolean =
-    source.hcursor.get[String]("head").contains(commit.identity) &&
-      source.hcursor.get[String]("tree").contains(commit.tree) &&
+    acceptedPublicationSource(source, commit.identity, commit.tree)
+  def acceptedPublicationSource(source: Json, head: String, tree: String): Boolean =
+    source.hcursor.get[String]("head").contains(head) &&
+      source.hcursor.get[String]("tree").contains(tree) &&
       source.hcursor.get[Vector[Json]]("dirty").contains(Vector.empty) &&
       source.hcursor.get[Vector[Json]]("dirtyContents").contains(Vector.empty)
 
@@ -180,9 +183,10 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
 
   /** Same-store result collection authenticates the native B checkpoint. A
     * pending/failed/decision-needed B remains a wait, without invoking B again. */
-  def collectC(storage: WorkflowComponentStorage, definition: DefinitionBinding,
+  def collectC(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding,
     state: S.State, core: ActionCall.Core): Consequence[S.State] =
-    if (state.stage != "AwaitResult" || state.delivery.exists(_.observations.exists(_.event == "defer")))
+    if (state.input.delegation.exists(_.providerPhase.nonEmpty)) ProviderPhaseDelivery.collectC(h, state, core)
+    else if (state.stage != "AwaitResult" || state.delivery.exists(_.observations.exists(_.event == "defer")))
       Consequence.success(state) else for {
       session <- state.delivery.flatMap(_.destinationSessionId).map(Consequence.success)
         .getOrElse(invalid("managed requester has no observed destination Session"))
@@ -245,11 +249,16 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     core: ActionCall.Core): Consequence[(S.State, Option[WorkflowInteraction[A.Request, Nothing]])] = for {
     policy <- h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty).map(Consequence.success)
       .getOrElse(invalid("No managed dependency scope is configured"))
-    producer <- receivedC(storage, definition, state, core)
-    capture <- producer.managedDependency.map(Consequence.success).getOrElse(invalid("B has no actual retained A capture"))
-    publication <- producer.state.delivery.flatMap(_.managedPublication).map(Consequence.success)
+    phase <- if (state.delivery.exists(_.phaseDelivery.nonEmpty)) ProviderPhaseDelivery.receivedC(h, state, core).map(Some(_))
+      else Consequence.success(Option.empty[ProviderPhaseDelivery.Delivery])
+    producer <- if (phase.isEmpty) receivedC(storage, definition, state, core).map(Some(_))
+      else Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
+    capture <- phase.map(_.capture).orElse(producer.flatMap(_.managedDependency)).map(Consequence.success)
+      .getOrElse(invalid("B has no actual retained A capture"))
+    publication <- phase.map(_.publication).orElse(producer.flatMap(_.state.delivery.flatMap(_.managedPublication))).map(Consequence.success)
       .getOrElse(invalid("B has no completed scoped publication"))
-    expected <- publicationInputC(policy, producer.state.input)
+    expected <- phase.map(p => ProviderPhaseDelivery.operation(policy, p.phase.locator, state.input.requestIdentity))
+      .getOrElse(publicationInputC(policy, producer.get.state.input))
     selected <- state.delivery.flatMap(_.artifactSelection).map(_.as[DelegateTask.ArtifactSelection]
       .fold(e => invalid(e.message), Consequence.success)).getOrElse(invalid("No exact artifact selection was supplied"))
     input = expected.copy(requestIdentity = state.input.requestIdentity, selection = state.input.requestIdentity)

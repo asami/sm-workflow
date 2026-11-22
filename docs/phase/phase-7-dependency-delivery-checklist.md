@@ -10,6 +10,10 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-01: Explicit Fixed/AssignedChat/DevelopmentSubtree selection is
   consumed from dependency configuration. Fixed reports a dependency-change
   error and waits for user direction without editing/delegating or resetting work.
+  Reuse the declared edge and actual AssignedChat identity to retain permitted
+  destinations per Phase/Task, with purpose, Component/project, acceptance,
+  permitted operations, exclusions and genuine authorization references in the
+  existing Workflow state; chat registration alone does not grant effects.
 - [ ] P7-DD-02: Two admitted requests to one development chat execute FIFO with
   one active request. Transport acknowledgement is distinct from runtime admission.
 - [ ] P7-DD-03: Request redelivery/reconnection reuses retained identity/result;
@@ -18,6 +22,9 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-04: A small defect uses Phase 6.8 delegation/shared execution with
   impact-selected verification, mandatory local commit and scope-private publication,
   then real consumer integration. No repeat permission within unchanged scope.
+  Same-purpose follow-up requests, necessary file/test/fixture additions, repairs
+  and affected revalidation reuse that permission; candidate, source revision,
+  Step or failure-reason changes alone do not trigger ApproveDependencyScope.
 - [ ] P7-DD-05: An ad hoc request uses the independent delegation route without
   altering test-fix/goal-task contracts; an explicit Phase uses existing GoalPhase
   composition. Return accepted development/commit/publication outcomes and reuse
@@ -54,6 +61,9 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-10: Existing pending dependency/Human records reconcile through
   public continuation with genuine existing direction; all Sessions/history/
   counts/results survive. Real authority expansion retains Human admission.
+  Adopt the Phase/Task clarification at an applicable existing work boundary;
+  do not restart/rebaseline active work, reopen accepted results, reset counters
+  or fabricate answers to legacy pending questions from a planning edit.
 - [ ] P7-DD-11: Queue and result lifecycle are runtime-owned; cross-chat icons
   use existing observations with no additional AI calls or periodic monitoring.
 - [ ] P7-DD-12: Installed caller/runtime delivery and operational guidance
@@ -63,6 +73,16 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
   Incorporated projects need no additional repair decision. External repair/shared
   CLI update default independently to false, retaining actual Human enablement
   across Steps/reconnects without repeated in-purpose permission gates.
+  Qualify retained permitted-chat/scope policy for both Phase and Task: a Task
+  reuses applicable owning-Phase authority or its own adopted scope without
+  enlarging it. An admitted Cozy generation request, necessary fixture/test
+  expansion, follow-up repair and revalidation proceed after reconnect without
+  another Human permission question. Unpermitted destinations, out-of-purpose
+  work and unauthorized effects require the actual missing direction; explicit
+  Fixed/exclusions and independent shared-CLI/publication/push boundaries remain.
+  Missing setup is distinguished from missing consent, and UNKNOWN is not
+  automatic retry authority. Reuse covering evidence and existing admission/
+  continuation owners; no separate policy store, approval gate or new Step ID.
 - [ ] P7-DD-14: Publish/resolve dependency JARs only inside the development scope
   through existing artifact repository/binding/overlay owners. Prove unrelated
   consumers and shared local repositories unchanged, including same-coordinate

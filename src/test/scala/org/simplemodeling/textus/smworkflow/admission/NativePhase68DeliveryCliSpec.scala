@@ -17,7 +17,7 @@ import NativeWorkflowCliFixture as F
   * Sessions only. No publication, semantic execution, genuine chat delivery or
   * historical user-Session recovery is simulated by these assertions.
   * @since   Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -195,7 +195,7 @@ final class NativePhase68DeliveryCliSpec extends AnyWordSpec with Matchers with 
         "org.example.DelegatedFixture", "requester", "documentation",
         NonEmptyVector.of("dispatch", "implement", "validate", "commit", "review", "return", "adopt"),
         Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("specification-owned-authorization", "1")),
-        None, Vector.empty, "No destination execution or activation is claimed by this isolated fixture")
+        None, Vector.empty, "No destination execution or activation is claimed by this isolated fixture", None, None, None)
       val input = V.DelegateTaskInput(task.repositoryIdentity, "installed-phase68-delegate", task.objective,
         task.ownedPaths, task.checks, task.conditions, task.sourceReferences, task.reviewRequired, task.kind, task.scalaLint,
         task.repairLimit, task.sourceKind, task.dependencies, contract, Vector.empty)

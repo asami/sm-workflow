@@ -703,7 +703,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
       requests :+= repair
       facts :+= fact
       val fixed = V.GoalPhaseIssueReport(repair.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-OWNED actual docs source correction for issued batch " + count, None)))
+        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-OWNED actual docs source correction for issued batch " + count, None)), Vector.empty)
       Files.writeString(usage, firstline + (if (count >= 2) "Line endings are LF.\n" else "") +
         (if (count >= 3) "Input has one record.\n" else ""))
       cli.submit(repair, cli.result(repair, "completed", Some(fixed)), "failed-history-source-repair-" + count)
@@ -774,7 +774,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
       firstrepair.work.get.stepIdentity shouldBe None
       val earlier = failedhistory.map(_._2).getOrElse {
         val fixed = V.GoalPhaseIssueReport(firstrepair.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(i =>
-          V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED actual first-sentence correction only", None)))
+          V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED actual first-sentence correction only", None)), Vector.empty)
         Files.writeString(Path.of(scenario.host.target.root).resolve("docs/usage.md"),
           "The accepted input is exactly expected followed by LF.\n")
         cli.submit(firstrepair, cli.result(firstrepair, "completed", Some(fixed)), "first-release-sentence-repair")
@@ -806,7 +806,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
         "primaryChecks" -> _checks(scenario.root).asJson, "repair" -> _json(firstrepair).asJson).noSpaces)
       val resolved = V.GoalPhaseIssueReport(request.work.get.issues.get.issues
         .filter(i => i.source == "REVIEW" || i.status != "RESOLVED").map(i =>
-          V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent confirmation of the corrected first sentence", None)))
+          V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent confirmation of the corrected first sentence", None)), Vector.empty)
       val report = cli.result(request, "repair", Some(resolved))
       report.hcursor.get[Vector[String]]("findings").toOption.get shouldBe Vector(
         "After the first Release repair, docs/usage.md must contain The encoding is UTF-8. as its own LF line")
@@ -821,14 +821,14 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
     val binding = old.copy(identity = "release-new-purpose-validation", step = "phase:" + scenario.plan.phase,
       paths = Vector("release-help.txt"), checks = Vector(GoalPhaseNativeValidation.Check("release-cncf-test", 5)))
     val pendingissues = V.GoalPhaseIssueReport(repair.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "UNRESOLVED", "SPECIFICATION-OWNED usage correction remains pending the actual dependency decision", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "UNRESOLVED", "SPECIFICATION-OWNED usage correction remains pending the actual dependency decision", None)), Vector.empty)
     cli.submit(repair, cli.result(repair, "decision-needed", Some(pendingissues)).mapObject(_.add(
       "dependencyProposal", _proposal(binding, "new-phase-proposal").asJson)), "new-phase-proposal-result")
     cli.approve(cli.advance(session), "new-phase-approval")
     val assigned = cli.advance(session).business[V.GoalPhaseAdvanceResult]
     assigned.work.get.kind shouldBe "RepairStep"
     val fixed = V.GoalPhaseIssueReport(assigned.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED actual usage correction and approved separate dependency purpose", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED actual usage correction and approved separate dependency purpose", None)), Vector.empty)
     Files.writeString(Path.of(scenario.host.target.root).resolve("docs/usage.md"),
       "The accepted input is exactly expected followed by LF.\n" +
         (if (failedReleaseHistory) "Line endings are LF.\nInput has one record.\n" else "") +
@@ -1042,7 +1042,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
     }
     val reference = V.WorkflowArtifactReference("release-dependency-review", "1")
     val resolved = V.GoalPhaseIssueReport(request.work.get.issues.get.issues.filter(i => i.source == "REVIEW" || i.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms the actual new checks and immutable old prefix", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms the actual new checks and immutable old prefix", None)), Vector.empty)
     val report = cli.result(request, "accept", Some(resolved))
     val execution = cli.evidence(result, "review", report.noSpaces, reference.identity)
     if (negativeChecks) {
@@ -1134,7 +1134,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
     val firstpublication = _publication_updates(scenario)
     firstpublication.size shouldBe 1
     val resolvedusage = V.GoalPhaseIssueReport(original.work.get.issues.get.issues.filter(i => i.source == "REVIEW" || i.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms the actual corrected usage document", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms the actual corrected usage document", None)), Vector.empty)
     val report = cli.result(original, "repair", Some(resolvedusage))
     report.hcursor.get[Vector[String]]("findings").toOption.get shouldBe Vector(
       "The declared C source must retain its qualified Release dependency continuation for its next normal publication")
@@ -1189,7 +1189,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
     _source_integrated(scenario) shouldBe true
     _dependency_inputs(frontier) shouldBe inputs
     val fixed = V.GoalPhaseIssueReport(repair.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED exact qualified C patch integrated only after new Release work issuance", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "FIXED", "SPECIFICATION-OWNED exact qualified C patch integrated only after new Release work issuance", None)), Vector.empty)
     cli.submit(repair, cli.result(repair, "completed", Some(fixed)), "accepted-new-source-repair")
     val freshresult = cli.advance(frontier.session)
     val fresh = freshresult.business[V.GoalPhaseAdvanceResult]
@@ -1224,7 +1224,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
     retained.work shouldBe fresh.work
     retained.issuedWorkContext shouldBe fresh.issuedWorkContext
     val resolved = V.GoalPhaseIssueReport(retained.work.get.issues.get.issues.filter(i => i.source == "REVIEW" || i.status != "RESOLVED").map(i =>
-      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms actual corrected C source, new publication and fresh primary checks", None)))
+      V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "SPECIFICATION-OWNED independent review confirms actual corrected C source, new publication and fresh primary checks", None)), Vector.empty)
     delivered.review(next, "accept", "delivered-source-independent-acceptance", Some(resolved))
     val closing = delivered.advance(frontier.session)
     closing.business[V.GoalPhaseAdvanceResult].authorityContext should not be empty

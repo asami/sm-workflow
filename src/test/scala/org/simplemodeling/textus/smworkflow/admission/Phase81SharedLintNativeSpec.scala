@@ -35,7 +35,7 @@ final class Phase81SharedLintNativeSpec extends AnyWordSpec with Matchers with G
   private def result(request: V.GoalPhaseAdvanceResult, summary: String): V.GoalPhaseWorkResult = {
     val issues = if (request.work.get.kind == "RepairStep") request.work.get.issues.map(value =>
       V.GoalPhaseIssueReport(value.issues.filter(_.status != "RESOLVED").map(issue =>
-        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", summary, None)))) else None
+        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", summary, None)), Vector.empty)) else None
     V.GoalPhaseWorkResult("completed", summary, Vector.empty, None, None, issues, None, None, None, None, None,
       dependencyValidation = None, diagnosticRepair = None)
   }

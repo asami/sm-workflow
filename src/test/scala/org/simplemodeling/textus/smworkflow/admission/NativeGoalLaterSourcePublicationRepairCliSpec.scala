@@ -1106,7 +1106,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         "SPECIFICATION-ONLY correct the actual failed test's Consumer value from 19 to 20; fresh checks remain owed", None))
     _submit(scenario, fresh, "post-validation-fresh-repair-submit", Json.obj("outcome" -> "completed".asJson,
       "summary" -> "SPECIFICATION-ONLY correct actual failed test's Consumer value to the required 42".asJson,
-      "findings" -> Json.arr(), "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions))))
+      "findings" -> Json.arr(), "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions, Vector.empty))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val old = _advance(scenario, task, "post-validation-old-advance")
     Then("the OLD installed product refuses that accepted latest source at the exact retained primary repair lineage guard")
@@ -2020,7 +2020,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _submit(scenario, repair, submitlabel, Json.obj("outcome" -> "completed".asJson,
       "summary" -> (if (_post_validation_lineage) "SPECIFICATION-ONLY correct actual primary Compile failure; tests remain owed"
         else "SPECIFICATION-ONLY correct real failed test").asJson, "findings" -> Json.arr(),
-      "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions))))
+      "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions, Vector.empty))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val current = saved.mapObject(_.add("oldPrimaryPublications", _lines(root.resolve("primary-publications.txt")).asJson)
       .add("oldTests", _lines(root.resolve("selected-tests.txt")).asJson)
@@ -3155,7 +3155,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       .map(issue => V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-ONLY changed scoped candidate and selected regression", None))
     _submit(scenario, repair, "phase8-consumer-repair-submit", Json.obj("outcome" -> "completed".asJson,
       "summary" -> "SPECIFICATION-ONLY current Consumer and validation-plan correction".asJson, "findings" -> Json.arr(),
-      "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions))))
+      "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions, Vector.empty))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
 
     def noConsumerEffects(expectedProducer: Vector[String] = producerBefore): Unit = {
@@ -3334,7 +3334,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         "SPECIFICATION-ONLY current declared runtime rebuilt and selected within the retained purpose", None))
     _submit(scenario, runtimeWork, "phase8-current-runtime-submit", Json.obj("outcome" -> "completed".asJson,
       "summary" -> "SPECIFICATION-ONLY current runtime construction within the original admitted work".asJson,
-      "findings" -> Json.arr(), "issueReport" -> _json(V.GoalPhaseIssueReport(runtimeDispositions))))
+      "findings" -> Json.arr(), "issueReport" -> _json(V.GoalPhaseIssueReport(runtimeDispositions, Vector.empty))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val runtimeCandidate = _advance(scenario, task, "phase8-current-runtime-candidate")
     val runtimeReview = if (runtimeCandidate._goalAdvance(scenario).work.exists(_.kind == "ReviewStep")) runtimeCandidate else {
