@@ -1155,3 +1155,16 @@ Consumer activation and fresh tests are still required; producer delivery alone
 does not qualify the repaired consumer or close issue19/20. Explicit Git-only
 edges may accompany one selected scoped-consumption edge; multiple independent
 consumer envelopes and localProject execution remain outside the adapter.
+
+<!-- sm-workflow completion 14fad7b7a87c61d8d8f2eeb432a65fb4 phase 7 -->
+Accepted phase 7.
+Evidence: 14fad7b7a87c61d8d8f2eeb432a65fb4:ordered-validation:2898:validation
+Evidence: file:///Users/asami/src/dev2026/sm-workflow-dev/target/sm-workflow/runtime-phase-7-20261112/target/sm-workflow/tasks/phase-7-01a1555d/365-p7-open-issue-runtime-adoption.ckOtuf7j/review/independent-result.json
+Phase source accepted; normal local record/commit closure follows. No later synchronization outcome is inferred.
+Source revision: 8164981cc9b4cc14bed7f12ce50658aa3f796b81/1c2782ff2220b8a14dd2cc9c1010b6216487e48e. Source physical lines: start=254781; end=266654; net=11873. Cohort phase-7-managed-parallel-development:Classification(CODING,COMPLEX,ENGINEERING,LARGE,None) (Step, class=Classification(CODING,COMPLEX,ENGINEERING,LARGE,None), source=1c2782ff2220b8a14dd2cc9c1010b6216487e48e, window=2026-11-11T20:01:13.565482Z..2026-11-22T01:38:14.276115Z): eventual=5/5 (1); first-pass=0/5 (0); unknown first-pass=0; pending=0; outcomes=(accepted,5); profiles=standard@1/standard-2026-11-01; mixed=. P7-A completion-ms=unavailable elapsed-ms=unavailable; P7-B completion-ms=unavailable elapsed-ms=unavailable; P7-C completion-ms=unavailable elapsed-ms=unavailable; P7-D completion-ms=unavailable elapsed-ms=unavailable; P7-DD completion-ms=unavailable elapsed-ms=unavailable. codex tokens=unavailable unavailable; local tokens=unavailable unavailable. Ordinary-work observations do not establish model causality; missing resources are unavailable Issued profiles=standard@1. codex tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable. local tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable
+Profile standard@1; mapping=caller-standard@standard-2026-11-01; logical dispatch=Capture(standard-2026-11-01,difficult,Vector(difficult, hardest),DELEGATED,None,HashMap(sol-medium -> difficult, ordinary -> difficult, small -> sol-medium, difficult -> hardest, mechanical -> small)); configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=caller-standard@standard-2026-11-01; logical dispatch=Capture(standard-2026-11-01,difficult,Vector(difficult, hardest),DELEGATED,None,HashMap(sol-medium -> difficult, ordinary -> difficult, small -> sol-medium, difficult -> hardest, mechanical -> small)); configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+
+No benchmark or model-causality claim. Missing original endpoints, usage, timestamps and launch observations remain unavailable.
+
+Local record/commit closure is runtime-owned; later publication, return and synchronization outcomes are recorded separately.

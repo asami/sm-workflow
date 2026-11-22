@@ -64,7 +64,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 21, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -331,6 +331,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task && input.delegation.nonEmpty == delegation) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
     requester = delegation && DelegateTask.requester(input)
+    _ <- _preflight_execution_c(input, h)
     identity <- core.executionContext.security.session.flatMap(_.sessionId).map(x => Consequence.success(InstanceIdentity(x)))
       .getOrElse(invalid("Standalone Start requires its canonical session"))
     store <- storageC(h, definition, core)
@@ -349,7 +350,6 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     }
     deliveryPolicy = h.managedDevelopment.map(p => priorPayload.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_)))))
     _ <- if (!requester && input.delegation.exists(_.providerPhase.nonEmpty)) invalid("Declared provider Phase uses its existing GoalPhase owner; no bounded destination Start or duplicate lifecycle is allowed") else Consequence.unit
-    _ <- _preflight_execution_c(input, h)
     _ <- if (delegation) deliveryPolicy.fold(Consequence.unit)(DependencyDevelopmentDelivery.admitC(_, input)) else Consequence.unit
     managed = delegation && !requester && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)
     _ <- if (managed) ManagedDevelopmentBoundedWork.publicationInputC(h.managedDevelopment.get, input).map(_ => ()) else Consequence.unit
