@@ -3,6 +3,10 @@ name: sm-review-fix
 description: Repair identified original review findings with exact disposition attribution through the shared native standalone FIX runtime.
 ---
 
+Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
+Default to English for new workflow/AI requests and results. Use Japanese for
+user-facing reports and questions. Preserve approvals and logs in their original language and wording.
+
 ## Shared Journal operations
 
 For a concrete Journal recording or lookup purpose, use the
@@ -73,6 +77,7 @@ Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md
 ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
 Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
 captured checks/results and use the runtime's supported selection route.
+An explicit `fix-check` uses the [Session checkout binding](../../docs/spec/native-host-execution.md#session-state-and-semantic-returns).
 
 ## Waiting for another chat
 

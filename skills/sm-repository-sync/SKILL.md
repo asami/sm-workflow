@@ -3,6 +3,10 @@ name: sm-repository-sync
 description: Synchronize selected repositories and worktrees with their configured Git remotes through sm-workflow RepositorySync. Use for local-main-first integration, ordinary GitHub synchronization, or continuation of an existing RepositorySync Session.
 ---
 
+Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
+Default to English for new workflow/AI requests and results. Use Japanese for
+user-facing reports and questions. Preserve approvals and logs in their original language and wording.
+
 ## Shared Journal operations
 
 For a concrete Journal recording or lookup purpose, use the
@@ -212,6 +216,11 @@ with GitHub. If the user names both checkouts, pass both paths in the same
 batch. The runtime coordinates their common target and push. A checkout
 already on main uses the normal remote route once. Other destinations keep
 their configured branches.
+
+For explicitly selected managed dependency synchronization, use the admitted
+dependency worktree and its configured GitHub branch via the direct route.
+Artifact publication, consumer selection and consumer checks retain their own
+operations and evidence.
 
 On a new call, `mainIntegration` accepts `local-first`, `direct` or `confirm`,
 and `uncommittedPolicy` accepts `auto-commit`, `confirm` or `error`. Omitted

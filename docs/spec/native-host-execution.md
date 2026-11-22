@@ -8,6 +8,16 @@ actual operator decisions; they do not construct per-Session slot/check-policy
 objects. The finite caller keeps only the opaque routing and issued references
 needed for supported continuation. See the [Session candidate resource contract](repository-sync-directory-list.md#session-candidate-resource-admission).
 
+In bounded GoalTask, DelegateTask and StandaloneFix work, the current
+operational runtime resolves an explicit `fix-check` against the Session's
+admitted checkout and configured check binding. Use the selected runtime's
+reported binding and retained result.
+
+For offline review package assembly, use `assemble_review_package` from
+`scripts/goal-phase-dispatch.py` in the operational sm-workflow checkout.
+When complete files have already been supplied, use `review_package`.
+Unconfirmed completeness uses the ordinary capable reviewer.
+
 For GoalPhase/GoalTask semantic results, the normal caller projects supported
 worker artifacts through `projectSemanticWorkResult` and forwards its complete
 public JSON Resource with the original issued context. Direct public results
