@@ -1,0 +1,62 @@
+# Phase 28 D1: deterministic repair inventory
+
+Inventory of the checkout at base `e49d2fd1e0e1e426081c6091024a31e2aa247508`, 2026-11-22. Source inspection is distinguished from observed tool execution below; no compiler, language server, lint, or repair run was performed for this inventory. The initial draft reported a blocked evidence gap because the D1 request itself supplied no earlier diagnostic or measurement evidence. The caller subsequently identified the public historical evidence below; the original blocked observation is preserved here. Historical observations are candidate-specific and are not a comparative latency or AI-savings baseline.
+
+## Producers and current observations
+
+| Producer | Attributable evidence | Supported here / unverified boundary |
+| --- | --- | --- |
+| Scala compiler / sbt | `project.yaml` selects Scala 3.3.8. `IncrementalSbtFailureDiagnosis.scala` recognizes specific Scala 3 `-- ...: file.scala:line:column` and Scala 2 `file.scala:line[:column]: ...` text shapes, only as compiler errors when anchored by `[error]`. It retains stream, line references, context, candidate and revision, with bounded display and explicit omission counts. Warnings are skipped by this projection. | These patterns are text projections, not a structured compiler protocol or proof of Scala 2.12 compatibility. `IncrementalSbtFailureDiagnosisSpec.scala` contains a synthetic Scala 3 E007 type mismatch and compilation-blocked example; it is a fixture, not a real compiler run. A retained Scala 3 failure and strict-warning qualification are inventoried below. No real Scala 2.12 compiler-error corpus or representative category frequencies were established. |
+| Metals / LSP | No Metals declaration in this project's `project.yaml`; `command -v metals` returned no path in the inventory environment. | No server was started. Initialization, Scala version support, negotiated diagnostic/code-action capabilities, action identity, edit format, and availability are unknown. PATH absence does not prove no other installation exists. No action is currently proven safe or available. |
+| Scalafix | `project/plugins.sbt` pins sbt-scalafix 0.12.1; `build.sbt` uses scalafix-core/interfaces 0.12.1 and a Scala 2.13.14 rule project, with Scala 3.3.8 lint inputs. `sharedScalaLintMain/Test` invoke `--check`; `.scalafix.conf` configures DisableSyntax.noFinalize. | This demonstrates configured integration, not an executed Scala 2.12 compatibility result or a safe automatic patch. A 2.13 rule-engine host is not evidence that a 2.12 target works. `command -v scalafix` found no standalone executable; the sbt plugin is a separate producer. |
+| Scalafmt | No Scalafmt declaration or configuration was identified in the inspected project files, and `command -v scalafmt` returned no path. | Availability, target-version compatibility, formatting output and bounded patch behavior remain unverified; do not assume a formatter or introduce one as an implicit prerequisite. |
+| Shared Scala lint | `WorkflowScalaLintAction.scala` builds typed `SbtLintInput` from a real candidate/release Git base and captured pending diff; bounded configuration and workspace reads apply. `build.sbt` selects handwritten Compile/Test inputs and invokes Scalafix `--check`, reporting selected findings through `ScalaLintAdmission.Reporter`. `project.yaml` enables `fixCheck` and `sharedScalaLint`. | This is an attributable check-only path, not an auto-fix producer. A diagnostic's ownership and selected delta must survive any future action. `docs/spec/scala-lint-profiles.md` describes lint policy. No actual finding counts or outcome rate were provided for this baseline. |
+| CAR lint | `GoalPhaseNativeValidation.scala` selects CAR lint as a typed native check, ordered after Compile and behavioral tests; the result must match its resolved host program and selected operation. | Its findings and producer contract are separate from Scala source actions; no repair or CAR lint execution was observed here. |
+| Existing repair / admission | `GoalPhaseCompilePackage.scala` requires complete retained stdout/stderr and owned candidate source, otherwise declines the package. `StandaloneFixExecution.scala` ties diagnostic manifests to retained failure evidence, checks and ownership. `WorkflowRepairAssessment.scala` requires exact successful typed receipts, Compile plus nonempty behavioral tests for code and FixCheck when required. | Candidate evidence and runtime validation remain authoritative. The Phase 9 isolated takeover below supplies counted repair and validation observations, not general success rates or avoided AI calls. Duration and comparable call counts remain unknown, not zero. |
+
+## Retained historical observations
+
+These are prior producer and workflow observations, not executions of D1 or proof that a proposed action is safe:
+
+- The [Phase 7 issued public Work](../../target/sm-workflow/runtime-phase-7-20261112/target/sm-workflow/tasks/phase-7-01a1555d/303-read-p7-d-compile-repair/response.json) retains a real Scala 3.3.8 Compile failure at source revision `2472`, candidate head `372efcfa4ceedbb13e27f366710c5f83ba716d67`, tree `f7c8b1571993ce3a529da015c26df15c2d622308`. It exited 1; stdout and stderr captures were complete with no source loss observed, but projection coverage is recognized patterns only. Four compiler-error groups include E040 at `RepositorySyncNativeProgression.scala:295:15` (`<-` expected, `=` found), two E049 ambiguous-reference errors and E007 type mismatch. Grouping is exact text, not causal; the record does not establish independent root causes or a safe edit. Tests were not selected. The output reports 30 seconds for that invocation, not a repair-latency comparison.
+- The [sbt-cozy producer return](/Users/asami/src/dev2026/sbt-cozy/target/sm-workflow/p7-sbt-cozy-artifact-adapter-20261112/p7-224-continuation.e0GQjGMc/p7-b-return.md) identifies candidate commit `04f521f3002cdc5a2c2e7c1d11cb2971d821eda8`, tree `99a44c53052dba995f0cbebb68d5fcab090b883e`: Compile, fix-check and TestOnly passed, with 11 tests in two suites; its strict-warning compile was expected to reject generated source. The published plugin targets Scala 2.12 / sbt 1.0; current sbt-cozy `build.sbt` selects Scala 2.12.20. This producer result does not supply an actual Scala 2.12 error corpus or prove a cross-version action.
+- The [separate Scala 3.3.8 strict compiler qualification](/Users/asami/src/dev2026/sbt-cozy/target/sm-workflow/slpb2-compiler-policy-20261120/slpb2-qualified-settings.md), commit `c978b1a1ae878edbdc6fa2d588228c6c4ecdf2de`, reports an isolated JVM fixture on JDK 21 and sbt 1.11.7: strict equality and unhandled Java null rejected in both scopes; safe initialization, discarded value, nonunit statement, unused imports/privates/locals, unchecked, deprecation and feature warnings observed and promoted to errors under `-Werror`. Typed Compile and one selected qualification test passed. Inner compiler logs were temporary, so this handoff is the retained observation, not a reusable raw diagnostic corpus. Qualification does not cover other consumer sources or generated outputs.
+- [Phase 9 integrated handoff](phase-9-provider-integration.md#integrated-handoff-after-r1-and-r2) records an isolated live-editor takeover following actual Compile failures: repair count 0 → 1 → 2 under limit 3, replacement submitted and independently reviewed, and departed continuation's stale Submit rejected. The R3 receipt records Compile, FULL (3,085 tests) and FixCheck; it does not establish execution of the specified HEAVY cases. The [accepted Phase 9 checklist](../phase/phase-9-checklist.md) separately records the final Phase Compile, FULL (3,086 tests), FixCheck and independent Release review. These outcomes describe their own candidates and selected runs, not a Phase 28 lint finding count, repair success rate, latency, or AI savings.
+
+## Safe first integration boundaries
+
+1. Connect existing retained compiler and lint observations as provenance-bearing inputs, preserving original captures and source revision; fail closed on truncation, ambiguous file identity, unavailable source, or warnings the projection does not represent. Text patterns alone do not authorize a patch.
+2. Negotiate Metals capabilities for the selected project only after bounded, authorized initialization; record unavailable, timeout and unsupported separately. Default-on configuration is not itself authority to launch a server. No code action is allowlisted from the present evidence.
+3. Admit a candidate only with producer identity, original diagnostic and document version, an explicit narrow allowlist, unambiguous workspace paths and nonoverlapping edits against the observed revision. Require ordinary candidate admission, compile, lint and focused tests, rollback on failure, and the existing AI/Human paths for unresolved cases. A disappearing diagnostic is not proof of correctness.
+4. Keep Scalafix check-only and CAR lint as distinct producer boundaries until a specific reproducible correction is qualified. Formatting must likewise have an identified version, configuration and scoped patch before use. Never generate semantic justifications or treat suppression as correction; consume the Phase 29 policy.
+
+## Evidence still required
+
+Capture representative real Scala 2.12 compiler failures and broader Scala 3 failures and warnings with versions, raw receipts and locations; negotiated Metals capabilities and actual actions including unavailable fallback; reproducible Scalafix and formatter compatibility; selected lint/CAR findings; and attributable existing repair attempts with timestamps, outcome and actual AI-call counts. Use comparable bounded scenarios to measure success, failure, latency and avoided calls after integration. Unsupported and unavailable cases must be retained explicitly. Other languages remain deferred. These observations require later authorized runtime-owned work; none are inferred from fixture text or installed binaries.
+
+## D6 local qualification and remaining evidence
+
+The preceding D5 development observations for the selected lint scope decreased
+from 304 to 4 to 0; the independent [D5 review](../../target/sm-workflow/runtime-phase-28-20261122/target/sm-workflow/tasks/phase-28-01a1555d/d5-typed-lint-repair-772/continue-repairs-813/review-897-result-v2.json)
+records that sequence and successful selected validation 890. These are
+candidate-specific development observations, not production baseline metrics.
+
+D6 executed disposable Scala 3.3.8 native CLI fixtures using typed SBT Test
+and the current Test classpath's Circe error class location, without selecting a
+new Circe dependency version. Both first observed compiler error E008. The pass
+fixture adopted the `getMessage` correction, revalidated Test with exit 0 and
+reached ReviewStep. The rollback fixture applied the same correction, then its
+independent ProductCheck canary failed with exit 1; original bytes were restored
+and the workflow returned to ordinary RepairStep. The retained typed stdout and
+stderr evidence is under `target/sm-workflow/work/native-cli/circe-native-pass-5034042719722502189/logs`
+and `target/sm-workflow/work/native-cli/circe-native-rollback-4631855445124332056/logs`
+(`10.stdout.json`, `10.stderr`, and `11.stdout.json`). Child SBT elapsed times
+were 3290/2434 ms for pass and 3248/2443 ms for rollback; these are scoped
+fixture observations, not production latency or AI-avoidance measurements.
+Selected validation 1022 on tree `7034b3bdf01efb2b48720dc54a5b7c0813f0cf3c`
+passed Compile, TestOnly (8 tests), and FixCheck. Real deployed
+Metals and tool behavior, real Scala 2.12/3 project qualification, and production
+latency and AI-avoidance measurements remain deferred by the adopted Plan.
+Terminal-LF action application and a production Metals provider seam remain
+unverified/incomplete. The selected Phase conditions and formal release remain
+open to their ordinary review and verification.

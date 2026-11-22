@@ -119,12 +119,13 @@ final class ScalaLintAdmissionSpec extends AnyWordSpec with Matchers with GivenW
         ScalaLintDelta.read(config) shouldBe captured
         val root = Paths.get("target/lint-admission-spec").toAbsolutePath.normalize
         val output = scala.collection.mutable.ArrayBuffer.empty[String]
+        val records = scala.collection.mutable.ArrayBuffer.empty[ScalaLintAdmission.DiagnosticRecord]
         val reporter = new ScalaLintAdmission.Reporter(root, ScalaLintInput.Binding("test", "1", config),
-          text => { output += text; () })
-        def _diagnostic_(): ScalafixDiagnostic = new ScalafixDiagnostic {
+          text => { output += text; () }, record => { records += record; () })
+        def _diagnostic_(level: ScalafixSeverity): ScalafixDiagnostic = new ScalafixDiagnostic {
           override def message(): String = "value.get must not enter retained output"
           override def explanation(): String = message()
-          override def severity(): ScalafixSeverity = ScalafixSeverity.ERROR
+          override def severity(): ScalafixSeverity = level
           override def lintID(): Optional[ScalafixLintID] = Optional.of(new ScalafixLintID {
             override def ruleName(): String = "NoOptionGet"
             override def categoryID(): String = ""
@@ -144,14 +145,70 @@ final class ScalaLintAdmissionSpec extends AnyWordSpec with Matchers with GivenW
             }
           })
         }
-        reporter.reportDiagnostic(_diagnostic_())
+        reporter.reportDiagnostic(_diagnostic_(ScalafixSeverity.WARNING))
+        reporter.reportDiagnostic(_diagnostic_(ScalafixSeverity.ERROR))
 
         Then("the real reporter refuses admission for the still-present affected diagnostic in this file")
-        intercept[IllegalArgumentException](reporter.finish()).getMessage should include("1 affected blocking")
+        intercept[IllegalArgumentException](reporter.finish()).getMessage should include("2 affected blocking")
         output.mkString should include("AFFECTED_BLOCKER")
         output.mkString should not include "value.get"
         output.mkString should not include "OUTSIDE_AFFECTED_SCOPE"
+        records.map(_.severity).toVector shouldBe Vector("WARNING", "ERROR")
+        records.head.disposition shouldBe "AFFECTED_BLOCKER"
+        records.head.age shouldBe "UNKNOWN"
+        records.head.rule shouldBe "NoOptionGet."
+        records.head.path shouldBe selectedpath
+        records.head.line shouldBe diagnosticline
+        records.head.column shouldBe 1
+        records.head.endLine shouldBe diagnosticline
+        records.head.endColumn shouldBe 2
+        records.head.provenance shouldBe "scalafix"
+        output.mkString should include("endColumn=2 severity=WARNING provenance=scalafix")
       }
+    }
+    "block an affected warning alone while keeping outside warnings and affected info nonblocking" in {
+      val root = Paths.get("target/lint-admission-spec").toAbsolutePath.normalize
+      val selectedpath = "Example.scala"
+      val config = ScalaLintDelta.add(ConfigFactory.empty(),
+        Vector(ScalaLintDelta.File(selectedpath, Vector(4))))
+      val output = scala.collection.mutable.ArrayBuffer.empty[String]
+      val records = scala.collection.mutable.ArrayBuffer.empty[ScalaLintAdmission.DiagnosticRecord]
+      val reporter = new ScalaLintAdmission.Reporter(root, ScalaLintInput.Binding("test", "1", config),
+        text => { output += text; () }, record => { records += record; () })
+      def diagnostic(level: ScalafixSeverity, line: Int): ScalafixDiagnostic = new ScalafixDiagnostic {
+        override def message(): String = "private diagnostic content"
+        override def explanation(): String = message()
+        override def severity(): ScalafixSeverity = level
+        override def lintID(): Optional[ScalafixLintID] = Optional.of(new ScalafixLintID {
+          override def ruleName(): String = "NoOptionGet"
+          override def categoryID(): String = ""
+        })
+        override def position(): Optional[ScalafixPosition] = Optional.of(new ScalafixPosition {
+          override def startOffset(): Int = 0
+          override def endOffset(): Int = 1
+          override def startLine(): Int = line - 1
+          override def endLine(): Int = line - 1
+          override def startColumn(): Int = 0
+          override def endColumn(): Int = 1
+          override def formatMessage(severity: String, message: String): String = message
+          override def input(): ScalafixInput = new ScalafixInput {
+            override def text(): CharSequence = source
+            override def filename(): String = root.resolve(selectedpath).toString
+            override def path(): Optional[Path] = Optional.empty()
+          }
+        })
+      }
+
+      reporter.reportDiagnostic(diagnostic(ScalafixSeverity.WARNING, 5))
+      intercept[IllegalArgumentException](reporter.finish()).getMessage should include("1 affected blocking")
+      records.last.disposition shouldBe "AFFECTED_BLOCKER"
+      output.mkString should not include "private diagnostic content"
+
+      reporter.reportDiagnostic(diagnostic(ScalafixSeverity.WARNING, 9))
+      reporter.reportDiagnostic(diagnostic(ScalafixSeverity.INFO, 5))
+      reporter.finish()
+      records.takeRight(2).map(_.disposition).toVector shouldBe
+        Vector("OUTSIDE_AFFECTED_SCOPE", "AFFECTED_DIAGNOSTIC")
     }
     "keep ordinary paired replacements local and read historical captures conservatively without rewriting them" in {
       Given("a typed method-body replacement and a genuinely historical delta without provenance")

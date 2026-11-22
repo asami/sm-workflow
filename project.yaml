@@ -28,6 +28,12 @@ cml:
 validation:
   fixCheck: true
   sharedScalaLint: true
+  metals:
+    enabled: true
+    timeoutMillis: 10000
+    maxEdits: 32
+    maxActions: 64
+    maxReplacementChars: 65536
 
 publication:
   source_manifest:

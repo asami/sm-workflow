@@ -1,4 +1,6 @@
 org.simplemodeling.scalalint.NoOptionGet
+org.simplemodeling.scalalint.NullableBoundarySemantics
+org.simplemodeling.scalalint.NullableBoundarySuppression
 org.simplemodeling.scalalint.GoldenportPrivateMemberNaming
 org.simplemodeling.scalalint.GoldenportLocalHelperNaming
 org.simplemodeling.scalalint.GoldenportFlatcaseNaming

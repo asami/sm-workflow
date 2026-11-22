@@ -10,8 +10,13 @@ needed for supported continuation. See the [Session candidate resource contract]
 
 In bounded GoalTask, DelegateTask and StandaloneFix work, the runtime resolves
 an explicit `fix-check` against the Session's admitted checkout and configured
-check binding. Its position in the requested check list does not select a
-workspace. Use the runtime's reported binding and retained result.
+check binding. The runtime uses the same binding regardless of the check's
+position in the request. Use its reported binding and retained result.
+
+For offline review package assembly, use `assemble_review_package` from
+`scripts/goal-phase-dispatch.py` in the operational sm-workflow checkout.
+When complete files have already been supplied, use `review_package`.
+Unconfirmed completeness uses the ordinary capable reviewer.
 
 For GoalPhase/GoalTask semantic results, the normal caller projects supported
 worker artifacts through `projectSemanticWorkResult` and forwards its complete
