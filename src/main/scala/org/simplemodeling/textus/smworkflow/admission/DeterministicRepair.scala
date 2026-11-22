@@ -189,9 +189,15 @@ private[smworkflow] object DeterministicRepair {
         val caret = raw"\[error\]\s+\|\s*\^+\s*".r
         val message = raw"\[error\]\s+\|\s+value message is not a member of io\.circe\.Error\s*".r
         val task = raw"\[error\] \((?:[^\r\n()]+ / )?(Compile|Test) / (?:compile|compileIncremental)\) Compilation failed\s*".r
+        val summary = raw"\[error\] Total time: \d+ s(?: \(\d+:\d{2}\))?, completed \d{4}/\d{1,2}/\d{1,2} \d{1,2}:\d{2}:\d{2}".r
         val streams = Vector(receipt.stdout, receipt.stderr).map(_.split("\\r?\\n", -1).toVector)
         val errors = streams.flatMap(_.filter(_.startsWith("[error]")))
-        errors match {
+        val (diagnostic, footer) = errors match {
+          case Vector(a, b, c, d, e, f, last: String) if summary.matches(last) =>
+            (Vector(a, b, c, d, e, f), Some(last))
+          case rows => (rows, None)
+        }
+        diagnostic match {
           case Vector(header(path, ln, col), source(sourceLine, echoed), caret(), message(),
               "[error] one error found", task(configuration)) =>
             val expectedShape = ".fold(error => fail(error.message), identity)"
@@ -203,7 +209,17 @@ private[smworkflow] object DeterministicRepair {
               parsedSource <- sourceLine.toIntOption.filter(_ == line)
               if parsedSource == line && echoed.drop(indent) == expectedShape && dot >= 0 && column == dot + 1
               if check.kind == WorkflowSbtValidation.Kind.Compile || configuration == "Test"
-              if streams.exists(lines => lines.sliding(6).exists(_.toVector == errors))
+              if streams.exists(lines => lines.sliding(6).exists(_.toVector == diagnostic))
+              if errors.size == 6 || footer.exists { expectedFooter =>
+                streams.exists { lines =>
+                  lines.sliding(7).zipWithIndex.exists {
+                    case (Vector(a, b, c, d, e, f, actualFooter: String), index) =>
+                      Vector(a, b, c, d, e, f) == diagnostic && expectedFooter.equals(actualFooter) &&
+                        lines.drop(index + 7).forall(_.isEmpty)
+                    case _ => false
+                  }
+                }
+              }
             } yield DeterministicCompilerFinding(check.identity, path, line, column, echoed)
             location
           case _ => None

@@ -2,6 +2,9 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.{Files, Path}
+import org.simplemodeling.textus.smworkflow.value as V
+import NativeWorkflowCliFixture as F
 import org.goldenport.cncf.processexecution.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +16,73 @@ import org.simplemodeling.textus.smworkflow.admission.DeterministicRepair.*
   * @version Nov. 22, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "The native Circe repair" should {
+    "revalidate a real compiler correction and restore it after an independent Test failure" in {
+      Vector(true, false).foreach { passes =>
+        val scenario = F.fresh("circe-native-" + (if (passes) "pass" else "rollback"),
+          sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable),
+          repairContinuation = true,
+          selectedGoalPaths = Some(Vector("src/test/scala/RepairExample.scala", "build.sbt", "value.txt", "docs/phase.md")))
+        val repository = Path.of(scenario.host.target.root)
+        val source = repository.resolve("src/test/scala/RepairExample.scala")
+        val original = """object RepairExample {
+          |  def fail(message: String): String = throw new IllegalArgumentException(message)
+          |  def render(value: Either[io.circe.Error, String]): String = value
+          |    .fold(error => fail(error.message), identity)
+          |}
+          |""".stripMargin
+        val circe = Path.of(classOf[io.circe.Error].getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
+        val quoted = io.circe.Json.fromString(circe.toString).noSpaces
+        val task = scenario.ownTask("circe-repair-task")
+        val started = scenario.start().business[V.GoalPhaseStartResult]
+        scenario.retain(task, started)
+        val implementation = scenario.readGoalPhaseResult(scenario.advance(task))
+        implementation.work.getOrElse(fail("expected implementation work")).kind shouldBe "ImplementStep"
+        Files.writeString(source, original)
+        Files.writeString(repository.resolve("build.sbt"), s"""scalaVersion := "3.3.8"
+          |Test / unmanagedClasspath += Attributed.blank(file($quoted))
+          |Test / test := (Test / runMain).toTask(" ProductCheck").value
+          |""".stripMargin)
+        Files.writeString(repository.resolve("value.txt"), if (passes) "expected\n" else "incorrect\n")
+        val result = V.GoalPhaseWorkResult("completed", "Fixture inputs for actual native validation", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        val reference = V.WorkflowArtifactReference("circe-fixture-implementation", "1")
+        scenario.call("command", implementation.submitOperation.getOrElse(fail("expected submit operation")), Vector("--sessionId", implementation.submitSessionId.getOrElse(fail("expected submit session")),
+          "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+          "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+          .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        val advance = scenario.advance(task)
+        val control = advance.business[V.GoalPhaseAdvanceResult]
+        val next = scenario.readGoalPhaseResult(advance)
+        def authoredSource: String = {
+          val managedHeader = raw"(?s)\A/\*\*\n \* @since   ([A-Z][a-z]{2}\.\s+\d{1,2}, \d{4})\n \* @version \1\n \*/\n(.*)\z".r
+          Files.readString(source) match {
+            case managedHeader(_, body) => body
+            case _ => fail("expected the canonical initial managed source history header")
+          }
+        }
+        if (passes) {
+          next.work.getOrElse(fail("expected review work")).kind shouldBe "ReviewStep"
+          val validation = control.controlSummary.flatMap(_.getRecord("validation"))
+          validation.flatMap(_.getString("outcome")) shouldBe Some("passed")
+          val sourceRevision = validation.flatMap(_.getString("source_revision"))
+          sourceRevision should not be empty
+          next.work.getOrElse(fail("expected review work")).checksReceipt shouldBe sourceRevision.map { revision =>
+            s"${started.sessionId}:ordered-validation:$revision:validation"
+          }
+          authoredSource shouldBe original.replace("error.message", "error.getMessage")
+          Files.readString(scenario.root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 1
+        } else {
+          (next.work.exists(work => "RepairStep".equals(work.kind)) || "Human".equals(next.kind)) shouldBe true
+          authoredSource shouldBe original
+          Files.readString(scenario.root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 1
+        }
+      }
+    }
+  }
   "Metals proposal admission" should {
     "project only one exact complete typed compiler failure" in {
       val source = "            .fold(error => fail(error.message), identity)"
@@ -37,6 +106,11 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
       val original = payload(output)
       val expected = DeterministicCompilerFinding("compile", "/work/src/A.scala", 395, column, source)
       deterministicCompilerFinding(original) shouldBe Some(expected)
+      val footer = "[error] Total time: 1 s, completed 2026/11/22 20:11:04\n"
+      deterministicCompilerFinding(payload(output + footer)) shouldBe Some(expected)
+      deterministicCompilerFinding(payload(output + footer + "[error] another error\n")) shouldBe None
+      deterministicCompilerFinding(payload(output + footer + footer)) shouldBe None
+      deterministicCompilerFinding(payload(footer + output)) shouldBe None
       deterministicCompilerFinding(original.copy(outcome = Some("repair-limit-reached"))) shouldBe Some(expected)
       deterministicCompilerFinding(payload(output, truncated = true)) shouldBe None
       deterministicCompilerFinding(payload(output + "[error] another error\n")) shouldBe None

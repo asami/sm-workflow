@@ -33,3 +33,30 @@ These are prior producer and workflow observations, not executions of D1 or proo
 ## Evidence still required
 
 Capture representative real Scala 2.12 compiler failures and broader Scala 3 failures and warnings with versions, raw receipts and locations; negotiated Metals capabilities and actual actions including unavailable fallback; reproducible Scalafix and formatter compatibility; selected lint/CAR findings; and attributable existing repair attempts with timestamps, outcome and actual AI-call counts. Use comparable bounded scenarios to measure success, failure, latency and avoided calls after integration. Unsupported and unavailable cases must be retained explicitly. Other languages remain deferred. These observations require later authorized runtime-owned work; none are inferred from fixture text or installed binaries.
+
+## D6 local qualification and remaining evidence
+
+The preceding D5 development observations for the selected lint scope decreased
+from 304 to 4 to 0; the independent [D5 review](../../target/sm-workflow/runtime-phase-28-20261122/target/sm-workflow/tasks/phase-28-01a1555d/d5-typed-lint-repair-772/continue-repairs-813/review-897-result-v2.json)
+records that sequence and successful selected validation 890. These are
+candidate-specific development observations, not production baseline metrics.
+
+D6 executed disposable Scala 3.3.8 native CLI fixtures using typed SBT Test
+and the current Test classpath's Circe error class location, without selecting a
+new Circe dependency version. Both first observed compiler error E008. The pass
+fixture adopted the `getMessage` correction, revalidated Test with exit 0 and
+reached ReviewStep. The rollback fixture applied the same correction, then its
+independent ProductCheck canary failed with exit 1; original bytes were restored
+and the workflow returned to ordinary RepairStep. The retained typed stdout and
+stderr evidence is under `target/sm-workflow/work/native-cli/circe-native-pass-5034042719722502189/logs`
+and `target/sm-workflow/work/native-cli/circe-native-rollback-4631855445124332056/logs`
+(`10.stdout.json`, `10.stderr`, and `11.stdout.json`). Child SBT elapsed times
+were 3290/2434 ms for pass and 3248/2443 ms for rollback; these are scoped
+fixture observations, not production latency or AI-avoidance measurements.
+Selected validation 1022 on tree `7034b3bdf01efb2b48720dc54a5b7c0813f0cf3c`
+passed Compile, TestOnly (8 tests), and FixCheck. Real deployed
+Metals and tool behavior, real Scala 2.12/3 project qualification, and production
+latency and AI-avoidance measurements remain deferred by the adopted Plan.
+Terminal-LF action application and a production Metals provider seam remain
+unverified/incomplete. The selected Phase conditions and formal release remain
+open to their ordinary review and verification.

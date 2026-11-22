@@ -132,3 +132,27 @@ with rule, severity, exact one-based start and end positions, disposition, unkno
 age and Scalafix provenance. It retains the previous text fields and blocking
 policy. It does not itself establish historical age or prove that an exception is
 admissible.
+
+### Local qualification boundary
+
+`DeterministicRepairSpec` defines disposable native CLI scenarios using Scala
+3.3.8 and the current test classpath's Circe error class location. Both executed
+typed SBT Test and observed an initial E008 failure. The pass fixture adopted
+`getMessage`, revalidated Test with exit 0 and reached ReviewStep. In the rollback
+fixture the same correction was followed by an independent ProductCheck failure
+(exit 1), restoration of the original bytes and ordinary RepairStep. Retained
+typed stdout and stderr evidence is under
+`target/sm-workflow/work/native-cli/circe-native-pass-5034042719722502189/logs`
+and `target/sm-workflow/work/native-cli/circe-native-rollback-4631855445124332056/logs`
+(`10.stdout.json`, `10.stderr`, and `11.stdout.json`). Child SBT elapsed times
+were 3290/2434 ms for pass and 3248/2443 ms for rollback; they describe only
+these fixtures. Selected validation 1022 on tree
+`7034b3bdf01efb2b48720dc54a5b7c0813f0cf3c` passed Compile, TestOnly (8 tests),
+and FixCheck.
+
+The standalone terminal-LF proposal test does not establish runtime application
+of that action. A production provider seam for deployed Metals remains incomplete;
+the transport fixture does not establish actual server behavior. The adopted
+Plan defers qualification against deployed tools and real Scala 2.12/3 projects,
+and production latency and AI-avoidance measurements. No Phase completion is
+claimed by this local qualification.
