@@ -13,6 +13,9 @@ final class NoEmptySensitiveCollectionOps extends SemanticRule("NoEmptySensitive
   override def fix(implicit doc: SemanticDocument): Patch = Patch.fromIterable(doc.tree.collect {
     case name: Term.Name if _partial(name.value) && SafetySemantic.standard(name) =>
       SafetySemantic.finding(name, "Standard collection operation may throw on empty input; handle emptiness explicitly")
-    case name: Term.Name if _partial(name.value) && name.symbol.info.isEmpty => SafetySemantic.unresolved(name, "empty-sensitive operation")
+    case name: Term.Name if _partial(name.value) && name.symbol.info.isEmpty && name.symbol.isGlobal &&
+        name.symbol.owner.value.startsWith("scala/collection/") =>
+      SafetySemantic.finding(name, "Standard collection operation may throw on empty input; handle emptiness explicitly")
+    case name: Term.Name if _partial(name.value) && name.symbol.info.isEmpty && !name.symbol.isGlobal => SafetySemantic.unresolved(name, "empty-sensitive operation")
   })
 }

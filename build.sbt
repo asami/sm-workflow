@@ -41,7 +41,7 @@ lazy val scalaLintRules: Project = project.in(file("scala-lint-rules"))
       "com.typesafe" % "config" % "1.4.3",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test
     ),
-    Compile / unmanagedSources ++= Seq("ScalaLintProfiles.scala", "ScalaLintInput.scala", "ScalaLintDelta.scala", "ScalaLintAdmission.scala").map(
+    Compile / unmanagedSources ++= Seq("ScalaLintProfiles.scala", "ScalaLintInput.scala", "ScalaLintDelta.scala", "ScalaLintAdmission.scala", "ScalaLintSemanticdb.scala").map(
       name => baseDirectory.value.getParentFile / "project" / name),
     scalafixTestkitInputClasspath := (scalaLintInput / Compile / fullClasspath).value,
     scalafixTestkitInputSourceDirectories := (scalaLintInput / Compile / unmanagedSourceDirectories).value,
@@ -53,6 +53,7 @@ lazy val scalaLintRules: Project = project.in(file("scala-lint-rules"))
       props.setProperty("sourceroot", (ThisBuild / baseDirectory).value.getAbsolutePath)
       props.setProperty("scalaVersion", (scalaLintConsumerInput / scalaVersion).value)
       props.setProperty("classpath", (scalaLintConsumerInput / Test / fullClasspath).value.files.mkString(java.io.File.pathSeparator))
+      props.setProperty("mainMeta", (scalaLintConsumerInput / Compile / semanticdbTargetRoot).value.getAbsolutePath)
       props.setProperty("main", (scalaLintConsumerInput / Compile / sources).value.mkString(java.io.File.pathSeparator))
       props.setProperty("test", (scalaLintConsumerInput / Test / sources).value.mkString(java.io.File.pathSeparator))
       props.setProperty("mainScalacOptions", (scalaLintConsumerInput / Compile / scalacOptions).value.mkString("|"))
@@ -266,13 +267,47 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
     Test / scalafix / aggregate := false,
     sharedScalaLintMain := Def.taskDyn {
       val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
-      if (!(Compile / unmanagedSources).value.exists(selected.selected)) Def.task { () }
-      else Def.task { requireOnlyLintFindings((Compile / scalafix).toTask(" --check").result.value) }
+      val selectedSources = (Compile / unmanagedSources).value.filter(selected.selected)
+      if (selectedSources.isEmpty) Def.task { () }
+      else Def.taskDyn {
+        (Compile / compile).value
+        val prepared = org.simplemodeling.scalalint.ScalaLintSemanticdb.prepare(
+          (ThisBuild / baseDirectory).value.toPath, (Compile / semanticdbTargetRoot).value.toPath,
+          (Compile / sources).value.map(_.toPath), selectedSources.map(_.toPath),
+          (target.value / "scala-lint" / "semanticdb-input").toPath)
+        val args = try prepared.map(org.simplemodeling.scalalint.ScalaLintSemanticdb.argument).getOrElse(" --check")
+        catch { case error: Throwable =>
+          prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+          throw error
+        }
+        Def.task {
+          val result = (Compile / scalafix).toTask(args).result.value
+          try requireOnlyLintFindings(result)
+          finally prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+        }
+      }
     }.value,
     sharedScalaLintTest := Def.taskDyn {
       val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
-      if (!(Test / unmanagedSources).value.exists(selected.selected)) Def.task { () }
-      else Def.task { requireOnlyLintFindings((Test / scalafix).toTask(" --check").result.value) }
+      val selectedSources = (Test / unmanagedSources).value.filter(selected.selected)
+      if (selectedSources.isEmpty) Def.task { () }
+      else Def.taskDyn {
+        (Test / compile).value
+        val prepared = org.simplemodeling.scalalint.ScalaLintSemanticdb.prepare(
+          (ThisBuild / baseDirectory).value.toPath, (Test / semanticdbTargetRoot).value.toPath,
+          (Test / sources).value.map(_.toPath), selectedSources.map(_.toPath),
+          (target.value / "scala-lint" / "semanticdb-input").toPath)
+        val args = try prepared.map(org.simplemodeling.scalalint.ScalaLintSemanticdb.argument).getOrElse(" --check")
+        catch { case error: Throwable =>
+          prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+          throw error
+        }
+        Def.task {
+          val result = (Test / scalafix).toTask(args).result.value
+          try requireOnlyLintFindings(result)
+          finally prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+        }
+      }
     }.value
   )
 
@@ -317,13 +352,47 @@ lazy val root: Project = project
       .getOrElse((ThisBuild / scalafixCallback).value),
     sharedScalaLintMain := Def.taskDyn {
       val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
-      if (!(Compile / unmanagedSources).value.exists(selected.selected)) Def.task { () }
-      else Def.task { requireOnlyLintFindings((Compile / scalafix).toTask(" --check").result.value) }
+      val selectedSources = (Compile / unmanagedSources).value.filter(selected.selected)
+      if (selectedSources.isEmpty) Def.task { () }
+      else Def.taskDyn {
+        (Compile / compile).value
+        val prepared = org.simplemodeling.scalalint.ScalaLintSemanticdb.prepare(
+          (ThisBuild / baseDirectory).value.toPath, (Compile / semanticdbTargetRoot).value.toPath,
+          (Compile / sources).value.map(_.toPath), selectedSources.map(_.toPath),
+          (target.value / "scala-lint" / "semanticdb-input").toPath)
+        val args = try prepared.map(org.simplemodeling.scalalint.ScalaLintSemanticdb.argument).getOrElse(" --check")
+        catch { case error: Throwable =>
+          prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+          throw error
+        }
+        Def.task {
+          val result = (Compile / scalafix).toTask(args).result.value
+          try requireOnlyLintFindings(result)
+          finally prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+        }
+      }
     }.value,
     sharedScalaLintTest := Def.taskDyn {
       val selected = sharedScalaLintReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
-      if (!(Test / unmanagedSources).value.exists(selected.selected)) Def.task { () }
-      else Def.task { requireOnlyLintFindings((Test / scalafix).toTask(" --check").result.value) }
+      val selectedSources = (Test / unmanagedSources).value.filter(selected.selected)
+      if (selectedSources.isEmpty) Def.task { () }
+      else Def.taskDyn {
+        (Test / compile).value
+        val prepared = org.simplemodeling.scalalint.ScalaLintSemanticdb.prepare(
+          (ThisBuild / baseDirectory).value.toPath, (Test / semanticdbTargetRoot).value.toPath,
+          (Test / sources).value.map(_.toPath), selectedSources.map(_.toPath),
+          (target.value / "scala-lint" / "semanticdb-input").toPath)
+        val args = try prepared.map(org.simplemodeling.scalalint.ScalaLintSemanticdb.argument).getOrElse(" --check")
+        catch { case error: Throwable =>
+          prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+          throw error
+        }
+        Def.task {
+          val result = (Test / scalafix).toTask(args).result.value
+          try requireOnlyLintFindings(result)
+          finally prepared.foreach(org.simplemodeling.scalalint.ScalaLintSemanticdb.delete)
+        }
+      }
     }.value,
     sharedScalaLintCheck := {
       (scalaStrictAuthoring / Test / compile).value

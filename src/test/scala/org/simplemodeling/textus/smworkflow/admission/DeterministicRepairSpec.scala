@@ -1,6 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import java.nio.charset.StandardCharsets.UTF_8
+import org.goldenport.cncf.processexecution.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -13,6 +15,76 @@ import org.simplemodeling.textus.smworkflow.admission.DeterministicRepair.*
   */
 final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Metals proposal admission" should {
+    "project only one exact complete typed compiler failure" in {
+      val source = "            .fold(error => fail(error.message), identity)"
+      val column = source.indexOf(".message") + 1
+      val output = Vector(
+        s"[error] -- [E008] Not Found Error: /work/src/A.scala:395:$column ",
+        s"[error] 395 |$source", "[error]     |                                ^^^^^^^^^^^^^",
+        "[error]     |                       value message is not a member of io.circe.Error",
+        "[error] one error found", "[error] (Test / compileIncremental) Compilation failed").mkString("\n") + "\n"
+      val check = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+      def payload(text: String, truncated: Boolean = false): GoalPhaseNativeValidation.Payload = {
+        val bytes = text.getBytes(UTF_8).toVector
+        val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(1),
+          ProcessExecutionCapture(bytes, bytes.size.toLong, truncated), ProcessExecutionCapture(Vector.empty, 0L, false),
+          Vector.empty, 1L, "fixture-compile")
+        val receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(1), text, "",
+          Some(WorkflowSbtValidation.Facts(check.kind, WorkflowSbtValidation.Outcome.Failed, None, None)), Some(process))
+        GoalPhaseNativeValidation.Payload("1", "step", GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40),
+          Vector(check), Vector(receipt), Some("repair-required"))
+      }
+      val original = payload(output)
+      val expected = DeterministicCompilerFinding("compile", "/work/src/A.scala", 395, column, source)
+      deterministicCompilerFinding(original) shouldBe Some(expected)
+      deterministicCompilerFinding(original.copy(outcome = Some("repair-limit-reached"))) shouldBe Some(expected)
+      deterministicCompilerFinding(payload(output, truncated = true)) shouldBe None
+      deterministicCompilerFinding(payload(output + "[error] another error\n")) shouldBe None
+      deterministicCompilerFinding(payload(output + "[info] - other *** FAILED ***\n")) shouldBe None
+      deterministicCompilerFinding(payload(output.replace("one error found", "two errors found"))) shouldBe None
+      deterministicCompilerFinding(payload(output.replace(s":395:$column", s":395:${column + 1}"))) shouldBe None
+      deterministicCompilerFinding(original.copy(outcome = Some("passed"))) shouldBe None
+      val receipt = original.receipts match {
+        case Vector(value) => value
+        case _ => fail("expected exactly one fixture receipt")
+      }
+      val changed = receipt.copy(stdout = output + "changed")
+      deterministicCompilerFinding(original.copy(receipts = Vector(changed))) shouldBe None
+    }
+    "retain only bounded exact transaction records without inferring a result" in {
+      val transaction = Transaction("session", "12", "a" * 40, "validation:1", "src/A.scala", "old", "new", "sm-workflow-repository")
+      val intent = TransactionRecord(transaction, "apply", None)
+      transactionCodec.decode(transactionCodec.encode(intent)) shouldBe Right(intent)
+      val applied = intent.copy(outcome = Some("updated"))
+      transactionCodec.decode(transactionCodec.encode(applied)) shouldBe Right(applied)
+      val conflict = intent.copy(outcome = Some("conflict"))
+      transactionCodec.decode(transactionCodec.encode(conflict)) shouldBe Right(conflict)
+      transactionCodec.decode(transactionCodec.encode(intent.copy(outcome = Some("success")))).isLeft shouldBe true
+      validTransaction(transaction.copy(candidate = "c" * 64)) shouldBe true
+      Vector("", "a" * 39, "A" * 40, "g" * 40, "a" * 65).foreach { invalid =>
+        validTransaction(transaction.copy(candidate = invalid)) shouldBe false
+        transactionCodec.decode(transactionCodec.encode(intent.copy(transaction = transaction.copy(candidate = invalid)))).isLeft shouldBe true
+      }
+      validTransaction(transaction.copy(path = "../outside.scala")) shouldBe false
+      validTransaction(transaction.copy(expected = "new")) shouldBe false
+      validTransaction(transaction.copy(expected = "x" * (1024 * 1024 + 1))) shouldBe false
+      validTransaction(transaction.copy(sourceRevision = "0")) shouldBe false
+      validTransaction(transaction.copy(workspace = " sm-workflow-repository")) shouldBe false
+      val rollback = Rollback("28", "b" * 64, "28:test-only")
+      val reverse = TransactionRecord(transaction, "rollback", None, Some(rollback))
+      transactionCodec.decode(transactionCodec.encode(reverse)) shouldBe Right(reverse)
+      Vector("", "b" * 39, "B" * 40, "g" * 40, "b" * 65).foreach { invalid =>
+        transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = Some(rollback.copy(
+          failedCandidate = invalid))))).isLeft shouldBe true
+      }
+      transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = Some(rollback.copy(
+        failedCandidate = "b" * 40))))).isRight shouldBe true
+      transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = None))).isLeft shouldBe true
+      transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = Some(rollback.copy(
+        sourceRevision = transaction.sourceRevision))))).isLeft shouldBe true
+      transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = Some(rollback.copy(
+        failedCandidate = transaction.candidate))))).isLeft shouldBe true
+    }
     "propose the observed Circe compiler correction only for the exact bound shape" in {
       Given("the Scala 3 E008 receiver evidence and a handwritten snapshot")
       val line = "  .fold(error => fail(error.message), identity)"
@@ -26,6 +98,9 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
       val result = circeErrorMessage(finding, document, Set(document.uri))
       Then("the patch retains the compiler finding and distinguishes native patch provenance")
       result.map(_.action.edits) shouldBe Right(Vector(Edit(document.uri, 7, range, "getMessage")))
+      result.flatMap(render(_, document)) shouldBe Right(line.replace("error.message", "error.getMessage") + "\n")
+      result.flatMap(render(_, document.copy(text = document.text + " "))).isLeft shouldBe true
+      result.flatMap(render(_, document.copy(revision = "r2"))).isLeft shouldBe true
       result.toOption.flatMap(_.action.nativeProvenance) shouldBe Some(NativeProvenance(
         "circe-error-get-message-v1", "receipt:compiler", Some(3), Some("io.circe.Error")))
       When("the compiler, source, range or authority is not the one observed")
@@ -59,6 +134,7 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
       val result = terminalLf(finding, document, Set(document.uri))
       Then("the patch preserves the diagnostic and attributes the built-in recipe separately")
       result.map(_.action.edits) shouldBe Right(Vector(Edit(document.uri, 7, range, "")))
+      result.flatMap(render(_, document)) shouldBe Right("object A\n")
       result.toOption.flatMap(_.action.nativeProvenance) shouldBe Some(NativeProvenance("terminal-lf-v1", "receipt:1"))
       When("ownership, provenance, source shape or diagnostic binding differs")
       Then("no patch is admitted")

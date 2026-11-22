@@ -120,6 +120,8 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
         val (errors, actual) = _runConsumer(props, source, effective, work)
         errors shouldBe Set(ScalafixError.LinterError)
         actual should contain theSameElementsAs _scopedFindings(source)
+        val nestedLine = _location("NoIncompatibleEquality", "AnalysisUnavailable", source, "returnedPaths(value):", "returnedPaths(value)")
+        actual should not contain nestedLine
       }
     }
 
@@ -209,6 +211,33 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
     }
   }
 
+  "The verified sibling SemanticDB input" should {
+    "supply an exact compiler declaration and reject an absent declared source" in {
+      val props = _consumerProperties()
+      val source = _scopedSource(props)
+      val root = Paths.get(props.getProperty("sourceroot"))
+      val meta = Paths.get(props.getProperty("mainMeta"))
+      val sources = _paths(props.getProperty("main"))
+      _withProjectWork(props) { work =>
+        val effective = ScalaLintProfiles.resolve(ScalaLintProfiles.selection(None, None), None, getClass.getClassLoader)
+        val before = sources.map(p => p -> Files.readAllBytes(p).toVector).toMap
+        val ordinary = _runConsumer(props, source, effective, work)._2
+        val generated = ScalaLintSemanticdb.prepare(root, meta, sources, List(source), work).get
+        try {
+          val augmented = _runConsumer(props, source, effective, work, metadata = Some(generated))._2
+          val removed = ordinary.toSet -- augmented.toSet
+          val expected = Set(
+            _location("NoArrayValueEquality", "AnalysisUnavailable", source, "def siblingEquality", "value.get"),
+            _location("NoIncompatibleEquality", "AnalysisUnavailable", source, "def siblingEquality", "value.get"))
+          removed shouldBe expected
+          (augmented.toSet -- ordinary.toSet) shouldBe empty
+          ScalaLintSemanticdb.prepare(root, meta, sources :+ root.resolve("absent.scala"), List(source), work) shouldBe None
+          sources.map(p => p -> Files.readAllBytes(p).toVector).toMap shouldBe before
+        } finally ScalaLintSemanticdb.delete(generated)
+      }
+    }
+  }
+
   private def _consumerProperties(): Properties = {
     val props = new Properties()
     val input = getClass.getResourceAsStream("/scala-lint-consumer.properties")
@@ -245,6 +274,14 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
     _location("NoTryGet", "", source, "def scoped", "attempted.get", "attempted.".length),
     _location("NoOptionGet", "", source, "def outside", "get"),
     _location("NoTryGet", "", source, "def failed", "get"),
+    _location("NoEitherProjectionGet", "", source, "def projected", "get"),
+    _location("NoEmptySensitiveCollectionOps", "", source, "def first", "head"),
+    _location("NoArrayValueEquality", "", source, "def arrayEqual", "left =="),
+    _location("NoArrayValueEquality", "AnalysisUnavailable", source, "def siblingEquality", "value.get"),
+    _location("NoIncompatibleEquality", "AnalysisUnavailable", source, "def siblingEquality", "value.get"),
+    _location("NoArrayValueEquality", "AnalysisUnavailable", source, "def unknownEqual", "(if (flag)"),
+    _location("NoIncompatibleEquality", "AnalysisUnavailable", source, "def unknownEqual", "(if (flag)"),
+    _location("NoIncompatibleEquality", "", source, "def disjoint", "values.contains"),
     _location("NullableBoundarySemantics", "VerifiedBoundary", source, "def interop(", "value == null"),
     _location("NullableBoundarySemantics", "VerifiedBoundary", source, "def interopPredicate", "java.util.Objects.nonNull"),
     _location("NullableBoundarySemantics", "VerifiedBoundary", source, "def importedInterop", "nonNull(value)"),
@@ -275,7 +312,7 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
   )
 
   private def _runConsumer(props: Properties, source: Path, effective: ScalaLintProfiles.Effective, work: Path,
-      output: Option[PrintStream] = None)
+      output: Option[PrintStream] = None, metadata: Option[Path] = None)
       : (Set[ScalafixError], Vector[(String, String, Path, Int, Int)]) = {
     val config = work.resolve("effective.conf")
     Files.write(config, effective.rendered.getBytes(UTF_8))
@@ -299,7 +336,8 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
       .withScalacOptions(props.getProperty("mainScalacOptions").split("\\|").toList.asJava)
       .withToolClasspath(List(classOf[GoldenportPrivateMemberNaming].getProtectionDomain.getCodeSource.getLocation).asJava)
       .withMainCallback(callback)
-    val errors = output.map(arguments.withPrintStream).getOrElse(arguments).run().toSet
+    val withMetadata = metadata.map(path => arguments.withParsedArguments(List("--semanticdb-targetroots", path.toString).asJava)).getOrElse(arguments)
+    val errors = output.map(withMetadata.withPrintStream).getOrElse(withMetadata).run().toSet
     val actual = diagnostics.map { diagnostic =>
       diagnostic.position().isPresent shouldBe true
       diagnostic.lintID().isPresent shouldBe true

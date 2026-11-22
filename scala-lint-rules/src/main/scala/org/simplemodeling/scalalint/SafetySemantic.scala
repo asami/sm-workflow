@@ -78,8 +78,15 @@ private[scalalint] object SafetySemantic {
       doc.synthetics.filter(_related(_, target)).flatMap(_synthetics).collectFirst {
         // Factory apply synthetics place the OriginalTree beside the selected
         // method, in the enclosing ApplyTree, rather than inside SelectTree.
-        case TypeApplyTree(SelectTree(_, id), args) => id.info -> args
-        case TypeApplyTree(fun @ OriginalTree(original), args) if _related(fun, target) && original.symbol.info.nonEmpty => original.symbol.info.get -> args
+        case TypeApplyTree(SelectTree(qual, id), args) if
+          (!target.symbol.isNone && id.info.symbol == target.symbol) ||
+            (id.info.displayName == "apply" && !target.symbol.isNone && _synthetics(qual).exists {
+              case OriginalTree(original) => original.pos == target.pos && original.symbol == target.symbol
+              case _ => false
+            }) => id.info -> args
+        case TypeApplyTree(fun @ OriginalTree(original), args) if
+          _related(fun, target) && !target.symbol.isNone && original.symbol == target.symbol &&
+            original.symbol.info.nonEmpty => original.symbol.info.get -> args
       } else None
     inferred.orElse(target.symbol.info.orElse(_identifierInfo(target)).map(_ -> Nil))
   }
@@ -99,6 +106,8 @@ private[scalalint] object SafetySemantic {
       case Pat.Var(name) => name.symbol.info.flatMap(info => result(info.signature))
     }.flatten
     case Pat.Var(name) => tpe(name)
+    case Lit.Null() => Some(TypeRef(NoType, Symbol("scala/Null#"), Nil))
+    case Lit.Char(_) => Some(TypeRef(NoType, Symbol("scala/Char#"), Nil))
     case Lit.String(_) => Some(TypeRef(NoType, Symbol("java/lang/String#"), Nil))
     case Lit.Int(_) => Some(TypeRef(NoType, Symbol("scala/Int#"), Nil))
     case Lit.Long(_) => Some(TypeRef(NoType, Symbol("scala/Long#"), Nil))
@@ -165,6 +174,8 @@ private[scalalint] object SafetySemantic {
 
   def element(tree: Tree)(implicit doc: SemanticDocument): Option[SemanticType] = tpe(tree).flatMap { found =>
     bases(found).collectFirst {
+      case TypeRef(NoType, symbol, Nil) if Set("java/lang/String#", "scala/collection/StringOps#")(symbol.value) =>
+        TypeRef(NoType, Symbol("scala/Char#"), Nil)
       case TypeRef(_, symbol, args) if args.nonEmpty &&
         (symbol.value == "scala/Array#" || symbol.value == "scala/collection/IterableOnce#") => args.head
     }

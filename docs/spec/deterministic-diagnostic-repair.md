@@ -70,8 +70,35 @@ The [subsequent run](../../target/sm-workflow/runtime-phase-6.11-restart-2026110
 passed compilation and ran 11 tests, with 10 successes and one separate fixture
 failure. A [later candidate](../../target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/314-b5-advance-after-artifact312/response.json)
 also included another repair and passed all 11 tests. These observations do not
-establish live execution of this recipe. Metals, formatter and Scalafix rewrite
-actions remain unqualified; D5 owns runtime application and D6 its qualification.
+establish live execution of this recipe.
+
+### Ordered Phase Step repair
+
+After the normal repair reservation, the Phase attempts the initial compiler
+recipe before issuing semantic repair. It requires a completed typed failing
+SBT receipt, both complete output streams, a single matching diagnostic and
+compilation failure, and exact agreement between the compiler's echoed line,
+the staged UTF-8 blob and the same file in the worktree. The file must be an
+owned regular Scala source in the selected Step, with the checkout, index and
+validation bound to the retained candidate. Missing evidence leaves the normal
+RepairStep available.
+
+The runtime records the file-update intent before invoking the managed File
+compare-and-set and records the returned outcome separately. An applied edit
+goes through normal candidate inspection and the selected validation chain. If
+that revalidation formally fails, rollback checks that the single changed blob
+is precisely the applied edit. It restores the original bytes, stages that file
+through its selected Git program and verifies the original index. The failed
+diagnostic and validation remain available to the normal RepairStep or Human
+decision. A missing effect result or a rollback conflict retains the actual
+state for resolution. The runtime makes at most one automatic compiler
+correction attempt per Step in this initial route and preserves the normal
+repair budget and independent review.
+
+The Phase route supports the narrow Circe correction above. The Scala
+terminal-LF proposal, Metals transport and formatter/Scalafix actions have
+separate producer and qualification requirements. Installed tools, deployed
+project behavior and operational savings are checked after release.
 
 ## Source-local nullable boundary evidence
 

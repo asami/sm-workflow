@@ -14,7 +14,26 @@ object ConsumerScopedExceptions {
   def scoped(option: Option[Int], attempted: scala.util.Try[Int]): (Int, Int) = (option.get, attempted.get)
   def outside(option: Option[Int]): Int = option.get
   def failed(attempted: scala.util.Try[Int]): Int = attempted.get
+  def projected(value: Either[String, Int]): String = value.left.get
+  def first(values: List[Int]): Int = values.head
+  final class Unrelated {
+    def get: Int = 1
+    def head: Int = 2
+  }
+  def unrelated(value: Unrelated): Int = value.get + value.head
   def total(option: Option[Int]): Int = option.getOrElse(0)
+  def siblingEquality(value: Example.Other, text: String): Boolean = value.get == text
+  def returnedPaths(value: String): Vector[String] = Vector(value)
+  def nestedMembership(value: String): Boolean =
+    (returnedPaths(value): Vector[String]).contains(value)
+  def stringMembership(value: String, char: Char): Boolean = value.contains(char)
+  def charEqual(value: Char): Boolean = value == 'x'
+  def charReverse(value: Char): Boolean = 'x' != value
+  def arrayEqual(left: Array[Int], right: Array[Int]): Boolean = left == right
+  def unknownEqual(flag: Boolean, left: String, right: String): Boolean = (if (flag) left else right) == left
+  final case class CustomerId(value: String)
+  final case class OrderId(value: String)
+  def disjoint(values: List[CustomerId], wrong: OrderId): Boolean = values.contains(wrong)
   // nullable-boundary: rule=NullableBoundarySemantics target=value boundary=interop normalization=reject-null justification=java-api
   def interop(value: String | Null): Int = if (value == null) throw new IllegalArgumentException() else value.length
   // nullable-boundary: rule=NullableBoundarySemantics target=value boundary=interop normalization=reject-null justification=java-api
