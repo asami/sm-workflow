@@ -9,8 +9,8 @@ snapshot, revision and diagnostic. The caller must recheck the current candidate
 and authority at application and preserve normal admission, validation and rollback.
 
 An explicitly registered rule must attest the diagnostic and proposed edit shape
-against that snapshot. A title alone grants no authority; no production recipe is
-registered here. Multiple admissible actions are ambiguous and yield no patch.
+against that snapshot. A title alone grants no authority. Multiple admissible
+actions are ambiguous and yield no patch.
 Edit count, action count, replacement size, UTF-16 positions and overlapping edits
 are bounded. Unsupported command, disabled or unresolved alternatives are ignored;
 malformed protocol responses are distinct from no usable action. A fixture rule
@@ -33,5 +33,42 @@ fields are invalid. `enabled` defaults to true; `timeoutMillis` defaults to 1000
 `maxReplacementChars` to 65536 (0–1048576). Optional `serverIdentity` is a logical
 registration name, not a path or execution authority. Enabling policy grants no
 execution or workspace authority. An explicit `enabled: false` disables the route.
-Actual recipes, runtime integration and installed-server qualification belong to
-later steps.
+Runtime integration and installed-server qualification belong to later steps.
+
+## Native terminal LF proposal
+
+The `terminalLf` recipe proposes removal of extra terminal LF characters in a
+handwritten, owned Scala document, preserving one final LF and every preceding
+character. Nonempty content, no NUL, a matching range and an exact revision and
+version are required. This narrowly follows the byte-level correction described
+in [the normal typed Git workflow](normal-typed-git-workflow.md); application
+still requires its own byte, file-mode, ownership and validation checks.
+
+`phase-review` and `terminal-lf` are internal normalized identities, not external
+compiler or Git diagnostic codes. A trusted caller must project an actual review
+finding, supply its retained evidence reference, determine handwritten ownership,
+and bind the exact range to the snapshot. The data constructor does not verify
+those claims. The returned action separately records the native recipe and evidence
+reference and passes the existing admission boundary; it neither applies a patch
+nor proves a check succeeded. No runtime producer is wired to this projection yet.
+## Scala 3 Circe error member
+
+`circeErrorMessage` proposes replacing only the member `message` with
+`getMessage` on the exact line `.fold(error => fail(error.message), identity)`.
+The trusted caller must bind a Scala 3 `E008`, its exact diagnostic text and
+`io.circe.Error` receiver type to the same owned handwritten snapshot and member
+range, together with the actual compiler receipt. The implementation rejects
+different line shapes and a line inside a comment or string. Its conservative
+lexical scan can reject valid Scala containing uncertain character literals.
+The diagnostic retains the compiler identity; separate native provenance records
+the recipe, compiler major version, receiver type and evidence reference. A caller
+must authenticate the receipt and type: constructing the projection is not proof.
+
+The retained Phase 6.11 evidence contains the actual [E008 diagnostic](../../target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/298-b5-advance-after-artifact296/response.json)
+and the [authored replacement](../../target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/302-b5-circe-diagnostic-compile-repair/result.json).
+The [subsequent run](../../target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/309-b5-advance-after-artifact307/response.json)
+passed compilation and ran 11 tests, with 10 successes and one separate fixture
+failure. A [later candidate](../../target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/314-b5-advance-after-artifact312/response.json)
+also included another repair and passed all 11 tests. These observations do not
+establish live execution of this recipe. Metals, formatter and Scalafix rewrite
+actions remain unqualified; D5 owns runtime application and D6 its qualification.

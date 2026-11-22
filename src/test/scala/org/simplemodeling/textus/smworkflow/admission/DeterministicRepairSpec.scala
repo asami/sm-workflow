@@ -13,6 +13,65 @@ import org.simplemodeling.textus.smworkflow.admission.DeterministicRepair.*
   */
 final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Metals proposal admission" should {
+    "propose the observed Circe compiler correction only for the exact bound shape" in {
+      Given("the Scala 3 E008 receiver evidence and a handwritten snapshot")
+      val line = "  .fold(error => fail(error.message), identity)"
+      val column = line.indexOf("message")
+      val document = Document("file:///work/A.scala", "r1", 7, line + "\n")
+      val range = Range(Position(0, column), Position(0, column + 7))
+      val diagnostic = Diagnostic("scala-compiler", document.uri, "r1", 7, "E008", range,
+        "value message is not a member of io.circe.Error")
+      val finding = CirceMessageFinding(diagnostic, "receipt:compiler", 3, "io.circe.Error", handwritten = true)
+      When("the recipe admits the exact member replacement")
+      val result = circeErrorMessage(finding, document, Set(document.uri))
+      Then("the patch retains the compiler finding and distinguishes native patch provenance")
+      result.map(_.action.edits) shouldBe Right(Vector(Edit(document.uri, 7, range, "getMessage")))
+      result.toOption.flatMap(_.action.nativeProvenance) shouldBe Some(NativeProvenance(
+        "circe-error-get-message-v1", "receipt:compiler", Some(3), Some("io.circe.Error")))
+      When("the compiler, source, range or authority is not the one observed")
+      Then("the recipe fails closed")
+      circeErrorMessage(finding, document, Set.empty).isLeft shouldBe true
+      circeErrorMessage(finding.copy(handwritten = false), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding.copy(scalaMajor = 2), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding.copy(receiverType = "unknown"), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding.copy(diagnostic = diagnostic.copy(code = "E007")), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding.copy(diagnostic = diagnostic.copy(producer = "metals")), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding, document.copy(revision = "r2"), Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding.copy(diagnostic = diagnostic.copy(range = Range(Position(0, 0), Position(0, 7)))), document, Set(document.uri)).isLeft shouldBe true
+      circeErrorMessage(finding, document.copy(text = line.replace("error.message", "other.message") + "\n"), Set(document.uri)).isLeft shouldBe true
+      val comment = document.copy(text = "/*\n" + line + "\n*/")
+      val embedded = finding.copy(diagnostic = diagnostic.copy(range = Range(Position(1, column), Position(1, column + 7))))
+      circeErrorMessage(embedded, comment, Set(document.uri)).isLeft shouldBe true
+      val literal = document.copy(text = "\"\"\"\n" + line + "\n\"\"\"")
+      circeErrorMessage(embedded, literal, Set(document.uri)).isLeft shouldBe true
+      And("the current Circe API exposes getMessage but not message")
+      assertDoesNotCompile("""val error: io.circe.Error = ???; error.message""")
+      assertCompiles("""val error: io.circe.Error = ???; error.getMessage""")
+    }
+    "propose only the extra terminal LF identified by a trusted native finding" in {
+      Given("an owned handwritten Scala snapshot and a revision-bound review finding")
+      val document = Document("file:///work/A.scala", "r1", 7, "object A\n\n\n")
+      val range = Range(Position(1, 0), Position(3, 0))
+      val diagnostic = Diagnostic("phase-review", document.uri, document.revision, document.version,
+        "terminal-lf", range, "extra terminal LF")
+      val finding = TerminalLfFinding(diagnostic, "receipt:1", handwritten = true)
+      When("the native recipe constructs and admits its bounded proposal")
+      val result = terminalLf(finding, document, Set(document.uri))
+      Then("the patch preserves the diagnostic and attributes the built-in recipe separately")
+      result.map(_.action.edits) shouldBe Right(Vector(Edit(document.uri, 7, range, "")))
+      result.toOption.flatMap(_.action.nativeProvenance) shouldBe Some(NativeProvenance("terminal-lf-v1", "receipt:1"))
+      When("ownership, provenance, source shape or diagnostic binding differs")
+      Then("no patch is admitted")
+      terminalLf(finding, document, Set.empty).isLeft shouldBe true
+      terminalLf(finding.copy(handwritten = false), document, Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding.copy(evidenceReference = ""), document, Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding.copy(diagnostic = diagnostic.copy(producer = "metals")), document, Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding.copy(diagnostic = diagnostic.copy(range = Range(Position(0, 0), Position(0, 1)))), document, Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding, document.copy(revision = "r2"), Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding, document.copy(text = "\n\n"), Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding, document.copy(text = "object A\u0000\n\n\n"), Set(document.uri)).isLeft shouldBe true
+      terminalLf(finding, document.copy(text = "object A\n"), Set(document.uri)).isLeft shouldBe true
+    }
     "exchange and attest a versioned edit while ignoring command alternatives" in {
       Given("an owned snapshot and a fixture-only rule for an exact diagnostic and edit")
       val document = Document("file:///work/A.scala", "r1", 7, "abc")
