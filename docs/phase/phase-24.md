@@ -3,7 +3,7 @@
 Status: planned
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 24 on 2026-11-19; unpublished API Phase 22 renamed without accepting any condition
-Owner: sm-workflow-dev開発 (consumer development)
+Owner: SimpleModeling開発 (dedicated sm-workflow worktree)
 Checklist: [Phase 24 delivery ledger](phase-24-checklist.md)
 Successor: [Phase 25](phase-25.md)
 Decision: [development order and allocation](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md)
