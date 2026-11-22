@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
 /** A native inventory receipt inherits one actual Human boundary. It never
   * creates another answer, effect grant or dependency validation receipt.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
@@ -63,7 +63,8 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
     approvals: Vector[V.Approval], decisions: Vector[W.DecisionContext]): Consequence[Assessment] = for {
     _ <- D.validateProposalC(proposed)
     original <- Option(input).flatMap(_.decisionContext).filter(context =>
-      context.choice == "ApproveDependencyScope" && context.decisionReference == proposed.scopeUpdate.map(_.approval))
+      DependencyDevelopmentDelivery.humanScopeApproval(context.choice) &&
+        context.decisionReference == proposed.scopeUpdate.map(_.approval))
       .map(Consequence.success).getOrElse(F.invalid("inventory approval link is stale for this actual issued assignment"))
     _ <- _check(decisions != null && decisions.count(_ == original) == 1,
       "inventory assignment direction differs from its actual reconstructed Human or mechanical receipt")
@@ -273,7 +274,7 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
     _reference(value.requestingResult) && V.approvalValid(value.approval) && value.approval.step == value.step &&
     value.originalResult != null && W.resultCodec.decode(W.resultCodec.encode(value.originalResult)).contains(value.originalResult) &&
     value.originalResult.dependencyProposal.nonEmpty && value.originalResult.outcome == "decision-needed" &&
-    value.choice == "ApproveDependencyScope" && GoalPhasePurposeRepair.text(value.rationale) &&
+    DependencyDevelopmentDelivery.humanScopeApproval(value.choice) && GoalPhasePurposeRepair.text(value.rationale) &&
     D.validateOptionC(Some(value.proposed)).isSuccess && value.proposed.scopeUpdate.exists(_.approval == value.approval.decision) &&
     assessC(value.step, value.proposed, Vector(value.approval)).map {
       case WithinBoundary(_) => true

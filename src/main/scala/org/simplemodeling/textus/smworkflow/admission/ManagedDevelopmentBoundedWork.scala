@@ -18,12 +18,15 @@ import StandaloneFixExecution as S
 /** Composition over existing native WorkOrders, bounded checkpoints and scoped
   * artifact operations. This owns no queue, semantic executor or repair loop.
   * @since   Nov. 12, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentBoundedWork {
   import ManagedDevelopment.*
   import GoalPhaseDependencyValidation.ManagedCapture
+  import DependencyDevelopmentDelivery as D
+
+  final case class Captured(capture: ManagedCapture, route: Option[D.Route])
 
   def edgeC(policy: ManagedDevelopmentRuntime.Policy): Consequence[Edge] = for {
     _ <- validateC(policy.definition)
@@ -119,28 +122,107 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
   /** The sole A locator is an explicit sourceReference to the actual pending
     * native WorkOrder, with its expected revision. No chat/path proximity. */
   def captureC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[ManagedCapture]] =
-    h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty) match {
+    if (h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty))
+      captureSelectedC(h, input, core).map(_.map(_.capture))
+    else Consequence.success(None)
+
+  def requesterRouteC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[D.Route]] =
+    if (!input.delegation.exists(contract => contract.role == "requester" && contract.providerPhase.isEmpty))
+      Consequence.success(None)
+    else _selected_reference_c(h, input.sourceReferences, core).flatMap {
       case None => Consequence.success(None)
+      case Some((storage, reference, issued)) => for {
+        policy <- h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty).map(Consequence.success)
+          .getOrElse(invalid("selected dependency delivery requires its registered managed destination"))
+        edge <- edgeC(policy)
+        captured <- captureIssuedC(h, storage, edge, reference, issued, core)
+        route <- captured._2.decisionContext.flatMap(_.deliveryRoute).map(Consequence.success)
+          .getOrElse(invalid("requester has no selected route on its actual pending WorkOrder"))
+        // Reuse the existing target/coordinate validator without starting the destination.
+        _ <- publicationInputC(policy, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))))
+        _ <- _admit_selected_route_c(policy, input, captured._2, route, None, core)
+      } yield Some(route)
+    }
+
+  def captureSelectedC(h: Host, input: S.Input, core: ActionCall.Core): Consequence[Option[Captured]] =
+    h.managedDevelopment.filter(_.dependencyWorkEdge.nonEmpty) match {
+      case None if input.delegation.exists(_.role == "destination") =>
+        _selected_reference_c(h, input.sourceReferences, core).flatMap {
+          case None => Consequence.success(None)
+          case Some(_) => invalid("selected dependency delivery requires its registered managed destination")
+        }
       case Some(policy) if input.delegation.exists(_.role == "destination") => for {
         _ <- publicationInputC(policy, input)
         edge <- edgeC(policy)
         storage <- goalStorageC(h, core)
-        issued <- storage.bindIssuedC(F.completionOperation, A.inputCodec)
-        found <- input.sourceReferences.foldLeft(Consequence.success(Vector.empty[(ContextReference, WorkflowInteraction[A.Request, Nothing])])) {
-          (prior, reference) => for {
-            all <- prior
-            value <- issued.loadC(ContinuationIdentity(reference.identity))(using core.executionContext)
-          } yield all ++ value.toVector.map(reference -> _)
-        }
+        found <- _find_issued_c(storage, input.sourceReferences, core)
         _ <- if (found.size == 1) Consequence.unit else invalid("managed B requires one explicit actual pending A WorkOrder reference")
         pair = found.head
-        capture <- captureIssuedC(h, storage, edge, pair._1, pair._2, core)
-      } yield Some(capture)
+        captured <- captureIssuedC(h, storage, edge, pair._1, pair._2, core)
+        route <- captured._2.decisionContext.flatMap(_.deliveryRoute) match {
+          case None => Consequence.success(Option.empty[D.Route])
+          case Some(route) => _admit_selected_route_c(policy, input, captured._2, route, Some(h.root -> h.branch), core)
+            .map(_ => Some(route))
+        }
+      } yield Some(Captured(captured._1, route))
       case _ => Consequence.success(None)
     }
 
+  private def _selected_reference_c(host: Host, references: Vector[ContextReference], core: ActionCall.Core):
+      Consequence[Option[(WorkflowComponentStorage, ContextReference, WorkflowInteraction[A.Request, Nothing])]] = {
+    val candidates = references.filter(reference =>
+      reference.identity.contains(":ordered-implementation:") || reference.identity.contains(":ordered-repair:"))
+    if (candidates.isEmpty) Consequence.success(None) else for {
+      storage <- goalStorageC(host, core)
+      found <- _find_issued_c(storage, candidates, core)
+      selected <- found.foldLeft(Consequence.success(Vector.empty[(ContextReference, WorkflowInteraction[A.Request, Nothing])])) {
+        (prior, pair) => for {
+          all <- prior
+          work <- NativeWorkflowOperationOutput.workInputC(pair._2)
+        } yield if (work.decisionContext.exists(_.deliveryRoute.nonEmpty)) all :+ pair else all
+      }
+      result <- selected match {
+        case Vector() => Consequence.success(None)
+        case Vector((reference, issued)) if found.size == 1 => Consequence.success(Some((storage, reference, issued)))
+        case _ => invalid("selected dependency delivery requires one explicit actual pending GoalPhase WorkOrder")
+      }
+    } yield result
+  }
+
+  private def _find_issued_c(storage: WorkflowComponentStorage, references: Vector[ContextReference], core: ActionCall.Core):
+      Consequence[Vector[(ContextReference, WorkflowInteraction[A.Request, Nothing])]] = for {
+    issued <- storage.bindIssuedC(F.completionOperation, A.inputCodec)
+    found <- references.foldLeft(Consequence.success(Vector.empty[(ContextReference, WorkflowInteraction[A.Request, Nothing])])) {
+      (prior, reference) => for {
+        all <- prior
+        value <- issued.loadC(ContinuationIdentity(reference.identity))(using core.executionContext)
+      } yield all ++ value.toVector.map(reference -> _)
+    }
+  } yield found
+
+  private def _admit_selected_route_c(policy: ManagedDevelopmentRuntime.Policy, input: S.Input,
+    work: A.Request, route: D.Route, providersource: Option[(String, String)], core: ActionCall.Core): Consequence[Unit] = for {
+    context <- work.decisionContext.map(Consequence.success)
+      .getOrElse(invalid("selected dependency route has no actual issued approval"))
+    proposal <- context.requestingResult.dependencyProposal.map(Consequence.success)
+      .getOrElse(invalid("selected dependency route has no actual approved proposal"))
+    effective = context.inventoryContinuation.map(_.proposal).getOrElse(proposal)
+    contract <- input.delegation.map(Consequence.success)
+      .getOrElse(invalid("selected dependency route requires its exact destination contract"))
+    _ <- if (contract.providerPhase.nonEmpty)
+      invalid("selected bounded route cannot start or replace a provider Phase")
+      else if (contract.synchronization.nonEmpty || contract.permittedOperations.contains("repository-sync"))
+        invalid("selected bounded route allows scope-private delivery only; repository synchronization needs separate authority")
+      else if (D.routeValid(route, context.choice, effective) &&
+        providersource.forall(_ == (route.sourceRoot -> route.sourceBranch)) && route.destinationIdentity == contract.destinationIdentity &&
+        context.decisionReference.exists(contract.authorizationReferences.contains) &&
+        input.ownedPaths.forall(effective.paths.contains)) Consequence.unit
+      else invalid("destination crosses the selected route, source, approval or approved paths")
+    _ <- D.readmittedC(route, effective, policy, core)
+  } yield ()
+
   private def captureIssuedC(h: Host, storage: WorkflowComponentStorage, edge: Edge, reference: ContextReference,
-    issued: WorkflowInteraction[A.Request, Nothing], core: ActionCall.Core): Consequence[ManagedCapture] = for {
+    issued: WorkflowInteraction[A.Request, Nothing], core: ActionCall.Core): Consequence[(ManagedCapture, A.Request)] = for {
     order <- issued.current match {
       case value: WorkflowContinuation.WorkOrder[A.Request] => Consequence.success(value)
       case _ => invalid("managed requester reference is not an issued WorkOrder")
@@ -166,20 +248,46 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
   } yield ManagedCapture(core.component.get.core.instanceId.canonicalKey, participant, current.identity.value,
     ContextReference(work.selectedPlan.identity, work.selectedPlan.revision), work.stepIdentity.get, work.generation,
-    reference, edge)
+    reference, edge) -> work
 
   /** Recollect A's unchanged WorkOrder. This never supplies its semantic result
     * or bypasses managed atomic completion with a loose resume call. */
   def requesterC(h: Host, capture: ManagedCapture, core: ActionCall.Core): Consequence[WorkflowInteraction[A.Request, Nothing]] = for {
+    original <- _requester_work_c(h, capture, core)
+    _ <- _admit_requester_c(h, capture, original._1, original._2, core)
+  } yield original._2
+
+  def admitScopeCorrectionC(h: Host, capture: Option[ManagedCapture], additional: Vector[String],
+    core: ActionCall.Core): Consequence[Unit] =
+    if (additional.isEmpty) Consequence.unit
+    else capture.fold(Consequence.unit) { selected => for {
+      original <- _requester_work_c(h, selected, core)
+      work <- NativeWorkflowOperationOutput.workInputC(original._2)
+      _ <- work.decisionContext.filter(_.deliveryRoute.nonEmpty).fold(Consequence.unit) { context => for {
+        _ <- _admit_requester_c(h, selected, original._1, original._2, core)
+        effective <- context.inventoryContinuation.map(_.proposal).orElse(context.requestingResult.dependencyProposal)
+          .map(Consequence.success).getOrElse(invalid("selected delivery has no approved GoalPhase dependency inventory"))
+        _ <- if (context.deliveryRoute.exists(route => route.edge == selected.edge && D.routeValid(route, context.choice, effective)) &&
+            additional.forall(effective.paths.contains)) Consequence.unit
+          else invalid("scope correction crosses the exact approved GoalPhase dependency inventory")
+      } yield () }
+    } yield () }
+
+  private def _requester_work_c(host: Host, capture: ManagedCapture, core: ActionCall.Core):
+      Consequence[(WorkflowComponentStorage, WorkflowInteraction[A.Request, Nothing])] = for {
     _ <- if (capture.componentInstance == core.component.get.core.instanceId.canonicalKey) Consequence.unit
       else invalid("managed dependency crosses Component instances")
-    storage <- goalStorageC(h, core)
+    storage <- goalStorageC(host, core)
     issued <- storage.bindIssuedC(F.completionOperation, A.inputCodec)
     work <- issued.loadC(ContinuationIdentity(capture.work.identity))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(invalid("original requester WorkOrder is unavailable")))
-    actual <- captureIssuedC(h, storage, capture.edge, capture.work, work, core)
-    _ <- if (actual == capture) Consequence.unit else invalid("managed dependency callback crosses A's retained frontier")
-  } yield work
+  } yield storage -> work
+
+  private def _admit_requester_c(host: Host, capture: ManagedCapture, storage: WorkflowComponentStorage,
+    work: WorkflowInteraction[A.Request, Nothing], core: ActionCall.Core): Consequence[Unit] = for {
+    actual <- captureIssuedC(host, storage, capture.edge, capture.work, work, core)
+    _ <- if (actual._1 == capture) Consequence.unit else invalid("managed dependency callback crosses A's retained frontier")
+  } yield ()
 
   /** Same-store result collection authenticates the native B checkpoint. A
     * pending/failed/decision-needed B remains a wait, without invoking B again. */

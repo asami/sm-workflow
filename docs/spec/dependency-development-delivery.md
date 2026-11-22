@@ -409,6 +409,61 @@ Historical configurations without `delivery` retain their existing managed subtr
 route. Existing Sessions retain the mode captured at their original Start; later
 configuration does not move them to a new queue or remove queue exclusion.
 
+### Selecting a route from GoalPhase
+
+A fresh implementation or repair result can request managed delivery through its
+typed dependency proposal. The proposal identifies the concrete provider and
+consumer and explicitly permits source edits and local publication. The ordinary
+GoalPhase Human question retains the proposal and exposes optional
+`dependencyDelivery` with both alternatives:
+
+- `DevelopmentSubtree` is labeled **Local worktree** and is the display default
+  when available.
+- `AssignedChat` is labeled **Assigned development chat**. It needs a matching
+  existing chat registration on the same dependency edge.
+
+Both alternatives require the registered provider worktree and branch, the
+scope-private artifact workspace, and a declared and granted scoped-publish
+program for the edge's local JAR route. An unavailable alternative explains its
+missing or disabled prerequisite. If no active managed edge matches the
+proposal, both alternatives report the missing repository registration and the
+chat alternative also reports the missing assigned chat. Fixed dependencies
+offer neither route. Phase policy permission to repair does not select a
+delivery route. The question also allows rejection, deferral and cancellation. Untyped requests,
+scope-only decisions, previously issued questions and previously admitted
+delivery routes retain their ordinary behavior.
+
+The actual Human answer selects the route by its choice ID. Fresh submission
+checks the selected route against the saved offer and current registration.
+Adding a registration leaves the issued question unchanged. Use
+`RejectDependencyScope` on that question, continue the same Session through
+ordinary Advance, and submit a new typed proposal from the reissued WorkOrder to
+obtain an offer from the updated registration. The original question and result
+remain in history. Accepted history is read from the saved question and
+answer. The reissued WorkOrder exposes the exact `deliveryRoute` and actual
+answer reference in its decision context. The same-subject inventory receipt
+preserves that route while identifying the effective approved inventory.
+
+The existing requester Start reads the pending WorkOrder and retains the selected
+binding for ordinary dispatch. The bounded destination Start reads that exact pending WorkOrder and
+checks the original owner, current registration, source root and branch,
+scope-private artifact workspace, approved paths and actual answer reference.
+Local worktree uses `managed-worktree:<provider workspace>` as the destination.
+Assigned development chat uses the exact registered identity and existing FIFO.
+Reconnection uses the original saved Start binding. Either route still requires
+the existing independent Start selection and normal execution, validation,
+review, commit and scoped publication authority. Selecting a route performs no
+dispatch, installation, publication or repository synchronization.
+
+Destination scope correction may add only literal paths from the exact approved
+GoalPhase inventory. The native owner checks the current WorkOrder before either
+describing or applying a path addition. Timing-only corrections still use the
+ordinary bounded contract.
+
+This route uses the registered local JAR publication program even when the edge
+also declares a source project. Source-project build integration and separate
+effects remain with their existing owners.
+
 Fixed requester Start retains the existing consumer/delegation input and returns
 `DependencyChangeRequired` on Advance with the affected Component and objective.
 No dispatch is exposed. A Fixed destination refuses execution. Phase booleans do

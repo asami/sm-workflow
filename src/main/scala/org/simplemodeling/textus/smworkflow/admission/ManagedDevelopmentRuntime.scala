@@ -27,7 +27,7 @@ import ManagedDevelopment.*
   * Physical roots come only from the resolved CNCF workspace graph. All actual
   * acquisition and effects still cross CNCF admission, including owner grants.
   * @since   Nov. 12, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
@@ -274,19 +274,10 @@ private[smworkflow] object ManagedDevelopmentRuntime {
       selected = e.requested.copy(version = version(e.requested.version, d.scope, input.publication))
       jar = absolute(owner, base(d, e, input.publication) + "/jars/" + selected.module + ".jar")
       ivy = absolute(owner, base(d, e, input.publication) + "/ivys/ivy.xml")
-      _ <- if (report.hcursor.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-result.v1") &&
-        report.hcursor.get[String]("kind").toOption.contains("producer") &&
-        report.hcursor.get[Coordinate]("coordinate").toOption.contains(selected) &&
-        report.hcursor.get[String]("jar").toOption.contains(jar) && report.hcursor.get[String]("ivy").toOption.contains(ivy) &&
-        completion.hcursor.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v1") &&
-        completion.hcursor.get[String]("scope").toOption.contains(d.scope) &&
-        completion.hcursor.get[String]("selection").toOption.contains(input.selection) &&
-        completion.hcursor.get[String]("publication").toOption.contains(input.publication) &&
-        completion.hcursor.get[String]("organization").toOption.contains(selected.organization) &&
-        completion.hcursor.get[String]("module").toOption.contains(selected.module) &&
-        completion.hcursor.get[String]("version").toOption.contains(selected.version)) Consequence.unit
-      else invalid("zero exit lacks matching completed publication and actual adapter report")
-    } yield Publication(e, d.scope, input.publication, input.selection, selected, jar, ivy, source, report, completion)
+      publication = Publication(e, d.scope, input.publication, input.selection, selected, jar, ivy, source, report, completion)
+      _ <- if (_single_publication_valid(publication)) Consequence.unit
+        else invalid("zero exit lacks matching completed publication and actual adapter report")
+    } yield publication
 
     def consumerReportC(e: Edge, input: Input, selected: Publication): Consequence[Json] =
       if (selected.edge.batch.isEmpty) for {
@@ -480,38 +471,104 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     Member(requested, requested.copy(version = version(requested.version, d.scope, publication)),
       root.resolve("jars/" + requested.module + ".jar").toString, root.resolve("ivys/ivy.xml").toString, Json.Null)
   }
-  private def batchOwnerValid(d: Definition, input: Input, json: Json): Boolean = {
-    val c = json.hcursor
-    c.get[String]("scope").toOption.contains(d.scope) && c.get[String]("owner").toOption.contains(d.ownerWorkspace) &&
-      c.get[String]("batch").toOption.contains(input.publication) &&
-      c.get[String]("producerSelectionId").toOption.contains(input.selection) && c.get[Boolean]("complete").toOption.contains(true)
+
+  /** Verify the producer report and controls carried by the existing publication receipt. */
+  def retainedPublicationValid(publication: Publication): Boolean = {
+    val edge = publication.edge
+    val requested = edge.requested
+    def _selected_(coordinate: Coordinate): Coordinate =
+      coordinate.copy(version = version(coordinate.version, publication.scope, publication.identity))
+    Vector(publication.scope, publication.identity, publication.producerSelection, edge.localRepository,
+      requested.organization, requested.module, requested.version).forall(id) && edge.localJar &&
+      publication.selected == _selected_(requested) &&
+      _artifact_repository(publication.selected, publication.jar, publication.ivy).exists { repository =>
+        (edge.batch, publication.batch) match {
+          case (None, None) => _single_publication_valid(publication)
+          case (Some(declaration), Some(batch)) =>
+            val primary = Member(requested, publication.selected, publication.jar, publication.ivy, publication.completion)
+            batch.members.map(_.requested) == declaration.modules.map(_.requested) && batch.members.contains(primary) &&
+              batch.members.forall(m => Vector(m.requested.organization, m.requested.module, m.requested.version).forall(id) &&
+                m.selected == _selected_(m.requested) && _artifact_repository(m.selected, m.jar, m.ivy).contains(repository)) &&
+              _batch_publication_valid(publication.scope, edge.localRepository, publication.identity, publication.producerSelection,
+                batch, publication.report)
+          case _ => false
+        }
+      }
   }
-  private[admission] def batchMemberValid(d: Definition, input: Input, member: Member, control: Json): Boolean = {
+
+  private def _artifact_repository(coordinate: Coordinate, jar: String, ivy: String): Option[Path] =
+    scala.util.Try {
+      val jarpath = Path.of(jar)
+      val suffix = Path.of(coordinate.organization, coordinate.module, coordinate.version,
+        "jars", coordinate.module + ".jar")
+      Option.when(jarpath.isAbsolute && jarpath.normalize == jarpath && jarpath.toString == jar &&
+        jarpath.getNameCount > suffix.getNameCount && jarpath.endsWith(suffix)) {
+        jarpath.getRoot.resolve(jarpath.subpath(0, jarpath.getNameCount - suffix.getNameCount))
+      }.filter(root => root.resolve(suffix.getParent.getParent).resolve("ivys/ivy.xml").toString == ivy)
+    }.toOption.flatten
+
+  private def _single_publication_valid(publication: Publication): Boolean = {
+    val report = publication.report.hcursor
+    val completion = publication.completion.hcursor
+    val selected = publication.selected
+    report.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-result.v1") &&
+      report.get[String]("kind").toOption.contains("producer") &&
+      report.get[Coordinate]("coordinate").toOption.contains(selected) &&
+      report.get[String]("jar").toOption.contains(publication.jar) && report.get[String]("ivy").toOption.contains(publication.ivy) &&
+      Vector("scope" -> publication.scope, "selection" -> publication.producerSelection, "publication" -> publication.identity)
+        .forall { case (key, value) => report.downField(key).focus.forall(_.asString.contains(value)) } &&
+      completion.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v1") &&
+      completion.get[String]("scope").toOption.contains(publication.scope) &&
+      completion.get[String]("selection").toOption.contains(publication.producerSelection) &&
+      completion.get[String]("publication").toOption.contains(publication.identity) &&
+      completion.get[String]("organization").toOption.contains(selected.organization) &&
+      completion.get[String]("module").toOption.contains(selected.module) &&
+      completion.get[String]("version").toOption.contains(selected.version)
+  }
+
+  private def batchOwnerValid(d: Definition, input: Input, json: Json): Boolean = {
+    _batch_owner_valid(d.scope, d.ownerWorkspace, input.publication, input.selection, json)
+  }
+  private def _batch_owner_valid(scope: String, owner: String, identity: String, selection: String, json: Json): Boolean = {
+    val c = json.hcursor
+    c.get[String]("scope").toOption.contains(scope) && c.get[String]("owner").toOption.contains(owner) &&
+      c.get[String]("batch").toOption.contains(identity) &&
+      c.get[String]("producerSelectionId").toOption.contains(selection) && c.get[Boolean]("complete").toOption.contains(true)
+  }
+  private[admission] def batchMemberValid(d: Definition, input: Input, member: Member, control: Json): Boolean =
+    _batch_member_valid(d.scope, d.ownerWorkspace, input.publication, input.selection, member, control)
+
+  private def _batch_member_valid(scope: String, owner: String, identity: String, selection: String, member: Member, control: Json): Boolean = {
     val c = control.hcursor
-    batchOwnerValid(d, input, control) && c.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v2") &&
+    _batch_owner_valid(scope, owner, identity, selection, control) && c.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-publication.v2") &&
       c.get[String]("organization").toOption.contains(member.selected.organization) &&
       c.get[String]("module").toOption.contains(member.selected.module) && c.get[String]("version").toOption.contains(member.selected.version) &&
       c.get[String]("baseVersion").toOption.contains(member.requested.version) &&
       c.get[String]("artifact").toOption.contains(member.jar)
   }
-  private[admission] def batchPublicationValid(d: Definition, input: Input, batch: PublishedBatch, report: Json): Boolean = {
-    def exact(rows: Option[Vector[Json]], coordinate: Json => Option[Coordinate]): Boolean = rows.exists { values =>
+  private[admission] def batchPublicationValid(d: Definition, input: Input, batch: PublishedBatch, report: Json): Boolean =
+    _batch_publication_valid(d.scope, d.ownerWorkspace, input.publication, input.selection, batch, report)
+
+  private def _batch_publication_valid(scope: String, owner: String, identity: String, selection: String,
+    batch: PublishedBatch, report: Json): Boolean = {
+    def _exact_(rows: Option[Vector[Json]], coordinate: Json => Option[Coordinate]): Boolean = rows.exists { values =>
       val actual = values.map(coordinate)
       actual.forall(_.nonEmpty) && actual.flatten.distinct.size == actual.size && actual.flatten.toSet == batch.members.map(_.selected).toSet
     }
     val r = report.hcursor
-    batch.members.nonEmpty && batchOwnerValid(d, input, batch.completion) && batchOwnerValid(d, input, batch.artifacts) &&
+    batch.members.nonEmpty && _batch_owner_valid(scope, owner, identity, selection, batch.completion) &&
+      _batch_owner_valid(scope, owner, identity, selection, batch.artifacts) &&
       batch.completion.hcursor.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-batch.v2") &&
       r.get[String]("schema").toOption.contains("sbt-cozy.development-artifact-result.v2") &&
-      r.get[String]("kind").toOption.contains("producer") && r.get[String]("scope").toOption.contains(d.scope) &&
-      r.get[String]("publication").toOption.contains(input.publication) && r.get[String]("selection").toOption.contains(input.selection) &&
-      exact(r.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
-      exact(batch.completion.hcursor.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
-      exact(batch.artifacts.hcursor.get[Vector[Json]]("members").toOption, value => {
+      r.get[String]("kind").toOption.contains("producer") && r.get[String]("scope").toOption.contains(scope) &&
+      r.get[String]("publication").toOption.contains(identity) && r.get[String]("selection").toOption.contains(selection) &&
+      _exact_(r.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
+      _exact_(batch.completion.hcursor.get[Vector[Json]]("members").toOption, _.as[Coordinate].toOption) &&
+      _exact_(batch.artifacts.hcursor.get[Vector[Json]]("members").toOption, value => {
         val c = value.hcursor.downField("module")
         for { org <- c.get[String]("organization").toOption; name <- c.get[String]("name").toOption
           version <- c.get[String]("selectedVersion").toOption } yield Coordinate(org, name, version)
-      }) && batch.members.forall(m => batchMemberValid(d, input, m, m.completion) &&
+      }) && batch.members.forall(m => _batch_member_valid(scope, owner, identity, selection, m, m.completion) &&
         r.get[Vector[Json]]("members").toOption.exists(_.exists(row => row.as[Coordinate].toOption.contains(m.selected) &&
           row.hcursor.get[String]("jar").toOption.contains(m.jar) && row.hcursor.get[String]("ivy").toOption.contains(m.ivy))))
   }

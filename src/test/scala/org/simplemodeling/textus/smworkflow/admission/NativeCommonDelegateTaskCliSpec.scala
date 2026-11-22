@@ -129,13 +129,14 @@ private[admission] object DelegateTaskTestOnlyRecoveryFixture {
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   */
 private[admission] object NativeCommonDelegateTaskFixture extends ThreeWorkflowManagedRepositoryFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
   val testPath = "src/test/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriterSpec.scala"
   val component = "org.example.CommonDelegateFixture"
   val publication = "common-delegate-fixture"
+  private val _returned_capture_workspace = "specification-returned-capture"
 
   def processPlan(root: Path, focused: Boolean = true): Json = {
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
@@ -154,10 +155,39 @@ private[admission] object NativeCommonDelegateTaskFixture extends ThreeWorkflowM
       val program = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2),
         operation = SbtOperation.TestOnly, testClasses = Vector(suite))
         .hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.head
+      val captureWorkspace = "sm-workflow-validation-artifacts"
+      val captures = Vector(captureWorkspace, _returned_capture_workspace).map(_.asJson)
+      val captureRoot = Files.createDirectories(root.resolve("validation-captures"))
+      val roots = captures.map(identity => Json.obj("identity" -> identity, "root" -> captureRoot.toString.asJson))
+      val grants = captures.map(identity => Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+        "workspaceId" -> identity, "access" -> "manage".asJson))
+      val initialized = base.hcursor.get[Vector[Json]]("workspaceInitializations").toOption.getOrElse(Vector.empty)
+        .map(_.mapObject(policy => policy.add("sources", policy("sources").get.mapArray(_ ++ captures))))
       base.mapObject(fields => fields.add("sbtPrograms", fields("sbtPrograms").get.mapArray(_ :+ program))
+        .add("workspaces", fields("workspaces").get.mapArray(_ ++ roots))
+        .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ ++ grants))
+        .add("workspaceInitializations", initialized.asJson)
         .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
           grant("capabilities").get.mapArray(_ :+ program.hcursor.get[Json]("capability").toOption.get)))))))
     }
+  }
+
+  def admitReturnedCapture(root: Path, state: S.State): Unit = {
+    val bindings = state.receipts.flatMap(_.externalCapture).map { ref =>
+      val source = ref.association
+      Json.obj("sourceComponentInstance" -> source.component.asJson, "sourceSessionId" -> source.session.asJson,
+        "sourceRepository" -> state.input.repositoryIdentity.asJson, "sourceParticipant" -> source.participant.asJson,
+        "sourceRoot" -> source.root.asJson, "sourceBranch" -> source.branch.asJson, "sourceBaseHead" -> source.baseHead.asJson,
+        "sourceCandidateTree" -> source.candidateTree.asJson, "sourceCommit" -> state.commit.get.identity.asJson,
+        "sourceWorkspace" -> ref.workspace.asJson, "readWorkspace" -> _returned_capture_workspace.asJson,
+        "maximumBytes" -> ref.encodedBytes.asJson)
+    }
+    val config = root.resolve(".textus/config.json")
+    val existing = parser.parse(Files.readString(config)).toOption.get
+    val policy = Json.obj("schemaVersion" -> "sm-workflow.delegate-task-returned-capture-read.v1".asJson,
+      "bindings" -> bindings.asJson)
+    Files.writeString(config, existing.mapObject(_.add(DelegateTaskDeliveryService.captureReadDeclaration.name,
+      policy.noSpaces.asJson)).noSpaces)
   }
   /** Each selected detail is another actual installed process. Keep ordinary
     * control available separately for output and route assertions below. */
@@ -232,6 +262,8 @@ private[admission] object NativeCommonDelegateTaskFixture extends ThreeWorkflowM
 /** Explicit installed qualification. Human selections, transport observations
   * and semantic judgments are SPECIFICATION-OWNED. Actual checks, commit and
   * tiny artifact publication belong to the normal destination runtime.
+  * @since   Nov. 11, 2026
+  * @version Nov. 23, 2026
   */
 private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
@@ -261,7 +293,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       val root = scenario.root
       val config = parser.parse(Files.readString(root.resolve(".textus/config.json"))).toOption.get
       config.hcursor.get[String](ThreeWorkflowRuntimeParameters.definition.name).toOption shouldBe None
-      val conditions = NonEmptyVector.of("behavior", "validation", "commit", "publication")
+      val conditions = NonEmptyVector.of("preserve-input-text", "append-one-terminator")
       val request = V.DelegateTaskInput(scenario.host.goal.input.repositoryIdentity, "installed-common-request",
         "SPECIFICATION-OWNED author tiny LineWriter behavior and return the genuinely published source",
         NonEmptyVector.one(NativeCommonDelegateTaskFixture.testPath), NonEmptyVector.of("compile", "test-only"), conditions,
@@ -277,12 +309,13 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       def _start_(input: V.DelegateTaskInput): V.DelegateTaskView = {
         val role = input.delegation.role
         val file = root.resolve(role + "-input.json")
-        Files.writeString(file, _json(input))
+        val wire = parser.parse(_json(input)).toOption.get.mapObject(_.remove("submissionConditions")).noSpaces
+        Files.writeString(file, wire)
         val preparation = V.WorkflowDelegateTaskStartPreparationInput(file.toUri.toASCIIString,
           role + "-selection", "participant", "ExplicitHuman", role + "-key", "entity:smworkflow.cli.goal_selection")
         val prepared = _call(scenario, "NativeWorkflowPreparationService", "prepareDelegateTaskStart", Vector("--input", _json(preparation)))
         scenario.selectPreparedImport(prepared)
-        _view(scenario, _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(input),
+        _view(scenario, _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", wire,
           "--selectionId", role + "-selection", "--participant", "participant", "--idempotencyKey", role + "-key")))
       }
       def _advance_(id: String) = _view(scenario, _call(scenario, "DelegateTaskService", "advanceDelegateTask",
@@ -300,7 +333,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
           "--issuedWorkContext", _json(view.issuedWorkContext.get), "--result", _json(result),
           "--resultReference", _json(reference), "--executionEvidence", _json(evidence)))
       }
-      When("requester and destination select the same complete request and default timing through public preparation and Start")
+      When("requester and destination prepare and start the same complete request with submission timing omitted")
       val requester = _start_(request)
       val dispatch = _advance_(requester.sessionId)
       val destination = _start_(request.copy(delegation = request.delegation.copy(role = "destination")))
@@ -356,7 +389,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
         |}
         |""".stripMargin)
       val deferredreport = conditions.toVector.map(id => V.DelegateTaskCondition(id, false,
-        "Actual runtime validation local commit and publication have not yet established this obligation"))
+        "Behavioral judgment is deferred until the selected runtime effects are established"))
       val completed = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED tiny behavior supplied for genuine later verification",
         Vector.empty, NonEmptyVector.fromVectorUnsafe(deferredreport), Vector.empty, None, None)
       When("the destination submits a complete honest report with later effects false")
@@ -375,13 +408,14 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       withClue(current.message) { current.work should not be empty }
       val acceptedwork = _work(current)
       acceptedwork.kind shouldBe "DeliveryAcceptance"
-      acceptedwork.state.conditionReport.map(_.satisfied) shouldBe Vector.fill(4)(false)
+      acceptedwork.state.conditionReport.map(_.satisfied) shouldBe Vector.fill(conditions.toVector.size)(false)
       acceptedwork.state.receipts.map(_.identity) shouldBe Vector("compile", "test-only")
-      acceptedwork.state.receipts.foreach(_.exitCode shouldBe Some(0))
+      acceptedwork.state.receipts.head.exitCode shouldBe Some(0)
       acceptedwork.state.commit.get.identity shouldBe scenario.candidateHead
       scenario.candidateHead should not be beforehead
       acceptedwork.state.delivery.get.publication.get.ready shouldBe true
       acceptedwork.state.delivery.get.publication.get.request.source.head shouldBe scenario.candidateHead
+      acceptedwork.state.delivery.get.publication.get.request.source.tree shouldBe acceptedwork.state.commit.get.tree
       acceptedwork.state.reviewReference shouldBe None // Conditional detailed review was not required for this bounded request.
       val checks = Files.readString(root.resolve("sbt-executions.txt"))
       val publications = Files.readString(root.resolve("publication-count.txt"))
@@ -394,15 +428,15 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       When("final acceptance omits an original ID or falsely leaves an obligation unresolved")
       val missing = _submit_(current, finalresult.copy(conditions = NonEmptyVector.fromVectorUnsafe(finalreport.dropRight(1))), "final-missing")
       val unfinished = _submit_(current, finalresult.copy(conditions = NonEmptyVector.fromVectorUnsafe(
-        finalreport.updated(3, deferredreport(3)))), "final-unfinished")
+        finalreport.updated(0, deferredreport.head))), "final-unfinished")
       Then("both refuse without replaying the retained effects")
       missing.exitCode should not be 0
       unfinished.exitCode should not be 0
       _advance_(destination.sessionId).issuedWorkContext shouldBe current.issuedWorkContext
       if (outcome == "decision-needed") {
-        When("DeliveryAcceptance honestly retains unresolved activation obligations after actual commit and publication")
+        When("DeliveryAcceptance honestly retains unresolved behavior after actual commit and publication")
         val decision = finalresult.copy(outcome = "decision-needed", conditions = NonEmptyVector.fromVectorUnsafe(deferredreport),
-          unresolvedQuestions = Vector("SPECIFICATION-OWNED activation remains unresolved"))
+          unresolvedQuestions = Vector("SPECIFICATION-OWNED behavioral judgment remains unresolved"))
         val submitteddecision = _submit_(current, decision, "delivery-decision")
         withClue(submitteddecision.invocation.logs) { submitteddecision.exitCode shouldBe 0 }
         val submittedcontrol = submitteddecision.business[V.DelegateTaskView]
@@ -437,6 +471,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       withClue(submittedacceptance.invocation.logs) { submittedacceptance.exitCode shouldBe 0 }
       val returned = _advance_(destination.sessionId)
       val returnedstate = _state(returned)
+      NativeCommonDelegateTaskFixture.admitReturnedCapture(root, returnedstate)
       val received = _observe_(requester.sessionId, "result-received", destination.sessionId, returned.state)
       val observed = _observe_(destination.sessionId, "return-observed", destination.sessionId)
       Then("actual result transport retains the same request timing and source with no duplicate checks commit or publication")

@@ -2064,6 +2064,7 @@ OperationResult
 | rationale | string | 1 |
 | decisionReference | WorkflowArtifactReference | ? |
 | inventoryContinuation | Record | ? |
+| deliveryRoute | Record | ? |
 
 ## GoalPhaseOrderedDecisionResultReference
 
@@ -2089,6 +2090,7 @@ OperationResult
 | repairProgress | GoalPhaseRepairProgress | ? |
 | sourceHistoryRecovery | org.goldenport.record.Record | ? |
 | developmentReconstruction | org.goldenport.record.Record | ? |
+| dependencyDelivery | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionAnswer
 
@@ -11789,6 +11791,7 @@ GoalPhaseWorkSubmissionResult
 | planRevision | org.goldenport.record.Record | ? |
 | sourceHistoryRecovery | org.goldenport.record.Record | ? |
 | developmentReconstruction | org.goldenport.record.Record | ? |
+| dependencyDelivery | org.goldenport.record.Record | ? |
 
 ## GoalPhaseCompletionResult
 

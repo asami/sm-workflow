@@ -1,7 +1,6 @@
 /**
  * @since   Oct. 30, 2026
- *  version Nov. 12, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -174,6 +173,7 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     _ <- correctedInputC(payload.state.input, additional, submission)
     _ <- if (additional.forall(h.paths.contains)) Consequence.unit
       else N.invalid("Added paths exceed the configured host ownership")
+    _ <- ManagedDevelopmentBoundedWork.admitScopeCorrectionC(h, payload.managedDependency, additional, core)
     frontier <- WorkflowInstanceRecordJsonV1.encodeC(pending.current).flatMap(_parse_c)
     issued <- WorkflowWorkOrderJsonV1.encodeC(pending.issued, N.inputCodec).flatMap(_parse_c)
   } yield Observation(Target(core.component.get.core.instanceId.canonicalKey, session, payload.state.participant,

@@ -2325,6 +2325,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "deliveryRoute",
+              "type": "Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -2377,6 +2383,12 @@
             {
               "name": "repairProgress",
               "type": "GoalPhaseRepairProgress",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "dependencyDelivery",
+              "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false
             }
@@ -5666,6 +5678,12 @@
             },
             {
               "name": "planRevision",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "dependencyDelivery",
               "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false

@@ -18,7 +18,7 @@ import GoalPhaseDevelopmentPermissions as P
   * and exact proposal. It does not synthesize an ApproveDependencyScope answer.
   * Actual Human decisions and their original lineage remain unchanged.
   * @since   Nov. 12, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object GoalPhasePolicyDependencyContinuation {
   val causation = "ordered-phase-policy-dependency-admitted"
@@ -77,6 +77,7 @@ private[smworkflow] object GoalPhasePolicyDependencyContinuation {
     configured: Option[ManagedDevelopmentRuntime.Policy]): Consequence[Option[Source]] = last match {
     case Some((input, result)) if result.result.value.dependencyProposal.exists(_.scopeUpdate.isEmpty) &&
       controller.stage == O.Stage.Decision && controller.decisionSource.exists(Set(O.Stage.Implementation, O.Stage.Repair)) &&
+      !DependencyDevelopmentDelivery.requiresDirection(input, result.result.value, configured) &&
       input.decisionContext.forall(context => !Set("RejectDependencyScope", "Defer", "Cancel")(context.choice)) =>
       val proposal = result.result.value.dependencyProposal.get
       val authority = P.capture(controller.plan, proposal, configured)

@@ -41,8 +41,8 @@ private[admission] object NativeGoalReviewRepairAdoptionCliSpec extends Matchers
   * Every semantic response and independent directive is specification-owned;
   * this suite supplies no genuine live Human approval or independent review.
   * @since   Oct. 23, 2026
-  *  version Oct. 23, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -365,7 +365,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       repair.work.get.repairDirective.get.findings shouldBe findings
       repair.work.get.repairDirective.get.reason shouldBe originalresult.summary
       repair.work.get.decisionContext shouldBe Some(V.GoalPhaseOrderedDecisionContext(originalresult, P.origin,
-        direction.rationale, Some(reference), inventoryContinuation = None))
+        direction.rationale, Some(reference), inventoryContinuation = None, deliveryRoute = None))
       repair.work.get.issues.get.issues.filter(i => target.findings.exists(_.issueIdentity == i.identity)).map(_.status) shouldBe Vector("OPEN", "OPEN")
       repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       reopened shouldBe repair

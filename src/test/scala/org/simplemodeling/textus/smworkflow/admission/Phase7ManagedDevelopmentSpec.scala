@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Minimal real producer -> private repository -> immutable selection -> consumer
   * compilation. Fixture setup creates inputs; SBT effects use CNCF's native UoW.
   * @since   Nov. 12, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -233,6 +233,20 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
     "admit two destination requests through native FIFO and preserve explicit waiting hold cancel and requeue" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "assigned-").toRealPath()
       ConnectedFixture.exercise(root, "Assigned")
+    }
+
+    "carry either exact GoalPhase dependency delivery choice into its native destination Start" in {
+      Vector("RouteSubtree", "RouteAssignedChat").foreach { mode =>
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "delivery-choice-").toRealPath()
+        ConnectedFixture.exercise(root, mode)
+      }
+    }
+
+    "disclose missing or Fixed dependency delivery routes and refuse an unavailable answer" in {
+      Vector("RouteMissingChat", "RouteMissingRepository", "RouteMissingEdge", "RouteFixed").foreach { mode =>
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "delivery-unavailable-").toRealPath()
+        ConnectedFixture.exercise(root, mode)
+      }
     }
 
     "resume an actual dependency Decision from retained Phase policy without a fabricated Human answer" in {
@@ -1515,8 +1529,9 @@ allowedKinds = ["text"]
         "remoteBranch" -> "main".asJson, "endpoint" -> endpoint.toString.asJson,
         "commitIdentity" -> Json.obj("name" -> "Workflow Fixture".asJson, "email" -> "workflow@example.invalid".asJson),
         "limits" -> TypedGitHostPlanFixture.limits, "environment" -> Json.obj("PATH" -> "/usr/bin:/bin".asJson))
-      val repositories = Vector(repository("sm-workflow-repository", "sm-workflow", root.resolve("upstream.git")),
-        repository("managed-b", connectedEdge.provider.repository, root.resolve("b/upstream.git")))
+      val repositories = Vector(repository("sm-workflow-repository", "sm-workflow", root.resolve("upstream.git"))) ++
+        Option.when(scenario != "RouteMissingRepository")(
+          repository("managed-b", connectedEdge.provider.repository, root.resolve("b/upstream.git")))
       a.mapObject(_.add("schema", "cncf.runtime-process-execution.v5".asJson)
         .add("workspaces", workspaces.asJson).add("gitPrograms", git.asJson).add("sbtPrograms", sbt.asJson)
         .add("gitRepositories", repositories.asJson)
@@ -1543,15 +1558,25 @@ allowedKinds = ["text"]
       val plan = GoalPhaseOrderedProgression.Plan("connected-plan", "1", settings.goal.input.phaseIdentity, "sm-workflow",
         Vector(GoalPhaseOrderedProgression.Step("step-1", "Document the consumer's verified dependency", Vector("docs/phase.md"), Vector.empty, Vector("compile"),
           workClassification = Some(GoalPhaseWorkClassification.Assignment(coding, coding, coding.copy(kind = GoalPhaseWorkClassification.Kind.REVIEW))))),
-        Vector("compile"), repairLimit = 10, allowDependencyRepair = Option.when(mode == "PhasePolicy")(true))
-      val selectedPolicy = if (mode == "Assigned" || mode.startsWith("AssignedPhase")) connectedPolicy.copy(delivery = Some(Vector(
+        Vector("compile"), repairLimit = 10, allowDependencyRepair = Option.when(Set("PhasePolicy", "RouteMissingEdge")(mode))(true))
+      val configuredpolicy = if (mode == "RouteSubtree")
+        connectedPolicy.copy(definition = connectedDefinition.copy(edges = Vector(connectedEdge.copy(localProject = Some("managed-b")))))
+      else if (mode == "RouteMissingEdge")
+        connectedPolicy.copy(definition = connectedDefinition.copy(edges = Vector(
+          connectedEdge.copy(provider = connectedEdge.provider.copy(identity = "org.example.DifferentProvider")))))
+      else connectedPolicy
+      val selectedPolicy = if (mode == "RouteFixed") configuredpolicy.copy(delivery = Some(Vector(
+        DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.fixed))))
+      else if (mode == "Assigned" || mode.startsWith("AssignedPhase") ||
+          Set("RouteSubtree", "RouteAssignedChat", "RouteMissingRepository")(mode)) configuredpolicy.copy(delivery = Some(Vector(
         DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.assignedChat,
-          Some(DelegateTaskRequesterRoutingFixture.input("owner").delegation.destinationIdentity))))) else connectedPolicy
+          Some(DelegateTaskRequesterRoutingFixture.input("owner").delegation.destinationIdentity))))) else configuredpolicy
       // This provider Plan explicitly defers synchronization until scoped publication.
       val completionParameters = if (mode == "PhaseDelivery" || mode.startsWith("AssignedPhase")) Map(
         ThreeWorkflowRuntimeParameters.completionPolicy.name -> GoalPhasePostCompletionSync.localPolicy)
       else Map.empty[String, String]
       var reconnect = Option.empty[(V.DelegateTaskInput, String)]
+      var unavailable = Option.empty[(String, V.GoalPhaseHumanQuestion, GoalPhaseDependencyScope.Proposal)]
       _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
         "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++ completionParameters) { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
@@ -1586,7 +1611,8 @@ allowedKinds = ["text"]
               synchronization = Option.when(mode == "Connected")(V.DelegateDeliverySynchronization(connectedEdge.provider.repository,
                 "main", "origin", "main", root.resolve("b/upstream.git").toString, "FULL_STATE")),
               publicationTarget = Some(connectedEdge.identity), artifactCoordinates = Vector(connectedEdge.requested.organization + ":" +
-                connectedEdge.requested.module + ":" + version(connectedEdge.requested.version, connectedDefinition.scope, request))), Vector("behavior"))
+                connectedEdge.requested.module + ":" + version(connectedEdge.requested.version, connectedDefinition.scope, request))),
+            if (mode == "Connected") Vector.empty else Vector("behavior"))
         }
         def start(value: V.DelegateTaskInput, suffix: String): Consequence[org.goldenport.protocol.operation.OperationResponse] = {
           val selected = "connected-" + suffix
@@ -1600,7 +1626,156 @@ allowedKinds = ["text"]
           invoke("DelegateTaskService", "startDelegateTask", List(Property("input", value, None), Property("selectionId", selected, None),
             Property("participant", "participant", None), Property("idempotencyKey", selected, None)))
         }
-        if (mode.startsWith("PhasePolicy")) {
+        if (mode.startsWith("Route")) {
+          val local = DependencyDevelopmentDelivery.subtree
+          val assigned = DependencyDevelopmentDelivery.assignedChat
+          val providerpath = "src/main/scala/example/Provider.scala"
+          Given("an actual implementation WorkOrder and a typed provider proposal requesting source edits and local publication")
+          val proposal = GoalPhaseDependencyScope.Proposal("managed-delivery-proposal", "1", "IMPLEMENTATION",
+            connectedEdge.consumer, connectedEdge.provider, ContextReference("selected-usage", "1"),
+            "Produce the scoped provider correction for this exact consumer",
+            Vector(providerpath), Vector("Preserve the required consumer API"),
+            Vector(ContextReference(source.get.identity, source.get.revision)), Vector.empty,
+            Some(GoalPhaseDependencyScope.AuthorizationBoundary(GoalPhaseDependencyScope.authorizationSchema,
+              ContextReference(plan.identity, plan.revision),
+              Vector("edit-source", "validate", "independent-review", "publish-local"), Vector.empty)))
+          val semantic = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED managed dependency proposal",
+            Vector.empty, None, None, None, None, None, Some(GoalPhaseNativeMetadata.record(proposal.asJson)), None, None,
+            dependencyValidation = None, diagnosticRepair = None)
+          val semanticreference = V.WorkflowArtifactReference("route-semantic", "1")
+          read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", "submitGoalPhaseWorkResult", List(
+            Property("sessionId", a.sessionId, None), Property("result", semantic, None),
+            Property("issuedWorkContext", original.issuedWorkContext.get, None), Property("resultReference", semanticreference, None),
+            Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(semanticreference), Some("specification-route-implementer"),
+              None, Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                BoundedWorkExecutionAdmissionFixture.profile.identity))), None))))).accepted shouldBe true
+          def _advance_goal_() = read_value[V.GoalPhaseAdvanceResult](take(invoke(
+            "GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+          When("the owning Phase advances from the submitted dependency proposal")
+          val question = _advance_goal_()
+          Then("the retained Human decision lists both routes and the actual prerequisites for each")
+          question.kind shouldBe "Human"
+          val human = question.human.get
+          val offer = DevelopmentOperationalView.json(human.dependencyDelivery.get)
+          val alternatives = array(offer, "alternatives")
+          alternatives.map(_.hcursor.get[String]("choice").toOption.get) shouldBe Vector(local, assigned)
+          alternatives.map(_.hcursor.get[String]("label").toOption.get) shouldBe Vector("Local worktree", "Assigned development chat")
+          val both = Set("RouteSubtree", "RouteAssignedChat")(mode)
+          val worktree = both || mode == "RouteMissingChat"
+          offer.hcursor.get[String]("defaultChoice").toOption shouldBe Option.when(worktree)(local)
+          alternatives.map(_.hcursor.get[Boolean]("available").toOption.get) shouldBe Vector(worktree, both)
+          val routes = Vector(Option.when(worktree)(local), Option.when(both)(assigned)).flatten
+          human.choices shouldBe routes ++ Vector("RejectDependencyScope", "Defer", "Cancel")
+          val retainedquestion = _advance_goal_()
+          retainedquestion.human.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+            question.human.map(value => DevelopmentOperationalView.json(value.toRecord()))
+          val chosen = if (mode == "RouteSubtree") local else assigned
+          val answer = V.GoalPhaseOrderedDecisionAnswer(chosen, "SPECIFICATION-OWNED independent Human route direction")
+          val reference = V.WorkflowArtifactReference("route-human", "1")
+          val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+          val properties = List(Property("sessionId", a.sessionId, None), Property("answer", answer, None),
+            Property("resultReference", reference, None), Property("executionEvidence", evidence, None))
+          invoke("GoalPhaseService", "submitGoalPhaseOrderedDecision", properties).isSuccess shouldBe false
+          prepare { call => for {
+            prepared <- org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionPreparation.goalC(
+              human.humanDecisionContext.get, answer, reference, evidence, "participant", "normal-development-host",
+              call.executionContext.clock.instant().minusSeconds(60))
+            _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+          } yield () }
+          if (!both) {
+            val reason = alternatives.last.hcursor.get[String]("reason").toOption.get
+            reason should include (mode match {
+              case "RouteFixed" => "Fixed"
+              case "RouteMissingRepository" => "Git"
+              case "RouteMissingEdge" => "no managed repository is registered"
+              case _ => "no assigned development chat"
+            })
+            if (mode == "RouteMissingEdge") {
+              alternatives.head.hcursor.get[String]("reason").toOption.get should include ("no managed repository is registered")
+              reason should include ("no assigned development chat")
+              unavailable = Some((a.sessionId, human, proposal))
+            }
+            invoke("GoalPhaseService", "submitGoalPhaseOrderedDecision", properties).isSuccess shouldBe false
+            _advance_goal_().kind shouldBe "Human"
+          } else {
+            read_value[V.GoalPhaseOrderedDecisionSubmissionResult](take(invoke(
+              "GoalPhaseService", "submitGoalPhaseOrderedDecision", properties))).accepted shouldBe true
+            val resumed = _advance_goal_()
+            resumed.kind shouldBe "Request"
+            resumed.sessionId shouldBe a.sessionId
+            val direction = resumed.work.get.decisionContext.get
+            direction.choice shouldBe chosen
+            direction.decisionReference shouldBe Some(reference)
+            val route = DevelopmentOperationalView.json(direction.deliveryRoute.get)
+            route.hcursor.get[String]("mode").contains(chosen) shouldBe true
+            if (mode == "RouteSubtree") route.hcursor.downField("edge").get[String]("localProject").contains("managed-b") shouldBe true
+            val destination = if (chosen == local) "managed-worktree:" + connectedEdge.provider.workspace
+              else selectedPolicy.delivery.get.head.chat.get
+            route.hcursor.get[String]("destinationIdentity").contains(destination) shouldBe true
+            resumed.work.get.originalBase shouldBe original.work.get.originalBase
+            resumed.work.get.completed shouldBe original.work.get.completed
+            resumed.repairProgress shouldBe original.repairProgress
+            prepare(call => call.goalWorkC(InstanceIdentity(a.sessionId)).map { work =>
+              val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]]
+              source = Some(V.WorkflowArtifactReference(order.request.continuationId.value, order.request.expectedRevision.value))
+              order.request.input.get.value.decisionContext.flatMap(_.deliveryRoute).map(_.mode) shouldBe Some(chosen); ()
+            })
+            def _destination_(identity: String) = {
+              val value = input("destination", identity)
+              value.copy(ownedPaths = NonEmptyVector.of(providerpath),
+                delegation = value.delegation.copy(destinationIdentity = destination,
+                  authorizationReferences = NonEmptyVector.of(reference)))
+            }
+            def _requester_(value: V.DelegateTaskInput) =
+              value.copy(delegation = value.delegation.copy(role = "requester"))
+            Given("the chosen destination and the exact approval from the reissued WorkOrder")
+            val crossed = _destination_("route-crossed")
+            val otherdestination = if (chosen == local) selectedPolicy.delivery.get.head.chat.get
+              else "managed-worktree:" + connectedEdge.provider.workspace
+            val wrong = crossed.copy(delegation = crossed.delegation.copy(destinationIdentity = otherdestination))
+            start(_requester_(wrong), "route-crossed-requester").isSuccess shouldBe false
+            start(wrong, "route-crossed").isSuccess shouldBe false
+            val unapproved = _destination_("route-unapproved")
+            start(unapproved.copy(delegation = unapproved.delegation.copy(authorizationReferences = NonEmptyVector.of(semanticreference))),
+              "route-unapproved").isSuccess shouldBe false
+            val firstinput = _destination_("route-first")
+            When("the real requester starts and advances before the separately admitted destination")
+            val requester = read_value[V.DelegateTaskView](take(start(_requester_(firstinput), "route-first-requester")))
+            val dispatch = advance(requester.sessionId)
+            dispatch.kind shouldBe "Dispatch"
+            DelegateTaskRequesterRoutingFixture.state(dispatch).input.delegation.get.destinationIdentity shouldBe destination
+            val first = read_value[V.DelegateTaskView](take(start(firstinput, "route-first")))
+            val observed = V.DelegateTaskObservationInput(requester.sessionId, "dispatch-observed",
+              V.WorkflowArtifactReference("route-dispatch-observed", "1"), Some(first.sessionId), None, None,
+              "SPECIFICATION-OWNED caller observed the exact saved destination", None)
+            take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", observed, None))))
+            advance(requester.sessionId).kind shouldBe "Wait"
+            val second = read_value[V.DelegateTaskView](take(start(_destination_("route-second"), "route-second")))
+            val work = advance(first.sessionId)
+            Then("only the selected assigned chat queues its second destination")
+            work.kind shouldBe "Request"
+            advance(second.sessionId).kind shouldBe (if (chosen == assigned) "Wait" else "Request")
+            When("the destination asks for a scope description outside the approved provider inventory")
+            val outside = V.DelegateTaskScopeCorrectionDescriptionInput(first.sessionId, work.issuedWorkContext.get.continuationId,
+              Vector("src/test/scala/ProductCheck.scala"), Vector.empty)
+            val denied = invoke("DelegateTaskService", "describeDelegateTaskScopeCorrection", List(Property("input", outside, None)))
+            Then("the shared correction owner refuses the additional path before superseding the WorkOrder")
+            denied match {
+              case Consequence.Failure(reason) => reason.displayMessage should include ("exact approved GoalPhase dependency inventory")
+              case Consequence.Success(_) => fail("The destination scope correction accepted a path outside the approved inventory")
+            }
+            val replay = read_value[V.DelegateTaskView](take(invoke("DelegateTaskService", "startDelegateTask", List(
+              Property("input", firstinput, None), Property("sessionId", first.sessionId, None),
+              Property("selectionId", "connected-route-first", None), Property("participant", "participant", None),
+              Property("idempotencyKey", "connected-route-first", None)))))
+            replay.sessionId shouldBe first.sessionId
+            advance(first.sessionId).issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+              work.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+            _advance_goal_().issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+              resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+          }
+        } else if (mode.startsWith("PhasePolicy")) {
           var activeWork = original
           if (mode == "PhasePolicyEnable") {
             actualGoal.get.selectedPlan.allowDependencyRepair shouldBe None
@@ -1655,7 +1830,7 @@ allowedKinds = ["text"]
             Vector("src/External.scala"), Vector("Preserve the required consumer API"), Vector(ContextReference(source.get.identity, source.get.revision)), Vector.empty,
             Some(GoalPhaseDependencyScope.AuthorizationBoundary(GoalPhaseDependencyScope.authorizationSchema,
               ContextReference(actual.selectedPlan.identity, actual.selectedPlan.revision),
-              Vector("edit-source", "validate", "independent-review", "publish-local"), Vector.empty)))
+              Vector("edit-source", "validate", "independent-review"), Vector.empty)))
           val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED necessary external dependency proposal",
             Vector.empty, None, None, None, None, None, Some(GoalPhaseNativeMetadata.record(proposal.asJson)), None, None,
             dependencyValidation = None, diagnosticRepair = None)
@@ -1869,14 +2044,36 @@ allowedKinds = ["text"]
           observe(requester.sessionId, "dispatch-observed")
           val work = advance(destination.sessionId)
           work.kind shouldBe "Request"
+          val condition = V.DelegateTaskCondition("behavior", mode != "Connected",
+            if (mode == "Connected") "Evaluate behavior with retained evidence at delivery" else "The assigned existing answer is retained")
           val semantic = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED existing answer retained for actual native checks",
-            Vector.empty, NonEmptyVector.of(V.DelegateTaskCondition("behavior", true, "The assigned existing answer is retained")), Vector.empty, None, None)
-          delegate("submitDelegateTaskWorkResult", List(Property("sessionId", destination.sessionId, None), Property("result", semantic, None),
-            Property("issuedWorkContext", work.issuedWorkContext.get, None), Property("resultReference", V.WorkflowArtifactReference("connected-semantic", "1"), None),
-            Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference("connected-semantic", "1")), Some("specification-implementer"), None,
-              Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
-                BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
-          val delivered = advance(destination.sessionId)
+            Vector.empty, NonEmptyVector.of(condition), Vector.empty, None, None)
+          def submit(pending: V.DelegateTaskView, result: V.DelegateTaskWorkResult, identity: String): Unit = {
+            val reference = V.WorkflowArtifactReference(identity, "1")
+            delegate("submitDelegateTaskWorkResult", List(Property("sessionId", destination.sessionId, None), Property("result", result, None),
+              Property("issuedWorkContext", pending.issuedWorkContext.get, None), Property("resultReference", reference, None),
+              Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference), Some("specification-implementer"), None,
+                Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                  BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
+          }
+          submit(work, semantic, "connected-semantic")
+          val qualified = advance(destination.sessionId)
+          val delivered = if (mode != "Connected") qualified else {
+            When("the default timing advances after native validation and managed publication")
+            val retained = DelegateTaskRequesterRoutingFixture.state(qualified)
+            retained.stage shouldBe "DeliveryAcceptance"
+            val pending = if (qualified.issuedWorkContext.nonEmpty) qualified else advance(destination.sessionId)
+            Then("the same managed receipt supports delivery acceptance without running effects again")
+            val accepted = semantic.copy(outcome = "accept", conditions = NonEmptyVector.of(
+              condition.copy(satisfied = true, detail = "The retained focused check confirms the answer")))
+            submit(pending, accepted, "connected-delivery-acceptance")
+            val result = advance(destination.sessionId)
+            val returned = DelegateTaskRequesterRoutingFixture.state(result)
+            returned.receipts shouldBe retained.receipts
+            returned.commit shouldBe retained.commit
+            returned.delivery.flatMap(_.managedPublication) shouldBe retained.delivery.flatMap(_.managedPublication)
+            result
+          }
           val bState = DelegateTaskRequesterRoutingFixture.state(delivered)
           if (mode == "Connected") {
             bState.delivery.flatMap(_.managedPublication) should not be empty
@@ -1893,7 +2090,11 @@ allowedKinds = ["text"]
             delivered.kind shouldBe "Wait"
             bState.stage shouldBe "PublicationWait"
             bState.commit should not be empty
-            bState.receipts.forall(_.exitCode.contains(0)) shouldBe true
+            bState.receipts.map(_.identity) shouldBe bState.selected.map(_.identity)
+            bState.receipts.head.exitCode shouldBe Some(0)
+            val report = Files.readString(root.resolve("b/repository/target/test-reports/TEST-example.ProviderSpec.xml"))
+            report should include ("tests=\"1\"")
+            report should include ("failures=\"0\"")
             val sourcePath = root.resolve("b/repository/src/main/scala/example/Provider.scala")
             val originalSource = Files.readString(sourcePath)
             val extraPath = sourcePath.resolveSibling("Unaccepted.scala")
@@ -2057,10 +2258,62 @@ allowedKinds = ["text"]
             invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
           }
         }
-        if (mode != "Connected" && !mode.startsWith("PhasePolicy")) {
+        if (mode != "Connected" && !mode.startsWith("PhasePolicy") && !mode.startsWith("Route")) {
           val retainedA = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
           retainedA.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
             original.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+        }
+      }
+      unavailable.foreach { case (session, original, proposal) =>
+        Given("the same Phase Session after registering the exact missing provider and its assigned chat")
+        val registered = connectedPolicy.copy(delivery = Some(Vector(DependencyDevelopmentDelivery.Binding(
+          connectedEdge.identity, DependencyDevelopmentDelivery.assignedChat,
+          Some(DelegateTaskRequesterRoutingFixture.input("owner").delegation.destinationIdentity)))))
+        _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
+          "sm-workflow.managed-development" -> registered.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces)) {
+          (owner, component, actor, prepare) =>
+            def _goal_(operation: String, properties: List[Property]) = take(owner.executeOperationResponseInContext(
+              Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor))
+            def _advance_() = read_value[V.GoalPhaseAdvanceResult](
+              _goal_("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(session)))
+            val retained = _advance_().human.get
+            DevelopmentOperationalView.json(retained.toRecord()) shouldBe DevelopmentOperationalView.json(original.toRecord())
+            When("Human rejects the old proposal and the reissued WorkOrder submits a fresh proposal")
+            val answer = V.GoalPhaseOrderedDecisionAnswer("RejectDependencyScope",
+              "SPECIFICATION-OWNED direction to replace this unavailable offer through the same Phase")
+            val reference = V.WorkflowArtifactReference("reject-unavailable-route", "1")
+            val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+            prepare { call => for {
+              prepared <- org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionPreparation.goalC(
+                retained.humanDecisionContext.get, answer, reference, evidence, "participant", "normal-development-host",
+                call.executionContext.clock.instant().minusSeconds(60))
+              _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+            } yield () }
+            read_value[V.GoalPhaseOrderedDecisionSubmissionResult](_goal_("submitGoalPhaseOrderedDecision", List(
+              Property("sessionId", session, None), Property("answer", answer, None),
+              Property("resultReference", reference, None), Property("executionEvidence", evidence, None)))).accepted shouldBe true
+            val reissued = _advance_()
+            reissued.kind shouldBe "Request"
+            reissued.work.get.decisionContext.get.decisionReference shouldBe Some(reference)
+            val context = reissued.issuedWorkContext.get
+            val refreshed = proposal.copy(revision = "2", dependentWork = Vector(
+              ContextReference(context.continuationId, context.expectedRevision)))
+            val semantic = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED new managed delivery proposal",
+              Vector.empty, None, None, None, None, None, Some(GoalPhaseNativeMetadata.record(refreshed.asJson)), None, None,
+              dependencyValidation = None, diagnosticRepair = None)
+            val resultreference = V.WorkflowArtifactReference("new-route-proposal", "1")
+            read_value[V.GoalPhaseWorkSubmissionResult](_goal_("submitGoalPhaseWorkResult", List(
+              Property("sessionId", session, None), Property("result", semantic, None),
+              Property("issuedWorkContext", context, None), Property("resultReference", resultreference, None),
+              Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(resultreference), Some("specification-route-implementer"),
+                None, Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                  BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                  BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))).accepted shouldBe true
+            Then("a new question in the original Session offers both registered routes")
+            val next = _advance_()
+            next.sessionId shouldBe session
+            next.human.get.choices.take(2) shouldBe DependencyDevelopmentDelivery.routeChoices
+            next.human.get.humanDecisionContext should not be original.humanDecisionContext
         }
       }
       if (mode == "Assigned") {

@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -417,12 +417,19 @@ private[admission] object NativeWorkflowCliFixture {
       wait: Option[InstalledCallWait] = None, jsonOutput: Boolean = true): Result = {
       require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
         "Select an actual absolute installed command")
+      val launcher = sys.props.get("smworkflow.spec.launcherHome").orElse(sys.env.get("SM_WORKFLOW_SPEC_LAUNCHER_HOME"))
+        .toVector.flatMap { value =>
+          val home = Path.of(value)
+          require(home.isAbsolute && home == home.normalize && Files.isDirectory(home),
+            "Select an existing absolute isolated launcher home")
+          Vector("--launcher-home", home.toString)
+        }
       val descriptor = assemblyDescriptor.toVector.map { path =>
         require(path.isAbsolute && path.normalize == path && path == _assembly && Files.isRegularFile(path),
           "Select only this scenario's existing explicit assembly descriptor")
         s"--textus.assembly.descriptor=$path"
       }
-      _run(Vector(executable.toString, s"$_component.$service.$operation") ++ descriptor ++
+      _run(Vector(executable.toString) ++ launcher ++ Vector(s"$_component.$service.$operation") ++ descriptor ++
         parameters ++ (if (jsonOutput) Vector("--json") else Vector.empty), installations, wait)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =

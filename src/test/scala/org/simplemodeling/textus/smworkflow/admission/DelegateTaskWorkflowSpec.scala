@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -9,7 +9,7 @@ import io.circe.{Json, parser}
 import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
-import org.goldenport.cncf.processexecution.SbtOperation
+import org.goldenport.cncf.processexecution.{ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination, SbtOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.Record
@@ -91,9 +91,14 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
       .mapObject(_.add("target", TypedGitHostPlanFixture.workspace.asJson).add("identity", "delegate-publication".asJson).add("capability", "delegate-publication".asJson))
     val programs = array(compile, "sbtPrograms") ++ array(focused, "sbtPrograms") :+ publication
     val caps = (array(compile, "gitPrograms") ++ programs).map(_.hcursor.get[Json]("capability").toOption.get)
+    val captureWorkspace = "sm-workflow-validation-artifacts"
+    val capture = Json.obj("identity" -> captureWorkspace.asJson,
+      "root" -> Files.createDirectories(root.resolve("validation-captures")).toString.asJson)
+    val captureGrant = Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+      "workspaceId" -> captureWorkspace.asJson, "access" -> "manage".asJson)
     compile.mapObject(_.add("sbtPrograms", Json.fromValues(programs))
-      .add("workspaces", Json.fromValues(array(compile, "workspaces") ++ array(focused, "workspaces")))
-      .add("workspaceGrants", Json.fromValues(array(compile, "workspaceGrants") ++ array(focused, "workspaceGrants")))
+      .add("workspaces", Json.fromValues(array(compile, "workspaces") ++ array(focused, "workspaces") :+ capture))
+      .add("workspaceGrants", Json.fromValues(array(compile, "workspaceGrants") ++ array(focused, "workspaceGrants") :+ captureGrant))
       .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson, "capabilities" -> Json.fromValues(caps)))))
   }
   private def _parameters: Map[String, String] = {
@@ -200,6 +205,123 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         requirement.reviewRequired shouldBe false
         resolved.disposition.get.independence shouldBe WorkflowProtocolV1.ExecutionIndependence.Optional
         capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+      }
+    }
+
+    "admit deferred judgment and return from the same exact managed publication and successful check batch" in {
+      Given("a destination whose default timing defers the behavioral condition until after typed delivery")
+      val publicinput = _input("destination", "managed-effect-evidence")
+      val coordinate = ManagedDevelopment.Coordinate("org.example", "p68-delegate-fixture_3", "0.0.1-SNAPSHOT")
+      val provider = GoalPhaseDependencyScope.Component(_component, publicinput.repositoryIdentity, TypedGitHostPlanFixture.workspace)
+      val consumer = GoalPhaseDependencyScope.Component("org.example.Consumer", "consumer-repository", "development-consumer")
+      val edge = ManagedDevelopment.Edge(_publication, provider, consumer, "development-artifacts", true, None, coordinate)
+      val definition = ManagedDevelopment.Definition("specification-scope", edge.localRepository, "ivy-repository", "staging", Vector(edge))
+      val identity = "managed-effect-evidence"
+      val selection = "producer-selection"
+      val member = ManagedDevelopmentRuntime.member(definition, coordinate, identity, "/specification/artifacts")
+      val selected = member.selected
+      val coordinates = Vector(selected.organization + ":" + selected.module + ":" + selected.version)
+      val input = take(DelegateTask.inputC(publicinput.copy(submissionConditions = Vector.empty, reviewRequired = true,
+        delegation = publicinput.delegation.copy(artifactCoordinates = coordinates))))
+      val original = take(S.startC(input, "participant", _checks))
+      val commit = S.Commit("a" * 40, "b" * 40, "c" * 40)
+      val candidate = S.Candidate(commit.parent, commit.tree, Vector(_test), "SPECIFICATION-OWNED checked change")
+      val execution = S.CommitExecution("committed", Vector(_test), "exited", Some(0), "", "")
+      val receipts = _checks.map(check => RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(0),
+        "", "", Some(T.Facts(check.kind, T.Outcome.Succeeded,
+          Option.when(check.kind == T.Kind.TestOnly)(T.Selection(Vector(_suite), 1, 2L)), None))))
+      val capture = GoalPhaseDependencyValidation.ManagedCapture("specification-instance", "participant", "consumer-session",
+        ContextReference("consumer-plan", "1"), "consumer-step", 1L, ContextReference("consumer-work", "1"), edge)
+      val source = Json.obj("head" -> commit.identity.asJson, "tree" -> commit.tree.asJson, "dirty" -> Json.arr(), "dirtyContents" -> Json.arr())
+      val producer = Json.obj("schema" -> "sbt-cozy.development-artifact-result.v1".asJson,
+        "kind" -> "producer".asJson, "coordinate" -> selected.asJson, "jar" -> member.jar.asJson, "ivy" -> member.ivy.asJson)
+      val completion = Json.obj("schema" -> "sbt-cozy.development-artifact-publication.v1".asJson,
+        "scope" -> definition.scope.asJson, "selection" -> selection.asJson, "publication" -> identity.asJson,
+        "organization" -> selected.organization.asJson, "module" -> selected.module.asJson, "version" -> selected.version.asJson,
+        "dependencies" -> Json.arr())
+      val publication = ManagedDevelopment.Publication(edge, definition.scope, identity, selection,
+        selected, member.jar, member.ivy, source, producer, completion)
+      val delivery = DelegateTask.Delivery(managedPublication = Some(publication), managedContinuation = Some(capture))
+      val report = Vector(S.Condition("behavior", true, "SPECIFICATION-OWNED behavioral judgment"))
+      val result = S.Result("accept", "Behavior accepted after its retained delivery effects", Vector.empty, report, Vector.empty)
+      val state = original.copy(stage = "DeliveryAcceptance", candidate = Some(candidate), receipts = receipts,
+        reviewReference = Some(ContextReference("independent-review", "1")), commit = Some(commit), commitExecution = Some(execution),
+        delivery = Some(delivery), conditionReport = report.map(_.copy(satisfied = false)))
+      val work = S.Work("managed-effect-evidence", "2", "DeliveryAcceptance", state)
+      val requester = input.copy(delegation = input.delegation.map(_.copy(role = "requester")))
+      val returned = state.copy(stage = "ReturnReady", conditionReport = report)
+
+      When("the final semantic judgment and requester return use the retained exact effects")
+      val admitted = S.admitResultC(work, result)
+      val received = DelegateTask.returnedC(requester, returned.asJson)
+      Then("both accept and the returned facts preserve the original timing and selected source")
+      admitted.isSuccess shouldBe true
+      take(received).delivery shouldBe returned.delivery
+      take(received).input.submissionConditions shouldBe Some(Vector.empty)
+
+      Given("the same source published through the managed batch report and its primary controls")
+      val batchedge = edge.copy(batch = Some(ManagedDevelopment.Batch(Vector(ManagedDevelopment.ProjectModule("provider", coordinate)),
+        Vector(coordinate), None)))
+      val batchscope = Json.obj("scope" -> definition.scope.asJson, "owner" -> definition.ownerWorkspace.asJson,
+        "batch" -> identity.asJson, "producerSelectionId" -> selection.asJson, "complete" -> true.asJson)
+      val primarycontrol = batchscope.deepMerge(selected.asJson).deepMerge(Json.obj(
+        "schema" -> "sbt-cozy.development-artifact-publication.v2".asJson, "baseVersion" -> coordinate.version.asJson,
+        "artifact" -> member.jar.asJson, "dependencies" -> Json.arr()))
+      val batchcompletion = batchscope.deepMerge(Json.obj("schema" -> "sbt-cozy.development-artifact-batch.v2".asJson,
+        "members" -> Json.arr(selected.asJson)))
+      val batchartifacts = batchscope.deepMerge(Json.obj("members" -> Json.arr(Json.obj("module" -> Json.obj(
+        "organization" -> selected.organization.asJson, "name" -> selected.module.asJson, "selectedVersion" -> selected.version.asJson)))))
+      val batchproducer = Json.obj("schema" -> "sbt-cozy.development-artifact-result.v2".asJson, "kind" -> "producer".asJson,
+        "scope" -> definition.scope.asJson, "publication" -> identity.asJson, "selection" -> selection.asJson,
+        "members" -> Json.arr(selected.asJson.deepMerge(Json.obj("jar" -> member.jar.asJson, "ivy" -> member.ivy.asJson))))
+      val batch = ManagedDevelopment.PublishedBatch(Vector(member.copy(completion = primarycontrol)), batchcompletion, batchartifacts)
+      val batched = publication.copy(edge = batchedge, report = batchproducer, completion = primarycontrol, batch = Some(batch))
+      val batchdelivery = delivery.copy(managedPublication = Some(batched), managedContinuation = Some(capture.copy(edge = batchedge)))
+      When("that exact batch stands for the managed publication at the same frontier")
+      val batchwork = work.copy(state = state.copy(delivery = Some(batchdelivery)))
+      Then("it passes the same admission and retains the primary completion in the returned result")
+      S.admitResultC(batchwork, result).isSuccess shouldBe true
+      take(DelegateTask.returnedC(requester, returned.copy(delivery = Some(batchdelivery)).asJson)).delivery shouldBe Some(batchdelivery)
+
+      When("the same successful judgment is paired with missing crossed or unconfirmed runtime effects")
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), empty, empty, Vector.empty, 1L, "specification-publication")
+      val ordinary = LocalPublication.Result("published", "SPECIFICATION-OWNED publication", LocalPublication.Request(
+        LocalPublication.Input("managed-effect-evidence", _publication), LocalPublication.Target(_publication, _component, provider.workspace),
+        LocalPublication.Source(commit.identity, commit.tree, Vector.empty), "participant", "specification", None, Vector.empty),
+        Some(WorkflowSbtCapture.encode(process)))
+      val alteredpublications = Vector(
+        publication.copy(edge = edge.copy(identity = "other-edge")),
+        publication.copy(edge = edge.copy(provider = provider.copy(identity = "org.example.OtherProvider"))),
+        publication.copy(selected = coordinate.copy(version = "0.0.2-SNAPSHOT")),
+        publication.copy(report = Json.obj()), publication.copy(completion = Json.obj()),
+        publication.copy(report = producer.mapObject(_.add("jar", "/elsewhere/foreign.jar".asJson))),
+        publication.copy(completion = completion.mapObject(_.add("scope", "foreign-scope".asJson))),
+        publication.copy(source = source.mapObject(_.add("head", ("d" * 40).asJson))),
+        publication.copy(source = source.mapObject(_.add("tree", ("d" * 40).asJson))),
+        publication.copy(source = source.mapObject(_.add("dirty", Json.arr(_test.asJson)))))
+      val alteredbatches = Vector(batched.copy(completion = completion),
+        batched.copy(batch = Some(batch.copy(artifacts = Json.obj()))), batched.copy(report = Json.obj()))
+      val invaliddeliveries = alteredpublications.map(p => delivery.copy(managedPublication = Some(p))) ++ Vector(
+        delivery.copy(managedPublication = None), delivery.copy(publication = Some(ordinary)),
+        delivery.copy(managedContinuation = Some(capture.copy(edge = edge.copy(identity = "other-edge"))))) ++
+        alteredbatches.map(p => batchdelivery.copy(managedPublication = Some(p)))
+      val invalidordinary = Vector(ordinary.copy(process = None), ordinary.copy(process = Some(Json.obj())),
+        ordinary.copy(process = Some(WorkflowSbtCapture.encode(process.copy(termination = ProcessExecutionTermination.Exited(1))))),
+        ordinary.copy(process = Some(WorkflowSbtCapture.encode(process.copy(termination = ProcessExecutionTermination.TerminationUnconfirmed)))),
+        ordinary.copy(status = "unnecessary"), ordinary.copy(status = "uncertain"))
+      val focused = receipts.last
+      val failed = focused.copy(exitCode = Some(1), sbt = Some(T.Facts(T.Kind.TestOnly, T.Outcome.Failed, None, None)))
+      val unknown = focused.copy(termination = "unknown", exitCode = None, sbt = Some(T.Facts(T.Kind.TestOnly, T.Outcome.Incomplete, None, None)))
+      val invalidstates = (invaliddeliveries ++ invalidordinary.map(p => DelegateTask.Delivery(publication = Some(p))))
+        .map(d => state.copy(delivery = Some(d))) ++ Vector(
+        state.copy(receipts = receipts.dropRight(1)), state.copy(receipts = Vector(receipts.head, failed)),
+        state.copy(receipts = Vector(receipts.head, unknown)), state.copy(commit = None), state.copy(reviewReference = None))
+
+      Then("neither the judgment nor return may stand in for those effects")
+      invalidstates.foreach { retained =>
+        S.admitResultC(work.copy(state = retained), result).isSuccess shouldBe false
+        DelegateTask.returnedC(requester, retained.copy(stage = "ReturnReady", conditionReport = report).asJson).isSuccess shouldBe false
       }
     }
 
@@ -529,6 +651,8 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         _state(nochange).commitExecution shouldBe None
         _state(nochange).candidate.get.paths shouldBe empty
         _state(nochange).delivery.flatMap(_.publication).map(_.status) shouldBe Some("unnecessary")
+        val nochangeinput = take(DelegateTask.inputC(_input("requester", "no-change-request")))
+        take(DelegateTask.returnedC(nochangeinput, _state(nochange).asJson)).commit shouldBe Some(commit)
         Files.readString(root.resolve("publication-count.txt")) shouldBe publications
         observe(nochange.sessionId, "return-observed", nochange.sessionId).kind shouldBe "Terminal"
       }

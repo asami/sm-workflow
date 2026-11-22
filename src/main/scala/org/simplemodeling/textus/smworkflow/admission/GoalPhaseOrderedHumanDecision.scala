@@ -17,20 +17,22 @@ import GoalPhaseNativeWork as S
 import GoalPhaseOrderedProgression as O
 import GoalPhasePlanRevision as R
 import GoalPhaseDevelopmentReconstruction as X
+import DependencyDevelopmentDelivery as D
 
 /** Human direction for a genuine retained ordered semantic decision. Answer
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
   val closingType = StateMachineResultTypeReference("GoalPhaseOrderedDecisionSubmissionResult")
   val purpose = "goal-phase-ordered-human-answer"
-  val choices = Vector("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "Defer", "Cancel") ++ X.choices.filterNot(Set("Defer", "Cancel"))
+  val choices = Vector("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "Defer", "Cancel") ++
+    X.choices.filterNot(Set("Defer", "Cancel")) ++ D.routeChoices
   private val _ordinary_choices = Vector("ResumeAssignedWork", "Defer", "Cancel")
   private val _repair_choices = Vector("ContinueRepairs", "Defer", "Cancel")
   private val _stopped_choices = Vector("Defer", "Cancel")
@@ -45,8 +47,11 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   private def _choices(controller: O.State, input: Input): Vector[String] =
     if (input.developmentReconstruction.nonEmpty) X.choicesFor(input.developmentReconstruction.get)
     else if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.choices
+    else if (input.dependencyDelivery.nonEmpty) _delivery_choices(input.dependencyDelivery.get)
     else if (input.result.dependencyProposal.nonEmpty) _dependency_choices
     else if (input.planRevision.nonEmpty) _revision_choices else choicesFor(controller)
+
+  private def _delivery_choices(offer: D.Offer): Vector[String] = offer.choices ++ _dependency_choices.tail
 
   /** Display only the exact choices captured by the owning issued question.
     * Neither presentation nor this projection supplies Human consent.
@@ -60,6 +65,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         input <- value.request.input.map(_.value).toRight("ordered Human input is absent")
         admitted <- Either.cond(if (input.developmentReconstruction.nonEmpty) values == X.choicesFor(input.developmentReconstruction.get)
           else if (input.sourceHistoryRecovery.nonEmpty) values == GoalPhaseSourceHistoryRecovery.choices
+          else if (input.dependencyDelivery.nonEmpty) values == _delivery_choices(input.dependencyDelivery.get)
           else values == _ordinary_choices || values == _repair_choices || values == _stopped_choices ||
             values == _revision_choices || values == _dependency_choices, values,
           "ordered Human issued choices differ from a declared question")
@@ -73,7 +79,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     planRevision: Option[R.Captured] = None,
     sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
     developmentOccurredAt: Option[String] = None,
-    developmentReconstruction: Option[X.Payload] = None)
+    developmentReconstruction: Option[X.Payload] = None,
+    dependencyDelivery: Option[D.Offer] = None)
   final case class Answer(choice: String, rationale: String)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, question: WorkflowInteraction[Input, Nothing],
@@ -123,7 +130,10 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         val recovery = value.sourceHistoryRecovery.fold(revision)(target => revision.add("sourceHistoryRecovery",
           summon[io.circe.Encoder[GoalPhaseSourceHistoryRecovery.RecoveryTarget]].apply(target)))
         val occurred = value.developmentOccurredAt.fold(recovery)(at => recovery.add("developmentOccurredAt", Json.fromString(at)))
-        value.developmentReconstruction.fold(occurred)(context => occurred.add("developmentReconstruction", X.codec.encode(context)))
+        val reconstruction = value.developmentReconstruction.fold(occurred)(context =>
+          occurred.add("developmentReconstruction", X.codec.encode(context)))
+        value.dependencyDelivery.fold(reconstruction)(offer => reconstruction.add("dependencyDelivery",
+          summon[io.circe.Encoder[D.Offer]].apply(offer)))
       }
     def decode(value: Json): Either[String, Input] = for {
       fields <- Option(value).flatMap(_.asObject)
@@ -155,6 +165,12 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case None => Right(None)
         case Some(value) => X.codec.decode(value).map(Some(_))
       }
+      delivery <- fields("dependencyDelivery") match {
+        case None => Right(None)
+        case Some(value) => value.as[D.Offer].left.map(_.message).map(Some(_))
+      }
+      _ <- Either.cond(delivery.forall(offer => captured.isEmpty && recovery.isEmpty && reconstruction.isEmpty &&
+        D.offerValid(offer, work, result)), (), "ordered Decision delivery offer crosses its exact semantic proposal")
       _ <- Either.cond(reconstruction.forall(context => context.semanticResult.contains(ContextReference(identity, revision)) &&
         context.sessionId == work.instanceIdentity && captured.isEmpty && recovery.isEmpty), (),
         "development reconstruction context crosses its genuine retained semantic result")
@@ -172,7 +188,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- captured.fold[Either[String, Unit]](Right(()))(selected =>
         Either.cond(R.validatePhaseAcceptanceDeferralSourceC(work, result, selected).isSuccess, (),
           "ordered Decision Phase acceptance deferral differs from its actual review result"))
-    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery, occurred, reconstruction)
+    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery, occurred, reconstruction, delivery)
   }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] = new WorkflowResultJsonV1.PayloadCodec[Answer] {
     val typeIdentity = "GoalPhaseOrderedDecisionAnswer"
@@ -214,7 +230,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case Some(_) => Consequence.success(projected)
         case None => for {
           offered <- issuedChoicesC(projected.question)
-          events <- if (offered.exists(Set("AdoptPlanRevision", "ApproveDependencyScope", "AdoptDevelopmentReconstruction")))
+          events <- if (offered.exists(choice => D.humanScopeApproval(choice) ||
+            Set("AdoptPlanRevision", "AdoptDevelopmentReconstruction")(choice)))
             NativeWorkflowOperationOutput.decisionInputC(projected.question).flatMap(input =>
               GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, source.from.identity.value,
                 projected.pending.revision.value, "ApprovalRequested", identity(source).value, core,
@@ -227,7 +244,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       retained <- _retained_for_plan_c(plan, core)
       wire <- retained match {
         case None => NativeWorkflowOperationOutput.goalHumanC(plan.question, core)
-        case Some((state, next, result)) => if (_continues(result.result.value.choice))
+        case Some((state, next, result)) => if (continues(result.result.value.choice))
           resume(source, state, next, result.result.value, core)
         else _wait_c(next, result)
       }
@@ -321,8 +338,20 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       questions <- plan.source.session.storage.bindDecisionC(completionOperation, inputCodec)
       instances <- plan.source.session.storage.bindInstancesC()(using core.executionContext)
       expected <- _completed_c(plan, submitted)
+      _ <- if (D.routeChoices.contains(submitted.result.value.choice)) for {
+        native <- _completion_c(plan.source.session.storage)
+        retained <- native.loadRetainedC(identity(plan.source))(using core.executionContext)
+        _ <- if (retained.nonEmpty) Consequence.unit else for {
+          input <- NativeWorkflowOperationOutput.decisionInputC(plan.question)
+          offer <- input.dependencyDelivery.flatMap(_.route(submitted.result.value.choice)).map(Consequence.success)
+            .getOrElse(F.invalid("selected dependency route was unavailable on the issued question"))
+          policy <- d.managedDevelopment.map(Consequence.success)
+            .getOrElse(F.invalid("selected dependency route has no current managed registration"))
+          _ <- D.readmittedC(offer, input.result.dependencyProposal.get, policy, core)
+        } yield ()
+      } yield () else Consequence.unit
       events <- submitted.result.value.choice match {
-          case "AdoptPlanRevision" | "ApproveDependencyScope" =>
+          case choice if choice == "AdoptPlanRevision" || D.humanScopeApproval(choice) =>
             GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, plan.pending.identity.value,
               expected.revision.value, "ApprovalAccepted", submitted.resultReference.identity, core)
           case "RejectPlanRevision" | "RejectDependencyScope" =>
@@ -400,6 +429,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       required <- requiredC
       bundle = ContextBundle(if (input.developmentReconstruction.nonEmpty) input.reason
         else if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
+        else if (input.dependencyDelivery.nonEmpty) "Choose the delivery route for this exact bounded dependency proposal"
         else if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
         else if (input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope))) _phase_acceptance_deferral_notice(input)
         else if (input.planRevision.exists(_.revisionScope.contains(R.remainingPurposeScope))) _remaining_purpose_notice(input)
@@ -428,6 +458,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         MinimalPresentation("Ordered GoalPhase needs Human direction", Json.obj("choices" -> Json.arr(_choices(source.controller, input).map(Json.fromString)*),
           "notice" -> Json.fromString(if (input.developmentReconstruction.nonEmpty) input.reason
           else if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
+          else if (input.dependencyDelivery.nonEmpty)
+            "Select an available route for this exact dependency. The worktree default is for display. Existing owner, source, effect and acceptance authorities still apply."
           else if (input.result.dependencyProposal.nonEmpty)
             "ApproveDependencyScope selects only this exact proposed linked work unit, its acceptance and dependent work. RejectDependencyScope rejects that proposal. Both resume the same semantic frontier with the actual answer reference; all effect, target and acceptance authorities still apply. Review remains read-only and neither direction executes dependency work."
           else if (input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope)))
@@ -504,7 +536,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           source.sourceHistoryRecovery.fold(source.dependencyInventoryReason.getOrElse(source.controller.decision.get))(
             _ => GoalPhaseSourceHistoryRecovery.message),
           Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery,
-          d.developmentObservation.map(_ => core.executionContext.clock.instant().toString))
+          d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
+          dependencyDelivery = D.offer(source.input, source.result.result.value, d.managedDevelopment, core))
       }
       _ <- if (input != null && input.result != null) Consequence.unit
         else F.invalid("saved Human question has no actual business input")
@@ -518,6 +551,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- GoalPhaseRepairProgress.validateOptionC(input.repairProgress)
       _ <- R.validateOptionC(input.result.planRevision)
       _ <- GoalPhaseDependencyScope.admitResultC(input.work.kind, input.result.outcome, input.result.dependencyProposal)
+      _ <- if (input.dependencyDelivery.forall(offer => D.offerValid(offer, input.work, input.result))) Consequence.unit
+        else F.invalid("saved dependency delivery offer differs from its actual semantic proposal")
       _ <- if (input.result.dependencyProposal == source.result.result.value.dependencyProposal &&
           (input.result.dependencyProposal.isEmpty || (input.planRevision.isEmpty && input.result.planRevision.isEmpty &&
             input.work == source.input && input.requestingResult == source.result.resultReference &&
@@ -553,7 +588,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case "AdoptPlanRevision" => input.planRevision.map(
           R.adoptedC(source.controller, _, result.resultReference.identity, source.deferralPredecessorsC))
           .getOrElse(F.invalid("Plan revision adoption has no saved captured proposal"))
-        case "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" =>
+        case choice if D.humanScopeApproval(choice) || Set("RejectPlanRevision", "RejectDependencyScope")(choice) =>
           source.controller.acceptC(O.DecisionResumptionAdmitted(result.resultReference.identity))
         case "ResumeAssignedWork" | "ContinueRepairs" => resumedC(source, result)
         case _ => Consequence.success(source.controller)
@@ -565,7 +600,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case "AdoptPlanRevision" if input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope)) =>
           "human-phase-acceptance-deferral-adopted"
         case "AdoptPlanRevision" => "human-plan-revision-adopted"
-        case "ResumeAssignedWork" | "ContinueRepairs" | "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" => (if (source.controller.documentDecision) "human-document-resumed-"
+        case choice if D.humanScopeApproval(choice) ||
+            Set("ResumeAssignedWork", "ContinueRepairs", "RejectPlanRevision", "RejectDependencyScope")(choice) =>
+          (if (source.controller.documentDecision) "human-document-resumed-"
           else "human-semantic-resumed-") + state.stage.toString
         case "Defer" => "human-semantic-deferred"
         case _ => "human-semantic-cancelled"
@@ -610,8 +647,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   private def _admit_answer_c(answer: Answer): Consequence[Unit] =
     if (answer != null && choices.contains(answer.choice) && _text(answer.rationale)) Consequence.unit
     else F.invalid("ordered Human answer choice or rationale is invalid")
-  private def _continues(choice: String): Boolean =
-    Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(choice)
+  def continues(choice: String): Boolean =
+    D.humanScopeApproval(choice) || Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision",
+      "RejectDependencyScope", "AuthorizeNewAttempt", "AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(choice)
   private def _phase_acceptance_deferral_notice(input: Input): String = {
     val ids = O.phaseAcceptanceDeferralConditionsC(input.work.selectedPlan, input.planRevision.get.plan).toOption.get
     "Answer only the saved Phase acceptance deferral; exact deferred condition IDs: " + ids.mkString(", ") +
@@ -631,6 +669,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       case "AdoptPlanRevision" => "Revision adoption retained; only owning Advance may issue implementation of the saved Plan."
       case "RejectPlanRevision" => "Revision rejection retained; only owning Advance may resume the original Plan with the explicit rejection context."
       case "ApproveDependencyScope" => "Exact dependency scope direction retained; owning Advance resumes the same semantic work. Effect, target and acceptance authorities still apply; review remains read-only."
+      case choice if D.routeChoices.contains(choice) => "Exact dependency route retained; owning Advance resumes the same semantic work. Destination Start and effect authority remain separate."
       case "RejectDependencyScope" => "Dependency proposal rejected; owning Advance resumes the same semantic work with its explicit rejection and actual answer reference."
       case "AuthorizeNewAttempt" => "Independent Human direction retained; only owning Advance may start the fresh candidate attempt. The original source normalization effect remains UNKNOWN."
       case "AdoptDevelopmentReconstruction" => "Actual Human document selection retained. Separate ordinary Advance appends the common reconstruction; unresolved effects remain pending observation/Human."

@@ -1,6 +1,6 @@
 /**
  * @since   Nov.  6, 2026
- * @version Nov. 18, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -30,7 +30,7 @@ private[smworkflow] object GoalPhaseDependencyApprovalLineage {
 
   private def _valid_context(context: W.DecisionContext): Boolean = context != null &&
     context.requestingResult != null && context.requestingResult.dependencyProposal != null &&
-    context.decisionReference != null && context.inventoryContinuation != null
+    context.decisionReference != null && context.inventoryContinuation != null && context.deliveryRoute != null
 
   private def _valid_state(state: State): Boolean = state != null && state.entries != null &&
     state.entries.forall(e => e != null && _valid_key(e.key) && V.approvalValid(e.original) &&
@@ -41,7 +41,8 @@ private[smworkflow] object GoalPhaseDependencyApprovalLineage {
 
   def appendC(state: State, key: Key, approval: V.Approval, context: W.DecisionContext,
     issued: Option[W.DecisionContext]): Consequence[State] =
-    if (context == null || context.choice != "ApproveDependencyScope") invalid("ordinary lineage requires actual Human direction")
+    if (context == null || !DependencyDevelopmentDelivery.humanScopeApproval(context.choice))
+      invalid("ordinary lineage requires actual Human direction")
     else _append_c(state, key, approval, context, issued)
 
   def policyC(state: State, saved: GoalPhasePolicyDependencyContinuation.Saved): Consequence[State] =
@@ -51,7 +52,8 @@ private[smworkflow] object GoalPhaseDependencyApprovalLineage {
   private def _append_c(state: State, key: Key, approval: V.Approval, context: W.DecisionContext,
     issued: Option[W.DecisionContext]): Consequence[State] = {
     if (!_valid_state(state) || !_valid_key(key) || !V.approvalValid(approval) || !_valid_context(context) ||
-        issued == null || issued.exists(c => !_valid_context(c)) || !Set("ApproveDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(context.choice) ||
+        issued == null || issued.exists(c => !_valid_context(c)) ||
+        (!DependencyDevelopmentDelivery.humanScopeApproval(context.choice) && context.choice != GoalPhasePolicyDependencyContinuation.choice) ||
         context.decisionReference != Some(approval.decision) ||
         !context.requestingResult.dependencyProposal.contains(approval.proposal) || approval.step != key.step ||
         state.entries.exists(e => e.key.session != key.session || e.key.continuation == key.continuation ||

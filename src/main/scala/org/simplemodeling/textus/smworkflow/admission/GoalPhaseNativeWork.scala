@@ -19,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -103,28 +103,35 @@ private[smworkflow] object GoalPhaseNativeWork {
   }
   final case class DecisionContext(requestingResult: Result, choice: String, rationale: String,
     decisionReference: Option[ContextReference] = None,
-    inventoryContinuation: Option[GoalPhaseDependencyInventoryContinuation.InventoryContext] = None)
+    inventoryContinuation: Option[GoalPhaseDependencyInventoryContinuation.InventoryContext] = None,
+    deliveryRoute: Option[DependencyDevelopmentDelivery.Route] = None)
 
   // Review Context and validation Payload use their owning companion codecs,
   // including the optional retained metadata defaults. Derive request-only
   // wrappers bottom-up to bound expansion at the actual receipt vectors.
   private given Encoder[DecisionContext] = deriveEncoder[DecisionContext].mapJson(_.mapObject(_.filter {
-    case ("decisionReference" | "inventoryContinuation", value) => !value.isNull
+    case ("decisionReference" | "inventoryContinuation" | "deliveryRoute", value) => !value.isNull
     case _ => true
   }))
   private val _decision_decoder: Decoder[DecisionContext] = deriveDecoder
   private given Decoder[DecisionContext] = Decoder.instance { cursor =>
-    if (Vector("decisionReference", "inventoryContinuation").exists(key => cursor.downField(key).focus.exists(_.isNull)) ||
+    if (Vector("decisionReference", "inventoryContinuation", "deliveryRoute").exists(key => cursor.downField(key).focus.exists(_.isNull)) ||
         !cursor.value.asObject.exists(fields => fields.keys.toSet ==
           (Set("requestingResult", "choice", "rationale") ++
-            Vector("decisionReference", "inventoryContinuation").filter(key => cursor.downField(key).focus.nonEmpty))))
+            Vector("decisionReference", "inventoryContinuation", "deliveryRoute").filter(key => cursor.downField(key).focus.nonEmpty))))
       Left(DecodingFailure("Decision reference must be absent or valid", cursor.history))
     else _decision_decoder(cursor).flatMap { value =>
       val validreference = value.decisionReference.forall(reference => reference != null &&
         Vector(reference.identity, reference.revision).forall(text => _bounded_text(text) && !text.exists(_.isControl)))
-      val dependency = Set("ApproveDependencyScope", "RejectDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(value.choice)
+      val dependency = DependencyDevelopmentDelivery.humanScopeApproval(value.choice) ||
+        Set("RejectDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(value.choice)
+      val route = DependencyDevelopmentDelivery.routeChoices.contains(value.choice) == value.deliveryRoute.nonEmpty &&
+        value.deliveryRoute.forall(route => value.requestingResult != null &&
+          value.requestingResult.dependencyProposal.exists(proposal =>
+            DependencyDevelopmentDelivery.routeValid(route, value.choice, proposal)))
       val inventory = value.inventoryContinuation.forall(context =>
-        GoalPhaseDependencyInventoryContinuation.contextValid(context) && value.choice == "ApproveDependencyScope" &&
+        GoalPhaseDependencyInventoryContinuation.contextValid(context) &&
+          DependencyDevelopmentDelivery.humanScopeApproval(value.choice) &&
           value.decisionReference.contains(context.approval) && value.requestingResult != null &&
           value.requestingResult.dependencyProposal.exists(original =>
             GoalPhaseDependencyInventoryContinuation.assessC("context", context.proposal,
@@ -132,7 +139,7 @@ private[smworkflow] object GoalPhaseNativeWork {
                 case GoalPhaseDependencyInventoryContinuation.WithinBoundary(_) => true
                 case _ => false
               }.fold(_ => false, identity)))
-      if (validreference && inventory && (!dependency || (value.decisionReference.nonEmpty && value.requestingResult != null &&
+      if (validreference && route && inventory && (!dependency || (value.decisionReference.nonEmpty && value.requestingResult != null &&
           value.requestingResult.dependencyProposal.nonEmpty && value.requestingResult.planRevision.isEmpty &&
           value.requestingResult.outcome == "decision-needed" &&
           GoalPhaseDependencyScope.validateOptionC(value.requestingResult.dependencyProposal).isSuccess))) Right(value)

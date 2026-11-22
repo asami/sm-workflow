@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -224,6 +224,42 @@ private[smworkflow] object DelegateTask {
     LocalPublication.Input(state.input.requestIdentity + ":delegate-publication:" + session,
       state.input.delegation.get.publicationTarget.get, None)
 
+  /** Qualify the effects retained by the destination owner before judgment or return. */
+  def deliveryEffectsC(state: S.State): Consequence[Unit] = for {
+    contract <- state.input.delegation.filter(c => valid(c) && c.role == "destination")
+      .map(Consequence.success).getOrElse(invalid("delivery effects require an admitted destination contract"))
+    _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
+    _ <- checksC(state.input, state.selected)
+    _ <- if ((!state.input.reviewRequired || state.reviewReference.nonEmpty) && S.committedResultValid(state)) Consequence.unit
+      else invalid("delivery effects require the retained required review and accepted local commit")
+    _ <- if (state.delivery.exists(d => _publication_ready(contract, state.commit.get, d))) Consequence.unit
+      else invalid("delivery effects lack the required publication for the accepted source and route")
+  } yield ()
+
+  private def _publication_ready(contract: Contract, commit: S.Commit, delivery: Delivery): Boolean =
+    (contract.publicationTarget, delivery.publication, delivery.managedPublication) match {
+      case (None, None, None) => delivery.managedContinuation.isEmpty
+      case (Some(target), Some(publication), None) =>
+        delivery.managedContinuation.isEmpty && _local_publication_valid(publication) && publication.request.target.identity == target &&
+          publication.request.target.component == contract.componentIdentity && publication.request.source.head == commit.identity &&
+          publication.request.source.tree == commit.tree
+      case (Some(target), None, Some(publication)) =>
+        publication.edge.identity == target && publication.edge.provider.identity == contract.componentIdentity &&
+          delivery.managedContinuation.forall(_.edge == publication.edge) &&
+          ManagedDevelopmentBoundedWork.acceptedPublicationSource(publication.source, commit) &&
+          contract.artifactCoordinates == Vector(publication.selected.organization + ":" + publication.selected.module + ":" + publication.selected.version) &&
+          ManagedDevelopmentRuntime.retainedPublicationValid(publication)
+      case _ => false
+    }
+
+  private def _local_publication_valid(publication: LocalPublication.Result): Boolean =
+    publication.nextPreparation.isEmpty && (publication.status match {
+      case "published" => publication.applicability.isEmpty && publication.process.exists(raw =>
+        WorkflowSbtCapture.decode(raw).toOption.exists(p => WorkflowSbtCapture.exitCode(p).contains(0)))
+      case "unnecessary" => publication.process.isEmpty
+      case _ => false
+    })
+
   /** Validate producer facts at their demonstrated scope. The source locator is
     * retained by receipt; this does not authenticate another runtime's storage.
     */
@@ -242,18 +278,10 @@ private[smworkflow] object DelegateTask {
       else invalid("returned request, owners, scope or authorization differs")
     _ <- if (state.input.submissionConditions == expected.submissionConditions || expected.submissionConditions.isEmpty)
       Consequence.unit else invalid("returned condition timing differs from the original explicit request")
-    _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
-    _ <- checksC(state.input, state.selected)
+    _ <- deliveryEffectsC(state)
     _ <- if (state.conditionReport.map(_.identity) == state.input.conditions && state.conditionReport.forall(_.satisfied) &&
-      state.unresolvedQuestions.isEmpty && state.findings.isEmpty && S.committedResultValid(state) &&
-      (!state.input.reviewRequired || state.reviewReference.nonEmpty) && state.delivery.exists(d =>
-        contract.publicationTarget.isEmpty || d.publication.exists(p => p.ready &&
-          p.request.target.identity == contract.publicationTarget.get && p.request.target.component == contract.componentIdentity &&
-          p.request.source.head == state.commit.get.identity) || d.managedPublication.exists(p =>
-            contract.publicationTarget.contains(p.edge.identity) && p.edge.provider.identity == contract.componentIdentity &&
-            ManagedDevelopmentBoundedWork.acceptedPublicationSource(p.source, state.commit.get) &&
-            contract.artifactCoordinates == Vector(p.selected.organization + ":" + p.selected.module + ":" + p.selected.version)))) Consequence.unit
-      else invalid("returned result lacks accepted conditions, local commit or required actual publication")
+      state.unresolvedQuestions.isEmpty && state.findings.isEmpty) Consequence.unit
+      else invalid("returned result lacks accepted conditions or retains unresolved questions or findings")
   } yield state
 
   /** The retained reference identifies a correction; it does not authenticate

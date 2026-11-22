@@ -391,15 +391,17 @@ the full original vector is valid too. Requester and destination carry the same
 declared timing with only their role changed. Standalone FIX and ordinary
 GoalTask cannot use this delegation timing field.
 
-For example, `conditions: [behavior, validation, commit, publication]` with
-`submissionConditions: []` reports all four false during Implement, Repair and
-Review, with truthful detail that actual later checks and delivery are not yet
-established. `submissionConditions: [behavior]` reports behavior true and the
-other three false when successful implementation or review is submitted. The
-full subset requires all four true at submission. No English-string heuristic
-classifies timing, and no additional Human timing selection is required for a
-new request's declared subset. A missing condition or prematurely true deferred
-condition refuses.
+Use `conditions` for the semantic obligations of the request. The selected
+`checks`, `reviewRequired`, retained local commit and optional
+`delegation.publicationTarget` already specify the ordinary runtime effects.
+The destination verifies those effects from retained typed evidence. Callers can
+omit `submissionConditions` and list only semantic conditions such as
+`conditions: [preserve-input-text, append-one-terminator]`. Both are reported
+false during Implement, Repair and Review and evaluated at DeliveryAcceptance.
+An explicit `submissionConditions: [preserve-input-text]` evaluates that
+condition at submission and defers the other. The full subset requires every
+condition true at submission. The runtime uses the declared subset as written.
+A missing condition or prematurely true deferred condition refuses.
 
 Historical durable `S.Input` without the optional field retains `None`, omits
 that field when re-encoded and preserves strict all-true submission semantics.
@@ -469,9 +471,16 @@ obligations against genuine retained validation, delivery and application
 evidence. It does not execute implementation, checks, commit or publication
 again, and it cannot request repair, diagnostic work or a new review disposition.
 Only accept or decision-needed is available. Acceptance requires every original
-condition true and retains the actual committed source and ready required
-publication. It appends the final report and evidence reference while preserving
-checks, prior independent review, candidate, commit, publication and counters.
+condition true. Issuance, result admission and requester receipt share the check,
+review, commit and publication evidence gate. Ordinary local publication must
+be ready for the configured target and Component and match the accepted commit
+and tree. Native `unnecessary` remains a ready result. Managed development must
+retain its scoped publication for the requested edge, provider Component and
+selected coordinates, from the clean accepted commit and tree. Missing or
+crossed evidence, failed checks and UNKNOWN effects cannot satisfy the gate. A
+successful judgment appends the final report and evidence reference while
+preserving checks, prior independent review, candidate, commit, publication and
+counters.
 
 `ReturnReady` still requires all final conditions, actual checks, required
 review, the selected source commit and actual required publication. Requester
@@ -484,8 +493,8 @@ prose or publication alone.
 `NativeCommonDelegateTaskCliSpec` is an explicitly selected, DoNotDiscover
 RuntimeTestDeclaration over one tiny isolated LineWriter build. Its normal host
 has no runtime.definition and supplies a fixed nonempty TestOnly binding at
-ordinal two. Public requester transport and destination preparation/Start share
-the original explicit empty timing. Actual typed Compile/TestOnly, destination
+ordinal two. Public requester and destination preparation/Start omit submission
+timing and retain the same default empty selection. Actual typed Compile/TestOnly, destination
 local commit and normal tiny artifact publication precede DeliveryAcceptance.
 Final result transport and repeated collection must retain those effects
 without duplication. Human, worker and transport judgments in this fixture are

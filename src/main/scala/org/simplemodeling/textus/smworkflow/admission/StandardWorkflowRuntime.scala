@@ -25,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -167,7 +167,9 @@ private[smworkflow] object StandardWorkflowRuntime {
       def loadForCallC(identity: String, call: ActionCall.Core) = Consequence.success(loaded._2)
     }
     declaration = composition.goal.copy(managedDevelopment = composition.goal.managedDevelopment.map(p =>
-      loaded._4.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_))))))
+      loaded._4.filter(retained => retained.dependencyDelivery.nonEmpty || p.definition.edges.exists(edge =>
+        p.dependencyWorkEdge.contains(edge.identity) && edge.provider.repository == retained.plan.repository))
+        .fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_))))))
     service <- GoalPhaseNativeServiceAssembly.bindC(creation, declaration, plans)
     described = if (request.service.contains("DevelopmentObservationService"))
       DevelopmentObservationService.bind(declaration, catalog.definition)

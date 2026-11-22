@@ -14,7 +14,7 @@ import GoalPhaseRuntimeRepairControl as R
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -293,17 +293,10 @@ private[smworkflow] object StandaloneFixExecution {
       (result.outcome != "accept" || result.unresolvedQuestions.isEmpty)) Consequence.unit
       else invalid("semantic result does not cover the actual work and adopted conditions")
     _ <- if (work.kind != "DeliveryAcceptance" || (work.state.input.submissionConditions.nonEmpty &&
-      work.state.input.delegation.exists(_.role == "destination") && work.state.commit.nonEmpty &&
-      work.state.delivery.exists(d => work.state.input.delegation.get.publicationTarget.isEmpty || d.publication.exists(p =>
-        p.ready && p.request.target.identity == work.state.input.delegation.get.publicationTarget.get &&
-        p.request.target.component == work.state.input.delegation.get.componentIdentity &&
-        p.request.source.head == work.state.commit.get.identity && p.request.source.tree == work.state.commit.get.tree)) &&
       Set("accept", "decision-needed")(result.outcome) && result.fixAssessment.isEmpty && result.diagnosticRepair.isEmpty &&
-      result.reviewDispositions.isEmpty)) Consequence.unit else invalid("delivery acceptance requires retained commit/publication and cannot request a repair")
+      result.reviewDispositions.isEmpty)) Consequence.unit else invalid("delivery acceptance requires deferred timing and cannot request a repair")
     _ <- if (work.kind != "DeliveryAcceptance") Consequence.unit else for {
-      _ <- WorkflowRepairAssessment.checksC(work.state.input.kind, work.state.input.scalaLint, work.state.selected, work.state.receipts)
-      _ <- if ((!work.state.input.reviewRequired || work.state.reviewReference.nonEmpty) && committedResultValid(work.state)) Consequence.unit
-        else invalid("delivery acceptance requires the actual retained checks, required review and local commit")
+      _ <- DelegateTask.deliveryEffectsC(work.state)
       _ <- if (result.outcome != "decision-needed" || (result.conditions.exists(!_.satisfied) && result.unresolvedQuestions.nonEmpty)) Consequence.unit
         else invalid("delivery decision requires an unresolved condition and precise retained explanation")
     } yield ()

@@ -16,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -49,7 +49,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         qualification = r.qualification.map(q => GoalPhaseNativeMetadata.record(GoalPhaseQualification.codec.encode(q))))),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
         d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
-        d.inventoryContinuation.map(context => GoalPhaseNativeMetadata.record(context.asJson)))),
+        d.inventoryContinuation.map(context => GoalPhaseNativeMetadata.record(context.asJson)),
+        deliveryRoute = d.deliveryRoute.map(route => GoalPhaseNativeMetadata.record(route.asJson)))),
       value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation),
         c.initialPhaseRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
         c.stepTestReportRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
@@ -107,7 +108,9 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         choices, Some(context), GoalPhasePlanRevision.publicCaptured(value.planRevision),
         value.sourceHistoryRecovery.map(GoalPhaseSourceHistoryRecovery.targetRecord),
         value.developmentReconstruction.map(context => GoalPhaseNativeMetadata.record(
-          GoalPhaseDevelopmentReconstruction.codec.encode(context))))), None, None, None, None, None, None, None, None, progress, None, None, None, None, Vector.empty)
+          GoalPhaseDevelopmentReconstruction.codec.encode(context))),
+        dependencyDelivery = value.dependencyDelivery.map(offer => GoalPhaseNativeMetadata.record(offer.asJson)))),
+      None, None, None, None, None, None, None, None, progress, None, None, None, None, Vector.empty)
 
   def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,
