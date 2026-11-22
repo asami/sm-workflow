@@ -678,6 +678,28 @@ configured CNCF Resource/UoW authorization, UTF-8 decoding and read budget;
 put the actual artifact under an already authorized root. A refusal does not
 authorize adding another reader or an application-side size bypass.
 
+### Scala diagnostic repair and lint evidence
+
+#### GoalPhase compiler repair
+
+After a failed Step validation and the normal repair reservation, ordinary
+Advance may apply a registered deterministic correction before issuing
+`RepairStep`. The connected recipe handles the exact supported Scala 3 Circe
+`E008` error-member case. Runtime binds the edit to the retained compiler
+receipt and selected candidate, records its outcome, and runs the selected
+candidate inspection and revalidation. A formal revalidation failure can
+restore the prior bytes and index before ordinary repair. Use the runtime's
+returned state and dispatch semantic repair only when it issues a WorkOrder.
+
+When an issued repair says the deterministic edit was reverted, the retained
+failure describes the checked candidate before rollback. Use the current
+issued candidate and owned source for edits, and the retained failure for
+diagnosis. When the runtime reports an unconfirmed write or rollback conflict,
+retain that state and follow its returned continuation. Preserve the original
+results and repair budget.
+Metals/LSP provider integration and automatic formatter or Scalafix repair
+remain deferred from this delivery.
+
 ### Current-source and source-history continuation
 
 Use these routes only when the selected installed runtime supports them. Retain
