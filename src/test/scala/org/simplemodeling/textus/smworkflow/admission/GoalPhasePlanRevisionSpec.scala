@@ -652,6 +652,27 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       val repeatedProof = _take(I.adoptedDeferralC(repeatedRequest, repeated, submitted.resultReference, paused, adopted, repeatedState))
       val repeatedFollowup = followup.copy(issues = repeatedState, review = successor.review.map(_.copy(priorReviews = repeatedPrior)))
       I.completedC(repeatedFollowup, acceptance, "fresh-review", Some(repeatedProof)).isSuccess shouldBe false
+
+      val recurrenceReference = ContextReference("specification-phase-review-recurrence", "22")
+      val recurrence = repeated.copy(findings = Vector("The independent re-review confirms the original requirement is still unmet"))
+      def finish(decision: S.Result, ledger: Option[I.State]): Consequence[Option[I.State]] = {
+        val original = _submitted(repeatedRequest, decision).copy(resultReference = recurrenceReference)
+        val prior = _take(GoalPhaseNativeReview.retainPriorC(Vector.empty, repeatedRequest, original))
+        val proof = _take(I.adoptedDeferralC(repeatedRequest, decision, recurrenceReference, paused, adopted, ledger))
+        val followup = successor.copy(issues = ledger, review = successor.review.map(_.copy(priorReviews = prior)))
+        val dispositions = ledger.get.issues.map(i => disposition.copy(issueIdentity = i.identity))
+        I.completedC(followup, acceptance.copy(issueReport = Some(report.copy(dispositions = dispositions))), "fresh-review", Some(proof))
+      }
+      val ledger = _take(I.completedC(repeatedRequest, recurrence, recurrenceReference.identity)).get
+      val preserved = _take(finish(recurrence, Some(ledger))).get
+      preserved.issues shouldBe Vector(issue.copy(summary = recurrence.findings.head,
+        evidenceReference = recurrenceReference.identity, latestDisposition = Some("NOT_REVIEWED")))
+      preserved.history shouldBe state.get.history
+      finish(recurrence, Some(ledger.copy(issues = ledger.issues.map(_.copy(summary = issue.summary))))).isSuccess shouldBe false
+      finish(recurrence, Some(ledger.copy(issues = ledger.issues.map(_.copy(evidenceReference = issue.evidenceReference))))).isSuccess shouldBe false
+      val carry = recurrence.copy(issueReport = Some(I.Report(Vector(disposition))))
+      val carriedLedger = _take(I.completedC(repeatedRequest, carry, recurrenceReference.identity))
+      finish(carry, carriedLedger).isSuccess shouldBe false
     }
 
     "admit 64-character candidate Git object IDs and refuse malformed head or tree IDs" in {

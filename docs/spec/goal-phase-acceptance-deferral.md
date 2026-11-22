@@ -127,9 +127,12 @@ requires a `NOT_REVIEWED` disposition and an entry in
 `issueReport.deferredIssues` containing its `issueIdentity` and the nonempty
 set of `conditionIdentities` that account for the entire issue. The runtime
 reconstructs the exact Human adoption and checks the same Session, successor
-Plan, candidate, checks and retained original review. The issue must have
-been opened by that original decision-needed review. The fresh review must
-preserve the actual unmet observations for the adopted conditions.
+Plan, candidate, checks and retained original review. The decision-needed
+review must have opened the issue or explicitly reported it as `RECURRING`
+at its unique finding ordinal. A recurring issue must have been open on
+issuance. Its retained identity and scope must still match, and its summary
+and evidence must match the exact finding and decision review. The fresh
+review must preserve the actual unmet observations for the adopted conditions.
 
 An issue without complete attribution, or one that also concerns a required
 or unrelated condition, continues to block acceptance. An attributed issue

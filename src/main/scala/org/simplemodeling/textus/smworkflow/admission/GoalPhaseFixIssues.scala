@@ -87,15 +87,23 @@ private[smworkflow] object GoalPhaseFixIssues {
     _ <- _check(observations.map(_.identity).toSet == conditions.toSet &&
       observations.forall(o => _unverified(o.status)), "deferral conditions have no retained unmet observations")
     state = issues.getOrElse(_empty)
-    existing = review.issues.toVector.flatMap(_.issues.map(_.identity)).toSet
+    before = review.issues.getOrElse(_empty)
+    existing = before.issues.map(i => i.identity -> i).toMap
     opened = state.history.collect {
-      case t if !existing(t.issueIdentity) && t.previousStatus.isEmpty && t.status == "OPEN" &&
+      case t if !existing.contains(t.issueIdentity) && t.previousStatus.isEmpty && t.status == "OPEN" &&
           t.evidenceReference == reference.identity =>
         t.issueIdentity
     }.toSet
-    selected = state.issues.filter(i => opened(i.identity) && i.evidenceReference == reference.identity &&
+    recurring = result.issueReport.toVector.flatMap(_.dispositions).filter(_.disposition == "RECURRING")
+    observed = recurring.flatMap(d => for {
+      prior <- existing.get(d.issueIdentity).filter(i => i.status == "OPEN" && i.evidenceReference != reference.identity)
+      ordinal <- d.findingOrdinal if recurring.count(_.findingOrdinal.contains(ordinal)) == 1
+      finding <- result.findings.lift(ordinal - 1)
+    } yield _recurring_review_issue(prior, finding, reference.identity)).toSet
+    selected = state.issues.filter(i => i.evidenceReference == reference.identity &&
       i.repository == review.selectedPlan.repository && i.step == "phase:" + review.selectedPlan.phase &&
-      i.source == "REVIEW" && i.status == "OPEN" && result.findings.contains(i.summary))
+      i.source == "REVIEW" && i.status == "OPEN" &&
+      (observed(i) || (opened(i.identity) && result.findings.contains(i.summary))))
   } yield new AdoptedDeferral(review, result, successor, reference, conditions.toSet, selected)
 
   private val _statuses = Set("OPEN", "DECLINED", "RESOLVED", "REOPENED")
@@ -256,9 +264,7 @@ private[smworkflow] object GoalPhaseFixIssues {
       val updated = entry.disposition match {
         case "RESOLVED" => issue.copy(status = "RESOLVED", evidenceReference = evidence,
           latestDisposition = Some(entry.disposition))
-        case "RECURRING" => issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,
-          summary = result.findings(entry.findingOrdinal.get - 1), evidenceReference = evidence,
-          latestDisposition = Some(entry.disposition))
+        case "RECURRING" => _recurring_review_issue(issue, result.findings(entry.findingOrdinal.get - 1), evidence)
         case _ => issue.copy(latestDisposition = Some(entry.disposition))
       }
       _update(prior, updated, evidence)
@@ -274,6 +280,10 @@ private[smworkflow] object GoalPhaseFixIssues {
     correspondence = !next.issues.exists(i => relevant(request, i) && i.source == "REVIEW" && i.sourceIdentity.isEmpty)
   } yield _movement_at(next, state.history.size, request.selectedPlan.repository,
     if (request.kind == "ReviewPhase") None else request.stepIdentity, evidence, correspondence)
+
+  private def _recurring_review_issue(issue: Issue, finding: String, evidence: String): Issue =
+    issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,
+      summary = finding, evidenceReference = evidence, latestDisposition = Some("RECURRING"))
 
   private def _deferred_issues_c(request: W.Request, result: W.Result, known: Vector[Issue],
     dispositions: Vector[Disposition], entries: Vector[Deferral],
