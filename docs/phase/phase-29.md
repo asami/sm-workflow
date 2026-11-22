@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-22 (Asia/Tokyo)
-Scheduled: after Phase 23 and before Phase 25
+Scheduled: after Phase 23
 Depends on: Phase 23; consumes applicable Phase 28 deterministic auto-fix integration
 Checklist: [Phase 29 acceptance](phase-29-checklist.md)
 Strategy: [Scala lint quality strategy](../journal/2026/11/2026-11-22-scala-lint-quality-strategy.md)

@@ -130,3 +130,14 @@ counts. It starts no Phase and neither restarts nor resubmits existing work, and
 does not change another chat's assignment. Existing source changes and Git
 staging remain intact. No implementation, test execution, publication, account
 configuration or push is part of this record.
+
+## Phase 25 after Phase 28 — 2026-11-22
+
+The user selected Phase 25 as the next Phase after
+[Phase 28](../../../phase/phase-28.md), ahead of Phase 18. The decision moves
+normal OpenAI API use into [Phase 25](../../../phase/phase-25.md#ordinary-openai-use).
+Phase 28 supplies deterministic fixes first. Phase 25 starts with independent
+review and small remaining compiler-error repairs and measures routing through
+the ordinary sm-workflow command. Task eligibility, verified usage bounds,
+runtime-owned patch checks and existing Codex continuation stay with their
+respective owners. This decision changes scheduling and acceptance scope.

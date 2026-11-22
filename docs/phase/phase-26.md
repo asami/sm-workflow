@@ -55,4 +55,4 @@ A developer can start the existing sm-workflow Server, connect **both Codex CLI 
 
 ## Scheduling
 
-Plan as the smallest practical dual-CLI interoperability slice, using existing server/CLI foundations. Do not reorder the currently selected stabilization → remaining Phase 7 → Phase 24 → Phase 25 sequence merely by creating this Phase. Assess and explicitly select a delivery slot after checking concrete prerequisites. No Phase/Session is started by this plan.
+Plan as the smallest practical dual-CLI interoperability slice, using existing server/CLI foundations. Follow the [current development priority](README.md#adopted-development-priority--2026-11-22) and select a delivery slot after checking concrete prerequisites. No Phase/Session is started by this plan.

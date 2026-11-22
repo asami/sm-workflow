@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-22 (Asia/Tokyo)
-Scheduled: immediately after Phase 24; before Phases 18, 23, 22
+Scheduled: immediately after Phase 24; followed by [Phase 25](phase-25.md), then Phases 18, 23 and 22
 Depends on: Phase 24 practical API-credit route
 Checklist: [Phase 28 acceptance](phase-28-checklist.md)
 Decision: [Deterministic-first development strategy](../journal/2026/11/2026-11-22-deterministic-first-auto-fix-strategy.md)
