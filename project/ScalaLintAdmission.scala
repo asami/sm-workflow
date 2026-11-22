@@ -99,7 +99,8 @@ object ScalaLintAdmission {
         val original = position.input().text().toString
         val ranges = scopes.getOrElseUpdate(path -> original, affected(original, changed))
         val active = ranges.exists(_.overlaps(position.startLine() + 1, position.endLine() + 1))
-        val blocking = active && diagnostic.severity() == ScalafixSeverity.ERROR
+        val blocking = active && (diagnostic.severity() == ScalafixSeverity.ERROR ||
+          diagnostic.severity() == ScalafixSeverity.WARNING)
         if (blocking) blockers += 1
         val id = diagnostic.lintID().get()
         val rule = (id.ruleName() + "." + id.categoryID()).filterNot(_.isControl)

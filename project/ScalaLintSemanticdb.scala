@@ -31,7 +31,10 @@ object ScalaLintSemanticdb {
   private def safe(info: SymbolInformation): Boolean = {
     val eligible = info.kind == SymbolInformation.Kind.FIELD || info.kind == SymbolInformation.Kind.METHOD
     eligible && global(info.symbol) && (info.signature match {
-      case value: ValueSignature => simple(value.tpe)
+      case value: ValueSignature => value.tpe match {
+        case ByNameType(result) if info.kind == SymbolInformation.Kind.METHOD => simple(result)
+        case other => simple(other)
+      }
       case method: MethodSignature => method.typeParameters.forall(s => s.symlinks.isEmpty && s.hardlinks.isEmpty) &&
         method.parameterLists.forall(s => s.symlinks.isEmpty && s.hardlinks.isEmpty) && simple(method.returnType)
       case _ => false

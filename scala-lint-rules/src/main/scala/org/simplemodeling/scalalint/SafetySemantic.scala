@@ -76,6 +76,10 @@ private[scalalint] object SafetySemantic {
     val target = method(tree)
     val inferred = if (tree.isInstanceOf[Term.Apply] || tree.isInstanceOf[Term.ApplyType])
       doc.synthetics.filter(_related(_, target)).flatMap(_synthetics).collectFirst {
+        case ApplyTree(TypeApplyTree(SelectTree(IdTree(companion), id), args), List(OriginalTree(original))) if
+          original.pos != Position.None && tree.pos != Position.None && original.pos == tree.pos &&
+            !target.symbol.isNone && !companion.symbol.isNone && companion.symbol == target.symbol &&
+            id.info.displayName == "apply" => id.info -> args
         // Factory apply synthetics place the OriginalTree beside the selected
         // method, in the enclosing ApplyTree, rather than inside SelectTree.
         case TypeApplyTree(SelectTree(qual, id), args) if

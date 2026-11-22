@@ -180,6 +180,8 @@ final class NoProjectConfigConsumerSpec extends AnyWordSpec with Matchers with G
         val expected = _scopedFindings(source).filterNot(x => x._1 == "NoOptionGet") ++ Vector(
           _location("DisableSyntax", "var", source, "var current", "var"),
           _location("GoldenportPrivateMemberNaming", "", source, "private def _projectHelper", "_projectHelper"),
+          _location("GoldenportPrivateMemberNaming", "", source, "private val selectedValue", "selectedValue"),
+          _location("GoldenportPrivateMemberNaming", "", source, "private def selectedCall", "selectedCall"),
           // Scalafix 0.12.1 anchors this diagnostic to the string contents,
           // excluding the literal's opening quote.
           _location("UnusedScalafixSuppression", "", source, "@SuppressWarnings", "scalafix:NoOptionGet")
