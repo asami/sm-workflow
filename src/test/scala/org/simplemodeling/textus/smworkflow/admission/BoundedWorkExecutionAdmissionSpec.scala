@@ -1,7 +1,7 @@
 /**
  * @since   Oct. 26, 2026
  *  version Oct. 27, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -146,6 +146,31 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
       GoalPhaseNativeExecution.validatePairC(Some(concrete), None).isSuccess shouldBe false
     }
 
+    "resolve a fresh Review from its current class after implementation, while a new Start still needs all stage classes" in {
+      Given("a retained Task at Review and a current host mapping only its review class")
+      import GoalPhaseWorkClassification.*
+      val runtime = GoalTaskNativeRun
+      val implementation = Classification(Kind.CODING, Complexity.SIMPLE, Domain.PROGRAMMING, Footprint.SMALL)
+      val review = Classification(Kind.REVIEW, Complexity.STANDARD, Domain.ENGINEERING, Footprint.LARGE)
+      val input = _input("code", true).copy(workClassification = Some(Assignment(implementation, implementation, review)))
+      val state = _take(S.startC(input, "participant", Vector(GoalPhaseNativeValidation.Check("focused", 1)))).copy(stage = "Review")
+      val work = S.Work("instance", "7", "Review", state)
+      val fixture = NativePreparationFixture.work("GoalTaskWorkflow", work, runtime.inputCodec.typeIdentity,
+        "GoalTaskWorkResult", runtime.completionOperation)
+      val template = fixture.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Work]]
+      val requirement = _take(runtime.executionRequirementC(input, "Review"))
+      val pending = fixture.copy(current = template.copy(requirement = requirement))
+      val host = _host(Some(_take(mappingC(Vector("ReviewCritical")))), Some(origin))
+      When("new Start and the existing Task's fresh Review are evaluated against that same host")
+      val start = runtime._preflight_execution_c(input, host)
+      val bound = _take(runtime._bind_fresh_task_c(pending, host)).current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Work]]
+      Then("Start refuses the incomplete stage mapping and Review captures only its current independent assignment")
+      start.isSuccess shouldBe false
+      bound.request.input.get.value.operatingProfile.flatMap(_.reasoningClass) shouldBe Some("ReviewCritical")
+      bound.requirement.copy(disposition = None) shouldBe requirement
+      bound.requirement.disposition.map(_.independence) shouldBe Some(ExecutionIndependence.Required)
+    }
+
     "retain code documentation and independent review captures in the owning bounded Work codec and preserve historical omission" in {
       Given("fresh bounded semantic intent and a shared logical operating context")
       Vector("code", "documentation").foreach { kind =>
@@ -170,6 +195,7 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
           resolved.disposition.get.independence shouldBe (if (stage == "Review") ExecutionIndependence.Required else ExecutionIndependence.Optional)
           val old = codec.encode(legacy)
           old.hcursor.downField("payload").downField("operatingProfile").focus shouldBe None
+          old.hcursor.downField("payload").downField("state").downField("input").downField("workClassification").focus shouldBe None
           codec.decode(old) shouldBe Right(legacy)
           codec.encode(codec.decode(old).toOption.get) shouldBe old
           Vector(Json.Null, Json.obj(), Json.fromString("not-a-capture"),
@@ -181,13 +207,54 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
       }
     }
 
+    "admit complete public Task assignments and reject stage crossings before semantic issuance" in {
+      Given("a direct code Task with explicitly distinct implementation, repair and independent review classifications")
+      val implementation = V.WorkflowSemanticWorkClassification("CODING", "SIMPLE", "ENGINEERING", "SMALL", None)
+      val repair = implementation.copy(complexity = "COMPLEX", nature = Some("hardest"))
+      val review = implementation.copy(kind = "REVIEW", complexity = "STANDARD")
+      val assignment = V.WorkflowTaskWorkClassification(implementation, repair, review)
+      val public = V.GoalTaskInput("sm-workflow", "typed-task-intent", "Admit only complete stage intent",
+        NonEmptyVector.of("src"), NonEmptyVector.of("focused"), NonEmptyVector.of("behavior"),
+        NonEmptyVector.of(V.WorkflowArtifactReference("spec-adopted-direction", "1")), true,
+        "code", "off", 10, "direct-instruction", Vector.empty, Some(assignment))
+      val legacy = _take(V.GoalTaskInput.createC(public.toRecord().removeKeys(Set("workClassification"))))
+      val invalid = Vector(
+        assignment.copy(implementation = review),
+        assignment.copy(repair = implementation.copy(kind = "DESIGN")),
+        assignment.copy(review = implementation),
+        assignment.copy(repair = repair.copy(domain = "unregistered")),
+        assignment.copy(review = review.copy(nature = Some("mechanical"))),
+        assignment.copy(implementation = implementation.copy(nature = Some("deterministic"))))
+      When("the same typed parser used by preparation and Start receives exact, absent, incomplete and crossed stage intent")
+      val admitted = _take(S.goalTaskInputC(public))
+      val absent = _take(S.goalTaskInputC(legacy))
+      val refused = invalid.map(value => S.goalTaskInputC(public.copy(workClassification = Some(value))))
+      val incomplete = V.WorkflowTaskWorkClassification.createC(assignment.toRecord().removeKeys(Set("repair")))
+      Then("only admitted Task stages select explicit intent, and read-only delivery and absent work keep their previous meaning")
+      _take(GoalTaskNativeRun.executionRequirementC(admitted, "Implement")).reasoningClass.map(_.value) shouldBe Some("CodingEngineeringRoutine")
+      _take(GoalTaskNativeRun.executionRequirementC(admitted, "Repair")).reasoningClass.map(_.value) shouldBe Some("CodingEngineeringDeep")
+      _take(GoalTaskNativeRun.executionRequirementC(admitted, "Review")).reviewRequired shouldBe true
+      _take(DelegateTaskNativeRun.executionRequirementC(admitted, "DeliveryAcceptance")) shouldBe
+        _take(DelegateTaskNativeRun.executionRequirementC(absent, "DeliveryAcceptance"))
+      absent.workClassification shouldBe None
+      absent.asJson.hcursor.downField("workClassification").focus shouldBe None
+      admitted.asJson.as[S.Input] shouldBe Right(admitted)
+      refused.foreach(_.isSuccess shouldBe false)
+      incomplete.isSuccess shouldBe false
+      S.inputC(admitted.copy(task = None)).isSuccess shouldBe false
+      S.goalTaskInputC(public.copy(kind = "validation")).isSuccess shouldBe false
+    }
+
     "start a managed logical GoalTask and recollect its immutable pending work after host settings change" in {
-      Given("an actual managed SQLite host and a passively prepared documentation Task")
+      Given("an actual managed SQLite host and a passively prepared documentation Task with explicit stage intent")
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/bounded-logical").toAbsolutePath), "episode-").toRealPath()
+      val design = V.WorkflowSemanticWorkClassification("DESIGN", "COMPLEX", "ENGINEERING", "MEDIUM", None)
+      val review = V.WorkflowSemanticWorkClassification("REVIEW", "STANDARD", "ENGINEERING", "SMALL", None)
+      val classification = V.WorkflowTaskWorkClassification(design, design.copy(complexity = "STANDARD"), review)
       val input = V.GoalTaskInput("sm-workflow", "logical-task", "Retain the adopted documentation meaning",
         NonEmptyVector.of("docs/phase.md"), NonEmptyVector.of("test"), NonEmptyVector.of("behavior"),
         NonEmptyVector.of(V.WorkflowArtifactReference("explicit-documentation-direction", "1")), false,
-        "documentation", "off", 10, "direct-instruction", Vector.empty)
+        "documentation", "off", 10, "direct-instruction", Vector.empty, Some(classification))
       val prepared = _take(NativeGoalTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "logical-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "logical-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))
@@ -223,7 +290,9 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
         withClue(captureclue) { normalized.operatingProfile should not be empty }
         val capture = normalized.operatingProfile.get
         withClue(captureclue + "; actualCapture=" + capture) { capture.dispatch should not be empty }
-        capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+        normalized.state.input.workClassification shouldBe _take(GoalPhaseWorkClassification.taskInputC(Some(classification)))
+        capture.reasoningClass shouldBe Some("DesignDeep")
+        capture.dispatch.get.candidates shouldBe Vector("difficult", "hardest")
         val publiccapture = GoalPhaseNativeMetadata.normalizePublicJson(contextjson).toOption.get.hcursor
           .get[GoalPhaseOperatingProfiles.Capture]("operatingProfile").toOption.get
         publiccapture shouldBe normalized.operatingProfile.get
@@ -254,13 +323,13 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
             Property("resultReference", reference, None), Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference),
               Some("spec-logical-implementer"), None, Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "spec-logical-implementer", profile))), None))), actor)
         When("actual Submit checks a crossed context and an execution outside the captured chain")
-        val crossed = _submit_("ordinary", issued.issuedWorkContext.get.copy(expectedRevision = "999"))
-        val outside = _submit_("outside-chain")
+        val crossed = _submit_("difficult", issued.issuedWorkContext.get.copy(expectedRevision = "999"))
+        val outside = _submit_("ordinary")
         Then("both the crossed revision and the outside-chain execution refuse")
         crossed.isSuccess shouldBe false
         outside.isSuccess shouldBe false
         When("the retained candidate submits with its original captured route")
-        val accepted = _submit_("difficult")
+        val accepted = _submit_("hardest")
         Then("a retained candidate is admitted using the original capture despite changed live settings")
         accepted.isSuccess shouldBe true
       }
@@ -272,7 +341,7 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
         val input = V.GoalTaskInput("sm-workflow", "fresh-preflight-task", "Retain the adopted documentation meaning",
           NonEmptyVector.of("docs/phase.md"), NonEmptyVector.of("test"), NonEmptyVector.of("behavior"),
           NonEmptyVector.of(V.WorkflowArtifactReference("explicit-documentation-direction", "1")), false,
-          "documentation", "off", 10, "direct-instruction", Vector.empty)
+          "documentation", "off", 10, "direct-instruction", Vector.empty, None)
         val prepared = _take(NativeGoalTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "fresh-selection",
           "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "fresh-start",
           "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))
@@ -321,7 +390,7 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
       val input = V.GoalTaskInput("sm-workflow", "concrete-context-task", "Retain the adopted documentation meaning",
         NonEmptyVector.of("docs/phase.md"), NonEmptyVector.of("test"), NonEmptyVector.of("behavior"),
         NonEmptyVector.of(V.WorkflowArtifactReference("explicit-documentation-direction", "1")), false,
-        "documentation", "off", 10, "direct-instruction", Vector.empty)
+        "documentation", "off", 10, "direct-instruction", Vector.empty, None)
       val prepared = _take(NativeGoalTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "concrete-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "concrete-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))

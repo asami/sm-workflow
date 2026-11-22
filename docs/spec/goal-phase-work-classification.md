@@ -138,13 +138,52 @@ They establish no executed test result, provider invocation, installed runtime
 refresh, repair of a retained consumer Session or independent review acceptance.
 Fresh native compile/focused/FULL and genuine independent review remain required.
 
+## R8 — Bounded Task intent and fresh execution
+
+GoalTask and DelegateTask accept optional `workClassification` through their
+ordinary inputs. When supplied, it requires `implementation`, `repair` and
+`review`. Each member supplies `kind`, `complexity`, `domain`, `footprint`
+and optional `nature`, using the Phase vocabulary in R1. Implementation and
+repair take `CODING` for code or `DESIGN` for documentation. Review takes
+`REVIEW` and keeps its assigned independence. Semantic Task work permits
+`hardest` and `parent-inline` under the ordinary dispatch policy, with
+`mechanical` available for explicitly mechanical coding. Deterministic
+operations have their own runtime entry points. Standalone FIX and validation
+inputs carry no Task classification.
+
+Preparation and Start admit the same typed input. A DelegateTask requester
+retains semantic intent in the dispatch request. The destination owns
+execution and admits the same intent when it starts the Task. Read-only
+DeliveryAcceptance keeps its existing requirement. Older Task inputs that omit
+the field keep their original standard, small-footprint interpretation and
+retain the omission in storage.
+
+At fresh issuance, GoalPhase projects the selected Plan member and bounded
+Tasks project their retained stage member into the same operating profile and
+dispatch policy. Logical requirement derivation and GoalPhase fresh dispatch
+look up the same selected Plan classification, including unanimous Phase-wide
+repair. An explicit whole-Phase review uses the same class-based dispatch as
+other review stages. A whole-Phase review with omitted classification keeps
+its difficult dispatch default. Start preflights the prospective bounded stages
+for new Sessions. Each fresh issue after Start checks host readiness and resolves
+its current stage. Exact DelegateTask Start redelivery uses retained admission.
+The operation still supplies capabilities, risk, review responsibility and
+isolation. The existing caller adapter owns model and effort selection,
+availability fallback and launch. Recollection uses the issued Work and
+its recorded requirement and capture. A changed host or policy applies to
+fresh work and leaves assignments already issued intact.
+
 ## Executable specification coverage
 
 `GoalPhaseWorkClassificationSpec` covers E1 (144 classification combinations),
 E2 (assigned frontier separation), E3 (selected Plan storage), E4 (native Start
 and Work request codecs), E5 (invalid input) and E6 (internal Split semantic-only derivation with preserved
 independent obligation and unchanged strict refusal), E7 (unanimous Phase-wide repair and public
-profile resolution), E8 (absent/missing/different repair classifications) and E9
-(unchanged ordinary frontiers and codecs). Connected Operation verification
+profile resolution), E8 (absent/missing/different repair classifications), E9
+(shared Phase lookup and unchanged codecs) and E10 (equivalent stage intent and
+fresh selection across all three workflows). Bounded Work specifications cover
+typed input validation, historical omission, retained pending work under
+changed host settings and the requester-to-destination dispatch round trip.
+Connected Operation verification
 and runtime execution evidence remain required for the applicable Phase 5 scope;
 helper-level success cannot close the integrated batch or reopen Phase 2.

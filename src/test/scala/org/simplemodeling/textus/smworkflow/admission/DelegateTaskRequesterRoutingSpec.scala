@@ -34,7 +34,7 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
       NonEmptyVector.of(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authorization", "1")),
       Some("destination-only-publication"), Vector("org.goldenport:goldenport-cncf_3:0.1.0-SNAPSHOT"),
       "Return actual destination checks, review, commit and publication; consumer activation remains separate",
-      None, None, None), Vector.empty)
+      None, None, None), Vector.empty, None)
 
   def state(view: V.DelegateTaskView): S.State = {
     val json = parser.parse(take(view.state.get.toJsonStringC)).toOption.get
@@ -62,7 +62,7 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
 /** Cheap pure admission and managed public operations; no destination program
   * or SBT program is installed or executed by this specification.
   * @since   Nov.  5, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -156,7 +156,10 @@ final class DelegateTaskRequesterRoutingSpec extends AnyWordSpec with GivenWhenT
       Given("a SPECIFICATION-OWNED caller repository with no destination checkout, mapping, checks or publication target")
       val root = Files.createTempDirectory(Files.createDirectories(
         Path.of("target/sm-workflow/work/delegate-requester").toAbsolutePath), "caller-").toRealPath()
-      val request = input("managed-requester")
+      val implementation = V.WorkflowSemanticWorkClassification("CODING", "SIMPLE", "ENGINEERING", "SMALL", None)
+      val repair = implementation.copy(complexity = "COMPLEX", nature = Some("hardest"))
+      val review = implementation.copy(kind = "REVIEW", complexity = "STANDARD")
+      val request = input("managed-requester").copy(workClassification = Some(V.WorkflowTaskWorkClassification(implementation, repair, review)))
       val adopted = take(DelegateTask.inputC(request))
       val inputfile = root.resolve("request.json")
       Files.writeString(inputfile, take(request.toRecord().toJsonStringC))
@@ -213,6 +216,12 @@ final class DelegateTaskRequesterRoutingSpec extends AnyWordSpec with GivenWhenT
         assertNoExecution(state(dispatched))
         dispatched.work shouldBe None
         dispatched.issuedWorkContext shouldBe None
+        val outbound = dispatched.dispatchInput.get
+        outbound.workClassification shouldBe request.workClassification
+        When("the destination decodes the recorded dispatch input through its typed admission")
+        val destination = take(DelegateTask.inputC(take(V.DelegateTaskInput.createC(outbound.toRecord()))))
+        Then("only the execution role changes and the complete semantic assignment stays attached to the request")
+        destination shouldBe adopted.copy(delegation = adopted.delegation.map(_.copy(role = "destination")))
         When("the exact requester Start is redelivered")
         val redelivered = read_value[V.DelegateTaskView](take(_start_()))
         Then("the original Session and dispatch state are retained")

@@ -19,7 +19,7 @@ import DelegateTaskValidationRecovery.given
 
 /** Managed validation recovery and retained-capture qualification.
   * @since   Nov. 12, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -151,7 +151,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-source", "1")), true, "code", "off", 10,
         "direct-instruction", Vector.empty, V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component",
           "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
-          Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None), Vector("behavior"))
+          Vector.empty, NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty, "SPEC-only", None, None, None), Vector("behavior"), None)
       _with_runtime_(root, "Equal", Some(host), parameters) { (owner, component, actor, prepare) =>
         prepare(_.setupC(_setup_commands_(root, "Equal").size))
         def _call_(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -305,7 +305,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-legacy-v2-capacity", "SPEC-owned actual managed Test fixture",
         NonEmptyVector.one("src"), NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.of("first", "second"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), true, "code", "off", 10,
-        "direct-instruction", Vector.empty, contract, if (delivery) Vector.empty else Vector("first"))
+        "direct-instruction", Vector.empty, contract, if (delivery) Vector.empty else Vector("first"), None)
       var session = ""
       var intentRevision = 0L
       var association = Option.empty[WorkflowSbtCapture.Association]
@@ -930,7 +930,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-legacy-lost-new-test", "SPEC-owned lost-result fixture",
         NonEmptyVector.one("src"), NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.of("first", "second"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), true, "code", "off", 10,
-        "direct-instruction", Vector.empty, contract, Vector("first"))
+        "direct-instruction", Vector.empty, contract, Vector("first"), None)
       val parameters = BoundedWorkExecutionAdmissionFixture.parameters ++ Map("workflow.mechanical-receipt.max-bytes" -> "67108864")
       var session = ""
       var oldRevision = 0L
@@ -1096,7 +1096,7 @@ class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Match
       val input = V.DelegateTaskInput("sm-workflow", "SPEC-lost-result", "SPEC-owned recovery fixture", NonEmptyVector.one("src"),
         NonEmptyVector.of("compile", "test", "test-only"), NonEmptyVector.one("condition"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original-source", "1")), false, "code", "off", 10,
-        "direct-instruction", Vector.empty, contract, Vector("condition"))
+        "direct-instruction", Vector.empty, contract, Vector("condition"), None)
       var session = ""
       var oldRevision = 0L
       var oldHistory = Vector.empty[String]

@@ -20,7 +20,7 @@ import StandaloneFixExecution.given
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -93,12 +93,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           selected = core.copy(executionContext = context)
           result <- if (start) for {
             input <- if (N.delegation) NativeWorkflowOperationInput.valueC[V.DelegateTaskInput](incoming, "input").flatMap(DelegateTask.inputC)
-              else NativeWorkflowOperationInput.valueC[V.GoalTaskInput](incoming, "input").map { input =>
-                S.Input(input.repositoryIdentity, input.requestIdentity, input.objective, input.ownedPaths.toVector,
-                  input.checks.toVector, input.conditions.toVector, input.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
-                  input.reviewRequired, input.kind, input.scalaLint, input.repairLimit,
-                  Some(S.Task(input.sourceKind, input.dependencies.toVector)))
-              }
+              else NativeWorkflowOperationInput.valueC[V.GoalTaskInput](incoming, "input").flatMap(S.goalTaskInputC)
             selection <- NativeWorkflowOperationInput.textC(incoming, "selectionId")
             participant <- NativeWorkflowOperationInput.textC(incoming, "participant")
             key <- NativeWorkflowOperationInput.textC(incoming, "idempotencyKey")

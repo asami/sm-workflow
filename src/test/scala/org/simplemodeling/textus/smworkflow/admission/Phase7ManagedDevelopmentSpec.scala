@@ -1612,7 +1612,7 @@ allowedKinds = ["text"]
                 "main", "origin", "main", root.resolve("b/upstream.git").toString, "FULL_STATE")),
               publicationTarget = Some(connectedEdge.identity), artifactCoordinates = Vector(connectedEdge.requested.organization + ":" +
                 connectedEdge.requested.module + ":" + version(connectedEdge.requested.version, connectedDefinition.scope, request))),
-            if (mode == "Connected") Vector.empty else Vector("behavior"))
+            if (mode == "Connected") Vector.empty else Vector("behavior"), None)
         }
         def start(value: V.DelegateTaskInput, suffix: String): Consequence[org.goldenport.protocol.operation.OperationResponse] = {
           val selected = "connected-" + suffix

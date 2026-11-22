@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 18, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -77,7 +77,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-delegate-review", "SPEC-managed continuation",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("objective", "delivery"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), true, "documentation", "off", 10,
-      "direct-instruction", Vector.empty, contract, Vector.empty)
+      "direct-instruction", Vector.empty, contract, Vector.empty, None)
     val measurements = scala.collection.mutable.Map.empty[String, Int]
     def measure(label: String, value: String): Unit = {
       val size = value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length

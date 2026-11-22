@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -116,7 +117,7 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
       val input = V.GoalTaskInput("sm-workflow", "malformed-task-spec", "Preserve the adopted request through recovery",
         NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
         NonEmptyVector.one(V.WorkflowArtifactReference("specification-direct-request", "1")), false,
-        "documentation", "off", 10, "direct-instruction", Vector.empty)
+        "documentation", "off", 10, "direct-instruction", Vector.empty, None)
       val prepared = take(NativeGoalTaskStartInput.prepareC(Map("input" -> "input", "selection-id" -> "malformed-task-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "malformed-task-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))

@@ -23,8 +23,7 @@ import GoalTaskValidationContinuation as C
 /** Specification-owned receipt facts exercise native public admission only;
   * they do not represent installed execution or a consumer's consent.
   * @since   Nov.  7, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -112,7 +111,7 @@ class GoalTaskValidationContinuationManagedSpec extends AnyWordSpec with GivenWh
         val input = V.GoalTaskInput("sm-workflow", "fixture-validation", "Qualify specification source",
           NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
           NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), true,
-          "code", "required", 10, "direct-instruction", Vector.empty)
+          "code", "required", 10, "direct-instruction", Vector.empty, None)
         val prepared = take(NativeGoalTaskStartInput.prepareC(Map("input" -> "input", "selection-id" -> "selection",
           "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "start",
           "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))

@@ -15,7 +15,10 @@ import NativeWorkflowCliFixture as F
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Explicit installed producer for a disposable genuine legacy frontier. The
-  * handoff is test-owned; no real consumer state or private store is touched. */
+  * handoff is test-owned; no real consumer state or private store is touched.
+  * @since   Nov.  7, 2026
+  * @version Nov. 23, 2026
+  */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -71,7 +74,7 @@ final class NativeGoalTaskValidationContinuationCliSpec extends AnyWordSpec with
         "SPECIFICATION-OWNED author the tiny LineWriter test", NonEmptyVector.one(NativeCommonDelegateTaskFixture.testPath),
         NonEmptyVector.of("fix-check", "test"), NonEmptyVector.one("behavior"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request", "1")), false,
-        "code", "required", 10, "direct-instruction", Vector.empty)
+        "code", "required", 10, "direct-instruction", Vector.empty, None)
       val inputfile = root.resolve("legacy-task-input.json")
       Files.writeString(inputfile, json(input))
       val preparation = V.WorkflowGoalTaskStartPreparationInput(inputfile.toUri.toASCIIString, "legacy-selection", "participant",

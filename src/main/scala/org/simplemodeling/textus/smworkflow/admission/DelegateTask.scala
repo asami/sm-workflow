@@ -113,21 +113,22 @@ private[smworkflow] object DelegateTask {
     c.artifactCoordinates != null && c.artifactCoordinates.forall(exact) &&
     (c.publicationTarget.isEmpty || c.artifactCoordinates.nonEmpty)
 
-  def inputC(v: V.DelegateTaskInput): Consequence[S.Input] = {
-    val c = v.delegation
-    val contract = Contract(c.requesterIdentity, c.destinationIdentity, c.returnDestination, c.componentIdentity,
+  def inputC(v: V.DelegateTaskInput): Consequence[S.Input] = for {
+    classification <- GoalPhaseWorkClassification.taskInputC(v.workClassification)
+    c = v.delegation
+    contract = Contract(c.requesterIdentity, c.destinationIdentity, c.returnDestination, c.componentIdentity,
       c.role, c.validationScope, c.permittedOperations.toVector, c.exclusions,
       c.authorizationReferences.toVector.map(r => ContextReference(r.identity, r.revision)), c.publicationTarget,
       c.artifactCoordinates, c.consumerInstructions, c.prerequisiteFor,
       c.providerPhase.map(p => ProviderPhaseDelivery.Locator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
       c.synchronization.map(p => DevelopmentDeliverySynchronization.Selection(p.repositoryIdentity, p.localBranch,
         p.trackingRemote, p.trackingBranch, p.remoteEndpointIdentity, p.syncMode)))
-    val value = S.Input(v.repositoryIdentity, v.requestIdentity, v.objective, v.ownedPaths.toVector, v.checks.toVector,
+    value = S.Input(v.repositoryIdentity, v.requestIdentity, v.objective, v.ownedPaths.toVector, v.checks.toVector,
       v.conditions.toVector, v.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
       v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract),
-      submissionConditions = Some(v.submissionConditions.toVector))
-    S.inputC(value).map(_ => value)
-  }
+      submissionConditions = Some(v.submissionConditions.toVector), workClassification = classification)
+    _ <- S.inputC(value)
+  } yield value
 
   def requester(input: S.Input): Boolean = input != null && input.delegation != null &&
     input.delegation.exists(c => valid(c) && c.role == "requester")
@@ -149,7 +150,7 @@ private[smworkflow] object DelegateTask {
       c.providerPhase.map(p => V.DelegateProviderPhaseLocator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
       c.synchronization.map(s => V.DelegateDeliverySynchronization(s.repositoryIdentity, s.localBranch,
         s.trackingRemote, s.trackingBranch, s.remoteEndpointIdentity, s.syncMode))),
-    input.submissionConditions.getOrElse(Vector.empty))
+    input.submissionConditions.getOrElse(Vector.empty), input.workClassification.map(GoalPhaseWorkClassification.taskValue))
 
   /** Passive request policy remains applicable without destination check bindings. */
   def requesterInputC(input: S.Input): Consequence[Unit] = for {

@@ -24,9 +24,7 @@ import StandaloneFixExecution.given
   * Prior receipts and Human direction are explicitly specification-owned.
   * No actual user's Session, consent or delivery is represented by this fixture.
   * @since   Nov.  8, 2026
-  *  version Nov.  8, 2026
-  *  version Nov.  9, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -113,11 +111,11 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         val input = V.DelegateTaskInput("sm-workflow", "selected-continuation-fixture", "Retain original behavior",
           NonEmptyVector.of("docs/phase.md", _suite_path), NonEmptyVector.of("compile", "focused", "test"), NonEmptyVector.one("behavior"),
           NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), true, "code", "off", 10,
-          "direct-instruction", Vector.empty, contract, Vector.empty)
+          "direct-instruction", Vector.empty, contract, Vector.empty, None)
         val record = if (family == "GoalTask") V.GoalTaskInput("sm-workflow", "selected-continuation-fixture", "Retain original behavior",
           NonEmptyVector.of("docs/phase.md", _suite_path), NonEmptyVector.of("compile", "focused", "test"), NonEmptyVector.one("behavior"),
           NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), true, "code", "off", 10,
-          "direct-instruction", Vector.empty).toRecord() else input.toRecord()
+          "direct-instruction", Vector.empty, None).toRecord() else input.toRecord()
         val parameters = Map("input" -> "input", "selection-id" -> "selection",
           "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "start",
           "selection-collection" -> "entity:smworkflow.cli.goal_selection")

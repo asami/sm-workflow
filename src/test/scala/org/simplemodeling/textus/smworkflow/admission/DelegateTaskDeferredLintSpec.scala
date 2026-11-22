@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -56,7 +56,7 @@ final class DelegateTaskDeferredLintSpec extends AnyWordSpec with Phase69Configu
         "direct-instruction", Vector.empty, V.DelegateTaskContract("requester", "destination", "requester", "org.example.Fixture",
           "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "commit", "return", "adopt", "review"),
           Vector.empty, NonEmptyVector.of(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")), None, Vector.empty,
-          "Return the unchanged request and actual destination results", None, None, None), Vector.empty)
+          "Return the unchanged request and actual destination results", None, None, None), Vector.empty, None)
       _with_runtime_(root, "UpToDate", hostParameters = BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, prepare) =>
         prepare(_.setupC(_setup_commands_(root, "UpToDate").size))
         val prepared = take(NativeDelegateTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "lint-selection",

@@ -9,7 +9,7 @@ import DelegateTaskSemanticContinuation as R
 
 /** Actual native semantic work, with separately identified fixture qualification facts.
   * @since Nov. 12, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -85,7 +85,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-delegate-semantic", "SPEC-managed continuation",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("objective", "delivery"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,
-      "direct-instruction", Vector.empty, contract, Vector.empty)
+      "direct-instruction", Vector.empty, contract, Vector.empty, None)
     var session = ""
     var description = Option.empty[V.DelegateTaskSemanticContinuationDescriptionResult]
     var emittedwork = Option.empty[V.WorkflowRetainedWorkReference]
@@ -940,7 +940,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-incomplete-semantic", "SPEC preserve ordinary Repair decisions",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,
-      "direct-instruction", Vector.empty, contract, Vector.empty)
+      "direct-instruction", Vector.empty, contract, Vector.empty, None)
     val originalHost = ThreeWorkflowNormalHostFixture.definition(root)
     val expandedHost = originalHost.copy(goal = originalHost.goal.copy(
       candidatePaths = Vector("docs/phase.md", "docs/extra.md", "docs/other.md")))

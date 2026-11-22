@@ -4,14 +4,14 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
+import org.simplemodeling.textus.smworkflow.value as V
 
-/** Application planning input only. Classification selects semantic intent;
-  * neither a model, effort, worker identity nor execution permission is input.
-  * The public skill-facing contract remains Phase 6 work.
+/** Semantic intent for Phase planning and bounded Tasks. Execution policy
+  * owns model, effort, worker identity and permission.
   * @since   Oct.  8, 2026
   *  version Oct. 11, 2026
   *  version Oct. 16, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWorkClassification {
@@ -60,23 +60,66 @@ private[smworkflow] object GoalPhaseWorkClassification {
           (if (nature.contains("mechanical")) "Mechanical" else intensity))))
   }
 
-  /** Planning explicitly supplies all three Step frontiers, not a Skill's
-    * decision to select or call an execution route.
-    */
+  /** Each assignment describes the three semantic frontiers independently. */
   final case class Assignment(implementation: Classification, repair: Classification, review: Classification) {
     def validateC: Consequence[Assignment] =
       if (implementation == null || repair == null || review == null ||
           implementation.kind != Kind.CODING || repair.kind != Kind.CODING || review.kind != Kind.REVIEW)
         Consequence.stateConflict("GoalPhase classification must bind implementation, repair and independent review")
       else for { _ <- implementation.validateC; _ <- repair.validateC; _ <- review.validateC } yield this
+
+    def validateTaskC(taskKind: String): Consequence[Assignment] = {
+      val expected = if (taskKind == "documentation") Kind.DESIGN else Kind.CODING
+      if (!Set("code", "documentation")(taskKind) || implementation == null || repair == null || review == null ||
+          implementation.kind != expected || repair.kind != expected || review.kind != Kind.REVIEW)
+        Consequence.stateConflict("Task classification must bind its implementation, repair and independent review")
+      else for {
+        _ <- implementation.validateC
+        _ <- repair.validateC
+        _ <- review.validateC
+        _ <- if (Vector(implementation, repair, review).exists(_.nature.contains("deterministic")))
+          Consequence.stateConflict("Deterministic work cannot replace a Task semantic assignment") else Consequence.unit
+      } yield this
+    }
   }
+
+  def taskInputC(value: Option[V.WorkflowTaskWorkClassification]): Consequence[Option[Assignment]] = value match {
+    case None => Consequence.success(None)
+    case Some(work) if work != null => for {
+      implementation <- _task_classification_c(work.implementation)
+      repair <- _task_classification_c(work.repair)
+      review <- _task_classification_c(work.review)
+    } yield Some(Assignment(implementation, repair, review))
+    case _ => Consequence.stateConflict("Task workClassification is incomplete")
+  }
+
+  def taskValue(value: Assignment): V.WorkflowTaskWorkClassification =
+    V.WorkflowTaskWorkClassification(_task_value(value.implementation), _task_value(value.repair), _task_value(value.review))
+
+  private def _task_classification_c(value: V.WorkflowSemanticWorkClassification): Consequence[Classification] = {
+    def _member_c_[A](field: String, value: String, values: Array[A]): Consequence[A] =
+      values.find(_.toString == value).map(Consequence.success).getOrElse(
+        Consequence.stateConflict("Unsupported WorkClassification " + field))
+    if (value == null) Consequence.stateConflict("Task workClassification is incomplete")
+    else for {
+      kind <- _member_c_("kind", value.kind, Kind.values)
+      complexity <- _member_c_("complexity", value.complexity, Complexity.values)
+      domain <- _member_c_("domain", value.domain, Domain.values)
+      footprint <- _member_c_("footprint", value.footprint, Footprint.values)
+      result <- Classification(kind, complexity, domain, footprint, value.nature).validateC
+    } yield result
+  }
+
+  private def _task_value(value: Classification): V.WorkflowSemanticWorkClassification =
+    V.WorkflowSemanticWorkClassification(value.kind.toString, value.complexity.toString, value.domain.toString,
+      value.footprint.toString, value.nature)
 
   /** Reconstruct only retained semantic intent. Invocation-time mapping owns
     * concrete placement; a phase-wide repair has no selected Step to invent.
     */
-  def requirementC(kind: String, stepIdentity: Option[String],
-    selectedPlan: GoalPhaseOrderedProgression.Plan, base: ExecutionRequirement): Consequence[ExecutionRequirement] = {
-    val classification = if (kind == "ReviewPhase") selectedPlan.phaseReviewClassification
+  def selectedClassification(kind: String, stepIdentity: Option[String],
+    selectedPlan: GoalPhaseOrderedProgression.Plan): Option[Classification] =
+    if (kind == "ReviewPhase") selectedPlan.phaseReviewClassification
       else if (kind == "RepairStep" && stepIdentity.isEmpty) {
         selectedPlan.steps.map(_.workClassification.map(_.repair)).distinct match {
           case Vector(Some(value)) => Some(value)
@@ -86,14 +129,15 @@ private[smworkflow] object GoalPhaseWorkClassification {
         .flatMap(_.workClassification).map { work => kind match {
           case "ImplementStep" => work.implementation
           case "RepairStep" => work.repair
-          case "TriageStep" => work.review
           case _ => work.review
         }}
-    classification match {
+
+  def requirementC(kind: String, stepIdentity: Option[String],
+    selectedPlan: GoalPhaseOrderedProgression.Plan, base: ExecutionRequirement): Consequence[ExecutionRequirement] =
+    selectedClassification(kind, stepIdentity, selectedPlan) match {
       case Some(value) => value.requirementC(base)
-      case None => Consequence.success(base) // Optional classification remains absent, not defaulted.
+      case None => Consequence.success(base)
     }
-  }
 
   given Encoder[Classification] = Encoder.instance(value => Json.obj(
     "kind" -> Json.fromString(value.kind.toString), "complexity" -> Json.fromString(value.complexity.toString),

@@ -22,7 +22,7 @@ import BoundedWorkRuntime.given
 
 /** SPECIFICATION-OWNED selection and workspace; no actual Human event is asserted.
   * @since   Nov. 16, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -31,7 +31,7 @@ final class GoalTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenThen w
   private val input = V.GoalTaskInput("sm-workflow", "scope-specification", "Preserve the same purpose",
     NonEmptyVector.one("src/test/scala"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.of("behavior", "delivery"),
     NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), false, "code", "off", 10,
-    "direct-instruction", Vector.empty)
+    "direct-instruction", Vector.empty, None)
   private val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =

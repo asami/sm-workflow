@@ -21,7 +21,9 @@ private[smworkflow] object StandaloneFixExecution {
   final case class Input(repositoryIdentity: String, requestIdentity: String, objective: String,
     ownedPaths: Vector[String], checks: Vector[String], conditions: Vector[String],
     sourceReferences: Vector[ContextReference], reviewRequired: Boolean,
-    kind: String = "code", scalaLint: String = "required", repairLimit: Int = R.ceiling, task: Option[Task] = None, reviewOrigin: Option[StandaloneReviewFix.Origin] = None, delegation: Option[DelegateTask.Contract] = None, submissionConditions: Option[Vector[String]] = None)
+    kind: String = "code", scalaLint: String = "required", repairLimit: Int = R.ceiling, task: Option[Task] = None,
+    reviewOrigin: Option[StandaloneReviewFix.Origin] = None, delegation: Option[DelegateTask.Contract] = None,
+    submissionConditions: Option[Vector[String]] = None, workClassification: Option[GoalPhaseWorkClassification.Assignment] = None)
   final case class Task(sourceKind: String, dependencies: Vector[String])
   final case class CommitExecution(outcome: String, selectedPaths: Vector[String], termination: String,
     exitCode: Option[Int], stdout: String, stderr: String)
@@ -78,7 +80,7 @@ private[smworkflow] object StandaloneFixExecution {
   given Encoder[CommitReconciliation] = deriveEncoder
   given Decoder[CommitReconciliation] = deriveDecoder
   given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(_.filter {
-    case ("task" | "reviewOrigin" | "delegation" | "submissionConditions", value) => !value.isNull
+    case ("task" | "reviewOrigin" | "delegation" | "submissionConditions" | "workClassification", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Input] = deriveDecoder
@@ -112,6 +114,15 @@ private[smworkflow] object StandaloneFixExecution {
       else Left(io.circe.DecodingFailure("Invalid bounded operatingProfile capture", cursor.history)))
   }
 
+  def goalTaskInputC(value: V.GoalTaskInput): Consequence[Input] = for {
+    classification <- GoalPhaseWorkClassification.taskInputC(value.workClassification)
+    input = Input(value.repositoryIdentity, value.requestIdentity, value.objective, value.ownedPaths.toVector,
+      value.checks.toVector, value.conditions.toVector, value.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
+      value.reviewRequired, value.kind, value.scalaLint, value.repairLimit, Some(Task(value.sourceKind, value.dependencies.toVector)),
+      workClassification = classification)
+    _ <- inputC(input)
+  } yield input
+
   def inputC(input: Input): Consequence[Unit] = {
     val valid = try input != null && Vector(input.repositoryIdentity, input.requestIdentity, input.objective).forall(text) &&
       paths(input.ownedPaths) && strings(input.checks, true) &&
@@ -125,7 +136,15 @@ private[smworkflow] object StandaloneFixExecution {
       input.reviewOrigin != null && input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies)) &&
       (input.kind != "validation" || (input.task.isEmpty && input.delegation.isEmpty && input.reviewOrigin.isEmpty && !input.reviewRequired))
       catch { case scala.util.control.NonFatal(_) => false }
-    if (valid) StandaloneReviewFix.inputC(input) else invalid("adopted objective, ownership, checks, conditions or repair policy is invalid")
+    if (!valid) invalid("adopted objective, ownership, checks, conditions or repair policy is invalid")
+    else for {
+      _ <- input.workClassification match {
+        case None => Consequence.unit
+        case Some(value) if value != null && input.task.nonEmpty && input.reviewOrigin.isEmpty => value.validateTaskC(input.kind).map(_ => ())
+        case _ => invalid("Work classification requires an admitted semantic Task")
+      }
+      _ <- StandaloneReviewFix.inputC(input)
+    } yield ()
   }
 
   /** Later obligations remain false until post-publication semantic acceptance.

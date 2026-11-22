@@ -25,7 +25,7 @@ import DelegateTaskScopeCorrection.given
 /** Actual deferred public handlers and managed local persistence. All direction
   * and selections are specification-owned, with no live Human or check result.
   * @since   Nov. 18, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -37,7 +37,7 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
     "direct-instruction", Vector.empty, V.DelegateTaskContract("requester", "destination", "requester", "org.example.Fixture",
       "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
       Vector("private"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authority", "1")),
-      None, Vector.empty, "Return the unchanged request and actual results", None, None, None), Vector("behavior", "delivery"))
+      None, Vector.empty, "Return the unchanged request and actual results", None, None, None), Vector("behavior", "delivery"), None)
 
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val base = super.process_plan(root, scenario, goal)

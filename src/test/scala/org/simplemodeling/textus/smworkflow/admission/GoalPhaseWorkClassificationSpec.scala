@@ -8,6 +8,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseWorkClassification.*
 import GoalPhaseWorkClassification.given
 import GoalPhaseOrderedProgression as O
@@ -15,7 +16,8 @@ import GoalPhaseOrderedProgression as O
 /** Planning/codec evidence only: not execution, consent or Skill integration.
   * @since   Oct.  8, 2026
   *  version Oct. 24, 2026
-  * @version Oct. 31, 2026
+  *  version Oct. 31, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -226,7 +228,7 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
       }
     }
     "E9 retain normal Step and whole-Phase selection and current Work codecs" must metadata("E9", "R2,R3,R7") {
-      "while only the Phase-wide repair frontier gains the bounded fallback" in {
+      "while fresh capture uses the same selected Plan members as logical requirements" in {
         Given("the original explicit implementation repair Step-review and Phase-review classifications")
         val routes = Vector(("ImplementStep", Some("S1"), false, assignment.implementation),
           ("RepairStep", Some("S1"), false, assignment.repair),
@@ -235,11 +237,17 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
           ("ReviewPhase", None, true, classified.phaseReviewClassification.get))
         When("the shared constructor receives the same normal native frontier inputs")
         val outcomes = routes.map { case (kind, step, independent, expected) =>
-          take(GoalPhaseWorkClassification.requirementC(kind, step, classified, base(independent))) ->
-            take(expected.requirementC(base(independent)))
+          val request = GoalPhaseNativeWork.Request("instance", "2", kind, step, 1,
+            "Retained frontier", classified, O.Snapshot("a" * 40, "b" * 40), Vector.empty, None, None, None)
+          (take(GoalPhaseWorkClassification.requirementC(kind, step, classified, base(independent))),
+            take(expected.requirementC(base(independent))), GoalPhaseDispatchPolicy.classification(request), expected)
         }
         Then("ordinary lookup and strict requirement meaning stay identical")
-        outcomes.foreach { case (actual, expected) => actual shouldBe expected }
+        outcomes.foreach { case (actual, expected, captured, classification) =>
+          actual shouldBe expected
+          captured shouldBe Some(classification)
+        }
+        GoalPhaseWorkClassification.requirementC("TriageStep", Some("S1"), classified, base(false)).isSuccess shouldBe false
         Vector("ImplementStep", "TriageStep", "ReviewStep").foreach { kind =>
           take(GoalPhaseWorkClassification.requirementC(kind, None, classified, base(false))) shouldBe base(false)
         }
@@ -252,6 +260,77 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
         val decoded = GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(request))
         Then("the same Plan and absent Step identity are retained without new fields or concrete profile data")
         decoded shouldBe Right(request)
+        GoalPhaseDispatchPolicy.classification(request) shouldBe Some(assignment.repair)
+      }
+    }
+
+    "E10 choose equivalent fresh execution for equivalent Phase, GoalTask and DelegateTask intent" must metadata("E10", "R2,R8") {
+      "across assigned stages, explicit mechanical work, difficulty and independent review" in {
+        Given("the same operating policy and equal classified stage intent across the three workflow owners")
+        val roles = Vector(
+          coding.copy(complexity = Complexity.TRIVIAL) -> "ordinary",
+          coding.copy(complexity = Complexity.TRIVIAL, nature = Some("mechanical")) -> "mechanical",
+          coding.copy(complexity = Complexity.SIMPLE) -> "small",
+          coding -> "ordinary",
+          coding.copy(complexity = Complexity.COMPLEX) -> "difficult",
+          coding.copy(nature = Some("hardest")) -> "hardest")
+        val cases = roles.flatMap { case (intent, role) => Vector(
+          ("ImplementStep", "Implement", assignment.copy(implementation = intent), role),
+          ("RepairStep", "Repair", assignment.copy(repair = intent), role))
+        } ++ Vector(
+          ("ReviewStep", "Review", assignment.copy(review = review.copy(nature = Some("parent-inline"))), "ordinary"),
+          ("ReviewStep", "Review", assignment.copy(review = review.copy(footprint = Footprint.LARGE)), "difficult"),
+          ("ReviewStep", "Review", assignment.copy(review = review.copy(nature = Some("hardest"))), "hardest"),
+          ("ReviewPhase", "Review", assignment, "ordinary"))
+        val context = BoundedWorkExecutionAdmissionFixture.logicalContext
+        val request = DelegateTaskRequesterRoutingFixture.input("spec-classified-destination")
+        When("each workflow projects its admitted stage to the common fresh capture")
+        val selections = cases.map { case (frontier, stage, intent, role) =>
+          val independent = stage == "Review"
+          val whole = frontier == "ReviewPhase"
+          val plan = classified.copy(steps = classified.steps.map(_.copy(workClassification = Some(intent))),
+            phaseReviewClassification = if (whole) Some(intent.review) else classified.phaseReviewClassification)
+          val phase = GoalPhaseNativeWork.Request("instance", "2", frontier, if (whole) None else Some("S1"), 1,
+            "Equivalent semantic work", plan, O.Snapshot("a" * 40, "b" * 40), Vector.empty, None, None, None)
+          val goal = StandaloneFixExecution.Input("owned-repository", "spec-classified-goal", "Equivalent semantic work",
+            Vector("src"), Vector("focused"), Vector("behavior"), Vector(ContextReference("spec-source", "1")), false,
+            task = Some(StandaloneFixExecution.Task("direct-instruction", Vector.empty)), workClassification = Some(intent))
+          val destination = take(DelegateTask.inputC(request.copy(delegation = request.delegation.copy(role = "destination"),
+            workClassification = Some(taskValue(intent)))))
+          take(StandaloneFixExecution.inputC(goal))
+          val phaseclass = GoalPhaseDispatchPolicy.classification(phase)
+          val phaserequirement = take(GoalPhaseWorkClassification.requirementC(frontier, phase.stepIdentity, plan, base(independent)))
+          val (resolved, capture) = take(GoalPhaseOperatingProfiles.captureFreshC(context, frontier, phaseclass, phaserequirement,
+            None, independent))
+          val bounded = Vector(GoalTaskNativeRun -> goal, DelegateTaskNativeRun -> destination).map { case (owner, input) =>
+            val intent = take(owner._classification_c(input, stage))
+            val requirement = take(owner.executionRequirementC(input, stage))
+            val (resolved, capture) = take(GoalPhaseOperatingProfiles.captureFreshC(context, stage, Some(intent), requirement,
+              None, independent))
+            (Some(intent), resolved.disposition, capture)
+          }
+          (role, independent, phaseclass, resolved.disposition, capture, bounded)
+        }
+        Then("classification, captured role, fallback chain, and disposition agree across owners")
+        selections.foreach { case (role, independent, intent, disposition, capture, bounded) =>
+          bounded.foreach(_ shouldBe ((intent, disposition, capture)))
+          capture.dispatch.map(_.role) shouldBe Some(role)
+          capture.dispatch.map(_.candidates) shouldBe Some(GoalPhaseDispatchPolicy.chain(role))
+          disposition.map(_.placement) shouldBe Some(ExecutionPlacement.Delegated)
+          disposition.map(_.independence) shouldBe Some(
+            if (independent) ExecutionIndependence.Required else ExecutionIndependence.Optional)
+        }
+
+        Given("a legacy whole-Phase review with no explicit classification")
+        val legacy = GoalPhaseNativeWork.Request("instance", "2", "ReviewPhase", None, 1,
+          "Retained whole-Phase review scope", unclassified, O.Snapshot("a" * 40, "b" * 40), Vector.empty, None, None, None)
+        When("fresh dispatch receives the absent classification and the original independent requirement")
+        val requirement = take(GoalPhaseWorkClassification.requirementC(legacy.kind, legacy.stepIdentity, unclassified, base(true)))
+        val (resolved, capture) = take(GoalPhaseOperatingProfiles.captureFreshC(context, legacy.kind,
+          GoalPhaseDispatchPolicy.classification(legacy), requirement, None, true))
+        Then("the legacy review still uses the difficult dispatch profile and retains independence")
+        capture.dispatch.map(_.role) shouldBe Some("difficult")
+        resolved.disposition.map(_.independence) shouldBe Some(ExecutionIndependence.Required)
       }
     }
 

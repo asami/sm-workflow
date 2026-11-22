@@ -1,7 +1,7 @@
 /**
  * @since   Oct. 26, 2026
  *  version Oct. 27, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -101,7 +101,7 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
       val publicInput = V.GoalTaskInput("sm-workflow", "public-ad-hoc-task", "Develop the explicitly adopted direct request",
         NonEmptyVector.of("docs/phase.md"), NonEmptyVector.of("test"), NonEmptyVector.of("objective"),
         NonEmptyVector.of(V.WorkflowArtifactReference("direct-instruction", "1")), false, "documentation", "off", 10,
-        "direct-instruction", Vector.empty)
+        "direct-instruction", Vector.empty, None)
       val prepared = take(NativeGoalTaskStartInput.prepareC(Map("input" -> "adopted.json", "selection-id" -> "task-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "public-task-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), name =>

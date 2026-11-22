@@ -17,7 +17,7 @@ import NativeWorkflowCliFixture as F
   * Sessions only. No publication, semantic execution, genuine chat delivery or
   * historical user-Session recovery is simulated by these assertions.
   * @since   Oct. 27, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -109,7 +109,7 @@ final class NativePhase68DeliveryCliSpec extends AnyWordSpec with Matchers with 
     "Retain the actual issued documentation request through independent installed commands",
     NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
     NonEmptyVector.one(V.WorkflowArtifactReference("specification-owned-request", "1")), false,
-    "documentation", "off", 10, "direct-instruction", Vector.empty)
+    "documentation", "off", 10, "direct-instruction", Vector.empty, None)
   private def _task_start(scenario: F.Scenario): F.Result = {
     _prepare(scenario, "prepareGoalTaskStart", V.WorkflowGoalTaskStartPreparationInput(
       _file(scenario, "task-input", _task), "task-selection", "participant", "ExplicitHuman", "task-start",
@@ -198,7 +198,7 @@ final class NativePhase68DeliveryCliSpec extends AnyWordSpec with Matchers with 
         None, Vector.empty, "No destination execution or activation is claimed by this isolated fixture", None, None, None)
       val input = V.DelegateTaskInput(task.repositoryIdentity, "installed-phase68-delegate", task.objective,
         task.ownedPaths, task.checks, task.conditions, task.sourceReferences, task.reviewRequired, task.kind, task.scalaLint,
-        task.repairLimit, task.sourceKind, task.dependencies, contract, Vector.empty)
+        task.repairLimit, task.sourceKind, task.dependencies, contract, Vector.empty, None)
       _prepare(scenario, "prepareDelegateTaskStart", V.WorkflowDelegateTaskStartPreparationInput(
         _file(scenario, "delegate-input", input), "delegate-selection", "participant", "ExplicitHuman", "delegate-start",
         "entity:smworkflow.cli.goal_selection"))

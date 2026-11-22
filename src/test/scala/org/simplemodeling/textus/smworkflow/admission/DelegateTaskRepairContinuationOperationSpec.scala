@@ -162,7 +162,7 @@ abstract class DelegateTaskRepairContinuationCodecSpec extends AnyWordSpec with 
 
 /** Public operations over one specification-owned managed destination Session.
   * @since Nov. 12, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -228,7 +228,7 @@ final class DelegateTaskRepairContinuationOperationSpec extends DelegateTaskRepa
     val input = V.DelegateTaskInput("sm-workflow", "SPEC-delegate-repair", "SPEC-managed continuation",
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), false, "documentation", "off", 10,
-      "direct-instruction", Vector.empty, contract, Vector.empty)
+      "direct-instruction", Vector.empty, contract, Vector.empty, None)
     var session = ""
     var description = Option.empty[V.GoalTaskRepairContinuationDescriptionResult]
     var retained = Option.empty[BoundedWorkRuntime.Payload]

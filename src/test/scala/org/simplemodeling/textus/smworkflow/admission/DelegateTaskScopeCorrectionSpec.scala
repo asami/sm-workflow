@@ -22,9 +22,7 @@ import S.given
 /** Public native operations and real managed persistence, without launching SBT.
   * Authority is specification-owned; this does not claim an actual Human event.
   * @since Oct. 30, 2026
-  *  version Nov.  7, 2026
-  *  version Nov. 18, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -37,7 +35,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
   private val _input = V.DelegateTaskInput("sm-workflow", "scope-correction-specification", "Correct the same SBT connection",
     NonEmptyVector.one("src/test/scala"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.one("behavior"),
     NonEmptyVector.one(V.WorkflowArtifactReference("specification-request", "1")), false, "code", "off", 10,
-    "direct-instruction", Vector.empty, _contract, Vector("behavior"))
+    "direct-instruction", Vector.empty, _contract, Vector("behavior"), None)
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {

@@ -9,7 +9,7 @@ import org.goldenport.configuration.ConfigurationValue
 /** Logical future-work policy only. Concrete assignments and availability belong
   * to the versioned caller adapter; this object never discovers or starts models.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object GoalPhaseDispatchPolicy {
   val revision = "standard-2026-11-01"
@@ -70,7 +70,8 @@ private[smworkflow] object GoalPhaseDispatchPolicy {
       else if (nature.contains("hardest")) "hardest"
       else if (nature.contains("mechanical")) "mechanical"
       else if (classification.exists(c => c.kind == Kind.CODING && c.complexity == Complexity.SIMPLE)) "small"
-      else if (Set(ReasoningLevel.Deep, ReasoningLevel.Critical)(requirement.reasoning) || kind == "ReviewPhase") "difficult"
+      else if (Set(ReasoningLevel.Deep, ReasoningLevel.Critical)(requirement.reasoning) ||
+          (kind == "ReviewPhase" && classification.isEmpty)) "difficult"
       else "ordinary"
     val placement = if (role == "runtime") "RUNTIME" else if (role == "parent") "INLINE" else "DELEGATED"
     if (role == "runtime" && independent) Consequence.stateConflict("Deterministic work cannot replace an independent semantic assignment")
@@ -78,8 +79,5 @@ private[smworkflow] object GoalPhaseDispatchPolicy {
     else Consequence.success(Capture(policy.revision, role, if (placement == "DELEGATED") chain(role, policy.edges) else Vector(role), placement, nature, policy.edges))
   }
   def classification(request: GoalPhaseNativeWork.Request): Option[GoalPhaseWorkClassification.Classification] =
-    if (request.kind == "ReviewPhase") request.selectedPlan.phaseReviewClassification
-    else request.stepIdentity.flatMap(id => request.selectedPlan.steps.find(_.identity == id)).flatMap(_.workClassification).map { a =>
-      if (request.kind == "ReviewStep") a.review else if (request.kind == "RepairStep") a.repair else a.implementation
-    }
+    GoalPhaseWorkClassification.selectedClassification(request.kind, request.stepIdentity, request.selectedPlan)
 }

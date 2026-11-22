@@ -6392,6 +6392,66 @@
           ]
         },
         {
+          "name": "WorkflowSemanticWorkClassification",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "complexity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "domain",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "footprint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "nature",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowTaskWorkClassification",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "implementation",
+              "type": "WorkflowSemanticWorkClassification",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repair",
+              "type": "WorkflowSemanticWorkClassification",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "review",
+              "type": "WorkflowSemanticWorkClassification",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "GoalTaskInput",
           "kind": "value",
           "fields": [
@@ -6471,6 +6531,12 @@
               "name": "dependencies",
               "type": "string",
               "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "workClassification",
+              "type": "WorkflowTaskWorkClassification",
+              "multiplicity": "?",
               "required": false
             }
           ]
@@ -7647,6 +7713,12 @@
               "name": "submissionConditions",
               "type": "string",
               "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "workClassification",
+              "type": "WorkflowTaskWorkClassification",
+              "multiplicity": "?",
               "required": false
             }
           ]

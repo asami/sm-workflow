@@ -70,7 +70,7 @@ private[smworkflow] object GoalTaskRepairContinuationFixture {
 
 /** Managed same-Task continuation behavior.
   * @since Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov. 23, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -192,7 +192,7 @@ final class GoalTaskRepairContinuationSpec extends AnyWordSpec with GivenWhenThe
       val input = V.GoalTaskInput("sm-workflow", "task-trend-spec", "Continue the same Task after actual trend assessment",
         NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
         NonEmptyVector.one(V.WorkflowArtifactReference("specification-direct-request", "1")), false,
-        "documentation", "off", 10, "direct-instruction", Vector.empty)
+        "documentation", "off", 10, "direct-instruction", Vector.empty, None)
       val prepared = take(NativeGoalTaskStartInput.prepareC(Map("input" -> "input", "selection-id" -> "trend-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "trend-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))

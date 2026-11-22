@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public raw control and explicit native detail consumers, including a new
   * runtime over the same retained store. Fixture authorship is not execution.
   * @since   Nov.  8, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 23, 2026
   * The suite identity follows the frozen reference-continuation check selection.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -111,7 +111,7 @@ final class WorkflowResponseArtifactReferencesSpec extends AnyWordSpec with Give
       val input = V.GoalTaskInput("sm-workflow", "retained-human", "SPECIFICATION-OWNED unresolved adopted objective",
         NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.one("objective"),
         NonEmptyVector.one(V.WorkflowArtifactReference("specification-original-request", "1")), false,
-        "documentation", "off", 10, "direct-instruction", Vector.empty)
+        "documentation", "off", 10, "direct-instruction", Vector.empty, None)
       val prepared = take(NativeGoalTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "human-selection",
         "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "human-start",
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))

@@ -51,7 +51,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         c.publicationTarget, c.artifactCoordinates, c.consumerInstructions, c.prerequisiteFor,
         c.providerPhase.map(p => V.DelegateProviderPhaseLocator(p.sessionId, p.startRevision, p.publication, p.producerSelection)),
         c.synchronization.map(p => V.DelegateDeliverySynchronization(p.repositoryIdentity, p.localBranch,
-          p.trackingRemote, p.trackingBranch, p.remoteEndpointIdentity, p.syncMode))), Vector("behavior"))
+          p.trackingRemote, p.trackingBranch, p.remoteEndpointIdentity, p.syncMode))), Vector("behavior"), None)
   }
   private def _state(v: V.DelegateTaskView): S.State = {
     val raw = take(v.state.get.toJsonStringC)

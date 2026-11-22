@@ -14660,6 +14660,28 @@ StandaloneFixView
 
 # VALUE
 
+## WorkflowSemanticWorkClassification
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| kind | string | 1 |
+| complexity | string | 1 |
+| domain | string | 1 |
+| footprint | string | 1 |
+| nature | string | ? |
+
+## WorkflowTaskWorkClassification
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| implementation | WorkflowSemanticWorkClassification | 1 |
+| repair | WorkflowSemanticWorkClassification | 1 |
+| review | WorkflowSemanticWorkClassification | 1 |
+
 ## GoalTaskInput
 
 - input-kind :: COMMAND
@@ -14681,6 +14703,7 @@ StandaloneFixView
 | repairLimit | int | 1 |
 | sourceKind | string | 1 |
 | dependencies | string | * |
+| workClassification | WorkflowTaskWorkClassification | ? |
 
 ## GoalTaskAdvanceInput
 
@@ -15683,6 +15706,7 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | dependencies | string | * |
 | delegation | DelegateTaskContract | 1 |
 | submissionConditions | string | * |
+| workClassification | WorkflowTaskWorkClassification | ? |
 
 ## DelegateTaskAdvanceInput
 

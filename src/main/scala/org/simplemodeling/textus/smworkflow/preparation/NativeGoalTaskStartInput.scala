@@ -4,7 +4,6 @@ import org.simplemodeling.textus.smworkflow.admission.StandaloneFixExecution.giv
 
 import io.circe.syntax.*
 import org.goldenport.Consequence
-import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
@@ -14,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive preparation; returned data does not itself authorize Start.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object NativeGoalTaskStartInput {
   def prepareC(supplied: Map[String, String], read: String => Consequence[String]): Consequence[Record] = for {
@@ -24,11 +23,7 @@ private[smworkflow] object NativeGoalTaskStartInput {
     text <- read(options("input"))
     record <- new RecordDecoder().json(text)
     value <- summon[ValueReader[V.GoalTaskInput]].readC(record)
-    input = StandaloneFixExecution.Input(value.repositoryIdentity, value.requestIdentity, value.objective, value.ownedPaths.toVector,
-      value.checks.toVector, value.conditions.toVector, value.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
-      value.reviewRequired, value.kind, value.scalaLint, value.repairLimit,
-      Some(StandaloneFixExecution.Task(value.sourceKind, value.dependencies.toVector)))
-    _ <- StandaloneFixExecution.inputC(input)
+    input <- StandaloneFixExecution.goalTaskInputC(value)
     definition <- GoalTaskRuntimeCatalog.loadC()
     selection = ProfileStartAdmission.Selection(options("selection-id"), GoalTaskNativeRun.startOperation,
       definition.workflowIdentity, definition.workflowRevision, options("participant"), ProfileStartAdmission.SelectionOrigin.ExplicitHuman,

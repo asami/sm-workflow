@@ -21,7 +21,7 @@ import S.given
   * owned. CLI intake, checks, commit and publication are actual runtime effects.
   * This does not represent a Codex UI chat delivery or consumer authorization.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 23, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -79,7 +79,7 @@ final class NativeDelegateTaskRequestReconstructionCliSpec extends AnyWordSpec w
         NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt", "publishLocal"),
         Vector("remote-push", "consumer-activation"), NonEmptyVector.one(_reference(authority)), Some(C.publication),
         Vector("org.example.sm-workflow-common-delegate-fixture:common-delegate-fixture_3:0.0.1-SNAPSHOT"),
-        "SPECIFICATION-OWNED tiny artifact result; consumer selection and activation remain separate", None, None, None), Vector.empty)
+        "SPECIFICATION-OWNED tiny artifact result; consumer selection and activation remain separate", None, None, None), Vector.empty, None)
   }
 
   private def _prepare_start(scenario: F.Scenario, input: V.DelegateTaskInput, admission: String = "original"): F.Result = {

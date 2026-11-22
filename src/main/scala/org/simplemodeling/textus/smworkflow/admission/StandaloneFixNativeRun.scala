@@ -261,8 +261,16 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     import GoalPhaseWorkClassification.*
     if (input == null || !Set("Implement", "Repair", "Review", "DeliveryAcceptance")(stage) || !Set("code", "documentation")(input.kind))
       invalid("Fresh work has no supported semantic classification")
-    else Consequence.success(Classification(if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN,
-      Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL))
+    else {
+      val defaultkind = if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN
+      val fallback = Classification(defaultkind, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL)
+      Consequence.success(input.workClassification.fold(fallback) { work => stage match {
+        case "Implement" => work.implementation
+        case "Repair" => work.repair
+        case "Review" => work.review
+        case _ => fallback
+      }})
+    }
   }
 
   private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = for {
@@ -302,6 +310,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else invalid("Host concrete and operating execution inputs differ")
   } yield context
 
+  private def _execution_ready_c(context: GoalPhaseOperatingProfiles.Context): Consequence[Unit] = for {
+    execution <- GoalPhaseOperatingProfiles.forIssueC(context, None)
+    _ <- if ((execution.selection.identity == GoalPhaseOperatingProfiles.standard && context.dispatchPolicy.nonEmpty &&
+        context.logicalOrigin.orElse(context.executionOrigin.map(_.current.contextIdentity)).nonEmpty) ||
+        (execution.profiles.nonEmpty && execution.origin.nonEmpty)) Consequence.unit
+      else invalid("Task execution requires actual logical origin and standard dispatch policy or full concrete profiles and origin")
+  } yield ()
+
   /** Requesters dispatch the admitted input; only destinations preflight semantic execution. */
   private[admission] def _preflight_execution_c(input: S.Input, h: Host): Consequence[Unit] =
     if (!task || input.kind == "validation") preflightExecutionC(input, h.profiles, h.origin)
@@ -309,11 +325,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       _ <- S.inputC(input)
       context <- _operating_context_c(h)
       _ <- if (input.delegation.exists(_.role == "requester")) Consequence.unit else for {
-        execution <- GoalPhaseOperatingProfiles.forIssueC(context, None)
-        _ <- if ((execution.selection.identity == GoalPhaseOperatingProfiles.standard && context.dispatchPolicy.nonEmpty &&
-            context.logicalOrigin.orElse(context.executionOrigin.map(_.current.contextIdentity)).nonEmpty) ||
-            (execution.profiles.nonEmpty && execution.origin.nonEmpty)) Consequence.unit
-          else invalid("New Start requires actual logical origin and standard dispatch policy or full concrete profiles and origin")
+        _ <- _execution_ready_c(context)
         _ <- Vector("Implement", "Repair", "Review", "DeliveryAcceptance").foldLeft(Consequence.unit) { (prior, stage) => prior.flatMap { _ => for {
           requirement <- executionRequirementC(input, stage)
           classification <- _classification_c(input, stage)
@@ -333,8 +345,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     input <- order.request.input.map(i => Consequence.success(i.value)).getOrElse(invalid("Fresh Task input is absent"))
     _ <- if (input.operatingProfile != null && input.operatingProfile.isEmpty && input.state.input.task.nonEmpty &&
         !input.state.input.delegation.exists(_.role == "requester")) Consequence.unit else invalid("Already issued or dispatch-only work cannot be selected")
-    _ <- _preflight_execution_c(input.state.input, h)
+    _ <- S.inputC(input.state.input)
     context <- _operating_context_c(h)
+    _ <- _execution_ready_c(context)
     classification <- _classification_c(input.state.input, input.kind)
     selected <- GoalPhaseOperatingProfiles.captureFreshC(context, input.kind, Some(classification), order.requirement, None, input.kind == "Review")
   } yield work.copy(current = order.copy(requirement = selected._1,
@@ -375,7 +388,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task && input.delegation.nonEmpty == delegation) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
     requester = delegation && DelegateTask.requester(input)
-    _ <- _preflight_execution_c(input, h)
+    _ <- if (!delegation) _preflight_execution_c(input, h) else Consequence.unit
     identity <- core.executionContext.security.session.flatMap(_.sessionId).map(x => Consequence.success(InstanceIdentity(x)))
       .getOrElse(invalid("Standalone Start requires its canonical session"))
     store <- storageC(h, definition, core)
@@ -392,6 +405,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield Some(payload)
       case None => Consequence.success(Option.empty[Payload])
     }
+    _ <- if (delegation && prior.isEmpty) _preflight_execution_c(input, h) else Consequence.unit
     configuredpolicy = h.managedDevelopment.map(p => priorPayload.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_)))))
     _ <- if (!requester && input.delegation.exists(_.providerPhase.nonEmpty)) invalid("Declared provider Phase uses its existing GoalPhase owner; no bounded destination Start or duplicate lifecycle is allowed") else Consequence.unit
     managed = delegation && !requester && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)

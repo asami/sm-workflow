@@ -14,7 +14,10 @@ import NativeWorkflowCliFixture as F
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Requires a separately selected installed executable and component. All
-  * directions are SPECIFICATION-OWNED fixture data, not a Human event. */
+  * directions are SPECIFICATION-OWNED fixture data, not a Human event.
+  * @since   Nov. 16, 2026
+  * @version Nov. 23, 2026
+  */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -42,7 +45,7 @@ final class NativeGoalTaskScopeCorrectionCliSpec extends AnyWordSpec with Matche
       val request = V.GoalTaskInput(scenario.host.goal.input.repositoryIdentity, "specification-deferred-scope",
         "SPECIFICATION-OWNED additive same-purpose inventory", NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"),
         NonEmptyVector.one("behavior"), NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")),
-        false, "documentation", "off", 10, "direct-instruction", Vector.empty)
+        false, "documentation", "off", 10, "direct-instruction", Vector.empty, None)
       val repository = Path.of(scenario.host.target.root)
       val head = scenario.candidateHead
       val index = scenario.candidateIndexDiff
