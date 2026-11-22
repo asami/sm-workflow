@@ -1,5 +1,25 @@
 # sm-workflow incremental-use roadmap
 
+Current consumer development priority — 2026-11-19 (sm-workflow-dev開発):
+**stabilization -> remaining [Phase 7](phase-7.md) ->
+[necessary producer/setup prerequisites](phase-24.md#prerequisites-and-development-schedule) ->
+[Phase 24: practical API-credit use](phase-24.md)**.
+[Phase 25](phase-25.md) follows with generic textus-ai Task API and selected
+provider expansion. This is the user's latest priority for this consumer chat;
+the earlier 8.1 -> 9 -> 18 producer/feature sequence below remains recorded with
+its original ownership. Whole Phases 8.1/9/13/20/22/23/25 are not added ahead of
+Phase 24; concrete missing producer capabilities are named and scheduled in its
+PRE-1–4 table. Reuse applicable Phase 9 dispatch/handoff evidence without
+duplicate implementation or acceptance claims.
+
+API plans previously called 22/23 existed only as unpublished local documents.
+They are now [24](phase-24.md) / [25](phase-25.md), preserving the canonical
+[22 runtime stabilization](phase-22.md) and [23 strategic convergence](phase-23.md)
+plans and checklists. Phase 8's accepted FORMAL release is consumed without
+reopening its approved NOT RUN boundaries. See the
+[allocation record](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md).
+No Phase/Session is started by this planning change.
+
 Phase 8 result-submission simplification selected 2026-11-12:
 [program-owned semantic result submission](phase-8.md#program-owned-semantic-result-submission--2026-11-12)
 connects saved worker envelopes to the actual issued public DTO through typed
@@ -695,6 +715,18 @@ records the remaining gaps and safe adoption sequence.
 | Phase | Delivery boundary | Scheduling |
 | --- | --- | --- |
 | [10: CBD Review Integration](phase-10.md) | CBD prepare/external execution/result acceptance, then integrated review, affected repair and Final reuse; P6-SQ01..05 | After initial production adoption and required bounded producer handoffs; no dependency on whole 7/8/9 completion and no initial-use gate |
+
+## Practical API use and subsequent expansion — 2026-11-18
+
+| Phase | Delivery boundary | Scheduling |
+| --- | --- | --- |
+| [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, one existing textus-ai/OpenAI route, normal acceptance, bounded Codex handoff and attributable usage | Current stabilization -> remaining Phase 7 -> necessary producer/setup prerequisites -> 22; [checklist](phase-24-checklist.md) |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Generic task contract, capability/quota-aware provider selection and selected additional-provider integration | After 22's usable delivery; [checklist](phase-25-checklist.md); no prerequisite for 22 |
+
+These are new Phase identities. Earlier rollout descriptions retain their
+historical allocation; this chat's latest execution priority is stated above.
+Existing Phase 9 routing/convergence and Phase 13 usage acquisition are reused
+under their actual acceptance boundaries, without duplicate implementation.
 
 ## Scope and implementation policy
 

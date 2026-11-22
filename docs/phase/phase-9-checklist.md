@@ -7,6 +7,13 @@ Retain accepted predecessor evidence and attach it where applicable. This ledger
 does not reopen completed work, reset counters or assert that existing runtime
 mechanisms are unimplemented. Deliver R1 -> R2 -> R3.
 
+Related allocation 2026-11-19: [Phase 24](phase-24.md) owns practical API-credit
+use and [Phase 25](phase-25.md) generic textus-ai Task API/provider expansion.
+P9-01–12 may consume applicable shared dispatch/acceptance/handoff evidence;
+cross-reference its actual scope without duplicate implementation or invocation.
+All existing P9 IDs, unchecked states and R1–R3 acceptance conditions remain.
+Phase 24's bounded route need not finish this entire checklist first.
+
 ## R1: one review contract through both interfaces
 
 - [ ] P9-01: Consume CNCF Phase 80's bounded producer handoff; identify the actual runtime dispatcher, API adapter and agent Continuation adapter. The pure Harness is not described as a launcher.

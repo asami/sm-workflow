@@ -1,5 +1,37 @@
 # Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
+## Related practical API delivery — 2026-11-19
+
+This existing Phase retains all R1–R3 requirements, IDs and acceptance states.
+The user's latest consumer-chat priority is stabilization -> remaining Phase 7
+-> necessary bounded producer/setup prerequisites -> [Phase 24](phase-24.md),
+followed by [Phase 25](phase-25.md)'s generic textus-ai/provider expansion.
+Phase 24 supplies practical Context Packaging/OpenAI-credit use through existing
+textus-ai boundaries. The unpublished local API plans formerly numbered 22/23
+are renamed 24/25; canonical [Phase 22](phase-22.md) stabilization and
+[Phase 23](phase-23.md) strategic convergence remain intact.
+
+P9-01–07 API/agent dispatch, typed result, independence and attribution and
+P9-08–12 retained-work handoff are shared foundations. Reuse accepted capability
+and applicable evidence, or return newly delivered shared foundations for later
+Phase 9 assessment. No duplicate dispatcher, retry ledger or identical live
+execution is required solely for a Phase label. Phase 24's bounded practical
+handoff does not prove all Phase 9 convergence scenarios; completing this whole
+Phase is not an additional Phase 24 prerequisite. Required concrete producer
+gaps stay explicit in Phase 24's schedule. See the
+[allocation record](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md).
+
+## Earlier scheduling and allocation
+
+Priority selected 2026-11-18: reach API-use delivery quickly while retaining
+the selected Phase 8 -> Phase 8.1 -> Phase 9 order and Phase 9 -> Phase 18
+priority. API priority does not skip preceding Phases. Complete their bounded
+practical scope and explicitly transfer expensive residuals to the newly planned
+[Phase 22](phase-22.md), including ownership and affected acceptance conditions.
+Deliver R1's actual API/agent connection first within this Phase, retaining the
+R1 -> R2 -> R3 scope below. Phase 22 execution follows API delivery and is not
+a new entry or closure gate for these preceding Phases.
+
 Rollout priority updated 2026-11-11: Phase 7 -> Phase 11.1 -> Phase 8 ->
 [Phase 8.1](phase-8.1.md), formerly 6.12 -> Phase 9 -> [Phase 18](phase-18.md).
 Phase 9 retains its existing number,
