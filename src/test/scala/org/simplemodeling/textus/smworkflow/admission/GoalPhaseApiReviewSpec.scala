@@ -14,13 +14,14 @@ import org.goldenport.protocol.Property
 import org.goldenport.cncf.resource.{InMemoryUrlResourceProvider, ResourceAccessTestProfile, ResourceReference, ResourceUrlPolicy}
 import java.nio.file.Path
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
+final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "The supplied API review byte bound" should {
     "retain the API review operation in normal deferred declarations without publishing it to MCP" in {
       val name = "runGoalPhaseApiReview"
@@ -45,7 +46,7 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
         Some(Vector("accept", "repair", "decision-needed"))
       val deferral = schema.hcursor.downField("properties").downField("issueReport").downField("properties")
         .downField("deferredIssues").downField("items")
-      deferral.get[Vector[String]]("required").toOption shouldBe Some(Vector("issueIdentity", "conditionIdentities"))
+      deferral.downField("required").as[Vector[String]].toOption shouldBe Some(Vector("issueIdentity", "conditionIdentities"))
       GoalPhaseApiReview.reviewResultInstructions should include ("issueReport.deferredIssues")
       GoalPhaseApiReview.reviewResultInstructions should include ("do not use \"accepted\"")
       GoalPhaseApiReview.reviewResultInstructions should include ("Write newly authored review summaries, findings and rationales in English.")
@@ -227,9 +228,11 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
         urlProviders = Vector(new InMemoryUrlResourceProvider("file", Map(
           url -> reviewPacket, invalidUrl -> reviewPacket.replace("checks:1", "checks:other"))))))
       var requests = Vector.empty[AiRecordRequest]
-      val httpEvidence = Map("ai.provider.http.status" -> "429", "ai.provider.http.request-id" -> "req_abc-12",
-        "ai.provider.http.body" -> "  日本語\n", "ai.provider.http.body-omitted" -> "size-limit",
+      val httpEvidence = Map("ai.provider.http.request-id" -> "req_abc-12",
         "ai.provider.http.authorization" -> "secret-header")
+      val successBody = """{"choices":[{"message":{"content":"{\"outcome\":\"decision-needed\",\"summary\":\"Review needs a decision\",\"findings\":[]}"}}]}"""
+      val failureBody = """{"error":{"message":"Rate limit exceeded; credential [REDACTED]"}}"""
+      Given("the runner returns HTTP 200 evidence on success and redacted HTTP 429 evidence on failure")
       var failCall = false
       val runner = new AiRunner {
         def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
@@ -239,11 +242,14 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
         def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] = {
           requests :+= req
           if (failCall) {
-            val c = Consequence.serviceUnavailable("fixture failure").conclusion
-            Consequence.Failure(c.copy(observation = c.observation.copy(properties = httpEvidence ++ Map("secret" -> "hidden"))))
+            val c = Consequence.serviceUnavailable("AI provider request failed: category=rate_limited status=429").conclusion
+            val evidence = httpEvidence ++ Map("ai.provider.http.status" -> "429", "ai.provider.http.body" -> failureBody,
+              "secret" -> "hidden")
+            Consequence.Failure(c.copy(observation = c.observation.copy(properties = evidence)))
           } else Consequence.success(AiRecordResponse(
             Record.dataAuto("outcome" -> "decision-needed", "summary" -> "Review needs a decision", "findings" -> Vector.empty[String]),
-            Some("fixture-model"), Map("ai.execution.provider" -> "fixture-provider", "ai.usage.tokens" -> "42") ++ httpEvidence))
+            Some("fixture-model"), httpEvidence ++ Map("ai.execution.provider" -> "fixture-provider", "ai.usage.tokens" -> "42",
+              "ai.provider.http.status" -> "200", "ai.provider.http.body" -> successBody)))
         }
       }
       val socket = new AiRunnerSocketSet {}
@@ -255,8 +261,10 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
       val input = V.GoalPhaseApiReviewInput("session", resource, "attempt", url)
       def run(text: String): Consequence[V.GoalPhaseApiReviewResult] =
         GoalPhaseApiReview.runC(core, input, "continuation", text)
+      When("the supplied review completes through the runner SPI")
       val result = GoalPhaseApiReview.acquireAndReviewC(execution, ResourceReference.parseC(url).toOption.getOrElse(fail("Expected successful result")),
         512 * 1024, actual, input, "continuation", run).toOption.getOrElse(fail("Expected successful result"))
+      Then("the serialized result retains the available HTTP response evidence")
       result.status shouldBe "COMPLETED"
       result.result.map(_.outcome) shouldBe Some("decision-needed")
       result.model shouldBe Some("fixture-model")
@@ -276,18 +284,20 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers {
         wire.noSpaces should not include "hidden"
         wire.hcursor.downField("metadata").downField("providerHttp").focus.getOrElse(fail("Expected HTTP evidence"))
       }
-      def assertHttp(value: V.GoalPhaseApiReviewResult): Unit = {
+      def assertHttp(value: V.GoalPhaseApiReviewResult, status: Int, body: String): Unit = {
         val http = serializedHttp(value).hcursor
-        http.downField("status").as[Int].toOption shouldBe Some(429)
+        http.downField("status").as[Int].toOption shouldBe Some(status)
         http.downField("requestId").as[String].toOption shouldBe Some("req_abc-12")
-        http.downField("body").as[String].toOption shouldBe Some("  日本語\n")
-        http.downField("bodyOmitted").as[String].toOption shouldBe Some("size-limit")
+        http.downField("body").as[String].toOption shouldBe Some(body)
+        http.downField("bodyOmitted").focus shouldBe None
       }
-      assertHttp(result)
+      assertHttp(result, 200, successBody)
+      When("the provider responds with HTTP 429 and a redacted error body")
       failCall = true
       val failed = run(reviewPacket).toOption.getOrElse(fail("Expected failure result"))
+      Then("the HTTP failure remains uncertain and preserves the rate-limit evidence")
       failed.status shouldBe "UNCERTAIN"
-      assertHttp(failed)
+      assertHttp(failed, 429, failureBody)
       requests.size shouldBe 2
       val rejected = GoalPhaseApiReview.acquireAndReviewC(execution, ResourceReference.parseC(invalidUrl).toOption.getOrElse(fail("Expected successful result")),
         512 * 1024, actual, input, "continuation", run).toOption.getOrElse(fail("Expected successful result"))

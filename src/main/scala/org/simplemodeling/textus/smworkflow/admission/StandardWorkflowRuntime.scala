@@ -713,25 +713,31 @@ private[smworkflow] object StandardWorkflowRuntime {
   private[admission] def boundedChecksC(ids: Vector[String], lintRequired: Boolean, plan: Json,
     root: String): Consequence[Vector[GoalPhaseNativeValidation.Check]] = for {
     explicit <- standardChecksC(ids)
-    checks <- if (!lintRequired) Consequence.success(explicit) else for {
-      programs <- plan.hcursor.get[Vector[Json]]("sbtPrograms").fold(e => invalid(e.message), Consequence.success)
-      workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
+    // An explicit FixCheck still selects the Session's admitted workspace when
+    // lint is not automatically required. Its list position is not a binding.
+    checks <- if (!lintRequired && !explicit.exists(check =>
+      java.util.Objects.equals(check.kind, WorkflowSbtValidation.Kind.FixCheck)))
+      Consequence.success(explicit)
+    else for {
+      programs <- plan.hcursor.downField("sbtPrograms").as[Vector[Json]].fold(e => invalid(e.message), Consequence.success)
+      workspaces <- plan.hcursor.downField("workspaces").as[Vector[Json]].fold(e => invalid(e.message), Consequence.success)
       relevant = programs.filter { program =>
-        val target = program.hcursor.get[String]("target").toOption
-        program.hcursor.get[String]("operation").contains("fix-check") && target.exists { alias =>
+        val target = program.hcursor.downField("target").as[String].toOption
+        program.hcursor.downField("operation").as[String].contains("fix-check") && target.exists { alias =>
           alias.matches("sm-workflow-repository-validation-[1-9][0-9]*") &&
-            workspaces.exists(w => w.hcursor.get[String]("identity").contains(alias) && w.hcursor.get[String]("root").contains(root))
+            workspaces.exists(w => w.hcursor.downField("identity").as[String].contains(alias) &&
+              w.hcursor.downField("root").as[String].contains(root))
         }
       }
-      binding <- uniqueC(relevant, "Required Scala lint needs one unambiguous configured repository fix-check binding")
-      alias <- binding.hcursor.get[String]("target").fold(e => invalid(e.message), Consequence.success)
-      _ <- if (workspaces.count(_.hcursor.get[String]("identity").contains(alias)) == 1) Consequence.unit
+      binding <- uniqueC(relevant, "Selected Scala lint needs one unambiguous fix-check binding for the Session checkout")
+      alias <- binding.hcursor.downField("target").as[String].fold(e => invalid(e.message), Consequence.success)
+      _ <- if (workspaces.count(_.hcursor.downField("identity").as[String].contains(alias)).equals(1)) Consequence.unit
         else invalid("Required Scala lint workspace is ambiguous")
       ordinal <- alias.stripPrefix("sm-workflow-repository-validation-").toIntOption.filter(_ > 0)
         .map(Consequence.success).getOrElse(invalid("Required Scala lint has no bounded validation ordinal"))
       lint = GoalPhaseNativeValidation.Check("fix-check", ordinal, WorkflowSbtValidation.Kind.FixCheck)
-    } yield if (explicit.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
-      explicit.map(c => if (c.kind == WorkflowSbtValidation.Kind.FixCheck) lint else c)
+    } yield if (explicit.exists(check => java.util.Objects.equals(check.kind, WorkflowSbtValidation.Kind.FixCheck)))
+      explicit.map(check => if (java.util.Objects.equals(check.kind, WorkflowSbtValidation.Kind.FixCheck)) lint else check)
       else explicit :+ lint
   } yield checks
 
