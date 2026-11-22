@@ -733,6 +733,16 @@ imports expand to the source. Typed-body edits wholly below the header expand to
 the method. Mixed header/body lines use the conservative type/source range.
 This bounded policy does not infer arbitrary cross-file semantic impact.
 
+Before capturing the ranges, the Action omits an isolated managed history date
+hunk when the resolved history rule and the actual base and index blobs prove
+it exactly. The full file diff must replay against those blobs. Using the
+observed version date, the rule must reproduce the base with just that hunk
+applied. Applying the rule to the index with just that hunk reverted must
+reproduce the exact indexed text. A file containing only the proven hunk
+contributes no affected range. Other hunks retain their original coordinates. Mixed edits,
+ordinary comments or suppressions, unsupported sections and unavailable proof
+retain the existing conservative attribution.
+
 Affected errors block ordinary admission/FIX. Outside-scope diagnostics are
 reported separately with age UNKNOWN; out-of-diff never proves old debt. Only
 the engine's typed LinterError can be classified this way; unavailable analysis,

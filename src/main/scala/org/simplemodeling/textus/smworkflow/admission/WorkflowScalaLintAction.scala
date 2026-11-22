@@ -8,7 +8,7 @@ import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, ResolvedParameters}
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtLintInput}
+import org.goldenport.cncf.processexecution.{GitBlobContent, GitObjectId, GitOperation, SbtLintInput}
 import org.goldenport.cncf.workspace.{FileReadPolicy, FileTarget, WorkspaceFilePath, WorkspaceId}
 import org.goldenport.cncf.resource.ResourceReadLimits
 import org.goldenport.configuration.ConfigurationValue
@@ -76,13 +76,35 @@ private[smworkflow] object WorkflowScalaLintAction {
           oid <- GitObjectId.parseC(selectedbase)
           captured <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.PendingDiff(oid), git).flatMap(_.valueC)
           _ <- if (!captured.isBinary) Consequence.unit else invalid("binary native delta cannot establish Scala lint attribution")
-          delta <- scala.util.Try(ScalaLintDelta.fromDiff(captured.text)).fold(e => invalid(e.getMessage), Consequence.success)
+          diff = _history_delta(core, git, oid, captured.text)
+          delta <- scala.util.Try(ScalaLintDelta.fromDiff(diff)).fold(e => invalid(e.getMessage), Consequence.success)
           project <- reader.projectC(path.resolve(".scalafix.conf"))
           input <- inputForSelectionC(lint.selection, project, selectedbase, delta)
         } yield Some(input)
       } yield input
     }
   } yield input
+
+  private def _history_delta(core: ActionCall.Core, workspace: String, base: GitObjectId, diff: String): String =
+    WorkflowSourceHistoryParameters.resolveC(core.executionContext).toOption.flatMap(_.rule).fold(diff) { rule =>
+      lazy val changes = for {
+        index <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.IndexTree, workspace).flatMap(_.valueC)
+        delta <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.TreeChanges(base, index), workspace).flatMap(_.valueC)
+      } yield delta
+      def _read_blobs_(path: String): Option[(GitBlobContent, GitBlobContent)] = for {
+        delta <- changes.toOption
+        change <- delta.filter(_.path.value == path) match {
+          case Vector(value) if value.status == "M" && value.oldMode == value.newMode &&
+              (value.oldMode == "100644" || value.oldMode == "100755") => Some(value)
+          case _ => None
+        }
+        oldblob <- change.oldBlob
+        newblob <- change.newBlob
+        before <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.BlobContent(oldblob), workspace).flatMap(_.valueC).toOption
+        after <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.BlobContent(newblob), workspace).flatMap(_.valueC).toOption
+      } yield (before, after)
+      WorkflowScalaLintHistoryDelta.withoutProvenUpdates(diff, rule, _read_blobs_)
+    }
 
   def requiresPhaseCheckC(core: ActionCall.Core, checkout: Path): Consequence[Boolean] = {
     val workspace = RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")

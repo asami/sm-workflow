@@ -10,7 +10,8 @@ import scala.util.control.NonFatal
 
 /** Pure interpretation of caller-supplied declarative source-history data.
   * @since   Oct. 17, 2026
-  * @version Oct. 22, 2026
+  *  version Oct. 22, 2026
+  * @version Nov. 22, 2026
   */
 private[smworkflow] object WorkflowSourceHistoryRule {
   final case class Input(path: String, text: String, updatedOn: LocalDate,
@@ -97,6 +98,34 @@ private[smworkflow] object WorkflowSourceHistoryRule {
     computed.fold(_invalid, Consequence.success)
   }
 
+  private[admission] def matchesDateUpdateC(rule: Rule, path: String, restored: String,
+    indexed: String): Consequence[Boolean] = {
+    val computed = for {
+      formatter <- _validate(rule)
+      _ <- Either.cond(_normalized_path(path) && restored != null && indexed != null, (), "invalid source input")
+      matched <- if (!_included(rule, path)) Right(false) else for {
+        before <- _managed_source(rule, formatter, restored)
+        after <- _managed_source(rule, formatter, indexed)
+        observed = for {
+          olddate <- before.flatMap(_version_with_since(rule, _))
+          newdate <- after.flatMap(_version_with_since(rule, _))
+          if olddate != newdate
+        } yield newdate
+        same <- observed match {
+          case Some(date) =>
+            _interpret_managed(rule, formatter, Input(path, restored, date, None, None, false), before)
+              .map(result => result.outcome == "updated" && result.text == indexed)
+          case None => Right(false)
+        }
+      } yield same
+    } yield matched
+    computed.fold(_invalid, Consequence.success)
+  }
+
+  private def _version_with_since(rule: Rule, managed: Managed): Option[LocalDate] =
+    Option.when(managed.dates.exists(_.tag == rule.tags.since))(managed.dates.find(_.tag == rule.tags.version))
+      .flatten.map(_.date)
+
   private def _validate(rule: Rule): Either[String, DateTimeFormatter] = try {
     if (rule == null || rule.schemaVersion != _schema || !_exact(rule.identity) ||
         rule.style != "goldenport" || rule.format != "scala-block-history-v1") Left("unsupported rule contract")
@@ -144,20 +173,27 @@ private[smworkflow] object WorkflowSourceHistoryRule {
     case Literal(triple: Boolean, interpolated: Boolean)
   }
 
-  private def _interpret(rule: Rule, formatter: DateTimeFormatter, input: Input): Either[String, Result] = for {
-    blocks <- _comments(input.text)
-    candidates <- blocks.foldLeft[Either[String, Vector[Managed]]](Right(Vector.empty)) { (prior, block) => for {
-      found <- prior
-      managed <- _managed_block(rule, formatter, input.text, block)
-    } yield found ++ managed }
-    _ <- Either.cond(candidates.size <= 1, (), "multiple managed block comments")
-    rewritten <- candidates.headOption match {
+  private def _interpret(rule: Rule, formatter: DateTimeFormatter, input: Input): Either[String, Result] =
+    _managed_source(rule, formatter, input.text).flatMap(_interpret_managed(rule, formatter, input, _))
+
+  private def _interpret_managed(rule: Rule, formatter: DateTimeFormatter, input: Input,
+    candidate: Option[Managed]): Either[String, Result] = for {
+    rewritten <- candidate match {
       case Some(managed) => _rewrite(rule, formatter, input, managed)
       case None => Right(_new_header(rule, formatter, input) + input.text)
     }
   } yield Result(rule.identity, if (rewritten == input.text) "unchanged" else "updated", rewritten,
     input.dateUncertain || (input.createdOn.isEmpty &&
-      candidates.headOption.forall(managed => !managed.dates.exists(_.tag == rule.tags.since))))
+      candidate.forall(managed => !managed.dates.exists(_.tag == rule.tags.since))))
+
+  private def _managed_source(rule: Rule, formatter: DateTimeFormatter, text: String): Either[String, Option[Managed]] = for {
+    blocks <- _comments(text)
+    candidates <- blocks.foldLeft[Either[String, Vector[Managed]]](Right(Vector.empty)) { (prior, block) => for {
+      found <- prior
+      managed <- _managed_block(rule, formatter, text, block)
+    } yield found ++ managed }
+    selected <- Either.cond(candidates.size <= 1, candidates.headOption, "multiple managed block comments")
+  } yield selected
 
   /** Scan the whole Scala source. A quote starts a character only when its
     * complete character token is present; Scala 3 quote expressions stay code.
