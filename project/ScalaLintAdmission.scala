@@ -73,7 +73,11 @@ object ScalaLintAdmission {
   def affected(source: String, delta: ScalaLintDelta.File): Vector[Range] =
     affected(source, if (delta.sourceWide) Vector(0) else delta.lines)
 
-  final class Reporter(root: Path, input: ScalaLintInput.Binding, output: String => Unit) extends ScalafixMainCallback {
+  final case class DiagnosticRecord(severity: String, disposition: String, age: String, rule: String,
+    path: String, line: Int, column: Int, endLine: Int, endColumn: Int, provenance: String)
+
+  final class Reporter(root: Path, input: ScalaLintInput.Binding, output: String => Unit,
+    record: DiagnosticRecord => Unit = (_: DiagnosticRecord) => ()) extends ScalafixMainCallback {
     private val files = ScalaLintDelta.read(input.config).map(file => file.path -> file).toMap
     private var blockers = 0
     private var unlocated = false
@@ -99,10 +103,15 @@ object ScalaLintAdmission {
         if (blocking) blockers += 1
         val id = diagnostic.lintID().get()
         val rule = (id.ruleName() + "." + id.categoryID()).filterNot(_.isControl)
-        output("shared-scala-lint: disposition=" + (if (blocking) "AFFECTED_BLOCKER" else if (active) "AFFECTED_DIAGNOSTIC" else "OUTSIDE_AFFECTED_SCOPE") +
-          " age=UNKNOWN rule=" + rule + " path=" + path + " line=" + (position.startLine() + 1) +
-          " column=" + (position.startColumn() + 1) + " endLine=" + (position.endLine() + 1) +
-          " content=redacted")
+        val result = DiagnosticRecord(diagnostic.severity().toString,
+          if (blocking) "AFFECTED_BLOCKER" else if (active) "AFFECTED_DIAGNOSTIC" else "OUTSIDE_AFFECTED_SCOPE",
+          "UNKNOWN", rule, path, position.startLine() + 1, position.startColumn() + 1,
+          position.endLine() + 1, position.endColumn() + 1, "scalafix")
+        record(result)
+        output("shared-scala-lint: disposition=" + result.disposition + " age=" + result.age +
+          " rule=" + result.rule + " path=" + result.path + " line=" + result.line +
+          " column=" + result.column + " endLine=" + result.endLine + " endColumn=" + result.endColumn +
+          " severity=" + result.severity + " provenance=" + result.provenance + " content=redacted")
       }
     }
     def finish(): Unit = synchronized {

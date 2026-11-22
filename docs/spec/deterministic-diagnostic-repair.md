@@ -72,3 +72,36 @@ failure. A [later candidate](../../target/sm-workflow/runtime-phase-6.11-restart
 also included another repair and passed all 11 tests. These observations do not
 establish live execution of this recipe. Metals, formatter and Scalafix rewrite
 actions remain unqualified; D5 owns runtime application and D6 its qualification.
+
+## Source-local nullable boundary evidence
+
+The baseline standalone Scalafix profile includes `NullableBoundarySemantics` and
+`NullableBoundarySuppression`. The former recognizes a deliberately narrow
+method boundary: one direct method-body `if` testing a stable parameter against
+`null`, or a semantically resolved `java.util.Objects.nonNull(parameter)`, an
+explicit `T | Null` parameter and a null branch that throws. The marker must be
+the immediately preceding source line, for example:
+
+```scala
+// nullable-boundary: rule=NullableBoundarySemantics target=value boundary=interop normalization=reject-null justification=java-api
+def length(value: String | Null): Int = if (value == null) throw new IllegalArgumentException() else value.length
+```
+
+`justification` is a nonempty author-supplied token; no tool creates or assesses
+its truth. A recognized shape emits `VerifiedBoundary` at Info severity. This is
+only evidence of the bounded syntax and resolved parameter/predicate, not proof
+that the producer is nullable, the reason is correct, or the behavior meets the
+contract. Unsupported, invalid, stale and misplaced cases emit warnings for
+judgment. Other normalization shapes and nullable types are unresolved, not
+accepted. The suppression audit reports a rule-specific suppression as a warning;
+it uses the same Scalafix engine, which still owns its ordinary suppression
+mechanism. A disabled rule, global suppression, missing SemanticDB or an absent
+`VerifiedBoundary` record is not affirmative evidence. Workflow exception admission
+must fail closed on absent, stale or unbound evidence; no runtime exception
+admission is implemented by this step.
+
+The existing changed-scope reporter emits a redacted structured diagnostic record
+with rule, severity, exact one-based start and end positions, disposition, unknown
+age and Scalafix provenance. It retains the previous text fields and blocking
+policy. It does not itself establish historical age or prove that an exception is
+admissible.

@@ -119,12 +119,13 @@ final class ScalaLintAdmissionSpec extends AnyWordSpec with Matchers with GivenW
         ScalaLintDelta.read(config) shouldBe captured
         val root = Paths.get("target/lint-admission-spec").toAbsolutePath.normalize
         val output = scala.collection.mutable.ArrayBuffer.empty[String]
+        val records = scala.collection.mutable.ArrayBuffer.empty[ScalaLintAdmission.DiagnosticRecord]
         val reporter = new ScalaLintAdmission.Reporter(root, ScalaLintInput.Binding("test", "1", config),
-          text => { output += text; () })
-        def _diagnostic_(): ScalafixDiagnostic = new ScalafixDiagnostic {
+          text => { output += text; () }, record => { records += record; () })
+        def _diagnostic_(level: ScalafixSeverity): ScalafixDiagnostic = new ScalafixDiagnostic {
           override def message(): String = "value.get must not enter retained output"
           override def explanation(): String = message()
-          override def severity(): ScalafixSeverity = ScalafixSeverity.ERROR
+          override def severity(): ScalafixSeverity = level
           override def lintID(): Optional[ScalafixLintID] = Optional.of(new ScalafixLintID {
             override def ruleName(): String = "NoOptionGet"
             override def categoryID(): String = ""
@@ -144,13 +145,25 @@ final class ScalaLintAdmissionSpec extends AnyWordSpec with Matchers with GivenW
             }
           })
         }
-        reporter.reportDiagnostic(_diagnostic_())
+        reporter.reportDiagnostic(_diagnostic_(ScalafixSeverity.WARNING))
+        reporter.reportDiagnostic(_diagnostic_(ScalafixSeverity.ERROR))
 
         Then("the real reporter refuses admission for the still-present affected diagnostic in this file")
         intercept[IllegalArgumentException](reporter.finish()).getMessage should include("1 affected blocking")
         output.mkString should include("AFFECTED_BLOCKER")
         output.mkString should not include "value.get"
         output.mkString should not include "OUTSIDE_AFFECTED_SCOPE"
+        records.map(_.severity).toVector shouldBe Vector("WARNING", "ERROR")
+        records.head.disposition shouldBe "AFFECTED_DIAGNOSTIC"
+        records.head.age shouldBe "UNKNOWN"
+        records.head.rule shouldBe "NoOptionGet."
+        records.head.path shouldBe selectedpath
+        records.head.line shouldBe diagnosticline
+        records.head.column shouldBe 1
+        records.head.endLine shouldBe diagnosticline
+        records.head.endColumn shouldBe 2
+        records.head.provenance shouldBe "scalafix"
+        output.mkString should include("endColumn=2 severity=WARNING provenance=scalafix")
       }
     }
     "keep ordinary paired replacements local and read historical captures conservatively without rewriting them" in {
