@@ -84,46 +84,27 @@ captured checks/results and use the runtime's supported selection route.
 
 ## Waiting for another chat
 
-Default to [active-Goal Luna waiting](../../docs/spec/native-host-execution.md#active-goal-luna-wait)
-after authorized cross-chat dispatch. Keep the existing Goal active and wait with
-collaboration.wait_agent(timeout_ms=3600000), or the longest duration permitted
-by the execution rules. Luna low checks the destination every 120 seconds, using
-wait_threads within its 120-second API limit and any shorter execution limit.
-Do not duplicate polling, start unrelated work, or use that polling interval as
-the parent's timeout. Preserve request, Session, history, repair counts and results.
+For a new default wait after authorized dispatch, the requester itself uses
+[parent-owned cross-chat waiting](../../docs/spec/native-host-execution.md#parent-owned-cross-chat-waiting).
+Keep the existing Goal active in this turn. Call Codex `wait_threads` directly
+with the destination and latest cursor, and re-enter the same wait after a
+routine timeout. Once the matching result is available, inspect and admit it
+through the existing requester route, then continue the same Goal and Session
+without a separate resume prompt. Surface actual Human decisions and honor an
+explicit stop. Preserve the request, history, repair counts and checks.
 
-Parent progress reporting defaults to **OFF**. **動作状況を報告して** /
-**動作状況の報告をON** enables reports at 2 -> 4 -> 8 -> 10 minute intervals;
-**動作状況の報告をOFF** disables them. Pass progress_reporting and destination title
-to the waiter. The report concerns the destination chat's work, not Luna's work.
-On a matching PROGRESS while ON, display its supplied commentary once and resume
-the same wait; do not query status, acknowledge, run workflow operations or spawn
-another waiter. OFF ignores queued progress. Terminal completion/attention is
-always returned immediately. Reporting ON consumes parent tokens.
-
-The user may switch ON/OFF during waiting. Send one REPORTING_MODE message with
-request_id and progress_reporting to the same child via collaboration.send_message.
-Do not interrupt/restart it or change the destination request. Apply OFF at the
-parent display boundary immediately; the child applies the message at its next
-message boundary. OFF -> ON starts a new two-minute reporting interval; repeated
-ON leaves the schedule intact. Follow the shared
+Progress reporting defaults to OFF. Preserve explicit ON/OFF preferences and
+honor changes in the parent using the
 [mode selection](../../docs/spec/native-host-execution.md#cross-chat-waiting-mode-selection).
-
-The explicit option **Luna待機なし** / **notification-only** uses the
-[notification-only return contract](../../docs/spec/native-host-execution.md#cross-chat-notification-only-return):
-end the requester turn after dispatch, with no Luna or parent polling, and resume
-on the authorized result reply or human instruction. This is a skill option, not
-a new CLI flag. Retain an explicitly selected mode within its stated scope; see
-[mode selection](../../docs/spec/native-host-execution.md#cross-chat-waiting-mode-selection).
-Do not silently opt out on model unavailability or duplicate an existing waiter.
-Neither mode creates/resumes a Goal or overrides an explicit human stop. This
-contract does not guarantee zero cost or control client UI/wakeup behavior.
+Explicit **notification-only** / **結果返信で続行** uses the
+[reply-based return contract](../../docs/spec/native-host-execution.md#cross-chat-notification-only-return)
+when the user chooses to end this turn after dispatch.
 
 At each send/receive, follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display):
 show **💬 📨 別チャットへ依頼中** at the actual send outcome, separately from
 parent-wait indicators. Name the destination/sender and request, then show this caller's outstanding
 requests from retained context. Distinguish result receipt from runtime adoption;
-include the waiting list in the dispatch turn's final handoff. No status queries
+include the waiting list in any final handoff if the requester turn ends. No status queries
 or new display storage are needed.
 
 ## Runtime-owned local publication

@@ -190,10 +190,11 @@ scope; never represent standalone evidence as proof of installed runtime support
 
 Execution/result collection has one owner. That owner collects the running
 invocation and returns the actual terminal result; consumer chats must not
-independently poll its logs or request progress-only AI turns. Cross-chat callers use [active-Goal Luna waiting](#active-goal-luna-wait) by
-default. Only an explicit Luna-wait opt-out uses notification-only turn ending.
-The parent does not duplicate the waiter's destination-log checks. For an owned runtime
-invocation, retain its existing completion/collection mechanism. User-facing updates use
+independently poll its logs or request progress-only AI turns. Cross-chat
+requesters use [parent-owned waiting](#parent-owned-cross-chat-waiting) by default.
+An explicitly selected notification-only mode ends the requester turn and uses
+the authorized result reply. For an owned runtime invocation, retain its existing
+completion/collection mechanism. User-facing updates use
 already-available observations, not extra execution, probes or status agents.
 Cross-chat messages carry a completed/usable result, material scope/contract change,
 or a decision that the delivery owner cannot resolve. Avoid duplicate progress
@@ -266,49 +267,38 @@ respective existing operations.
 
 ## Cross-chat waiting mode selection
 
-All sm-* skills default to [active-Goal Luna waiting](#active-goal-luna-wait)
-after an authorized cross-chat dispatch. Preserve an existing active Goal and
-Session; keep the parent waiting for correlated completion or actionable attention.
-The waiter alone owns destination polling. Parent progress reporting defaults to
-OFF. An explicit **動作状況の報告をON** / **動作状況を報告して** enables it;
-**動作状況の報告をOFF** disables it. This is independent of Luna waiting itself.
-Pass progress_reporting=off/on and the known destination title to the waiter;
-these are skill assignment fields, not CLI flags or runtime configuration keys.
-An applicable explicit reporting preference is retained with the request; otherwise
-use OFF. Reported activity always describes the destination, not the waiter.
+After authorized dispatch, default to [parent-owned cross-chat waiting](#parent-owned-cross-chat-waiting).
+Keep one collection owner, the requester. If there is an active Goal, keep it
+active and continue its existing Session when the matching result is admitted.
+An absent Goal stays absent. A user pause or stop takes effect immediately.
 
-While waiting, a user may change reporting with the same phrases. The parent
-updates its retained preference and sends one collaboration.send_message to the
-existing waiter: REPORTING_MODE with request_id and progress_reporting=on/off.
-Do not use followup_task, interrupt/restart the waiter, redispatch the destination,
-or change Goal/Session/history/counters. The waiter applies the change at the next
-message boundary; a pending tool wait may delay application. No acknowledgment
-loop is needed. OFF takes effect at the parent's display boundary immediately:
-ignore queued PROGRESS reports but still receive terminal results. OFF -> ON starts
-a fresh 120-second reporting interval; repeated ON does not reset the interval.
-The parent can briefly confirm the user-requested switch and re-enter waiting.
-If several requests are outstanding and the target is ambiguous, clarify which
-request the user means. In notification-only mode report that no Luna waiter is
-running; a reporting toggle alone does not start one.
+An explicit **notification-only** / **結果返信で続行** selects turn ending and the
+authorized reply transport. Preserve an already captured notification-only
+choice, including choices recorded under the older **Luna待機なし** label.
+For new default waits, a request to avoid Luna selects parent-owned waiting.
+If a legacy waiter already owns an in-flight request, keep its existing wait
+until it returns or hands back control. Do not start a second collector,
+redispatch the destination or modify the request, Goal, Session or history
+to change wait mode.
 
-The user may explicitly select **Luna待機なし** / **notification-only** for a
-request or an expressly stated broader scope. This is a caller/skill option, not
-a new sm-workflow CLI flag or runtime configuration key. Retain the selected mode
-with existing request context across turns. A specific current instruction wins
-within its scope; otherwise preserve an explicit still-applicable user preference,
-then use the Luna default. An incidental old default is not an explicit opt-out.
-Do not start a second waiter for the same outstanding request or silently switch
-an already-running wait. Apply the default at the next dispatch/wait boundary.
+Parent reporting defaults to OFF. **動作状況の報告をON** or
+**動作状況を報告して** enables it, and **動作状況の報告をOFF** disables it.
+Retain the preference with the request. ON uses compact wait snapshots at
+intervals of 2, 4, 8, then 10 minutes between reports. Schedule from the last
+report; switching OFF to ON starts at two minutes, and repeated ON retains
+the current schedule. OFF suppresses progress only. Report actual destination
+activity, with its observation time when needed. A matching result or actionable
+attention takes precedence over a progress report. A reporting toggle in
+notification-only mode leaves that mode in effect.
 
-This selection never creates or resumes a Goal by itself. If no Goal exists,
-retain ordinary caller context; if the user has paused/stopped work, honor that
-instruction rather than resuming through this default. No Session restart,
-accepted-result resubmission, repair-counter reset or repeated verification.
+For an active legacy waiter, send one `REPORTING_MODE` message with the matching
+`request_id` and `progress_reporting=on/off` to the same child when the preference
+changes. Apply OFF immediately at the parent display boundary by suppressing queued
+progress. Keep collecting the terminal result through the same child.
 
 ## Cross-chat notification-only return
 
-Use this section only for the explicit **Luna待機なし** / **notification-only**
-option. Do not start a Luna waiter or substitute parent polling. After authorized
+Use this section for an explicitly selected notification-only mode. After authorized
 dispatch and recording its actual transport outcome, end the requester turn with
 a brief pending-result report. Preserve request ID, requester/destination chat
 identities, existing Sessions, issued context and result locators. Ending a turn
@@ -355,114 +345,58 @@ or uncertain send is not automatically resent. Resume only on a delivered result
 or a human instruction; an explicit human pause remains in force.
 
 <a id="active-goal-luna-wait-trial"></a>
+<a id="active-goal-luna-wait"></a>
 
-## Active-Goal Luna wait
+## Parent-owned cross-chat waiting
 
-Status: default cross-chat waiting mode for sm-* skills, adopted 2026-11-01.
-Unless the user explicitly opts out under the mode-selection contract, use bounded
-reply checks by one dedicated `sm_workflow_chat_waiter` (gpt-6-luna, low). Do not end
-the parent turn merely because the destination is working. Do not use an unrelated runner role or
-silently replace an unavailable Luna with a more costly model.
+The requesting Codex chat performs the wait through the Codex app tool
+`wait_threads`. The requester owns transport collection and the normal
+sm-workflow result receipt and adoption. Keep the existing active Goal and
+current turn while the destination is working. New waits need no Luna
+subagent or separate monitoring process.
 
-The deployed waiter enables apps and plugins: its chat read/wait tools are
-provided by the Codex app plugin, not by CNCF. Disabling plugins while enabling
-apps can leave this role without its required transport. Missing tools are a
-waiter configuration/availability defect (`WAIT_FAILED`), not successful waiting
-or merely suppressed progress display. Qualify configuration repairs with a fresh
-role and actual bounded read/wait calls; preserve the outstanding request and
-its history without redispatching the development work.
+1. Retain the actual authorized send result, destination chat and host IDs,
+   original request ID, expected result marker, and existing Session and issued
+   work references. Reuse the latest cursor from this destination. If needed for
+   a new dispatch, capture a compact baseline with `timeoutMs: 0` before
+   sending. If the request was already sent, examine a first snapshot for its
+   result before treating the returned cursor as the next starting point.
+2. Call `wait_threads({targets: [{threadId, hostId, afterCursor}], timeoutMs})`
+   for the destination. Omit unavailable optional fields and copy the returned
+   opaque cursor verbatim. Use the longest wait permitted by the tool and the
+   caller's execution limit, shortened only as needed for an enabled reporting
+   deadline. The tool supports up to 120000 ms per call. On an ordinary timeout
+   with no matching event, keep the same request and re-enter the wait with the
+   returned cursor, without a status query or progress-only turn. Do not wake
+   on commentary alone. If the caller can handle unchanged timeouts in the same
+   tool execution, do so and yield control for user input or a meaningful event.
+3. Handle a new user instruction before re-waiting. On destination completion
+   or attention, verify the actual request ID, destination, issued context and
+   result marker or reference. A chat turn ending, an approval request, and a
+   delivered development result are distinct. If an event about this request
+   lacks the necessary detail, use one bounded `read_thread` read of the
+   relevant turn or collect the authorized reply. Ignore unrelated or already
+   handled events. Keep waiting for an outstanding request when evidence shows
+   it is still running or queued. If its turn ended and the matching result is
+   missing, or the transport is unavailable or repeatedly returns the same
+   immediate event, report the concrete gap and retain the request for later
+   collection.
+4. Show receipt when the matching result is observed. Use the existing
+   requester receipt and adoption operations exactly once, and proceed through
+   ordinary continuation in the same Goal and Session after acceptance. Leave
+   actual approvals, scope changes or missing evidence at their normal
+   boundary. Reuse accepted receipts for duplicate notifications. A wait
+   timeout, tool failure or chat interruption grants no retry of the
+   development request.
 
-The caller keeps its existing Goal active and retains the actual dispatch/request
-identity and Session. Spawn the waiter with minimal context and the destination,
-request ID, return marker and known cursor. The parent remains in its current turn
-using collaboration.wait_agent(timeout_ms=3600000) where the caller's applicable
-execution rules permit that duration. This tool supports up to one hour and
-returns early on mailbox updates or user input; the timeout is not a minimum sleep.
-If the current environment imposes a shorter waiting limit, use the longest
-permitted duration and disclose that parent timeout overhead remains. Do not copy
-the Luna 120-second polling interval into the parent's
-wait. Until a matching waiter result or human instruction arrives, do not call
-Advance, inspect logs, edit, investigate or start other work. Only explicitly
-enabled PROGRESS reports may cause the display-only parent handling below. On a wait timeout or unrelated
-agent notification, re-enter the same long wait without a status query. The tool
-can wake for other agents as well; correlate the sender/request before treating
-it as the awaited result. A one-hour expiry does not mean the destination failed
-and does not change Goal status. Do not call get_goal on every timeout. This is an
-instruction-level restriction, not a runtime execution lock.
-
-The waiter checks the destination every 120 seconds regardless of reporting mode.
-Use wait_threads with the latest opaque cursor copied verbatim and
-timeoutMs=min(120000, remaining milliseconds until next_poll_at, remaining
-milliseconds until next_report_at when ON), subject to any
-shorter applicable execution limit. The API rejects values above 120000. Keep the
-same deadline across shorter transport waits; intermediate timeouts do not trigger
-extra reads; a due enabled report may use the returned snapshot. At the due time reuse the compact snapshot; read at most
-one bounded new log section only if needed. Schedule the next check from observation
-completion, without catch-up bursts. Correlate completion/needs-attention events
-immediately, even before the next deadline.
-
-Silence, counters, log growth and a chat turn ending do not prove request completion
-or a stall. Unknown evidence retains the last known state with its observation time,
-without claiming it remains current. A transport failure or repeated stale immediate
-event returns WAIT_FAILED once, without retries or a busy loop.
-
-### Optional parent progress reports
-
-Reporting is OFF unless explicitly selected. OFF sends no nonterminal parent
-messages; child commentary on an actual state change is allowed but does not
-promise visibility in the parent's view. With reporting ON, the waiter sends one
-PROGRESS via collaboration.send_message to its parent at intervals of 120, 240,
-480, 600, then 600 seconds. Start at activation time; after sending, schedule the
-next interval from the send time. Poll and report deadlines are separate.
-For ON at t0 and instantaneous sends, reports occur at t120, t360, t840, t1440,
-t2040, ... seconds, not at every two-minute poll. The next intervals after those
-reports are 240, 480, 600, 600 seconds. Meaningful changes do not reset reporting
-backoff or trigger extra parent wakeups. At a reporting deadline use the returned
-compact snapshot, processing a due poll first. If no poll is due, report the
-available observation with its actual time without adding a log read.
-No catch-up bursts. Completion or actionable attention always takes priority over
-a due progress report. Never end the waiter turn for progress alone.
-
-Each PROGRESS contains request_id, destination_thread_id, destination title,
-observed_at, actual observed activity (or unknown/last-known), whether it changed
-since the last report, next report interval and ready-to-display commentary.
-Use `💬 ✨ 別チャット作業中 — <title>：<observed activity>` or
-`💬 ⏳ 別チャット待機中 — <title>：<observed waiting reason>` only for evidenced
-states; otherwise `💬 別チャット状況未確認 — <title>`. Unchanged observations may say
-`変化なし` without implying a fresh observation when none was available.
-
-The parent correlates sender and request, checks its current reporting preference,
-and forwards the supplied commentary once. It does not query status, investigate,
-call Advance, edit, acknowledge the report, spawn a new waiter or change Goal status.
-Then it resumes the same long wait with the same child. Reports are observations,
-not native result acceptance or authority. Unrelated messages and duplicate reports
-are not redisplayed; use existing request context, not a new display ledger.
-This optional reporting wakes the parent and consumes parent tokens. Do not claim
-zero-cost display or guaranteed delivery into the app UI.
-
-Return MATCHED_RESULT, NEEDS_ATTENTION or WAIT_FAILED only for correlated terminal
-results/actionable stops. The parent collects them and uses normal runtime
-receipt/adoption in the same Goal/Session. Preserve history, repair counts and
-successful results. Human stop instructions and actual Goal limits take precedence.
-Before waiting show the actual send outcome using `💬 📨 別チャットへ依頼中`,
-destination title, request and retained pending list, separately from parent-wait
-indicators. Show the terminal result on return even when progress reporting is OFF.
-
-The parent's long wait reduces periodic parent re-entry but cannot guarantee
-completion-only wakeups or an infinite suspension. Parent timeout boundaries,
-other-agent notifications and user input can still cause re-entry. Luna also
-consumes tokens when deciding to re-wait. Do not claim zero cost or a
-reduction without measurement. Record actual wait/timeout/wakeup counts and any
-already-available usage, without extra AI measurement calls. Try the dedicated role first. If it is explicitly unknown/unregistered before
-child creation, one equivalent default-agent start is allowed: read the deployed
-TOML, pass its full developer instructions and the same minimal assignment, with
-explicit gpt-6-luna / low and fork_turns=none. Disclose this equivalent route.
-An accepted start with a child identity is required; installed TOML alone is not
-proof. Do not substitute another model or role. Other rejection/failure types do
-not authorize this fallback, and failure of the equivalent start returns actionable WAIT_FAILED. Do not silently
-select notification-only or parent polling because Luna is unavailable.
-An isolated mailbox smoke test proves only child result return, not cross-chat
-transport or active-Goal scheduling. Record those qualification gaps explicitly.
+Use the [cross-chat display contract](#separate-chat-delegation-display) for the
+actual dispatch, wait and receipt. Use the compact snapshot already returned by
+the wait for explicitly enabled progress reports. The requester resumes
+decision-making at the returned event; the tool does not promise to reopen an
+ended requester turn or to accept a result for sm-workflow. For explicit turn
+ending, use the [notification-only return](#cross-chat-notification-only-return).
+Ordinary timeout handling and optional reporting can still consume requester
+tokens.
 
 ## New cross-chat development requests and existing continuations
 
@@ -1374,8 +1308,8 @@ pending list in the dispatch turn's final handoff as well, so ending the turn do
 not hide it inside collapsed commentary. Use existing context only: no new display
 ledger, AI call, runtime Operation, thread scan, status query, timer or monitoring.
 An event-driven list is a retained observation, not a live dashboard. Follow the
-[waiting mode selection](#cross-chat-waiting-mode-selection). Default Luna progress
-checks serve the authorized wait, not additional scans to populate this list.
+[waiting mode selection](#cross-chat-waiting-mode-selection). Use the snapshot
+from the requester wait for reporting, without extra scans to populate this list.
 Explicitly enabled parent reporting is the bounded exception for forwarding
 already observed destination status; it does consume parent tokens.
 
@@ -1688,8 +1622,9 @@ at the chosen integration boundary.
 
 The workstation distribution provides five semantic roles: `sm_workflow_analysis`,
 `sm_workflow_design`, `sm_workflow_implementation`, `sm_workflow_repair` and
-`sm_workflow_review`, plus a separate caller-side `sm_workflow_chat_waiter`.
-Initial semantic definitions select `gpt-6.1-sol` / `medium` and
+`sm_workflow_review`. The workstation retains `sm_workflow_chat_waiter` for
+legacy installations and already assigned waits. The current skills wait in the
+requester using Codex chat tools. Initial semantic definitions select `gpt-6.1-sol` / `medium` and
 omit inherited skill-discovery instructions. Analysis/design/review stay
 read-only by their semantic contract; implementation/repair own only the paths
 explicitly issued. Role instructions do not create filesystem permissions.

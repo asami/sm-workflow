@@ -170,13 +170,12 @@ no actual consumer choice, full delivery or application result.
 ## Transport and adoption
 
 Apply [waiting mode selection](native-host-execution.md#cross-chat-waiting-mode-selection).
-Default to Luna waiting with the existing parent Goal active; the parent performs
-no destination polling. Progress reporting defaults OFF; when explicitly ON,
-forward Luna reports at 2/4/8/10-minute intervals and re-enter the same wait.
-Support live reporting ON/OFF through the same waiter. Adopt only the actual correlated result,
-not a progress snapshot. Explicit Luna待機なし / notification-only ends the requester
-turn and relies on the authorized result reply. Neither choice changes public
-DTOs, native authority, acceptance, existing Sessions or execution history.
+For a new default wait, the requester uses `wait_threads` directly in the active
+parent turn and keeps the existing Goal, Session and request identity. Receive
+and adopt the actual correlated result before ordinary continuation. Progress reporting
+defaults OFF. Explicit notification-only mode ends the turn and relies on
+the authorized result reply. Both modes retain the same public DTOs, native
+authority, acceptance conditions and history.
 
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery --input <json>` takes
 `sessionId`, `event`, `sourceReference`, optional `destinationSessionId`, optional

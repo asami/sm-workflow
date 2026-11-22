@@ -147,15 +147,13 @@ periodic polling or progress-only chat messages manage waiting or icons. Initial
 multi-request FIFO and busy-destination scheduling remain in Phase 7; do not
 interrupt a different task or claim FIFO support from this minimum route.
 
-Cross-chat waiting defaults to [active-Goal Luna waiting](native-host-execution.md#active-goal-luna-wait).
-The requester retains its active Goal and Session, waits without unrelated work,
-and receives correlated completion or actionable attention. Luna checks every two
-minutes. Parent progress reporting defaults OFF; explicit ON enables reports at
-2/4/8/10-minute intervals and consumes parent tokens. The user can switch reporting
-ON/OFF during waiting without restarting the waiter or destination request.
-Explicit **Luna待機なし** / **notification-only** selects turn ending and authorized
-reply-based continuation instead. Follow [mode selection](native-host-execution.md#cross-chat-waiting-mode-selection),
-retain the admitted request and Sessions, and do not automatically retry delivery.
+Cross-chat waiting defaults to [parent-owned waiting](native-host-execution.md#parent-owned-cross-chat-waiting).
+With an active Goal, the requester remains in the same turn, waits on the
+destination via `wait_threads`, and continues the same Session after receipt
+and adoption of the correlated result. Follow
+[mode selection](native-host-execution.md#cross-chat-waiting-mode-selection)
+for optional reporting and explicit notification-only return. Retain the
+admitted request and Sessions.
 
 ## Runtime-owned validation scope
 
