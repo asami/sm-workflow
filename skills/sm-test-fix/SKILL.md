@@ -78,6 +78,7 @@ ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
 Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
 captured checks/results and use the runtime's supported selection route.
 An explicit `fix-check` uses the [Session checkout binding](../../docs/spec/native-host-execution.md#session-state-and-semantic-returns).
+Read [FixCheck attribution and exceptions](../../docs/spec/native-host-execution.md#fixcheck-attribution-and-exceptions) when it returns lint diagnostics.
 
 ## Waiting for another chat
 

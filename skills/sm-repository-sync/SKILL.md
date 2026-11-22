@@ -104,6 +104,7 @@ Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md
 ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
 Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
 captured checks/results and use the runtime's supported selection route.
+Use the retained [FixCheck attribution and exceptions](../../docs/spec/native-host-execution.md#fixcheck-attribution-and-exceptions) for a selected Scala lint check.
 
 ## Waiting for another chat
 

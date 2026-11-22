@@ -754,6 +754,7 @@ review and the integrated Phase review retain their own real issued routes.
 `fix-check` is the typed CNCF check-only SBT operation. The project owns the
 nonempty `fixCheck` Scalafix profile. Consume actual durable check results;
 missing, timed-out, uncertain, unavailable and OFF are distinct from PASS.
+Use the [retained attribution and exception evidence](../../docs/spec/native-host-execution.md#fixcheck-attribution-and-exceptions).
 Known check failures use the existing assigned FIX, not an AI waiver. An
 intentional lint exception requires an actual applicable prior Human decision.
 Use standard rule-scoped suppression with its source reason and decision

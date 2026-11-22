@@ -700,6 +700,24 @@ results and repair budget.
 Metals/LSP provider integration and automatic formatter or Scalafix repair
 remain deferred from this delivery.
 
+#### FixCheck attribution and exceptions
+
+Use the retained typed `fix-check` result and its actual diagnostic scope. The
+producer can omit a standalone managed history date hunk when actual Git base
+and index bytes and the resolved history rule prove the rewrite. Other hunks
+keep their coordinates. Mixed changes and unverified history retain ordinary
+conservative attribution. Keep the reported scope and preserve past results
+when a new validation uses the narrower attribution.
+
+When available, use the structured rule, severity, range, disposition and
+provenance alongside the retained check outcome. A null-boundary
+`VerifiedBoundary` observation confirms only the supported source shape and
+resolved parameter/predicate. Business correctness and Human acceptance require
+their existing evidence. Keep stale, invalid, unsupported or missing evidence
+and suppression warnings with their actual disposition. Use only an applicable
+admitted exception and retain the author's own justification. Request Human
+direction through the existing path when the runtime issues that decision.
+
 ### Current-source and source-history continuation
 
 Use these routes only when the selected installed runtime supports them. Retain
