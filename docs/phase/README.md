@@ -1,15 +1,34 @@
 # sm-workflow incremental-use roadmap
 
+## Phase 7.2 temporary dependency worktree retirement — 2026-11-24
+
+[Phase 7.2](phase-7.2.md) and its [checklist](phase-7.2-checklist.md) plan
+RepositorySync-owned retirement after verified remote synchronization, including
+later manual sync after an automatic failure. Local Phase closure and
+[Phase 7.1](phase-7.1.md)'s source-project hold are unchanged. No execution or
+change of adopted priority is implied.
+
+## Phase 7.1 source-project integration on hold — 2026-11-23
+
+[Phase 7.1](phase-7.1.md) and its [checklist](phase-7.1-checklist.md) are on hold
+by user decision. Source-project integration is not selected for implementation;
+its original proposal is retained. The existing project-scoped local JAR route
+is recommended, and machine-wide local JAR consumption is an explicit alternative
+with shared-publication effects. Delivery location remains a separate choice.
+Preserve accepted Phase 7, the separate Phase 22 operational residual and all
+existing Sessions and histories. This decision starts no live-consumer operation
+and changes no adopted delivery slot or priority below.
+
 ## Adopted development priority — 2026-11-22
 
 The 2026-11-24 scheduling decision keeps the immediate AI-cost reductions
 first, then brings forward validation, workflow stabilization, and everyday
-development support before expanding the provider pool. Phases 24 and 28 are
-locally released. Phase 25 is in progress; its T1–T3 plan is unchanged.
+development support before expanding the provider pool. Phases 24, 25 and 28
+have completed locally.
 
 | Order | Group | Phases |
 | --- | --- | --- |
-| 1–2 | Immediate AI-cost reductions | [25](phase-25.md) (OpenAI Task API) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
+| 1–2 | Immediate AI-cost reductions | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
 | 3–7 | Worktree retirement, validation, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
 | 8–11 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
 | 12–15 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
@@ -21,6 +40,9 @@ group; it does not reopen Phase 7 or gate local Phase closure.
 [Phase 7](phase-7.md) and [Phase 9](phase-9-checklist.md#actual-local-completion)
 have completed locally. Phase 24 operational qualification follows its release.
 Phase 18's Flutter W4–W5 still require the qualified CNCF Phase 117 delivery.
+Phase 25 release evidence includes the OpenAI allowance connection, a real
+review and a real compiler repair. Further Phase 25 operational verification
+continues alongside Phase 18.
 Phase 26 remains the functional prerequisite for Phase 27. Phase 13 usage
 observations inform routing without adding a Phase 27 acceptance condition,
 and Phase 20 requires Phase 13. Phase 21 precedes Phase 15. Resolve concrete

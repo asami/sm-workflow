@@ -46,8 +46,8 @@ retirement, does not reopen the completed Phase.
   explicitly opted-in worktree. A raw Git push is not a RepositorySync trigger.
 - Reuse current Phase, workspace, authority and RepositorySync records. No
   automatic retry loop, forced push, Phase reopening, or changes to the
-  project-scoped JAR route. Phase 7.1 source-project integration
+  project-scoped JAR route. [Phase 7.1](phase-7.1.md) source-project integration
   stays on hold. [Phase 22](phase-22.md) operational qualification is unchanged.
 
-This scheduling decision does not start a Session, synchronize any remote or
-authorize removal of current worktrees.
+Registration does not select a rollout slot, start a Session, synchronize any
+remote or authorize removal of current worktrees.

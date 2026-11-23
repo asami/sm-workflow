@@ -1,5 +1,15 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Source-project follow-on on hold — 2026-11-23
+
+[Phase 7.1](phase-7.1.md), with its [acceptance checklist](phase-7.1-checklist.md),
+is on hold by user decision. Do not implement the proposed `localProject` route
+or adopt its source-first default. Continue with the existing project-scoped local
+JAR connection as recommended; machine-wide local JAR consumption remains an
+explicit alternative. The hold preserves Phase 7's accepted results, historical
+limitations and the separate operational residual in Phase 22. It reopens no
+accepted Phase/Step and changes no live Session or captured delivery choice.
+
 ## Operational release follow-up — 2026-11-22
 
 The operational integration candidate passed production Compile. Its four
