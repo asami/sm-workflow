@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 /** Composition over existing native WorkOrders, bounded checkpoints and local
   * artifact operations. This owns no queue, semantic executor or repair loop.
   * @since   Nov. 12, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentBoundedWork {
@@ -499,7 +499,7 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
         ContextReference(key(policy.definition, edge, "selection", input.selection), "1")) Consequence.unit
       else invalid("Consumer selection crosses the native B publication or exact retained A/B edge")
     original <- requesterC(host, capture, core)
-    compiled <- ManagedDevelopmentRuntime.runC(core, policy, "status", input)
+    compiled <- ManagedDevelopmentRuntime.consumerVerificationC(core, policy, input)
     // Decode the complete selection, not a status string from caller-supplied JSON.
     selection <- if (compiled.status == "verified") compiled.detail.hcursor.get[Selection]("selection")
       .fold(e => invalid(e.message), s => if (s == Selection(input.selection, publication)) Consequence.success(Some(s))

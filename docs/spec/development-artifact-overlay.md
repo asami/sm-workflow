@@ -469,6 +469,29 @@ unverified, unknown and not-found. Reusing an execution request identity with di
 or participant rejects; redelivering the same completed input reuses its result.
 An intent without an observed result remains unknown and is never rerun implicitly.
 
+### Reuse a retained consumer Compile after prelaunch rejection
+
+An existing managed dependency requester can continue when its original scoped
+Compile was rejected by typed SBT admission and an independently identified
+verification has already succeeded for the same selection. Call
+`describeDevelopmentConsumerVerificationRecovery` on `ManagedDevelopmentService`
+with `edgeIdentity`, the original `requestIdentity`, `publication`, `selection`
+and the successful `verificationRequestIdentity`. Include `publicationEdge`
+when the original request specifies a separate publication edge.
+
+Use the same input with `adoptDevelopmentConsumerVerificationRecovery` once the
+description is eligible. The runtime checks both native intents and results,
+their participant, the active selection and publication, the consumer workspace
+and current source. It stores a receipt linking the two attempts. The original
+status still reports the rejection under the original ID and the successful
+verification under its own ID. Repeating the same adoption reuses the receipt.
+An unknown or launched original attempt, a failed or missing verification, or
+evidence from another source, publication or selection cannot be adopted.
+
+Run the requester's usual `advanceDelegateTask` on its existing Session. It
+revalidates the retained verification and returns the original parent Phase
+WorkOrder. Adoption and this continuation perform no Compile or publication.
+
 These are native Component records, not skill-maintained JSON lifecycle files.
 The JSON under the owner workspace is bounded execution input and actual adapter
 output. This minimum is a single-module route; selection sets, generation,

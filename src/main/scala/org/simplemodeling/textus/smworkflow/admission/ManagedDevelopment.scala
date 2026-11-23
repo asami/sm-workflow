@@ -10,7 +10,7 @@ import scala.util.Try
 /** A dependency edge selects source, JAR and project independently. Publications
   * and selections are immutable Component records, never a work.d JSON ledger.
   * @since   Nov. 12, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopment {
@@ -65,6 +65,11 @@ private[smworkflow] object ManagedDevelopment {
     }))
     given io.circe.Decoder[Input] = io.circe.generic.semiauto.deriveDecoder
   }
+  final case class ConsumerVerificationRecoveryInput(edgeIdentity: String, requestIdentity: String, publication: String,
+    selection: String, verificationRequestIdentity: String, publicationEdge: Option[String] = None) {
+    def original: Input = Input(edgeIdentity, requestIdentity, publication, selection, publicationEdge = publicationEdge)
+    def verification: Input = original.copy(requestIdentity = verificationRequestIdentity)
+  }
   final case class Publication(edge: Edge, scope: String, identity: String, producerSelection: String,
     selected: Coordinate, jar: String, ivy: String, source: Json, report: Json, completion: Json, batch: Option[PublishedBatch] = None)
   object Publication {
@@ -97,6 +102,8 @@ private[smworkflow] object ManagedDevelopment {
     def createC(key: String, value: Json): Consequence[Unit]
     def sourceC(edge: Edge): Consequence[Json]
     def consumerSourceC(edge: Edge): Consequence[Json] = sourceC(edge)
+    def consumerCompileRootC(edge: Edge, input: Input, selection: Selection): Consequence[String] =
+      invalid("retained consumer compile workspace binding is unavailable")
     def executeC(edge: Edge, input: Input, selected: Option[Publication]): Consequence[Execution]
     def publicationC(edge: Edge, input: Input, source: Json): Consequence[Publication]
     def consumerReportC(edge: Edge, input: Input, selected: Publication): Consequence[Json]
@@ -525,6 +532,117 @@ private[smworkflow] object ManagedDevelopment {
       case _ => invalid("operation is not implemented")
     }
   } yield result
+
+  def describeConsumerVerificationRecoveryC(definition: Definition, input: ConsumerVerificationRecoveryInput,
+    port: Port): Consequence[Result] = _consumer_verification_recovery_c(definition, input, port, adopt = false)
+
+  def adoptConsumerVerificationRecoveryC(definition: Definition, input: ConsumerVerificationRecoveryInput,
+    port: Port): Consequence[Result] = _consumer_verification_recovery_c(definition, input, port, adopt = true)
+
+  def consumerVerificationC(definition: Definition, input: Input, port: Port): Consequence[Result] = {
+    import scala.language.strictEquality
+    for {
+      edge <- edgeC(definition, input)
+      stored <- port.loadC(key(definition, edge, "compile-recovery", input.requestIdentity))
+      result <- stored match {
+        case None => runC("status", definition, input, port)
+        case Some(receipt) => for {
+          request <- receipt.hcursor.get[String]("verificationRequestIdentity").fold(e => invalid(e.message), Consequence.success)
+          recovery = ConsumerVerificationRecoveryInput(input.edgeIdentity, input.requestIdentity, input.publication,
+            input.selection, request, input.publicationEdge)
+          _ <- if (input.equals(recovery.original)) Consequence.unit
+            else invalid("consumer verification recovery crosses the original immutable input")
+          qualified <- _qualify_consumer_verification_c(definition, edge, recovery, port)
+          _ <- if (receipt.equals(qualified._1)) Consequence.unit
+            else invalid("consumer verification recovery is stale or crosses its retained binding")
+        } yield qualified._2.copy(detail = qualified._2.detail.mapObject(_.add("verificationRecovery", receipt)))
+      }
+    } yield result
+  }
+
+  private def _consumer_verification_recovery_c(d: Definition, input: ConsumerVerificationRecoveryInput, p: Port,
+    adopt: Boolean): Consequence[Result] = {
+    import scala.language.strictEquality
+    for {
+      original <- Option(input).map(i => Consequence.success(i.original))
+        .getOrElse(invalid("consumer verification recovery input is absent"))
+      edge <- edgeC(d, original)
+      qualified <- _qualify_consumer_verification_c(d, edge, input, p)
+      receipt = qualified._1
+      recordkey = key(d, edge, "compile-recovery", original.requestIdentity)
+      stored <- p.loadC(recordkey)
+      _ <- if (stored.forall(_.equals(receipt))) Consequence.unit
+        else invalid("original consumer request already has a different verification recovery")
+      _ <- if (adopt && stored.isEmpty) {
+        val created = immutableC(p, recordkey, receipt)
+        created match {
+          case Consequence.Success(_) => created
+          case _ => p.loadC(recordkey).flatMap { observed =>
+            if (observed.exists(_.equals(receipt))) Consequence.unit else created
+          }
+        }
+      } else Consequence.unit
+    } yield Result(if (adopt || stored.nonEmpty) "adopted" else "eligible", receipt)
+  }
+
+  private def _qualify_consumer_verification_c(d: Definition, e: Edge, input: ConsumerVerificationRecoveryInput,
+    p: Port): Consequence[(Json, Result)] = {
+    import scala.language.strictEquality
+    for {
+      _ <- if (id(input.verificationRequestIdentity) && input.verificationRequestIdentity != input.requestIdentity)
+        Consequence.unit else invalid("consumer verification recovery requires a distinct retained verification request")
+      original = input.original
+      verification = input.verification
+      rejected <- _retained_compile_c(d, e, original, p)
+      _ <- if (rejected.status == "admission-rejected" && rejected.detail.asString.exists(_.trim.nonEmpty))
+        Consequence.unit else invalid("original consumer Compile has no confirmed prelaunch admission rejection")
+      verified <- _retained_compile_c(d, e, verification, p)
+      _ <- if (verified.status == "verified") Consequence.unit
+        else invalid("successor consumer Compile has no retained verification")
+      selected <- selectionC(d, e, original, p)
+      sourceedge <- publicationEdgeC(d, e, original)
+      stored <- p.loadC(key(d, sourceedge, "publication", original.publication))
+      publication <- stored.map(decodeC[Publication]).getOrElse(invalid("retained consumer publication is absent"))
+      _ <- if (publication.edge.equals(sourceedge) && publication.equals(selected.publication))
+        Consequence.unit else invalid("consumer verification recovery crosses the immutable publication")
+      protection <- protectionC(d, p)
+      ref = identity(selected.publication)
+      _ <- availableC(protection, ref)
+      _ <- if (protection.active.get(e.identity).contains(ProtectedSelection(selected.identity, ref))) Consequence.unit
+        else invalid("consumer verification recovery requires the same active selection")
+      detail = verified.detail.hcursor
+      execution = detail.downField("execution")
+      _ <- if (detail.get[Selection]("selection").toOption.contains(selected) &&
+        detail.get[Json]("resolution").toOption.flatMap(_.asObject).exists(_.toIterable.nonEmpty) &&
+        execution.get[String]("operation").contains("Compile") &&
+        execution.get[String]("workspace").contains(e.consumer.workspace) &&
+        execution.get[String]("termination").contains("Exited(0)") &&
+        execution.get[String]("program").exists(_.trim.nonEmpty)) Consequence.unit
+        else invalid("retained consumer verification lacks the exact selection and successful scoped Compile evidence")
+      originalroot <- p.consumerCompileRootC(e, original, selected)
+      verifiedroot <- p.consumerCompileRootC(e, verification, selected)
+      _ <- if (originalroot.nonEmpty && originalroot == verifiedroot) Consequence.unit
+        else invalid("consumer Compile requests cross their retained workspace binding")
+      current <- p.consumerSourceC(e)
+      _ <- if (!current.isNull && detail.get[Json]("consumerSource").toOption.exists(_.equals(current))) Consequence.unit
+        else invalid("retained consumer verification is stale for the actual current consumer source")
+      receipt = Json.obj("schema" -> "sm-workflow.managed-consumer-verification-recovery.v1".asJson,
+        "original" -> original.asJson, "verificationRequestIdentity" -> verification.requestIdentity.asJson,
+        "participant" -> p.participant.asJson, "consumerWorkspace" -> e.consumer.workspace.asJson,
+        "consumerRoot" -> originalroot.asJson)
+    } yield receipt -> verified
+  }
+
+  private def _retained_compile_c(d: Definition, e: Edge, input: Input, p: Port): Consequence[Result] = {
+    import scala.language.strictEquality
+    for {
+      intent <- p.loadC(key(d, e, "compile-intent", input.requestIdentity))
+      _ <- if (intent.exists(_.equals(intentJson(input, p)))) Consequence.unit
+        else invalid("retained consumer Compile intent is missing or crosses its participant or immutable input")
+      raw <- p.loadC(key(d, e, "compile-result", input.requestIdentity))
+      result <- raw.map(decodeC[Result]).getOrElse(invalid("retained consumer Compile result is absent"))
+    } yield result
+  }
 
   private def publishC(d: Definition, e: Edge, input: Input, p: Port): Consequence[Result] =
     attemptC(d, e, input, "publish", p) {

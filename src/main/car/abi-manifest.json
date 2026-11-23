@@ -1136,6 +1136,20 @@
         },
         {
           "service": "ManagedDevelopmentService",
+          "name": "describeDevelopmentConsumerVerificationRecovery",
+          "kind": "COMMAND",
+          "input": "DescribeDevelopmentConsumerVerificationRecoveryInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "adoptDevelopmentConsumerVerificationRecovery",
+          "kind": "COMMAND",
+          "input": "AdoptDevelopmentConsumerVerificationRecoveryInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
           "name": "detachDevelopmentArtifact",
           "kind": "COMMAND",
           "input": "DetachDevelopmentArtifactInput",
@@ -9986,6 +10000,48 @@
             {
               "name": "retain",
               "type": "boolean",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "ManagedConsumerVerificationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "edgeIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "publication",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "verificationRequestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "publicationEdge",
+              "type": "string",
               "multiplicity": "?",
               "required": false
             }

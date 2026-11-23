@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -63,6 +63,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "StandaloneFixService.describeStandaloneFixValidationRecovery", "StandaloneFixService.recoverStandaloneFixValidation",
     "ManagedDevelopmentService.publishDevelopmentArtifact", "ManagedDevelopmentService.selectDevelopmentArtifact",
     "ManagedDevelopmentService.compileDevelopmentConsumer", "ManagedDevelopmentService.readDevelopmentArtifactStatus",
+    "ManagedDevelopmentService.describeDevelopmentConsumerVerificationRecovery",
+    "ManagedDevelopmentService.adoptDevelopmentConsumerVerificationRecovery",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "LocalPublicationService.collectLatestLocalPublication",
     "LocalPublicationService.describeLocalPublicationRecovery", "LocalPublicationService.admitLocalPublicationRecovery",

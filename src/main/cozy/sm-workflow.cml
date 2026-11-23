@@ -286,6 +286,41 @@ OperationResult
 |------+------|--------------|
 | input | ManagedDevelopmentInput | 1 |
 
+## ManagedConsumerVerificationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| edgeIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| publication | string | 1 |
+| selection | string | 1 |
+| verificationRequestIdentity | string | 1 |
+| publicationEdge | string | ? |
+
+## DescribeDevelopmentConsumerVerificationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedConsumerVerificationRecoveryInput | 1 |
+
+## AdoptDevelopmentConsumerVerificationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedConsumerVerificationRecoveryInput | 1 |
+
 ## DetachDevelopmentArtifactInput
 
 - input-kind :: COMMAND
@@ -12949,6 +12984,62 @@ VerifyDevelopmentArtifactInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### describeDevelopmentConsumerVerificationRecovery
+
+##### DESCRIPTION
+
+Read eligibility to associate a distinct retained successful scoped Compile with the original prelaunch-rejected request on the declared dependency-work edge. The exact participant, workspace, active selection, available publication and current consumer source must still agree. Return eligible or already adopted with the exact request binding. Description creates no receipt and runs no Compile or publication.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeDevelopmentConsumerVerificationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedConsumerVerificationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### adoptDevelopmentConsumerVerificationRecovery
+
+##### DESCRIPTION
+
+Record one immutable association after rechecking the same scoped Compile recovery binding. Repeat delivery of the same current association returns adopted. Existing Compile results remain readable on their own request identities. Ordinary requester continuation revalidates the receipt before using the retained verification. Adoption runs no Compile or publication.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdoptDevelopmentConsumerVerificationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedConsumerVerificationRecoveryInput | 1 |
 
 ##### OUTPUT
 

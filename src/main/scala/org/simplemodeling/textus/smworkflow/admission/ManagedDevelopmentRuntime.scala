@@ -27,7 +27,7 @@ import ManagedDevelopment.*
   * Physical roots come only from the resolved CNCF workspace graph. All actual
   * acquisition and effects still cross CNCF admission, including owner grants.
   * @since   Nov. 12, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
@@ -60,6 +60,34 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     roots <- rootsC(core)
     _ <- edgeC(policy.definition, input)
     result <- ManagedDevelopment.runC(operation, policy.definition, input, new NativePort(core, policy, roots))
+  } yield result
+
+  def describeConsumerVerificationRecoveryC(core: ActionCall.Core, policy: Policy,
+    input: ConsumerVerificationRecoveryInput): Consequence[Result] =
+    _consumer_verification_recovery_c(core, policy, input, adopt = false)
+
+  def adoptConsumerVerificationRecoveryC(core: ActionCall.Core, policy: Policy,
+    input: ConsumerVerificationRecoveryInput): Consequence[Result] =
+    _consumer_verification_recovery_c(core, policy, input, adopt = true)
+
+  private def _consumer_verification_recovery_c(core: ActionCall.Core, policy: Policy,
+    input: ConsumerVerificationRecoveryInput, adopt: Boolean): Consequence[Result] = {
+    import scala.language.strictEquality
+    for {
+      _ <- if (Option(input).exists(i => policy.dependencyWorkEdge.contains(i.edgeIdentity))) Consequence.unit
+        else invalid("consumer verification recovery requires the active dependency-work edge")
+      roots <- rootsC(core)
+      port = new NativePort(core, policy, roots)
+      result <- if (adopt) ManagedDevelopment.adoptConsumerVerificationRecoveryC(policy.definition, input, port)
+        else ManagedDevelopment.describeConsumerVerificationRecoveryC(policy.definition, input, port)
+    } yield result
+  }
+
+  def consumerVerificationC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[Result] = for {
+    roots <- rootsC(core)
+    result <- if (policy.dependencyWorkEdge.contains(input.edgeIdentity))
+      ManagedDevelopment.consumerVerificationC(policy.definition, input, new NativePort(core, policy, roots))
+    else ManagedDevelopment.runC("status", policy.definition, input, new NativePort(core, policy, roots))
   } yield result
 
   def executionPlanC(core: ActionCall.Core): Consequence[Json] =
@@ -335,6 +363,19 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     override def consumerSourceC(edge: Edge): Consequence[Json] =
       if (policy.dependencyWorkEdge.contains(edge.identity)) sourceC(edge.copy(provider = edge.consumer))
       else Consequence.success(Json.Null)
+
+    override def consumerCompileRootC(edge: Edge, input: Input, selection: Selection): Consequence[String] = {
+      import scala.language.strictEquality
+      for {
+        owner <- rootC(d.ownerWorkspace)
+        build <- rootC(edge.consumer.workspace)
+        retained <- readC(folder(edge, input, false) + "/input.json")
+        expected = executionInput(d, edge, input, owner, build, Some(selection.publication),
+          absolute(owner, resultPath(edge, input, false)))
+        _ <- if (retained.equals(expected)) Consequence.unit
+          else invalid("retained scoped Compile input crosses its current workspace or artifact binding")
+      } yield build
+    }
 
     def executeC(e: Edge, input: Input, selected: Option[Publication]): Consequence[Execution] = for {
       owner <- rootC(d.ownerWorkspace)

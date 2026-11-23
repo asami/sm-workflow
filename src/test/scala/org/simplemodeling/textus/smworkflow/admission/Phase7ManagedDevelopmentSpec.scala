@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Minimal real producer -> private repository -> immutable selection -> consumer
   * compilation. Fixture setup creates inputs; SBT effects use CNCF's native UoW.
   * @since   Nov. 12, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -1469,6 +1469,52 @@ allowedKinds = ["text"]
     ConnectedFixture.exercise(root, "RouteSubtree", managedInventory = Some(leavePending))
   }
 
+  private[admission] def exerciseManagedConsumerVerificationRecovery(leavePending: Boolean): Path = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+      "consumer-recovery-").toRealPath()
+    ConnectedFixture.exercise(root, consumerRecovery = Some(leavePending))
+    root
+  }
+
+  private[admission] def rejectManagedConsumerVerificationRecoveryCrossings(): Vector[Consequence[Result]] = {
+    val memory = new Memory {
+      override def consumerCompileRootC(edge: Edge, input: Input, selection: Selection): Consequence[String] =
+        Consequence.success("/consumer")
+    }
+    run("publish", memory).status shouldBe "published"
+    val original = input.copy(requestIdentity = "original-consumer", selection = "consumer-selection")
+    run("select", memory, original).status shouldBe "selected-unverified"
+    memory.execution = Execution("admission-rejected", Json.fromString("fixed consumer program was not granted"))
+    run("compile", memory, original).status shouldBe "admission-rejected"
+    val failed = original.copy(requestIdentity = "failed-consumer")
+    memory.execution = Execution("failed", Json.obj("termination" -> "Exited(1)".asJson))
+    run("compile", memory, failed).status shouldBe "failed"
+    val unknown = original.copy(requestIdentity = "uncertain-consumer")
+    memory.execution = Execution("unknown", Json.fromString("consumer process observation unavailable"))
+    run("compile", memory, unknown).status shouldBe "unknown"
+    val verified = original.copy(requestIdentity = "verified-consumer")
+    memory.execution = Execution("succeeded", Json.obj("operation" -> "Compile".asJson, "workspace" -> edge.consumer.workspace.asJson,
+      "termination" -> "Exited(0)".asJson, "program" -> "fixed-consumer-compile".asJson))
+    run("compile", memory, verified).status shouldBe "verified"
+    val recovery = ConsumerVerificationRecoveryInput(edge.identity, original.requestIdentity, original.publication,
+      original.selection, verified.requestIdentity)
+    val another = new Memory {
+      override val participant = "another-participant"
+      override val rows = memory.rows
+    }
+    val calls = memory.calls
+    take(describeConsumerVerificationRecoveryC(definition, recovery, memory)).status shouldBe "eligible"
+    val rejected = Vector(
+      adoptConsumerVerificationRecoveryC(definition, recovery.copy(requestIdentity = failed.requestIdentity), memory),
+      adoptConsumerVerificationRecoveryC(definition, recovery.copy(requestIdentity = unknown.requestIdentity), memory),
+      adoptConsumerVerificationRecoveryC(definition, recovery.copy(verificationRequestIdentity = failed.requestIdentity), memory),
+      adoptConsumerVerificationRecoveryC(definition, recovery.copy(verificationRequestIdentity = unknown.requestIdentity), memory),
+      adoptConsumerVerificationRecoveryC(definition, recovery, another))
+    memory.calls shouldBe calls
+    memory.rows.contains(ManagedDevelopment.key(definition, edge, "compile-recovery", original.requestIdentity)) shouldBe false
+    rejected
+  }
+
   private object ConnectedFixture extends ThreeWorkflowManagedRepositoryFixture {
     override protected def standard_runtime = true
     private val connectedEdge = edge.copy(provider = edge.provider.copy(workspace = "managed-b"),
@@ -1614,7 +1660,9 @@ allowedKinds = ["text"]
         }.asJson)
         .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
           "capabilities" -> (git ++ sbt ++ repositories).map(_.hcursor.get[String]("capability").toOption.get).distinct
-            .filterNot(capability => scenario == "DirtyPostCommit" && capability == "managed-b-scoped-publish").asJson))))
+            .filterNot(capability =>
+              (scenario == "DirtyPostCommit" && capability == "managed-b-scoped-publish") ||
+              (scenario == "ConsumerRecoveryDenied" && capability == "sm-workflow-repository-compile")).asJson))))
     }
 
     private def _exercise_inventory(root: Path, leavepending: Boolean, parentsession: String,
@@ -1861,7 +1909,108 @@ allowedKinds = ["text"]
       Files.readString(provider.resolve(_provider_path)) shouldBe providersource
     }
 
-    def exercise(root: Path, mode: String = "Connected", managedInventory: Option[Boolean] = None): Unit = {
+    private def _exercise_consumer_recovery(root: Path, settings: ThreeWorkflowRuntimeParameters.Definition,
+      hostparameters: Map[String, String], requestersession: String, phasesession: String, original: V.GoalPhaseAdvanceResult,
+      input: Input, leavepending: Boolean): Unit = {
+      val status = "readDevelopmentArtifactStatus"
+      val compile = "compileDevelopmentConsumer"
+      val describe = "describeDevelopmentConsumerVerificationRecovery"
+      val adopt = "adoptDevelopmentConsumerVerificationRecovery"
+      val verification = input.copy(requestIdentity = "connected-consumer-verification-success")
+      val recovery = ConsumerVerificationRecoveryInput(input.edgeIdentity, input.requestIdentity, input.publication,
+        input.selection, verification.requestIdentity).asJson.mapObject(_.remove("publicationEdge"))
+      val config = root.resolve(".textus/config.json")
+      val admittedconfig = Files.readString(config)
+      val workdir = root.resolve(".textus/sm-workflow/work.d")
+      val consumerinputs = workdir.resolve("inputs").resolve(input.edgeIdentity).resolve("consumer")
+
+      Given("the original A WorkOrder waiting for its already selected publication")
+      When("the same participant attempts Compile on a host without the fixed consumer Compile capability")
+      try _with_runtime_(root, "ConsumerRecoveryDenied", Some(settings), hostparameters, componentInstance = "default") {
+        (owner, component, actor, _) =>
+          val refused = read_control_value[V.ManagedDevelopmentResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "ManagedDevelopmentService", operation = compile,
+              properties = List(Property("input", GoalPhaseNativeMetadata.record(input.asJson), None))), actor)))
+          Then("the native prelaunch rejection is retained without launching the Compile process")
+          refused.status shouldBe "admission-rejected"
+          Files.exists(consumerinputs.resolve(input.requestIdentity).resolve("result.json")) shouldBe false
+      } finally Files.writeString(config, admittedconfig)
+
+      _with_runtime_(root, "Connected", Some(settings), hostparameters, componentInstance = "default") {
+        (owner, component, actor, prepare) =>
+        def _invoke_(service: String, operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
+          Request.of(component = component.name, service = service, operation = operation, properties = properties), actor)
+        def _input_(operation: String, body: Json) = _invoke_("ManagedDevelopmentService", operation,
+          List(Property("input", GoalPhaseNativeMetadata.record(body), None)))
+        def _result_(operation: String, body: Json) = read_control_value[V.ManagedDevelopmentResult](take(_input_(operation, body)))
+        def _advance_() = _invoke_("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requestersession, None)))
+        def _requester_record_(): InstanceRecord = {
+          var retained = Option.empty[InstanceRecord]
+          prepare(_.delegateCurrentC(InstanceIdentity(requestersession)).map { record => retained = Some(record); () })
+          retained.get
+        }
+
+        When("the fixed consumer Compile is granted for the same workspace and succeeds under a separate request identity")
+        _result_(compile, verification.asJson).status shouldBe "verified"
+        Then("the original rejection and successful verification can be read independently")
+        val refused = _result_(status, input.asJson)
+        val verified = _result_(status, verification.asJson)
+        refused.status shouldBe "admission-rejected"
+        verified.status shouldBe "verified"
+        read_value[V.DelegateTaskView](take(_advance_())).kind shouldBe "Wait"
+        val waiting = _requester_record_()
+        if (leavepending) {
+          Given("the retained pre-adoption runtime for qualification under an installed runtime")
+          val locator = Json.obj("root" -> root.toString.asJson, "requesterSessionId" -> requestersession.asJson,
+            "parentSessionId" -> phasesession.asJson, "originalWorkContext" -> DevelopmentOperationalView.json(original.issuedWorkContext.get.toRecord()),
+            "participant" -> "participant".asJson, "componentInstance" -> "default".asJson,
+            "assemblyDescriptor" -> root.resolve(".textus/assembly.yaml").toString.asJson,
+            "testDescriptor" -> root.resolve(".textus/test.yaml").toString.asJson, "recoveryInput" -> recovery,
+            "originalInput" -> input.asJson, "verificationInput" -> verification.asJson)
+          Files.writeString(root.resolve("managed-consumer-recovery-fixture.json"), locator.spaces2)
+        } else {
+          val artifacts = tree(workdir)
+          When("the participant describes and adopts only that exact retained consumer verification")
+          _input_(describe, recovery.mapObject(_.add("selection", "unrelated-selection".asJson))).isSuccess shouldBe false
+          _input_(describe, recovery.mapObject(_.add("verificationRequestIdentity", input.requestIdentity.asJson))).isSuccess shouldBe false
+          _result_(describe, recovery).status shouldBe "eligible"
+          val adopted = _result_(adopt, recovery)
+          adopted.status shouldBe "adopted"
+          val repeated = _result_(adopt, recovery)
+          repeated.status shouldBe adopted.status
+          DevelopmentOperationalView.json(repeated.detail) shouldBe DevelopmentOperationalView.json(adopted.detail)
+          Then("adoption preserves the original rejection, successful Compile, artifacts and requester history")
+          DevelopmentOperationalView.json(_result_(status, input.asJson).toRecord()) shouldBe DevelopmentOperationalView.json(refused.toRecord())
+          DevelopmentOperationalView.json(_result_(status, verification.asJson).toRecord()) shouldBe DevelopmentOperationalView.json(verified.toRecord())
+          tree(workdir) shouldBe artifacts
+          _requester_record_().history shouldBe waiting.history
+          _requester_record_().revision shouldBe waiting.revision
+
+          When("the requester advances against changed consumer bytes and then against the verified bytes")
+          val source = root.resolve("repository/value.txt")
+          val bytes = Files.readAllBytes(source)
+          try {
+            Files.writeString(source, "source changed after consumer verification\n")
+            _advance_().isSuccess shouldBe false
+          } finally Files.write(source, bytes)
+          val resumed = read_value[V.DelegateTaskView](take(_advance_()))
+          Then("ordinary Advance returns the original A WorkOrder and keeps the retained requester history")
+          resumed.kind shouldBe "Request"
+          resumed.submitSessionId shouldBe Some(phasesession)
+          resumed.submitOperation shouldBe original.submitOperation
+          resumed.resultType shouldBe Some("GoalPhaseWorkResult")
+          resumed.issuedWorkContext.map(v => DevelopmentOperationalView.json(v.toRecord())) shouldBe
+            original.issuedWorkContext.map(v => DevelopmentOperationalView.json(v.toRecord()))
+          resumed.work.map(DevelopmentOperationalView.json) shouldBe original.work.map(v => DevelopmentOperationalView.json(v.toRecord()))
+          val after = _requester_record_()
+          after.history.take(waiting.history.size) shouldBe waiting.history
+          tree(workdir) shouldBe artifacts
+        }
+      }
+    }
+
+    def exercise(root: Path, mode: String = "Connected", managedInventory: Option[Boolean] = None,
+      consumerRecovery: Option[Boolean] = None): Unit = {
       val machine = mode == "RouteMachineLocal"
       val offerededge = if (machine) _machine_edge(root) else connectedEdge
       offerededge.machineLocalJar.foreach(jar => Files.createDirectories(Path.of(jar.consumerJar).getParent))
@@ -1907,10 +2056,11 @@ allowedKinds = ["text"]
       else Map.empty[String, String]
       var reconnect = Option.empty[(V.DelegateTaskInput, String)]
       var unavailable = Option.empty[(String, V.GoalPhaseHumanQuestion, GoalPhaseDependencyScope.Proposal)]
-      _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
+      val hostparameters = BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
         "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++
-        completionParameters ++ publicationparameters,
-        componentInstance = if (machine || managedInventory.nonEmpty) "default" else "repository-spec") { (owner, component, actor, prepare) =>
+        completionParameters ++ publicationparameters
+      _with_runtime_(root, mode, Some(settings), hostparameters,
+        componentInstance = if (machine || managedInventory.nonEmpty || consumerRecovery.nonEmpty) "default" else "repository-spec") { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("b"), mode).size, Some(root.resolve("b")), mode)).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("other"), mode).size, Some(root.resolve("other")), mode)).flatMap(_ =>
@@ -2664,72 +2814,77 @@ allowedKinds = ["text"]
               List(Property("input", GoalPhaseNativeMetadata.record(operationInput.asJson), None)))))
             artifactCall("selectDevelopmentArtifact").status shouldBe "selected-unverified"
             advance(requester.sessionId).kind shouldBe "Wait"
-            artifactCall("compileDevelopmentConsumer").status shouldBe "verified"
-            Files.writeString(root.resolve("repository/value.txt"), "source changed after consumer verification\n")
-            invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
-            Files.writeString(root.resolve("repository/value.txt"), "fixture baseline\n")
-            val resumed = advance(requester.sessionId)
-            resumed.kind shouldBe "Request"
-            val resumedRecord = requesterRecord()
-            resumedRecord.lifecycle shouldBe Lifecycle.Active
-            // A's retained Request has A's work/context, not B's bounded state.
-            // Reobserve the identical admitted adoption to qualify its passive
-            // redisplay. Read an exact public snapshot only when the response
-            // supplies a retained reference instead of inline state.
-            def requesterState() = {
-              val control = read_control_value[V.DelegateTaskView](take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
-                List(Property("input", adoption, None)))))
-              control.kind shouldBe "Wait"
-              control.sessionId shouldBe requester.sessionId
-              val state = control.state.getOrElse {
-                val reference = control.retainedMaterials.find(_.fieldName == "state").get.reference
-                reference.sessionId shouldBe requester.sessionId
-                reference.owner shouldBe "DelegateTaskWorkflow"
-                val detail = read_control_value[V.WorkflowRetainedSnapshotReadResult](take(invoke(WorkflowRetainedWork.serviceName,
-                  WorkflowRetainedSnapshot.readOperation, List(Property("input", reference, None)))))
-                detail.availability shouldBe "available"
-                detail.reference shouldBe reference
-                detail.material
+            if (consumerRecovery.nonEmpty) {
+              _exercise_consumer_recovery(root, settings, hostparameters, requester.sessionId, a.sessionId, original,
+                operationInput, consumerRecovery.get)
+            } else {
+              artifactCall("compileDevelopmentConsumer").status shouldBe "verified"
+              Files.writeString(root.resolve("repository/value.txt"), "source changed after consumer verification\n")
+              invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
+              Files.writeString(root.resolve("repository/value.txt"), "fixture baseline\n")
+              val resumed = advance(requester.sessionId)
+              resumed.kind shouldBe "Request"
+              val resumedRecord = requesterRecord()
+              resumedRecord.lifecycle shouldBe Lifecycle.Active
+              // A's retained Request has A's work/context, not B's bounded state.
+              // Reobserve the identical admitted adoption to qualify its passive
+              // redisplay. Read an exact public snapshot only when the response
+              // supplies a retained reference instead of inline state.
+              def requesterState() = {
+                val control = read_control_value[V.DelegateTaskView](take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+                  List(Property("input", adoption, None)))))
+                control.kind shouldBe "Wait"
+                control.sessionId shouldBe requester.sessionId
+                val state = control.state.getOrElse {
+                  val reference = control.retainedMaterials.find(_.fieldName == "state").get.reference
+                  reference.sessionId shouldBe requester.sessionId
+                  reference.owner shouldBe "DelegateTaskWorkflow"
+                  val detail = read_control_value[V.WorkflowRetainedSnapshotReadResult](take(invoke(WorkflowRetainedWork.serviceName,
+                    WorkflowRetainedSnapshot.readOperation, List(Property("input", reference, None)))))
+                  detail.availability shouldBe "available"
+                  detail.reference shouldBe reference
+                  detail.material
+                }
+                persisted(requesterRecord()) shouldBe persisted(resumedRecord)
+                DelegateTaskRequesterRoutingFixture.state(control.copy(state = Some(state)))
               }
+              val resumedState = requesterState()
+              resumedState.stage shouldBe "Adopted"
+              resumedState.delivery.flatMap(_.managedConsumer).map(_.status) shouldBe Some("verified")
+              resumedState.delivery.flatMap(_.managedContinuation).map(_.session) shouldBe Some(a.sessionId)
+              resumed.submitSessionId shouldBe Some(a.sessionId)
+              resumed.submitOperation shouldBe original.submitOperation
+              resumed.resultType shouldBe Some("GoalPhaseWorkResult")
+              contextJson(resumed.issuedWorkContext) shouldBe contextJson(original.issuedWorkContext)
+              publicJson(resumed.work) shouldBe publicJson(original.work.map(_.toRecord()))
+              val resumedAgain = advance(requester.sessionId)
+              contextJson(resumedAgain.issuedWorkContext) shouldBe contextJson(resumed.issuedWorkContext)
+              resumedAgain.submitSessionId shouldBe resumed.submitSessionId
+              resumedAgain.submitOperation shouldBe resumed.submitOperation
+              resumedAgain.resultType shouldBe resumed.resultType
+              publicJson(resumedAgain.work) shouldBe publicJson(resumed.work)
               persisted(requesterRecord()) shouldBe persisted(resumedRecord)
-              DelegateTaskRequesterRoutingFixture.state(control.copy(state = Some(state)))
+              requesterState() shouldBe resumedState
+              val deferred = read_value[V.DelegateTaskView](take(start(input("requester", "deferred-delivery"), "deferred")))
+              observe(deferred.sessionId, "dispatch-observed")
+              observe(deferred.sessionId, "defer")
+              advance(deferred.sessionId).kind shouldBe "Wait"
+              DelegateTaskRequesterRoutingFixture.state(advance(deferred.sessionId)).stage shouldBe "AwaitResult"
+              Files.createDirectories(root.resolve("repository/docs"))
+              Files.writeString(root.resolve("repository/docs/phase.md"), "# Verified dependency\nThe explicit scoped provider compiles in this consumer.\n")
+              // This is the genuine fixture's original A semantic result. No A acceptance,
+              // validation receipt or new Start is synthesized from B's delivery.
+              val aResult = V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED original consumer documentation authored after real selected compilation",
+                Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+              val completed = read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", resumed.submitOperation.get,
+                List(Property("sessionId", resumed.submitSessionId.get, None), Property("result", aResult, None),
+                  Property("issuedWorkContext", resumed.issuedWorkContext.get, None), Property("resultReference", V.WorkflowArtifactReference("connected-a-semantic", "1"), None),
+                  Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference("connected-a-semantic", "1")), Some("specification-a-implementer"), None,
+                    Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                      BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))))
+              completed.accepted shouldBe true
+              invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
             }
-            val resumedState = requesterState()
-            resumedState.stage shouldBe "Adopted"
-            resumedState.delivery.flatMap(_.managedConsumer).map(_.status) shouldBe Some("verified")
-            resumedState.delivery.flatMap(_.managedContinuation).map(_.session) shouldBe Some(a.sessionId)
-            resumed.submitSessionId shouldBe Some(a.sessionId)
-            resumed.submitOperation shouldBe original.submitOperation
-            resumed.resultType shouldBe Some("GoalPhaseWorkResult")
-            contextJson(resumed.issuedWorkContext) shouldBe contextJson(original.issuedWorkContext)
-            publicJson(resumed.work) shouldBe publicJson(original.work.map(_.toRecord()))
-            val resumedAgain = advance(requester.sessionId)
-            contextJson(resumedAgain.issuedWorkContext) shouldBe contextJson(resumed.issuedWorkContext)
-            resumedAgain.submitSessionId shouldBe resumed.submitSessionId
-            resumedAgain.submitOperation shouldBe resumed.submitOperation
-            resumedAgain.resultType shouldBe resumed.resultType
-            publicJson(resumedAgain.work) shouldBe publicJson(resumed.work)
-            persisted(requesterRecord()) shouldBe persisted(resumedRecord)
-            requesterState() shouldBe resumedState
-            val deferred = read_value[V.DelegateTaskView](take(start(input("requester", "deferred-delivery"), "deferred")))
-            observe(deferred.sessionId, "dispatch-observed")
-            observe(deferred.sessionId, "defer")
-            advance(deferred.sessionId).kind shouldBe "Wait"
-            DelegateTaskRequesterRoutingFixture.state(advance(deferred.sessionId)).stage shouldBe "AwaitResult"
-            Files.createDirectories(root.resolve("repository/docs"))
-            Files.writeString(root.resolve("repository/docs/phase.md"), "# Verified dependency\nThe explicit scoped provider compiles in this consumer.\n")
-            // This is the genuine fixture's original A semantic result. No A acceptance,
-            // validation receipt or new Start is synthesized from B's delivery.
-            val aResult = V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED original consumer documentation authored after real selected compilation",
-              Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
-            val completed = read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", resumed.submitOperation.get,
-              List(Property("sessionId", resumed.submitSessionId.get, None), Property("result", aResult, None),
-                Property("issuedWorkContext", resumed.issuedWorkContext.get, None), Property("resultReference", V.WorkflowArtifactReference("connected-a-semantic", "1"), None),
-                Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference("connected-a-semantic", "1")), Some("specification-a-implementer"), None,
-                  Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
-                    BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))))
-            completed.accepted shouldBe true
-            invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
           }
         }
         if (mode != "Connected" && !mode.startsWith("PhasePolicy") && !mode.startsWith("Route")) {

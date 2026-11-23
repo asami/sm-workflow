@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Public selectors narrow configured edges; they grant no paths, tasks or argv.
   * @since   Nov. 12, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 24, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentService {
@@ -23,8 +23,12 @@ private[smworkflow] object ManagedDevelopmentService {
     "compile" -> declared.CompileDevelopmentConsumerOperation,
     "status" -> declared.ReadDevelopmentArtifactStatusOperation,
     "verify" -> declared.VerifyDevelopmentArtifactOperation,
+    "describe-consumer-verification-recovery" -> declared.DescribeDevelopmentConsumerVerificationRecoveryOperation,
+    "adopt-consumer-verification-recovery" -> declared.AdoptDevelopmentConsumerVerificationRecoveryOperation,
     "detach" -> declared.DetachDevelopmentArtifactOperation,
     "prune" -> declared.PruneDevelopmentArtifactOperation)
+  private val _recovery_kinds = Set("describe-consumer-verification-recovery", "adopt-consumer-verification-recovery")
+  private val _required_fields = Set("edgeIdentity", "requestIdentity", "publication", "selection")
   def bind(policy: Option[ManagedDevelopmentRuntime.Policy], native: Option[ProviderPhaseDelivery.Storage] = None, mainRoute: Option[String] = None): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(declared, spec.OperationDefinitionGroup(
       NonEmptyVector.fromVectorUnsafe(operations.map { (kind, operation) => new Operation(kind, operation, policy, native, mainRoute) })))
@@ -36,13 +40,32 @@ private[smworkflow] object ManagedDevelopmentService {
       if (request == null || !request.service.contains(declared.name) || request.operation != name)
         ManagedDevelopment.invalid("requires its declared Operation")
       else NativeWorkflowOperationInput.recordC(request, "input").flatMap { record =>
-        if (!DevelopmentOperationalView.uniqueFields(record) ||
-          !Set("edgeIdentity", "requestIdentity", "publication", "selection").subsetOf(record.fields.map(_.key).toSet) ||
-          !record.fields.map(_.key).toSet.subsetOf(Set("edgeIdentity", "requestIdentity", "publication", "selection", "providerPhase", "synchronization", "publicationEdge", "retain")))
+        val recovery = _recovery_kinds.contains(kind)
+        val required = if (recovery) _required_fields + "verificationRequestIdentity" else _required_fields
+        val optional = if (recovery) Set("publicationEdge") else Set("providerPhase", "synchronization", "publicationEdge", "retain")
+        val fields = record.fields.map(_.key).toSet
+        if (!DevelopmentOperationalView.uniqueFields(record) || !required.subsetOf(fields) || !fields.subsetOf(required ++ optional))
           ManagedDevelopment.invalid("duplicate or undeclared input fields")
+        else if (recovery) DevelopmentOperationalView.json(record).as[ManagedDevelopment.ConsumerVerificationRecoveryInput]
+          .fold(e => ManagedDevelopment.invalid(e.message), input => Consequence.success(
+            RecoveryCall(request, input, policy, adopt = kind == "adopt-consumer-verification-recovery")))
         else DevelopmentOperationalView.json(record).as[ManagedDevelopment.Input]
           .fold(e => ManagedDevelopment.invalid(e.message), input => Consequence.success(Call(request, kind, input, policy, native, mainRoute)))
       }
+  }
+  private final case class RecoveryCall(request: Request, input: ManagedDevelopment.ConsumerVerificationRecoveryInput,
+    policy: Option[ManagedDevelopmentRuntime.Policy], adopt: Boolean) extends CommandAction {
+    import scala.language.strictEquality
+    override def commandExecutionMode = CommandExecutionMode.Sync
+    def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+      val core = c
+      def execute(): Consequence[OperationResponse] = policy
+        .map(p => if (adopt) ManagedDevelopmentRuntime.adoptConsumerVerificationRecoveryC(core, p, input)
+          else ManagedDevelopmentRuntime.describeConsumerVerificationRecoveryC(core, p, input))
+        .getOrElse(Consequence.success(ManagedDevelopment.Result("not-configured", io.circe.Json.obj())))
+        .map(result => NativeWorkflowOperationOutput.response(V.ManagedDevelopmentResult(result.status,
+          GoalPhaseNativeMetadata.record(io.circe.Json.obj("data" -> result.detail)))))
+    }
   }
   private final case class Call(request: Request, kind: String, input: ManagedDevelopment.Input,
     policy: Option[ManagedDevelopmentRuntime.Policy], native: Option[ProviderPhaseDelivery.Storage], mainRoute: Option[String]) extends CommandAction {

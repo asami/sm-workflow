@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov. 22, 2026
+ * @version Nov. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -113,7 +113,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
-      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus", "verifyDevelopmentArtifact",
+      "compileDevelopmentConsumer", "describeDevelopmentConsumerVerificationRecovery", "adoptDevelopmentConsumerVerificationRecovery",
+      "readDevelopmentArtifactStatus", "verifyDevelopmentArtifact",
       "detachDevelopmentArtifact", "pruneDevelopmentArtifact"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication",
       "describeLocalPublicationRecovery", "admitLocalPublicationRecovery", "advanceLocalPublicationRecovery"),
@@ -300,12 +301,13 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
 
     "the declared component catalog" which {
       "expose the existing Phase 7 artifact operations to the standard launcher" in {
-        Given("the implemented verification, detachment and prune operations for managed artifacts")
+        Given("the implemented verification, retained verification recovery, detachment and prune operations for managed artifacts")
         When("the standard launcher selects its deferred operation declarations")
         val operations = admission.ThreeWorkflowLauncherAssembly.deferredDeclarations
           .find(_.name == "ManagedDevelopmentService").get.operations.operations.toVector.map(_.name)
-        Then("all three operations are available for standard dispatch")
-        operations should contain allOf ("verifyDevelopmentArtifact", "detachDevelopmentArtifact", "pruneDevelopmentArtifact")
+        Then("the managed artifact operations are available for standard dispatch")
+        operations should contain allOf ("verifyDevelopmentArtifact", "describeDevelopmentConsumerVerificationRecovery",
+          "adoptDevelopmentConsumerVerificationRecovery", "detachDevelopmentArtifact", "pruneDevelopmentArtifact")
       }
 
       "retain the complete declared operation catalog alongside the canonical host services" in {
