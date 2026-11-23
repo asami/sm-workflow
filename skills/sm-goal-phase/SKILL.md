@@ -249,13 +249,19 @@ asking the consumer to freeze each edit or relay each reviewer question. This
 organizes responsibility; it does not merge native issued work types or grant
 semantic workers command authority. Normal Phase validation remains runtime-owned.
 
-For dependency development, choose the
-[delivery owner](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice)
-separately from [parent JAR use](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
-Recommend project-private JAR use and offer machine-common JAR use as an
-explicit alternative. Reuse the captured choice for issued work.
-
-Route a new authorized development deliverable to another chat through
+For dependency development, first apply the shared
+[delivery choice](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice):
+offer local managed worktree (default) and assigned chat when selection is needed,
+and retain an existing selection. Missing registration or absent response choices
+alone do not make a chat identity a prerequisite. Check the
+[parent SBT build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
+Recommend project-private JAR use, and offer machine-common JAR use as a
+separate explicit selection. Retain the captured choice and name missing settings.
+Keep local delivery with its managed runtime owner. For a supplemental scope
+or retained consumer Compile, follow
+[continuing a managed dependency assignment](../../docs/spec/native-host-execution.md#continuing-a-managed-dependency-assignment).
+Route a new authorized
+development deliverable assigned to another chat through
 [sm-delegate-task](../sm-delegate-task/SKILL.md), following the
 [new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations).
 A correction needed for an already assigned deliverable stays with that request;
@@ -368,12 +374,12 @@ capability remains a concrete producer gap. Genuine new authority stays with
 the formal Human channel. Preserve UNKNOWN, successful results and repair counts;
 do not edit comments as a recovery bypass, reset the Session or replay Submit.
 
-For current Phase/checklist or source applicability after a formal failure,
-use the same contract's common `reconstructGoalPhaseDevelopment` route. It
-selects remaining work in the same Session; it does not make old checks current,
-replay completed prefix effects or settle unresolved writers. Use the actual
-installed capability and returned scope, not source documentation as proof of
-availability.
+For current Phase/checklist or source applicability after a formal failure
+or a retained prelaunch validation rejection, use the same contract's
+`reconstructGoalPhaseDevelopment` route. Correct the execution host when it
+does not match the selected Phase checkout. Use the returned remaining work
+and require fresh capture when the runtime calls for it. Preserve old check
+evidence with its original subject and leave unresolved writers pending.
 
 ## Long-running invocation collection
 
@@ -707,18 +713,15 @@ the issued candidate tree, which can differ from both HEAD and the live
 checkout. Retain the original Request and local provenance. Use the ordinary
 capable reviewer when the package is declined or completeness is unconfirmed.
 
-A READY package can be passed as `supplied_review` to the ordinary delegated
-reviewer. Offline assembly returns it as `suppliedReview`. For an explicitly
-selected API review under the configured provider and usage policy, use
-`api_prepare` with the actual work Resource and canonical package file to
-prepare `GoalPhaseService.runGoalPhaseApiReview`. Use
-`api_started`, `api_complete` or `api_uncertain` to retain the real invocation
-and its disposition. A started or uncertain invocation stays with its original
-attempt. Retain the returned model, provider and usage where supplied. A
-conversion failure may return `providerRecord` for diagnosis. Submit only a
-typed completed result with `api_execution_evidence` through the original
-review's normal Admission. For detail, see
-`docs/spec/phase-9-provider-routing.md` in the product repository.
+A READY package can be passed as `supplied_review` to ordinary dispatch.
+Offline assembly returns it as `suppliedReview`. For
+[bounded API review](../../docs/spec/native-host-execution.md#bounded-api-review-and-provider-usage),
+pass the canonical package file and use the adapter's selected route for
+`GoalPhaseService.runGoalPhaseApiReview`. Use `api_started`, `api_complete`
+or `api_uncertain` to retain the real invocation and disposition. Prepare
+an independent agent handoff only from a supported retained outcome. Submit
+a typed completed API result with `api_execution_evidence` through the
+original review's normal Admission.
 
 ## Journal results and purpose-driven lookup
 
@@ -1441,8 +1444,8 @@ it in-process requires an already selected supported interpreter. An unavailable
 managed interpreter is an environment precondition failure. Do not download an
 interpreter, fall back to system Python or treat that failure as model absence.
 
-`prepare` emits `launch`, the exact supported `collaboration.spawn_agent`
-arguments. Invoke that ordinary tool once and feed those exact arguments and
+For the agent route, `prepare` emits `launch` with the exact supported
+`collaboration.spawn_agent` arguments. Invoke that ordinary tool once and feed those exact arguments and
 its actual `task_name` return (or an exposed `agent_id` alias) to `launched`. The adapter copies the matching native
 role's execution instructions into a fresh context (`agent_type=default`,
 `fork_turns=none`), preserving selected `model` and `reasoning_effort` instead of

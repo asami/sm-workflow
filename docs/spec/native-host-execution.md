@@ -10,13 +10,13 @@ needed for supported continuation. See the [Session candidate resource contract]
 
 In bounded GoalTask, DelegateTask and StandaloneFix work, the runtime resolves
 an explicit `fix-check` against the Session's admitted checkout and configured
-check binding. The runtime uses the same binding regardless of the check's
-position in the request. Use its reported binding and retained result.
+check binding. Its position in the requested check list does not select a
+workspace. Use the runtime's reported binding and retained result.
 
 For offline review package assembly, use `assemble_review_package` from
-`scripts/goal-phase-dispatch.py` in the operational sm-workflow checkout.
-When complete files have already been supplied, use `review_package`.
-Unconfirmed completeness uses the ordinary capable reviewer.
+the product's `scripts/goal-phase-dispatch.py`. When complete files have
+already been supplied, use `review_package`. Unconfirmed completeness uses
+the ordinary capable reviewer.
 
 For GoalPhase/GoalTask semantic results, the normal caller projects supported
 worker artifacts through `projectSemanticWorkResult` and forwards its complete
@@ -26,25 +26,6 @@ contracts; this projection introduces no generic envelope or fallback for them.
 Keep one visible command interval across projection, Submit and paired Advance.
 Projection does not supply execution attribution, Human consent or acceptance,
 and never authorizes replay of an accepted result. See [semantic result submission](semantic-result-submission.md).
-
-## Workflow message language
-
-Use English by default for newly authored prose exchanged between sm-workflow
-and AI, including requests, worker handoffs, acceptance criteria, findings,
-result summaries and unresolved questions for another agent. Use Japanese for
-progress updates, reports and questions addressed to the user, including Human
-decision prompts. Choose the language by the intended reader even when both
-messages pass through the same chat.
-
-Preserve the original wording of user instructions and approvals, logs and
-diagnostics when carrying them as evidence. Keep identifiers, paths and typed
-protocol values exact. When an English handoff needs to explain a Japanese
-approval, summarize its scope in English and include the original text or a
-verifiable reference to it. Apply the default when authoring new prose; accept
-existing and mixed-language payloads as issued without a language gate.
-
-For API work, apply this contract when constructing the actual provider request,
-requesting typed output and presenting the result to the user.
 
 ## Authorization in delegated delivery — 2026-10-25
 
@@ -244,6 +225,25 @@ Carry these items in the issued assignment or its referenced handoff. Preserve
 the exact native Request and adapter-generated launch arguments. Reference
 specific decisions, files and evidence rather than copying a transcript. A
 worker's report is input to the owner's verification, not runtime acceptance.
+
+## Workflow message language
+
+Use English by default for newly authored prose exchanged between sm-workflow
+and AI, including requests, worker handoffs, acceptance criteria, findings,
+result summaries and unresolved questions for another agent. Use Japanese for
+progress updates, reports and questions addressed to the user, including Human
+decision prompts. Choose the language by the intended reader even when both
+messages pass through the same chat.
+
+Preserve the original wording of user instructions and approvals, logs and
+diagnostics when carrying them as evidence. Keep identifiers, paths and typed
+protocol values exact. When an English handoff needs to explain a Japanese
+approval, summarize its scope in English and include the original text or a
+verifiable reference to it. Apply the default when authoring new prose; accept
+existing and mixed-language payloads as issued without a language gate.
+
+For API work, apply this contract when constructing the actual provider request,
+requesting typed output and presenting the result to the user.
 
 ## Human decision prompts
 
@@ -553,9 +553,9 @@ Phase 7.1 source-project integration remains on hold.
 
 When an authorized parent task needs changes in a dependency repository, the
 requesting chat defines the required outcome, repository/scope, acceptance
-conditions, usage contract and delivery method. Apply the
+conditions, usage contract and [delivery method](#dependency-development-delivery-choice). Apply the
 [new-request/continuation routing](#new-cross-chat-development-requests-and-existing-continuations)
-above. For new delivery, use an authorized destination and sm-delegate-task;
+above to the selected chat method. For new chat delivery, use an authorized destination and sm-delegate-task;
 the existing message tools carry its issued work and actual return. This contract
 alone does not authorize creating or messaging a chat. The requesting chat remains
 responsible for collecting the result and integrating it into the parent project.
@@ -590,6 +590,32 @@ pending obligation or replay accepted work. When no supported reconciliation
 exists, report that precise parent integration gap and retain the record;
 authorized independent dependency development can still proceed. Existing
 native dependency-scope admission remains applicable to work recorded there.
+
+### Continuing a managed dependency assignment
+
+For an unclaimed implementation using a project-private JAR in the selected
+local worktree, the parent can approve supplemental owned paths within the same
+Step, Component, purpose and delivery. Use
+`describeDelegateTaskScopeCorrection` with the destination Session,
+`oldContinuationId`, literal `additionalOwnedPaths` and
+`supplementManagedInventory: true`. Use `prepareDelegateTaskScopeCorrection`,
+the actual Human choice for that target and `correctDelegateTaskScope`, then
+ordinary `advanceDelegateTask` in that Session. The original exclusions,
+explicit exact-path restrictions and registered ownership still apply. Keep
+the original parent order and approval, issued work, results and repair counts.
+
+When the original scoped consumer Compile was rejected before launch and
+another verification already succeeded for the same binding, use
+`ManagedDevelopmentService.describeDevelopmentConsumerVerificationRecovery`
+with `edgeIdentity`, original `requestIdentity`, `publication`, `selection`
+and the successful `verificationRequestIdentity`. Include `publicationEdge`
+when the original request names a separate one. Use the same input with
+`adoptDevelopmentConsumerVerificationRecovery` when eligible. The runtime
+matches both attempts to the same participant, workspace, publication,
+selection and current consumer source. Ordinary requester
+`advanceDelegateTask` returns the original parent WorkOrder using the adopted
+result. The rejection stays in history. No Compile or publication is repeated.
+An unknown or launched original attempt does not qualify.
 
 ## Codex Goal registration
 
@@ -739,8 +765,35 @@ issued candidate and owned source for edits, and the retained failure for
 diagnosis. When the runtime reports an unconfirmed write or rollback conflict,
 retain that state and follow its returned continuation. Preserve the original
 results and repair budget.
-Metals/LSP provider integration and automatic formatter or Scalafix repair
-remain deferred from this delivery.
+After deterministic repair, ordinary Advance can select a configured bounded
+compiler task for a supported Compile or TestCompile diagnostic. The runtime
+prepares the input from the retained diagnostic and exact candidate blob,
+records the invocation, and admits at most one owned replacement. It owns
+application, candidate capture, revalidation and rollback. Continue semantic
+repair only from an issued WorkOrder. Preserve observed usage and the disposition
+of declined or rejected proposals. A missing or unbound result remains uncertain.
+Metals/LSP integration and automatic formatter or Scalafix repair are separate
+capabilities.
+
+#### Bounded API review and provider usage
+
+For an independent ReviewStep or ReviewPhase with a complete READY package,
+ordinary dispatch can use bounded API review when the selected caller mapping
+has `"suppliedReviewApi": "bounded"`. Pass the package as `supplied_review`
+and its canonical file as `supplied_review_path` to the existing adapter. The
+selected runtime invokes the configured bounded Task runner. It may prefer
+OpenAI when the host has opted in and a verified allowance covers the request.
+The provider reserves the bound before dispatch. Retain actual provider, model
+and usage from the result. A reservation or reported token count alone does
+not establish a billing amount.
+
+Submit only the completed typed review with attribution. For a retained bounded
+decline, unavailability, failure or budget refusal, the adapter accepts the
+original review and `retained_api_attempt` to prepare the ordinary independent
+reviewer. Keep started or uncertain attempts with the original invocation.
+Incomplete packages or a mapping without bounded selection can use the ordinary
+reviewer. The skill does not select new provider authority or call a provider
+directly.
 
 #### FixCheck attribution and exceptions
 
@@ -823,6 +876,15 @@ base, repair counters and original evidence, and assesses the actual remaining
 scope. Collect pending work first; genuine ambiguity uses the returned Human
 channel. Do not use reconstruction to replace a potentially active worker or
 to clear unknown writer/publication/commit effects.
+
+Primary Phase Compile, TestCompile, Test and TestOnly use the selected
+candidate's checkout. If a wrong execution host stopped validation before
+launch after an authenticated completed prefix, correct the execution host
+through the supported configuration and use the same reconstruction route
+when owned source has changed and the Plan, retained candidate and observed
+HEAD still match. The runtime retains the earlier observations for their
+original subjects and requires a fresh candidate capture. Report the returned
+blocker for missing provenance, unchanged owned source or unresolved effects.
 
 For a formal normalization failure, the runtime assesses reusable versus fresh
 prefix paths under the saved rule/date and ownership. Callers do not mark the

@@ -46,6 +46,17 @@ reference alone does not require restart, re-review or another approval.
 
 # sm-delegate-task
 
+Before selecting this cross-chat route for dependency development, apply the
+[delivery choice](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice).
+Present local managed worktree (default) and assigned chat when a choice is needed;
+reuse an existing selection. A response without mode choices or missing managed
+registration does not require a destination chat. Local worktree delivery stays
+with the managed runtime route; this skill handles the selected chat method.
+Recommend project-private JAR use and offer machine-common JAR use as a
+separate explicit selection. For an existing managed assignment, use the shared
+[continuation contract](../../docs/spec/native-host-execution.md#continuing-a-managed-dependency-assignment)
+for supplemental inventory or eligible retained consumer verification.
+
 For the explicitly human-selected special sm-workflow maintenance route where
 the destination executes with cncf-* skills, use
 [cncf-delegate-task](../cncf-delegate-task/SKILL.md). This skill applies when the
@@ -130,11 +141,10 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
-Carry the already selected JAR use separately from the
-[delivery owner](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice).
-Follow the [parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
-for the selected private or explicitly chosen machine-common JAR. Report the
-actual publication and parent verification independently.
+Carry the selected JAR mode separately from the delivery choice. For an SBT
+consumer, follow the [parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
+for that mode. Report missing setup, actual publication and parent build
+verification separately.
 
 For a fresh request, use the intent already established during selection to
 author `workClassification` with separate `implementation`, `repair` and

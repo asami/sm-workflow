@@ -115,6 +115,15 @@ The [native host contract](../../docs/spec/native-host-execution.md) owns actual
 execution and the [caller information contract](../../docs/spec/caller-information.md)
 owns attributed observations. This skill is a thin caller/semantic adapter.
 
+For dependency development, apply the shared
+[delivery choice](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice)
+before requiring a chat: offer local managed worktree (default) and assigned chat
+when selection is needed, and retain an existing choice even when the response
+has no delivery selector. Check the
+[parent SBT build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
+Recommend project-private JAR use, and offer machine-common JAR use as a
+separate explicit selection. Report missing setup and the observed parent check.
+Machine-common JAR use is verified through the ordinary parent build.
 For a new authorized development deliverable assigned to another chat, route
 through [sm-delegate-task](../sm-delegate-task/SKILL.md) and the
 [new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations).
@@ -167,12 +176,6 @@ Adopt an explicitly authorized objective, repository, literal owned paths, selec
 checks, ordered conditions and original source references as `GoalTaskInput`. No Phase
 management files are required. Freeze that input; later suggestions do not expand
 scope. Existing Phase repair stays in its current Session. Preserve other edits.
-
-For dependency work, use the shared
-[delivery choice](../../docs/spec/native-host-execution.md#dependency-development-delivery-choice)
-and [parent SBT build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites).
-Recommend project-private JAR use. Machine-common JAR use requires a separate
-explicit selection and actual ordinary parent build verification.
 
 For a fresh Task, use the intent already established during selection to author
 `workClassification` with separate `implementation`, `repair` and `review`
