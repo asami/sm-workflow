@@ -3,11 +3,15 @@
 Status: planned; no implementation or acceptance claimed.
 Date: 2026-10-28
 Owner: sm-workflow development
-Delivery order: Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18 (2026-11-11)
+Scheduled: after [Phase 28.1](phase-28.1.md) and before [Phase 23](phase-23.md)
 Predecessor: [Phase 6.7](phase-6.7.md) shared Task/FIX route and existing GoalPhase/RepositorySync validation
 Producer: CNCF Phase 117 (required for W4–W5)
 Checklist: [P18 acceptance](phase-18-checklist.md)
 Handoff: [design handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-28-tool-neutral-validation-handoff.md)
+
+## Current scheduling — 2026-11-24
+
+The current schedule places Phase 18 after Phase 28.1 and before Phase 23. Flutter producer dependencies and all acceptance requirements are unchanged. See the [current roadmap](README.md#adopted-development-priority--2026-11-24). Earlier scheduling notes below are historical.
 
 ## Purpose and preservation
 

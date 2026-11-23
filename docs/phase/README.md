@@ -1,6 +1,23 @@
 # sm-workflow incremental-use roadmap
 
+## Adopted development priority — 2026-11-24
+
+Complete the immediate AI-cost work, then strengthen validation, quality, and everyday development support before expanding the provider pool. Phases 24 and 28 have formal local releases; Phase 25 remains in progress and its existing T1–T3 plan is unchanged.
+
+| Order | Group | Phases |
+| --- | --- | --- |
+| 1–2 | Immediate AI-cost reductions | [25](phase-25.md) (OpenAI Task API) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
+| 3–6 | Validation, quality, and stabilization | [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
+| 7–10 | Everyday development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
+| 11–14 | Usage measurement and AI execution expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared server and multiple CLIs) → [27](phase-27.md) (capability- and cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+
+Phase 18 remains in scope; its Flutter W4–W5 still require qualified CNCF Phase 117 delivery. Phase 26 remains the functional prerequisite for Phase 27. Phase 13 starts usage measurement before the expansion and supplies the prerequisite for Phase 20. Phase 21 remains before Phase 15. Phases 10, 19, and 16 remain deferred. Phase 7.1 remains on hold, and Phase 7.2 is a separate local worktree-retirement plan outside this sequence.
+
+This decision supersedes older schedules only. It does not change acceptance, scope, historical evidence, or an active Workflow Session. See the [decision journal](../journal/2026/11/2026-11-24-phase-25-follow-on-development-priority.md).
+
 ## Adopted development priority — 2026-11-21
+
+> See the [2026-11-24 adopted priority](README.md#adopted-development-priority--2026-11-24); this older schedule is retained for history.
 
 The user selected this **execution order** after the currently running Phases 7 and 9:
 

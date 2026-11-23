@@ -6,6 +6,10 @@ Depends on: Phase 26 dual-CLI practical interoperability
 Related: [Phase 9](phase-9.md), [Phase 13](phase-13.md), [Phase 24](phase-24.md), [Phase 25](phase-25.md), [Phase 26](phase-26.md)
 Checklist: [Phase 27 acceptance](phase-27-checklist.md)
 
+## Current scheduling — 2026-11-24
+
+Schedule Phase 27 after Phase 26 and before Phase 20. Use applicable Phase 13 usage observations; the Phase 26 prerequisite, routing scope, and billing boundaries are unchanged. See the [current roadmap](README.md#adopted-development-priority--2026-11-24). Earlier scheduling notes below are historical.
+
 ## Goal
 
 Extend the proven common sm-workflow Server and CLI client boundary from Phase 26 to practical selection among Codex, Claude Code, and optionally GitHub Copilot, with **separate execution route, provider/model and billing/allowance identity**. Choose suitable routes based on capability, availability, quality/convergence and verifiable cost constraints. Reuse existing provider and usage capabilities; do not create a parallel router or ledger.
