@@ -38,6 +38,29 @@ SDK is **not** assumed to be an independent inference API or separate quota. Dis
 - Apply a deterministic policy combining task suitability, availability, quota eligibility and bounded cost; avoid an AI call solely for routing.
 - Reuse textus-ai provider adapters and existing Phase 9 Take Over semantics. A CLI agent continuation is not interchangeable with a stateless API inference response.
 
+#### Configurable provider order for small compiler repairs
+
+Keep the [Phase 25 OpenAI-first default](phase-25.md#ordinary-openai-use).
+Allow an explicit local-first setting for the small compiler-repair task kind
+using the same textus-ai task contract. The setting applies to repairs that
+remain after applicable Phase 28 deterministic fixes and have complete bounded
+input and a supported typed patch result. Reviews and other task kinds retain
+their own routing policy.
+
+With local-first enabled, try the configured capable Local LLM once. Apply and
+revalidate an eligible patch through the existing sm-workflow repair path. A
+successful local repair completes without an OpenAI call. Use OpenAI next if
+the local provider is known to be unavailable, declines, returns no usable
+patch, or leaves the error unresolved after revalidation and any required
+rollback. Apply the existing capability, quota, budget, and paid-overage policy
+before dispatching to OpenAI.
+
+An uncertain execution or patch application stays in the existing recovery
+path until its outcome is known. Keep the same Session and repair allowance
+across both routes. Retain the selected providers, outcomes, and reason for a
+switch. Reuse Phase 25's provider adapters and Phase 9's Take Over and
+validation semantics for this policy.
+
 ### R3 — Evidence and fallback
 - Measure attributable per-task route, observed token/credit usage (where provided), cost, latency, outcome and validation quality. Keep subscription allowance and billed dollars separate.
 - Demonstrate safe refusal/decline or a finite switch at an authorized continuation boundary when a route is unavailable/limited; preserve Workspace ownership, Admission and repair limits.
@@ -64,6 +87,10 @@ SDK is **not** assumed to be an independent inference API or separate quota. Dis
 
 The same sm-workflow Server supports the Phase 26 Codex/Claude CLI path and at least one verified additional route (API, Copilot CLI or SDK), with explicit route/allowance identity, bounded selection, no unapproved paid overage, correct continuation/admission and actual evidence. Copilot integration is conditional on available entitlement and supported SDK/CLI functionality.
 
+The ordinary small compiler-repair path demonstrates the default OpenAI-first
+order and the opt-in local-first order, including successful local repair and
+an authorized switch to OpenAI after a known unresolved result.
+
 ## Scheduling
 
-Phase 26 is the functional prerequisite. Follow the [current development priority](README.md#adopted-development-priority--2026-11-22) and decide its implementation slot against actual accepted dependencies. Planning does not start a Workflow Session or grant changes in producer repositories.
+Follow [Phase 26](phase-26.md), the functional prerequisite, and precede [Phase 18](phase-18.md) in the [current development priority](README.md#adopted-development-priority--2026-11-22). Use applicable Phase 13 usage observations where available for routing evaluation. Planning does not start a Workflow Session or grant changes in producer repositories.

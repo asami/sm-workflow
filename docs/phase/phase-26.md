@@ -55,4 +55,4 @@ A developer can start the existing sm-workflow Server, connect **both Codex CLI 
 
 ## Scheduling
 
-Plan as the smallest practical dual-CLI interoperability slice, using existing server/CLI foundations. Follow the [current development priority](README.md#adopted-development-priority--2026-11-22) and select a delivery slot after checking concrete prerequisites. No Phase/Session is started by this plan.
+Follow [Phase 13](phase-13.md) in the [current development priority](README.md#adopted-development-priority--2026-11-22). Deliver the smallest practical dual-CLI interoperability slice using existing server/CLI foundations to support [Phase 27](phase-27.md). No Phase/Session is started by this plan.

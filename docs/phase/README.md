@@ -2,24 +2,33 @@
 
 ## Adopted development priority — 2026-11-22
 
-The user placed Phase 25 immediately after Phase 28 and added Phase 28.1
-between Phase 25 and Phase 18 on 2026-11-23. The current priority is:
+The 2026-11-23 scheduling decision prioritizes reducing AI calls and repair
+cycles and making their cost measurable. Phases 24 and 28 are locally released.
+Phase 25 remains in progress and Phase 28.1 follows it immediately.
 
-1. **Phase 24** — formal local release complete; operational review and patch qualification follow the release.
-2. **Phase 28** — deterministic diagnostics and lint auto-fix.
-3. **Phase 25** — textus-ai Task API and routine OpenAI API use for eligible development work.
-4. **[Phase 28.1](phase-28.1.md)** — Scala Metals runtime connection and native formatting/lint auto-fix.
-5. **Phase 18** — tool-neutral validation and Flutter integration.
-6. **Phase 23** — strategic Phase convergence.
-7. **Phase 22** — runtime stabilization and difficult continuations.
-8. **Phase 17** — Task and Standalone Fix extensions (elevated priority).
-9. **Phase 21** — recursive repository catch-up.
-10. **Phase 15** — development workspace operations.
-11. **Phase 14** — development investigation.
+| Order | Phase | Reason for its position |
+| --- | --- | --- |
+| 1 | [25](phase-25.md) | Finish the ordinary Task API route for eligible OpenAI reviews and small compiler repairs. |
+| 2 | [28.1](phase-28.1.md) | Deliver Metals and deterministic Scala formatting/lint fixes that can resolve work before any AI repair. |
+| 3 | [13](phase-13.md) | Measure actual parent and delegated AI usage by work kind, where attributable, to establish a baseline before expanding routing. |
+| 4 | [26](phase-26.md) | Deliver the two-CLI shared-server baseline required by Phase 27. |
+| 5 | [27](phase-27.md) | Select execution routes by capability and cost, including opt-in Local LLM first for small compiler repairs with bounded OpenAI fallback. OpenAI remains the default. |
+| 6 | [18](phase-18.md) | Deliver tool-neutral validation for Phase 23 and Flutter integration with its existing CNCF prerequisites. |
+| 7 | [23](phase-23.md) | Reduce repeated repair and review work by separating current blockers from work that can be scheduled later. |
+| 8 | [22](phase-22.md) | Reduce recovery work and repeated successful checks when Workflow management and continuation problems occur. |
+| 9 | [29](phase-29.md) | Improve Scala lint diagnostics and limit false positives after Phase 23, strengthening input to the deterministic repair path. |
+| 10 | [20](phase-20.md) | Aggregate Phase 13 usage across whole Phase executions, including repair and resumption. |
+| 11–14 | [17](phase-17.md) → [21](phase-21.md) → [15](phase-15.md) → [14](phase-14.md) | Continue Task/FIX extensions, recursive catch-up, workspace operations, and investigation in their existing relative order. |
 
-**Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), 13/20 (AI usage measurement and summaries), 26/27 (multi-CLI and cross-route cost-aware expansion), and 16 (experimentation). Deferral is scheduling only: preserve all scope, ownership, dependencies and acceptance conditions. [Phase 29](phase-29.md) retains its dependency on Phase 23.
+**Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), and 16 (experimentation).
 
-[Phase 7](phase-7.md) and [Phase 9](phase-9-checklist.md#actual-local-completion) have completed locally. Phase 24 removed formal Phase 7 completion as a separate prerequisite. Phase 25 will use Phase 28's deterministic fixes first and prioritize OpenAI API for eligible reviews and remaining bounded repairs in ordinary sm-workflow execution. Preserve the concrete API setup and usage prerequisites. Phase 18/23/22 then strengthen the platform before further development-support features. Phase 21 precedes Phase 15 as required for its related-repository operations. Record and resolve bounded dependency gaps without silently reordering this roadmap.
+[Phase 7](phase-7.md) and [Phase 9](phase-9-checklist.md#actual-local-completion)
+have completed locally. Phase 24 operational qualification follows its release.
+Phase 26 precedes 27, Phase 18 precedes 23, Phase 23 precedes 29, Phase 13
+precedes 20, and Phase 21 precedes 15. Phase 13 measurement informs the new
+routing policy using the observations available. This priority creates no
+additional acceptance requirement for Phase 27. Resolve concrete dependency
+gaps at their owning boundaries.
 
 This decision supersedes older priority sequences in this README and individual Phase files **for scheduling only**. Historical status, scope, evidence and explicit acceptance remain unchanged. No new Phase or Workflow Session is started by this documentation change.
 
@@ -109,9 +118,9 @@ P13-01–06 to P21-01–06 correspondence. It updates a selected existing reposi
 and registered local development dependencies from GitHub tracking refs or local
 main, without implicit push or artifact publication. Phase 7 supplies the shared
 dependency graph; Phase 15 consumes catch-up for related workspace operations.
-Current [Phase 13](phase-13.md) remains AI usage accounting, unchanged. Phase 21
-is planned with no selected delivery slot; the existing adopted execution
-priority and active Goals/Sessions are unchanged. See the
+Current [Phase 13](phase-13.md) remains AI usage accounting. The restoration
+selected no delivery slot at the time. The current roadmap schedules Phase 21
+between Phases 17 and 15. See the
 [restoration and allocation](phase-21.md#restoration-and-allocation) in the plan.
 
 Phase 6.11 closed with unverified items — 2026-11-11:
@@ -629,11 +638,11 @@ and connects the skills; Phase 6.3 starts gradual real use after integrated acce
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18**.
+needs. The earlier rollout plan was **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18**.
 Phase 17 extends Task/FIX after 6.7; its number does not require all Phases 8–16
 to finish first. Only the specific workspace/investigation integrations consume
 their relevant Phase 7/14 capabilities.
-Phase 18 is scheduled after Phase 9, reusing the 6.7 shared execution baseline;
+Phase 18 follows the current roadmap and reuses the 6.7 shared execution baseline;
 it does not wait for unrelated Phases 10-17. Its Flutter integration depends on
 CNCF Phase 117 delivery, while common SBT and persistence work within Phase 18
 can proceed in parallel with that producer.
@@ -671,14 +680,14 @@ in Phase 6, using the corrected runtime contract.
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Minimum managed parallel A/B lanes first, then assigned-chat/FIFO and remaining workspace/artifact scenarios | Prioritize parallel development within Phase 7; retain all related-project, overlay and synchronization acceptance |
 | [15: Development Workspace Operations](phase-15.md) | Workspace status, early project initialization and selected upgrade routes | Reuse Phase 7 resources and Phase 21 catch-up where relevant; early INIT and Phase 8 startup integration keep their separate dependencies |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
-| [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | Scheduled after Phase 9, reusing the 6.7 baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new earlier-Phase gate |
+| [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | Scheduled after Phase 27 and before Phase 23; reuses the 6.7 baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md) |
 | [19: Docker installation and customization qualification](phase-19.md) | Empty-environment install/use, configuration, preserved customization, update/failure and owned cleanup | Independent HEAVY track; consume INIT and profile producers per case; [checklist](phase-19-checklist.md); no active Phase gate |
 | [20: Phase Completion AI Consumption Summary](phase-20.md) | Aggregate attributable usage across one Phase execution, including repair and closure | Depends on accepted Phase 13 measurement; [checklist](phase-20-checklist.md); planned, not started |
-| [21: Recursive Repository Catch-up](phase-21.md) | Existing local repository/worktree and registered dependency catch-up from remote/local main; fast-forward, explicit rebase/merge and resumable Human decisions | Restores former P13-01–06 as P21-01–06; [checklist](phase-21-checklist.md); no implicit push/publication and no selected execution slot |
+| [21: Recursive Repository Catch-up](phase-21.md) | Existing local repository/worktree and registered dependency catch-up from remote/local main; fast-forward, explicit rebase/merge and resumable Human decisions | Restores former P13-01–06 as P21-01–06; scheduled between Phases 17 and 15; [checklist](phase-21-checklist.md); no implicit push/publication |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | FORMAL local release closed 2026-11-19; additional validation/review NOT RUN — USER-APPROVED; residuals in Phase 22; next 8.1 |
-| [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Planned after API-use delivery; preserve 9 -> 18 priority; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
+| [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Scheduled after Phase 23; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
 | [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, existing textus-ai/OpenAI connection, ordinary acceptance, bounded agent handoff and no-paid-overage setup | [Formal local release](phase-24.md#formal-local-release--2026-11-22) on 2026-11-22; operational qualification follows the release; [checklist](phase-24-checklist.md) |
-| [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, OpenAI preference for eligible work and selected additional-provider integration | Immediately after 28, before 18; [checklist](phase-25-checklist.md) |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, OpenAI preference for eligible work and selected additional-provider integration | Immediately after 28, followed by 28.1; [checklist](phase-25-checklist.md) |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal single-entry decisions, issues and handoffs](phase-11.1.md) | Linked semantic records, single-entry correction/history, state/query and one real consumer | After 7 and before 8; reuse 11 without reopening its trial |
@@ -772,7 +781,7 @@ records the remaining gaps and safe adoption sequence.
 | Phase | Delivery boundary | Scheduling |
 | --- | --- | --- |
 | [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, one existing textus-ai/OpenAI route, normal acceptance, bounded Codex handoff and attributable usage | Formal local release complete. The [checklist](phase-24-checklist.md) retains the operational acceptance still due. |
-| [25: textus-ai Task API and provider expansion](phase-25.md) | Generic task contract, OpenAI preference for eligible work and selected additional-provider integration | Immediately after 28, before 18. See the [checklist](phase-25-checklist.md). |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Generic task contract, OpenAI preference for eligible work and selected additional-provider integration | Immediately after 28, followed by 28.1. See the [checklist](phase-25-checklist.md). |
 
 Existing Phase 9 routing/convergence and Phase 13 usage acquisition are reused
 under their actual acceptance boundaries, without duplicate implementation.

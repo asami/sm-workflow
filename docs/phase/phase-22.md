@@ -4,7 +4,7 @@ Status: planned
 Selected: 2026-11-18 (Asia/Tokyo)
 Owner: sm-workflow development
 Checklist: [Phase 22 acceptance](phase-22-checklist.md)
-Priority: after the API-use delivery in [Phase 9](phase-9.md)
+Scheduled: after [Phase 23](phase-23.md) in the [current roadmap](README.md#adopted-development-priority--2026-11-22)
 
 ## Allocation and priority
 
@@ -24,8 +24,8 @@ Phase 8's performance/cost improvements remain required, and Phase 8 continues
 through its normal Steps rather than forced closure. Finish a useful bounded
 Step and continue to the next instead of expanding one repair indefinitely.
 Reach prioritized API-use delivery through the existing Phase 8 -> Phase 8.1 ->
-Phase 9 order. This Phase follows API delivery without interrupting the existing
-Phase 9 -> Phase 18 priority; its exact execution slot remains to be selected.
+Phase 9 order. The 2026-11-18 allocation placed this Phase after API delivery
+and left its exact slot open. The current roadmap schedules it after Phase 23.
 
 This transfer covers difficult generalization, robustness and extended assurance.
 Required Phase 8 performance/cost behavior and bounded representative acceptance
