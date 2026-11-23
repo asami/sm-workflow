@@ -224,3 +224,10 @@ candidate blob identify the observation. The original entry retains the
 source size, threshold and validation reference. Generated locations and
 recognized generator headers are excluded. Package-wide excess alone produces
 no source-size entry.
+
+## Phase 25 qualification and operation
+
+See the [operational qualification](../notes/phase-25-operational-qualification.md)
+for the real isolated OpenAI review and compiler-repair Admissions, a separate
+Ollama observation, retained uncertainty and the release limitations. These
+examples do not establish routine production behavior or settled billing.
