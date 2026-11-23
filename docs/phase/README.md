@@ -27,12 +27,12 @@ Phase 25 remains in progress and Phase 28.1 follows it immediately.
 
 | Order | Phase | Reason for its position |
 | --- | --- | --- |
-| 1 | [25](phase-25.md) | Finish the ordinary Task API route for eligible OpenAI reviews and small compiler repairs. |
+| 1 | [25](phase-25.md) | Finish the ordinary Task API route for eligible OpenAI reviews and small compiler repairs, with the production OpenAI allowance connection and one real review and compiler repair. |
 | 2 | [28.1](phase-28.1.md) | Deliver Metals and deterministic Scala formatting/lint fixes that can resolve work before any AI repair. |
 | 3 | [13](phase-13.md) | Measure actual parent and delegated AI usage by work kind, where attributable, to establish a baseline before expanding routing. |
 | 4 | [26](phase-26.md) | Deliver the two-CLI shared-server baseline required by Phase 27. |
 | 5 | [27](phase-27.md) | Select execution routes by capability and cost, including opt-in Local LLM first for small compiler repairs with bounded OpenAI fallback. OpenAI remains the default. |
-| 6 | [18](phase-18.md) | Deliver tool-neutral validation for Phase 23 and Flutter integration with its existing CNCF prerequisites. |
+| 6 | [18](phase-18.md) | Deliver tool-neutral validation for Phase 23 and Flutter integration with its existing CNCF prerequisites, alongside further operational verification of the Phase 25 release. |
 | 7 | [23](phase-23.md) | Reduce repeated repair and review work by separating current blockers from work that can be scheduled later. |
 | 8 | [22](phase-22.md) | Reduce recovery work and repeated successful checks when Workflow management and continuation problems occur. |
 | 9 | [29](phase-29.md) | Improve Scala lint diagnostics and limit false positives after Phase 23, strengthening input to the deterministic repair path. |
