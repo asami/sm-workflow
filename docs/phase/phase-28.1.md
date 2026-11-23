@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-23 (Asia/Tokyo)
-Scheduled: immediately after [Phase 25](phase-25.md), followed by [Phase 18](phase-18.md)
+Scheduled: immediately after [Phase 25](phase-25.md), followed by [Phase 7.2](phase-7.2.md)
 Depends on: [Phase 28 local release](phase-28.md)
 Checklist: [Phase 28.1 acceptance](phase-28.1-checklist.md)
 

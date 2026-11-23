@@ -44,5 +44,17 @@ rather than making it an immediate cost-reduction prerequisite.
 
 This is a scheduling decision, not an acceptance or Session change. Preserve
 Phase 25's T1–T3 plan, the local releases of Phases 24 and 28, the Phase 7.1
-hold, and the separate Phase 7.2 worktree-retirement plan. Phases 10, 19, and 16
+hold, and the scope of the Phase 7.2 worktree-retirement plan. Phases 10, 19, and 16
 remain deferred.
+
+## Worktree-retirement priority — 2026-11-24 (Asia/Tokyo)
+
+The user placed [Phase 7.2](../../../phase/phase-7.2.md) at the start of the
+second group: Phase 28.1 → Phase 7.2 → Phase 18. Retiring eligible temporary
+worktrees prevents recurring disk pressure and does not need to wait for Flutter
+or lint work. First prioritize the narrow RepositorySync outcome: after verified
+remote synchronization, remove only the explicitly bound, clean, inactive
+worktree. The same path covers a later manual RepositorySync after a failed
+automatic sync. Keep failed or uncertain syncs and unsafe worktrees intact;
+local Phase closure remains independent. This moves the schedule only;
+implementation and existing worktrees are unchanged.
