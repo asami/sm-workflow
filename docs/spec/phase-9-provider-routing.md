@@ -28,8 +28,85 @@ normal Submit remains responsible for semantic admission. `api_prepare`,
 `api_started`, `api_complete` and `api_uncertain` provide caller-owned attempt
 state: retain each state before the next effect, and do not redispatch a
 started or uncertain attempt. Socket availability is not evidence that a
-provider is configured or that a call succeeded. No live qualification has
-been established by these source changes.
+provider is configured or that a call succeeded.
+
+To enable bounded API review in ordinary dispatch, set
+`"suppliedReviewApi": "bounded"` in the selected caller mapping. Pass the READY
+`supplied_review` and the canonical file's absolute path as
+`supplied_review_path`. The caller derives the attempt identity from the issued
+Session, work Resource, Continuation and expected revision. Retain the attempt
+state for that issued work and supply it on continuation. The normal capable
+reviewer remains available when the mapping omits the setting or there is no
+eligible retained package. Existing explicit callers may still provide
+`bounded_api` with the selected `attemptIdentity` and `packagePath`.
+
+The returned API attempt sets `boundedTask` on the existing review operation.
+The runtime selects an installed member advertising
+`textus-ai.bounded-task.v1`, prefers OpenAI, and sends the exact work Resource,
+continuation, and attempt identity. The producer applies its usage policy and
+reserves its allowance before dispatch. Completion requires the producer to
+echo the binding and report the actual model and provider.
+
+The Textus AI runtime supplies the bounded binding as a typed component port.
+Advertise the capability on the configured instance after installing a binding
+with a qualified usage policy and bounded invoker. To opt into OpenAI, set
+`textus.ai.bounded-task.openai` to the string value `"true"`, select the
+registered OpenAI connection, and configure the Textus AI allowance authority.
+The built-in authority reads `textus.ai.bounded-task.openai-allocation` with
+verified organization, project, model group, allocation and validity. A host
+can also supply its own `OpenAiTaskAllowanceAuthority`. The authority assesses
+the exact task and atomically reserves its complete usage bound before dispatch. Assessment,
+reservation, HTTP and Record conversion share one monotonic deadline. The
+authority must return by that deadline. HTTP receives only the time remaining,
+and a response received too late retains its observed facts as uncertain.
+Bind the `ai-runner` socket of `org.simplemodeling.textus.SmWorkflow` to the
+selected Textus AI component instance in the assembly's `spi.bindings`.
+Declare `textus-ai.bounded-task.v1` in that instance's capabilities. Ordinary
+review and compiler repair invoke this SPI in the SmWorkflow execution
+context. In the trusted `textus.subsystem.http-execution.plan`, grant
+`org.simplemodeling.textus.SmWorkflow` POST to the exact configured origin.
+An app calling the provider from another Component needs its own explicit
+grant. The built-in policy reserves daily tokens first and can use verified
+promotional credit when it covers the whole request. Set
+`textus.ai.bounded-task.openai-daily-margin-percent` to an integer from 1 to 99
+to adjust the daily headroom, initially 10%. The new threshold includes earlier
+reservations for that organization, model group and UTC day. Refresh the daily
+allocation at the UTC boundary and use the same reservation store for the
+participating callers. Traffic outside that store can still cause overage.
+Credential configuration alone supplies no allowance. The configured local
+provider remains available when OpenAI has no eligible allowance.
+The bound response records the verified allowance admission separately from
+observed token usage and provider-reported cost. A successful allowance check
+does not supply an invoice amount.
+
+After a retained `DECLINED`, `UNAVAILABLE`, `FAILED`, or typed input/cost budget refusal,
+use `prepare` with `retained_api_attempt` and the original issued review.
+This prepares the existing independent agent assignment and records the
+handoff. A reported provider failure retains observed usage and request identity
+when available. A completed result goes to ordinary review Admission. An
+uncertain attempt stays with its original invocation for recovery.
+
+The [Phase 24 handoff](../phase/phase-24.md#local-handoff--2026-11-22) records
+one successful OpenAI transport invocation through the transport used by this
+operation, in an isolated Textus AI composition. The synthetic compiler package
+returned HTTP 200 and a typed `decision-needed` review from `gpt-5.6-sol`.
+OpenAI reported 590 input and 260 output tokens. Phase 25 can reuse that
+connection evidence and the package contract. Ordinary review admission and
+compiler-repair application still require their own same-Session evidence.
+The retained response contains token usage, with the remaining included
+allowance and billing category unobserved. Use the
+[provider access and usage policy](../notes/phase-24-provider-prerequisites.md#pre-4-access-and-no-paid-overage-gate)
+when enabling ordinary routing.
+
+The Phase 9 paired review fixture used the existing `gemma` provider with
+Ollama `gpt-oss:20b`. For a bounded Task on a native Ollama daemon, enable
+`textus.ai.bounded-task.local-ollama` with the string value `"true"` in the
+trusted host configuration. Set `textus.ai.gemma.endpoint` to the daemon's
+literal loopback origin and `textus.ai.gemma.model` to the installed model
+name. Use the same assembly binding and grant POST to that loopback origin
+for the calling Component. The bounded route uses the same Task and Record contract
+and preserves the model and actual token counts reported by Ollama. The
+Phase 9 retained review covers the earlier record-generation route.
 
 ## Editor takeover from native validation
 
@@ -107,6 +184,39 @@ actual serialized review and compile package bytes, with a default and
 ceiling of 524,288. Incomplete or oversized material returns `agent-required`
 and leaves the current repair assignment and validation history available.
 Preparation grants no provider invocation, mutation or acceptance authority.
+
+A bounded compiler replacement uses one owned Scala document and the actual
+diagnostic from the retained check. Its UTF-16 range must identify nonempty
+source that exactly matches the expected text in that candidate. The shared
+admission checks the issued document URI, revision and version, and admits one
+non-identical replacement of at most 4,096 UTF-16 units. The source span and its
+distance from the diagnostic are bounded by the same limit. Reuse this admission
+for a provider proposal with the runtime's diagnostic and owned document. The
+result is an edit proposal. The workflow applies it under its own file authority
+and validates the resulting candidate before acceptance.
+
+The bounded compiler task uses one complete diagnostic from a failed Compile
+or TestCompile check. Its source comes from the exact staged Git blob after
+the managed worktree file has been checked against that blob. The input carries
+the candidate tree, validation reference, repository-relative path, diagnostic
+and source. When the Scala 3 location, echoed source line and caret match the
+staged source, the runtime selects that exact span and asks for replacement
+text only. For other diagnostics, a compiler reply supplies the binding
+values, one range and the expected and replacement text. Coordinates are
+zero-based UTF-16 offsets within the selected lines. The runtime constructs the diagnostic and file
+identity from its own records. The shared bounded runner transport applies the
+same task binding and completion checks as for reviews.
+
+Ordinary Advance considers this task after the existing deterministic repair.
+It selects only an installed bounded runner and saves a native attempt intent
+before calling it. A known pre-dispatch decline, budget refusal or bound
+proposal that fails patch admission leaves the normal repair assignment
+available. For a rejected proposal, the runtime preserves the producer and
+usage evidence and records the patch admission refusal. A missing or unbound
+response leaves the attempt uncertain, with its
+recorded effects retained across Advance. Before applying a retained proposal,
+Advance checks the current candidate and exact source again, then uses the
+existing file update, candidate capture, validation and rollback route.
 
 A verified single oversized Scala or Java source can be recorded as a
 nonblocking `Hygiene` entry in the shared Journal. The repository, path and

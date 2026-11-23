@@ -47,7 +47,7 @@ import RepositorySyncManagedGitObservation as G
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -338,7 +338,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     reconstructionPrefixReuse: Option[X.PrefixReuse] = None,
     projectedpaths: Option[Vector[String]] = None,
     deterministicRepairs: Map[String, DeterministicRepair.TransactionObservation] = Map.empty,
-    deterministicRestored: Set[String] = Set.empty)
+    deterministicRestored: Set[String] = Set.empty,
+    compilerOriginals: Map[String, (GoalPhaseNativeCandidate.Saved, GoalPhaseNativeValidation.Saved)] = Map.empty,
+    compilerAttempts: Map[(String, String), BoundedCompilerSupport.CompilerAttemptObservation] = Map.empty)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -2061,15 +2063,52 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         Consequence.unit else F.invalid("historical phase dependency binding was removed or changed")
       following <- GoalPhaseNativeHistory.nextC(source.current, cursor.from)
       located <- following match {
+        case Some(entry) if (entry.causation.value: String) == (BoundedCompilerSupport._compiler_intent_cause: String) => for {
+          context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
+            .getOrElse(F.invalid("bounded compiler attempt has no failed Step"))
+          (step, candidate, validation) = context
+          retained <- BoundedCompilerSupport._compiler_retained_c(source, core, cursor.from)
+          actual = retained.value
+          original = cursor.compilerOriginals.get(step.identity).filter(_ => cursor.deterministicRestored.contains(step.identity))
+            .getOrElse((candidate, validation))
+          locator = DeterministicRepair.compilerLocator(original._2.payload)
+          reference = GoalPhaseCompilePackage.validationSource(source.current.identity.value, original._2.payload).identity
+          expectedAttempt: String = source.current.identity.value + ":bounded-compiler:" + cursor.from.revision.value + ":" + step.identity
+          expectedContinuation: String = source.current.identity.value + ":bounded-compiler-continuation:" + cursor.from.revision.value + ":" + step.identity
+          expectedValidationReference: String = original._2.record.revision.value.toString + ":" + actual.check
+          attemptKey: (String, String) = (step.identity, actual.candidate)
+          _ <- if ((cursor.controller.stage: O.Stage) == (O.Stage.Repair: O.Stage) && (actual.step: String) == (step.identity: String) &&
+              original._1.payload.candidate.exists(value => (value.tree: String) == (actual.candidate: String)) && locator.exists(value => (value.checkIdentity: String) == (actual.check: String)) &&
+              (actual.inputReference: String) == (reference: String) &&
+              (actual.attempt: String) == expectedAttempt &&
+              (actual.continuation: String) == expectedContinuation &&
+              actual.proposal.forall(proposal =>
+                step.ownedPaths.contains(proposal.path) &&
+                (proposal.validationReference: String) == expectedValidationReference) &&
+              !cursor.compilerAttempts.contains(attemptKey))
+            Consequence.unit else F.invalid("bounded compiler attempt crosses failed candidate or check")
+          result <- actual.outcome match {
+            case None | Some("unknown") => _paused_c(source, cursor, "Bounded compiler attempt remains UNKNOWN; no redispatch.")
+            case Some(_) => _walk_c(source, cursor.copy(from = retained.record,
+              compilerAttempts = cursor.compilerAttempts.updated(attemptKey, retained)),
+              soughtwork, soughthuman, soughtrecording, core, historyonly)
+          }
+        } yield result
         case Some(entry) if (entry.causation.value: String) == (DeterministicRepair.applyIntentCause: String) => for {
           context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
             .getOrElse(F.invalid("deterministic repair has no original failed Step validation"))
           (step, candidate, validation) = context
           retained <- DeterministicRepair.retainedTransactionC(source, core, cursor.from)
             .flatMap(_.map(Consequence.success).getOrElse(F.invalid("deterministic repair lost its intent")))
-          _ <- if (cursor.controller.stage == O.Stage.Repair && !cursor.deterministicRepairs.contains(step.identity) &&
-              DeterministicRepair.matchesCompilerSource(source, cursor.from, candidate, validation,
-                retained.value.transaction, step.ownedPaths.toSet)) Consequence.unit
+          providerKey: (String, String) = (step.identity, retained.value.transaction.candidate)
+          provider = cursor.compilerAttempts.get(providerKey)
+          validprovider = provider.exists(observed => observed.value.outcome.contains("completed") &&
+            java.util.Objects.equals(observed.record, cursor.from) && observed.value.proposal.exists(proposal =>
+              java.util.Objects.equals(proposal.copy(sourceRevision = cursor.from.revision.value.toString), retained.value.transaction)))
+          _ <- if (java.util.Objects.equals(cursor.controller.stage, O.Stage.Repair) &&
+              ((!cursor.deterministicRepairs.contains(step.identity) &&
+                DeterministicRepair.matchesCompilerSource(source, cursor.from, candidate, validation,
+                  retained.value.transaction, step.ownedPaths.toSet)) || validprovider)) Consequence.unit
             else F.invalid("deterministic repair differs from its original validated Step and ownership")
           result <- retained.value.outcome match {
             case None => _paused_c(source, cursor, "The deterministic edit has no retained result and remains UNKNOWN.")
@@ -2082,7 +2121,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                   "Retained programmatic Scala diagnostic correction; normal validation is required", false))
                 found <- _walk_c(source, cursor.copy(from = retained.record, controller = state,
                   candidate = None, validation = None,
-                  deterministicRepairs = cursor.deterministicRepairs.updated(step.identity, retained)),
+                  deterministicRepairs = cursor.deterministicRepairs.updated(step.identity, retained),
+                  deterministicRestored = cursor.deterministicRestored - step.identity,
+                  compilerOriginals = if (validprovider) cursor.compilerOriginals else
+                    cursor.compilerOriginals.updated(step.identity, (candidate, validation))),
                   soughtwork, soughthuman, soughtrecording, core, historyonly)
               } yield found
               case _ => F.invalid("deterministic repair has no corresponding native RepairStep transition")
@@ -3527,7 +3569,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Repair =>
         DeterministicRepair.attemptCompilerC(source, d, core, cursor.from, cursor.controller,
           cursor.candidate, cursor.validation, cursor.deterministicRepairs).flatMap {
-          case None => _semantic_frontier_c(source, cursor, core)
+          case None => BoundedCompilerSupport.executeC(source, cursor, core, d,
+            _semantic_frontier_c(source, cursor, core), _after_native_c(source, cursor, _, core))
           case Some(saved) => F.waitC(saved.record, "Deterministic correction observed", "Continue using the retained file update outcome.")
             .flatMap(_after_native_c(source, cursor, _, core))
         }
@@ -4473,4 +4516,177 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
   private def _is_review_kind(kind: String): Boolean = kind == "ReviewStep" || kind == "ReviewPhase"
   private def _is_review(input: S.Request): Boolean = _is_review_kind(input.kind)
+  private object BoundedCompilerSupport {
+    def executeC(source: F.Session, cursor: Cursor, core: ActionCall.Core, d: F.Declaration,
+      fallback: => Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult],
+      after: org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult => Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult]):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = {
+      import io.circe.Json
+      import org.goldenport.cncf.spi.ai.runner.AiRunnerSocketSet
+      val context = Option.when(source.current.suspension.isEmpty)(
+        DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation)).flatten
+      val socket = core.component.flatMap { component =>
+        val port: org.goldenport.cncf.component.Component.Port = component.port
+        port.entries.collectFirst { case value: AiRunnerSocketSet => value }
+      }
+      given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+      val runner = socket.flatMap(GoalPhaseApiReview.boundedRunner)
+      context match {
+        case None => fallback
+        case Some((step, candidate, validation)) =>
+          val original = cursor.compilerOriginals.get(step.identity).filter(_ => cursor.deterministicRestored.contains(step.identity))
+            .getOrElse((candidate, validation))
+          val key = original._1.payload.candidate.map(value => (step.identity, value.tree))
+          key.flatMap(cursor.compilerAttempts.get) match {
+            case Some(observed) if observed.value.outcome.contains("completed") && java.util.Objects.equals(observed.record, cursor.from) => for {
+              material <- DeterministicRepair.compilerMaterialC(source, d, core, cursor.from, original._1, original._2,
+                step.ownedPaths.toSet)
+              proposal <- observed.value.proposal.map(Consequence.success).getOrElse(F.invalid("compiler proposal absent"))
+              current <- material.map(Consequence.success).getOrElse(F.invalid("compiler source is no longer current"))
+              _ <- if (proposal.session == current.session && proposal.candidate == current.candidate &&
+                proposal.validationReference == current.validationReference && proposal.path == current.path &&
+                proposal.workspace == current.workspace && proposal.expected == current.document.text) Consequence.unit
+                else F.invalid("compiler proposal source no longer matches retained candidate")
+              saved <- DeterministicRepair.applyC(source, d, core, cursor.from,
+                proposal.copy(sourceRevision = cursor.from.revision.value.toString), step.ownedPaths.toSet)
+              result <- F.waitC(saved.record, "Bounded compiler correction observed", "Continue with normal candidate validation.")
+                .flatMap(after)
+            } yield result
+            case Some(_) => fallback
+            case None if runner.isEmpty => fallback
+            case None => for {
+              material <- DeterministicRepair.compilerMaterialC(source, d, core, cursor.from, original._1, original._2,
+                step.ownedPaths.toSet)
+              limit <- material.fold(Consequence.success(0))(_ => GoalPhaseApiReview.packageLimitC(core))
+              reference = GoalPhaseCompilePackage.validationSource(source.current.identity.value, original._2.payload).identity
+              attempt = source.current.identity.value + ":bounded-compiler:" + cursor.from.revision.value + ":" + step.identity
+              continuation = source.current.identity.value + ":bounded-compiler-continuation:" + cursor.from.revision.value + ":" + step.identity
+              task = material.flatMap(value => GoalPhaseApiReview.compilerTask(value, attempt, continuation, reference, limit))
+              result <- (material, task, runner) match {
+                case (Some(value), Some(selected), Some(provider)) => for {
+                  finding <- DeterministicRepair.compilerLocator(original._2.payload).map(Consequence.success)
+                    .getOrElse(F.invalid("compiler finding disappeared"))
+                  initial = BoundedCompilerSupport.CompilerAttempt(source.current.identity.value, cursor.from.revision.value.toString,
+                    step.identity, value.candidate, finding.checkIdentity, reference, attempt, continuation, None, None, None)
+                  adapter <- source.storage.bindMechanicalC(F.advanceOperation, BoundedCompilerSupport._compiler_attempt_codec)
+                  intended <- BoundedCompilerSupport._compiler_save_c(adapter, d, core, cursor.from, cursor.from, initial, "intent")
+                  output = GoalPhaseApiReview.boundedRecord(provider, selected)
+                  recorded = output match {
+                    case GoalPhaseApiReview.BoundedRecordResult.Completed(response) =>
+                      val evidence = Json.obj(
+                        "model" -> response.model.fold(Json.Null)(Json.fromString),
+                        "provider" -> response.metadata.get("ai.execution.provider").fold(Json.Null)(Json.fromString),
+                        "observation" -> GoalPhaseApiReview.boundedRecordEvidence(response).getOrElse(Json.Null))
+                      DeterministicRepair.compilerReplyC(value, response.record) match {
+                        case Consequence.Success(proposal) =>
+                          initial.copy(outcome = Some("completed"), proposal = Some(proposal), evidence = Some(evidence))
+                        case Consequence.Failure(_) =>
+                          val rejected = evidence.mapObject(_.add("reason", Json.fromString("proposal-not-admitted")))
+                          initial.copy(outcome = Some("rejected"), evidence = Some(rejected))
+                      }
+                    case GoalPhaseApiReview.BoundedRecordResult.Blocked(reason) =>
+                      initial.copy(outcome = Some("blocked"), evidence = Some(Json.obj("reason" -> Json.fromString(reason))))
+                    case GoalPhaseApiReview.BoundedRecordResult.Declined =>
+                      initial.copy(outcome = Some("declined"))
+                    case GoalPhaseApiReview.BoundedRecordResult.Failed(conclusion) =>
+                      initial.copy(outcome = Some("failed"), evidence = GoalPhaseApiReview.boundedFailureEvidence(conclusion))
+                    case GoalPhaseApiReview.BoundedRecordResult.Unbound(model, provider, metadata) =>
+                      val allowed = Set("ai.execution.provider", "ai.execution.profile", "openai.response_id",
+                        "openai.finish_reason", "gemma.response_id", "ai.usage.input_tokens", "ai.usage.output_tokens",
+                        "ai.usage.total_tokens", "ai.usage.cached_input_tokens", "ai.usage.reasoning_tokens",
+                        "ai.usage.cost_microunits", "ai.usage.tokens")
+                      val observed = metadata.flatMap(_.toJsonStringC.toOption).flatMap(io.circe.parser.parse(_).toOption)
+                        .map(_.mapObject(fields => io.circe.JsonObject.fromIterable(fields.toIterable.collect {
+                          case (key, fact) if allowed(key) => key -> fact
+                          case ("providerHttp", http) => "providerHttp" -> http.mapObject(value =>
+                            io.circe.JsonObject.fromIterable(value.toIterable.filter(pair => Set("status", "requestId")(pair._1))))
+                        })))
+                      initial.copy(outcome = Some("unknown"), evidence = Some(Json.obj(
+                        "model" -> model.fold(Json.Null)(Json.fromString),
+                        "provider" -> provider.fold(Json.Null)(Json.fromString),
+                        "observation" -> observed.getOrElse(Json.Null))))
+                    case GoalPhaseApiReview.BoundedRecordResult.Uncertain(conclusion) =>
+                      initial.copy(outcome = Some("unknown"), evidence = GoalPhaseApiReview.boundedFailureEvidence(conclusion))
+                  }
+                  next <- BoundedCompilerSupport._compiler_save_c(adapter, d, core, cursor.from, intended, recorded, "result")
+                  wire <- F.waitC(next, "Bounded compiler attempt retained", "Continue using its retained result.")
+                    .flatMap(after)
+                } yield wire
+                case _ => fallback
+              }
+            } yield result
+          }
+      }
+    }
+
+    import io.circe.Json
+    import io.circe.syntax.*
+    final case class CompilerAttempt(session: String, sourceRevision: String, step: String,
+      candidate: String, check: String, inputReference: String, attempt: String, continuation: String,
+      outcome: Option[String], proposal: Option[DeterministicRepair.Transaction], evidence: Option[Json])
+    final case class CompilerAttemptObservation(record: InstanceRecord, value: CompilerAttempt)
+    val _compiler_attempt_codec = new WorkflowResultJsonV1.PayloadCodec[CompilerAttempt] {
+      val typeIdentity = "GoalPhaseBoundedCompilerAttempt"
+      def encode(value: CompilerAttempt): Json = Json.obj(
+        "schemaVersion" -> Json.fromString("sm-workflow.bounded-compiler-attempt.v1"), "payload" -> value.asJson)
+      def decode(value: Json): Either[String, CompilerAttempt] = for {
+        wire <- Option(value).toRight("compiler attempt absent")
+        result <- wire.hcursor.get[CompilerAttempt]("payload").left.map(_.message)
+        _ <- Either.cond((encode(result): Json) == (wire: Json) && Vector(result.session, result.sourceRevision, result.step,
+          result.candidate, result.check, result.inputReference, result.attempt, result.continuation).forall(x =>
+            Option(x).exists(text => text.nonEmpty && text.length <= 4096 && !text.exists(_.isControl))) &&
+          result.sourceRevision.toLongOption.exists(_ > 0) && Option(result.outcome).isDefined && Option(result.proposal).isDefined &&
+          Option(result.evidence).isDefined && result.outcome.forall(Set("completed", "blocked", "declined", "rejected", "failed", "unknown")) &&
+          (result.outcome.contains("completed") == result.proposal.nonEmpty) &&
+          result.proposal.forall(value => DeterministicRepair.validTransaction(value) &&
+            value.session == result.session && value.sourceRevision == result.sourceRevision &&
+            value.candidate == result.candidate && value.validationReference.endsWith(":" + result.check)) &&
+          (result.outcome.nonEmpty || result.evidence.isEmpty) &&
+          (!result.outcome.contains("blocked") || result.evidence.exists(_.hcursor.get[String]("reason").toOption
+            .exists(Set("ai.input-budget", "ai.cost-budget")))) &&
+          (!Set("completed", "rejected").exists(result.outcome.contains) || result.evidence.exists(e =>
+            e.hcursor.get[String]("model").toOption.exists(_.nonEmpty) &&
+            e.hcursor.get[String]("provider").toOption.exists(_.nonEmpty))) &&
+          (!result.outcome.contains("rejected") || result.evidence.exists(e =>
+            e.hcursor.get[String]("reason").toOption.contains("proposal-not-admitted"))), (), "invalid compiler attempt")
+      } yield result
+    }
+    val _compiler_intent_cause = "ordered-bounded-compiler:intent"
+    val _compiler_result_cause = "ordered-bounded-compiler:result"
+    def _compiler_reference(source: InstanceRecord, kind: String): WorkflowMechanicalTransition.Reference =
+      WorkflowMechanicalTransition.Reference(source.identity.value + ":bounded-compiler:" + source.revision.value + ":" + kind, "1")
+    def _compiler_save_c(adapter: WorkflowManagedMechanicalTransition[CompilerAttempt],
+      declaration: F.Declaration, core: ActionCall.Core, source: InstanceRecord, previous: InstanceRecord,
+      payload: CompilerAttempt, kind: String): Consequence[InstanceRecord] = {
+      val pure = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
+      adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, _compiler_reference(source, kind),
+        previous, previous.revision, F.history(previous, "phase.Repair",
+          if (kind == "intent") _compiler_intent_cause else _compiler_result_cause),
+        TypedValue(_compiler_attempt_codec.typeIdentity, payload)), pure)(using core.executionContext).map(_.receipt.next)
+    }
+    def _compiler_retained_c(session: F.Session, core: ActionCall.Core, source: InstanceRecord):
+      Consequence[CompilerAttemptObservation] = for {
+      adapter <- session.storage.bindMechanicalC(F.advanceOperation, _compiler_attempt_codec)
+      found <- adapter.loadRetainedC(_compiler_reference(source, "intent"))(using core.executionContext)
+        .flatMap(_.map(Consequence.success).getOrElse(F.invalid("bounded compiler intent absent")))
+      initial <- _compiler_attempt_codec.decode(_compiler_attempt_codec.encode(found.receipt.payload.value))
+        .fold(F.invalid, Consequence.success)
+      _ <- if ((initial.session: String) == (source.identity.value: String) &&
+        (initial.sourceRevision: String) == (source.revision.value.toString: String) &&
+        initial.outcome.isEmpty) Consequence.unit else F.invalid("bounded compiler intent crosses source")
+      intended <- GoalPhaseSourceHistoryRecovery._adjacent_c(session.current, source, found.receipt.next, _compiler_intent_cause)
+      result <- adapter.loadRetainedC(_compiler_reference(source, "result"))(using core.executionContext)
+      observed <- result match {
+        case None => Consequence.success(CompilerAttemptObservation(intended, initial))
+        case Some(saved) => for {
+          value <- _compiler_attempt_codec.decode(_compiler_attempt_codec.encode(saved.receipt.payload.value))
+            .fold(F.invalid, Consequence.success)
+          _ <- if (java.util.Objects.equals(value.copy(outcome = None, proposal = None, evidence = None), initial) && value.outcome.nonEmpty)
+            Consequence.unit else F.invalid("bounded compiler result crosses intent")
+          next <- GoalPhaseSourceHistoryRecovery._adjacent_c(session.current, intended, saved.receipt.next, _compiler_result_cause)
+        } yield CompilerAttemptObservation(next, value)
+      }
+    } yield observed
+
+  }
 }

@@ -1,5 +1,7 @@
 import org.goldenport.cozy.CozyPlugin.autoImport._
 import org.goldenport.cozy.CozyProjectIdentityEvidence
+import org.goldenport.cozy.CozyDevelopmentArtifactsPlugin.autoImport._
+import org.goldenport.cozy.CozyDevelopmentArtifactOverlay.{Coordinate, ProjectReference}
 import sbt.Keys.*
 lazy val scalaLintInput: Project = project.in(file("scala-lint-rules/input"))
   .settings(
@@ -91,6 +93,8 @@ lazy val prepareFullTests = taskKey[Unit]("Prepare prerequisites required by def
 lazy val labelledTestExecution = inputKey[Unit]("Internal standard SBT execution for exact metadata-selected suite operations")
 lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."), sys.env.get("TEXTUS_SM_WORKFLOW_CNCF_SOURCE_ROOT"))
 lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(source.toURI))
+lazy val textusAiDevelopmentModule = "org.simplemodeling.textus" %% "textus-ai-runtime" % "0.2.3-SNAPSHOT"
+lazy val selectedTextusAiDependency = settingKey[ModuleID]("Selected task-private Textus AI dependency")
 lazy val validateCncfSource = taskKey[Unit]("Validate the selected source dependency against the declared CNCF coordinates")
 lazy val validateCncfPublicationClasspath = taskKey[Unit]("Verify the normal attributed source JAR in the application publication closure")
 lazy val strictGeneratedQualification = settingKey[Boolean]("Explicitly qualify fresh B04 generated strict consumers")
@@ -98,6 +102,13 @@ lazy val strictCoreQualification = settingKey[Boolean]("Explicitly qualify C04 c
 lazy val strictCoreGeneratedSourceDir = settingKey[Option[File]]("Explicit adopted Cozy C3 generated-output resource")
 lazy val strictCoreGeneratedSources = taskKey[Seq[File]]("Verify and stage the adopted Cozy C3 compiler and its direct ABI")
 lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatMap { source => Seq(
+  cozyDevelopmentProjectReferences := Some(Seq(
+    ProjectReference(ProjectRef(thisProjectRef.value.build, "scalaLintRules"),
+      Coordinate("org.simplemodeling", "scala-lint-rules_2.13", "0.1.0-SNAPSHOT"), "scalafix", "scalafix"),
+    ProjectReference((source / thisProjectRef).value,
+      Coordinate("org.goldenport", "goldenport-cncf_3", "0.5.6-SNAPSHOT"),
+      "compile->compile;runtime->runtime", "source")
+  )),
   libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
   validateCncfSource := {
     require((source / organization).value == "org.goldenport" && (source / moduleName).value == "goldenport-cncf" &&
@@ -133,6 +144,11 @@ lazy val scalaStrictAuthoring: Project = project.in(file("scala-lint-rules/stric
   .dependsOn(scalaLintRules % ScalafixConfig)
   .enablePlugins(org.goldenport.cozy.CozyPlugin)
   .settings(
+    cozyDevelopmentProjectReferences := Some(Seq(
+      ProjectReference(ProjectRef(thisProjectRef.value.build, "scalaLintRules"),
+        Coordinate("org.simplemodeling", "scala-lint-rules_2.13", "0.1.0-SNAPSHOT"), "scalafix", "scalafix")
+    )),
+    cozyDevelopmentModules := Seq.empty,
     scalaVersion := "3.3.8",
     scalacOptions ++= Seq(
       "-language:strictEquality", "-Yexplicit-nulls", "-Ysafe-init",
@@ -323,6 +339,23 @@ lazy val root: Project = project
       labelledTestExecution := Defaults.inputTests(labelledTestExecution).evaluated
     )))
   .settings(
+    cozyDevelopmentProjectReferences := Some(Seq(
+      ProjectReference(ProjectRef(thisProjectRef.value.build, "scalaLintRules"),
+        Coordinate("org.simplemodeling", "scala-lint-rules_2.13", "0.1.0-SNAPSHOT"), "scalafix", "scalafix")
+    )),
+    cozyDevelopmentModules := Seq(textusAiDevelopmentModule),
+    selectedTextusAiDependency := cozyDevelopmentDependency(textusAiDevelopmentModule).value,
+    // The task-private selection is supplied by the runtime; ordinary builds
+    // must not require the producer's unpublished base version.
+    libraryDependencies ++= {
+      if (sys.props.contains("sm.artifact.selection")) {
+        val selected = selectedTextusAiDependency.value
+        // The scoped producer publishes packageBin only, even if its Ivy
+        // descriptor also advertises source and documentation artifacts.
+        val binary = selected.artifacts(Artifact(selected.name, "jar", "jar"))
+        Seq(if (cncfSourceProject.nonEmpty) binary.exclude("org.goldenport", "goldenport-cncf_3") else binary)
+      } else Nil
+    },
     projectIdentityEvidence := ProjectYamlBuild.admitted(cozyProjectMetadata.value, scalaBinaryVersion.value),
     organization := ProjectYamlBuild.organization(projectIdentityEvidence.value, cozyProjectMetadata.value),
     moduleName := ProjectYamlBuild.moduleName(projectIdentityEvidence.value, cozyProjectMetadata.value),

@@ -2478,6 +2478,7 @@ OperationResult
 | workResource | string | 1 |
 | attemptIdentity | string | 1 |
 | packageResource | string | 1 |
+| boundedTask | boolean | ? |
 
 ## GoalPhaseApiReviewResult
 
@@ -8065,7 +8066,7 @@ Own the selected Phase's entry, assigned semantic/Human completion, mechanical p
 
 ##### DESCRIPTION
 
-Run one explicitly requested bounded supplied-input review against the currently issued GoalPhase review. The caller owns attempt retention and no-replay; returned work is submitted separately through normal Admission. If typed validation or conversion fails, the FAILED response retains the original provider record in providerRecord; it is not typed work for Admission.
+Run one explicitly requested supplied-input review against the currently issued GoalPhase review. When boundedTask is true, select the advertised bounded-task producer and require its task-bound response; absence selects the historical runner. The selection does not grant allowance. The caller owns attempt retention and no-replay; returned work is submitted separately through normal Admission. If typed validation or conversion fails, the FAILED response retains the original provider record in providerRecord; it is not typed work for Admission.
 
 ##### TYPE
 

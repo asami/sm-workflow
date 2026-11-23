@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 21, 2026
- * @version Nov. 22, 2026
+ * @version Nov. 23, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -93,6 +93,62 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       val original = io.circe.parser.parse(record.toJsonStringC.toOption.getOrElse(fail("Expected successful result"))).toOption.getOrElse(fail("Expected successful result"))
       wire.hcursor.downField("providerRecord").focus shouldBe Some(original)
     }
+    "retain a qualified reservation basis separately from measured usage and charges" in {
+      val key = "ai.usage.reservation_basis"
+      val facts = Map("ai.usage.total_tokens" -> "9", "ai.usage.allowance_admission" -> "verified-included")
+      val record = Record.dataAuto("outcome" -> "accept", "summary" -> "review", "findings" -> Vector.empty[String])
+      val response = AiRecordResponse(record, Some("pinned"), facts)
+      val review = GoalPhaseApiReview.providerResult("attempt", "continuation", record, response.model, facts)
+      review.metadata.flatMap(_.getString("ai.usage.allowance_admission")) shouldBe Some("verified-included")
+      review.metadata.flatMap(_.getAny("ai.usage.cost_microunits")) shouldBe None
+      val compiler = GoalPhaseApiReview.boundedRecordEvidence(response).getOrElse(fail("Expected compiler evidence"))
+      compiler.hcursor.get[String]("ai.usage.allowance_admission").toOption shouldBe Some("verified-included")
+      compiler.hcursor.downField("ai.usage.cost_microunits").focus shouldBe None
+      val unrecognized = response.copy(metadata = facts.updated("ai.usage.allowance_admission", "unverified"))
+      GoalPhaseApiReview.boundedRecordEvidence(unrecognized).flatMap(
+        _.hcursor.downField("ai.usage.allowance_admission").focus) shouldBe None
+
+      val uncertain = Consequence.operationIllegal("ai.task.uncertain", "fixture").conclusion
+      for (basis <- Vector("verified-daily-reservation", "verified-promotional-credit-reservation", "unverified")) {
+        val metadata = facts.updated(key, basis)
+        val expected = Option.when(basis != "unverified")(basis)
+        val reviewWithBasis = GoalPhaseApiReview.providerResult("attempt", "continuation", record, response.model, metadata)
+        reviewWithBasis.metadata.flatMap(_.getString(key)) shouldBe expected
+        val compilerWithBasis = GoalPhaseApiReview.boundedRecordEvidence(response.copy(metadata = metadata))
+          .getOrElse(fail("Expected compiler evidence"))
+        compilerWithBasis.hcursor.get[String](key).toOption shouldBe expected
+        compilerWithBasis.hcursor.get[String]("ai.usage.total_tokens").toOption shouldBe Some("9")
+        compilerWithBasis.hcursor.downField("ai.usage.cost_microunits").focus shouldBe None
+        val failed = uncertain.copy(observation = uncertain.observation.copy(properties = metadata))
+        GoalPhaseApiReview.failureResult("attempt", "continuation", failed).metadata.flatMap(_.getString(key)) shouldBe expected
+        GoalPhaseApiReview.boundedFailureEvidence(failed).flatMap(_.hcursor.get[String](key).toOption) shouldBe expected
+      }
+    }
+    "retain only observed safe provider identity in failure and compiler evidence" in {
+      val base = Consequence.operationIllegal("ai.task.uncertain", "fixture").conclusion
+      def observed(properties: Map[String, String]) =
+        base.copy(observation = base.observation.copy(properties = properties))
+      val facts = Map("ai.execution.model" -> "actual-model", "ai.execution.provider" -> "openai",
+        "ai.usage.untrusted" -> "secret", "untrusted-extra" -> "secret")
+      val review = GoalPhaseApiReview.failureResult("attempt", "continuation", observed(facts))
+      review.model shouldBe Some("actual-model")
+      review.provider shouldBe Some("openai")
+      val evidence = GoalPhaseApiReview.boundedFailureEvidence(observed(facts)).getOrElse(fail("Expected compiler evidence"))
+      evidence.hcursor.get[String]("ai.execution.model").toOption shouldBe review.model
+      evidence.hcursor.get[String]("ai.execution.provider").toOption shouldBe review.provider
+      evidence.hcursor.downField("ai.usage.untrusted").focus shouldBe None
+      evidence.hcursor.downField("untrusted-extra").focus shouldBe None
+      for (bad <- Vector("", "bad\nvalue", "x" * 257)) {
+        val invalid = observed(Map("ai.execution.model" -> bad, "ai.execution.provider" -> bad))
+        val result = GoalPhaseApiReview.failureResult("attempt", "continuation", invalid)
+        result.model shouldBe None
+        result.provider shouldBe None
+        GoalPhaseApiReview.boundedFailureEvidence(invalid) shouldBe None
+      }
+      val absent = GoalPhaseApiReview.failureResult("attempt", "continuation", observed(Map.empty))
+      absent.model shouldBe None
+      absent.provider shouldBe None
+    }
     "retain only closed failure diagnostics without inventing provider facts" in {
       def wire(c: org.goldenport.Conclusion): String = {
         val result = GoalPhaseApiReview.failureResult("attempt", "continuation", c)
@@ -147,6 +203,122 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       GoalPhaseApiReview.blockedReason(Consequence.stateConflict("ai.cost-budget").conclusion) shouldBe None
       GoalPhaseApiReview.blockedReason(Consequence.operationIllegal("ai.input-budget.extra", "denied").conclusion) shouldBe None
     }
+    "bind bounded reviews to an advertised producer and the exact issued task" in {
+      Given("one legacy runner and one producer advertising the bounded-task capability")
+      val execution = ExecutionContext.create()
+      val input = V.GoalPhaseApiReviewInput("session", "work:exact", "attempt", "file:///package", Some(true))
+      var calls = 0
+      var captured: Option[AiRecordRequest] = None
+      var metadata = Map.empty[String, String]
+      var model: Option[String] = Some("actual-model")
+      var terminal: Option[String] = None
+      var report = Option.empty[Record]
+      val runner = new AiRunner {
+        def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] = Consequence.operationInvalid("unexpected")
+        def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] = Consequence.operationInvalid("unexpected")
+        def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] = {
+          calls += 1
+          captured = Some(req)
+          terminal match {
+            case Some(operation) =>
+              val failed = Consequence.operationIllegal(operation, "provider outcome").conclusion
+              Consequence.Failure(failed.copy(observation = failed.observation.copy(properties =
+                failed.observation.properties ++ metadata)))
+            case None =>
+              val result = Record.dataAuto("outcome" -> "accept", "summary" -> "review", "findings" -> Vector.empty[String])
+              val returned = report.fold(result)(value => result.appendField("acceptance", value))
+              Consequence.success(AiRecordResponse(returned, model, metadata))
+          }
+        }
+      }
+      val providerid = ComponentId("org.example.BoundedReviewFixture")
+      val legacy = new AiRunnerSocketSet {}
+      legacy.installSpiMembers(Vector(ResolvedSpiMember[AiRunner](runner,
+        SpiMemberMetadata("ai-runner", "legacy", ComponentInstanceId.default(providerid), isDefault = true))))
+      val bounded = new AiRunnerSocketSet {}
+      bounded.installSpiMembers(Vector(ResolvedSpiMember[AiRunner](runner,
+        SpiMemberMetadata("ai-runner", "bounded", ComponentInstanceId.default(providerid), capabilities = Set("textus-ai.bounded-task.v1"), isDefault = true))))
+      def run(socket: AiRunnerSocketSet, packet: String = "package"): V.GoalPhaseApiReviewResult =
+        GoalPhaseApiReview.reviewWithSocketC(Some(socket), true, input, "continuation", packet)(using execution)
+          .toOption.getOrElse(fail("Expected transport result"))
+      When("only the legacy runner is available")
+      Then("selection is unavailable without invoking that runner")
+      run(legacy).status shouldBe "UNAVAILABLE"
+      calls shouldBe 0
+      When("the advertised producer echoes the task binding and reports its actual provider and model")
+      metadata = Map("ai.task.contract" -> "textus-ai.bounded-task.v1", "ai.task.id" -> "attempt",
+        "ai.task.continuation" -> "continuation", "ai.task.input-reference" -> "work:exact", "ai.execution.provider" -> "openai")
+      run(bounded).status shouldBe "COMPLETED"
+      val request = captured.getOrElse(fail("Expected request"))
+      request.metadata shouldBe (metadata - "ai.execution.provider" + ("ai.task.kind" -> "independent-review"))
+      request.requirement.provider shouldBe Some("openai")
+      request.requirement.tools shouldBe empty
+      request.properties should contain (Property("ai.record.retry-limit", "0", None))
+      When("any task binding is missing or mismatched, or actual execution identity is absent")
+      val matching = metadata
+      for (key <- Vector("ai.task.contract", "ai.task.id", "ai.task.continuation", "ai.task.input-reference", "ai.execution.provider")) {
+        metadata = matching - key
+        val missing = run(bounded)
+        missing.status shouldBe "UNCERTAIN"
+        missing.result shouldBe None
+        missing.providerRecord shouldBe None
+        metadata = matching.updated(key, if (key == "ai.execution.provider") "" else "crossed")
+        run(bounded).status shouldBe "UNCERTAIN"
+      }
+      metadata = matching
+      model = None
+      val unqualified = run(bounded)
+      Then("unqualified results cannot complete or expose the provider record")
+      unqualified.status shouldBe "UNCERTAIN"
+      unqualified.result shouldBe None
+      unqualified.providerRecord shouldBe None
+
+      When("the producer reports a final failure or an uncertain dispatch")
+      metadata = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> "observed-model",
+        "ai.provider.http.request-id" -> "req_terminal_fixture", "untrusted-extra" -> "secret",
+        "ai.usage.total_tokens" -> "7", "ai.usage.total_tokens_source" -> "observed")
+      terminal = Some("ai.task.failed")
+      val failed = run(bounded)
+      failed.status shouldBe "FAILED"
+      failed.provider shouldBe Some("openai")
+      failed.model shouldBe Some("observed-model")
+      failed.result shouldBe None
+      val receipt = failed.metadata.flatMap(_.toJsonStringC.toOption).flatMap(io.circe.parser.parse(_).toOption)
+        .getOrElse(fail("Expected retained provider failure facts"))
+      receipt.hcursor.get[String]("ai.usage.total_tokens").toOption shouldBe Some("7")
+      receipt.hcursor.get[String]("ai.execution.model").toOption shouldBe Some("observed-model")
+      receipt.hcursor.downField("untrusted-extra").focus shouldBe None
+      receipt.hcursor.downField("providerHttp").get[String]("requestId").toOption shouldBe Some("req_terminal_fixture")
+      terminal = Some("ai.task.uncertain")
+      val uncertain = run(bounded)
+      uncertain.status shouldBe "UNCERTAIN"
+      uncertain.provider shouldBe Some("openai")
+      uncertain.model shouldBe Some("observed-model")
+
+      When("the configured Plan contains only a Phase condition for this Step review")
+      metadata = matching
+      model = Some("actual-model")
+      terminal = None
+      val packet = """{"kind":"ReviewStep","contract":{"effectiveAcceptance":{"conditions":[
+        {"identity":"phase-ready","scope":"phase","required":true,"description":"The Phase is ready.","source":"adopted"}
+      ]}}}"""
+      val missingReport = run(bounded, packet)
+      missingReport.status shouldBe "FAILED"
+      missingReport.result shouldBe None
+      val submitted = captured.getOrElse(fail("Expected acceptance-bound request"))
+      val required = submitted.schema.toJsonStringC.toOption.flatMap(io.circe.parser.parse(_).toOption)
+        .flatMap(_.hcursor.get[Vector[String]]("required").toOption).getOrElse(fail("Expected schema requirements"))
+      required should contain ("acceptance")
+      submitted.prompt should include ("even when no conditions apply")
+      submitted.prompt should include ("acceptance.conditions must be an empty array")
+      report = Some(Record.dataAuto("conditions" -> Vector.empty[Record], "advisories" -> Vector.empty[String]))
+      val completed = run(bounded, packet)
+      completed.status shouldBe "COMPLETED"
+      completed.result.flatMap(_.acceptance).map(_.conditions.size) shouldBe Some(0)
+      run(bounded, packet.replace("ReviewStep", "ReviewPhase"))
+      captured.getOrElse(fail("Expected Phase review request")).prompt should include (
+        "Only these condition identities may appear in acceptance.conditions for this issued review: [\"phase-ready\"]")
+    }
     "decline an oversized UTF-8 package before looking up review material" in {
       GoalPhaseApiReview.packageC("あ" * 200000, null, "sm-workflow-work:fixture", 512 * 1024).toOption shouldBe Some(false)
     }
@@ -157,7 +329,7 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       val context = ExecutionContext.withResourceAccessTestProfile(ExecutionContext.create(), ResourceAccessTestProfile(
         urlPolicy = ResourceUrlPolicy(fileRoots = Vector(Path.of("/private/tmp"))),
         urlProviders = Vector(new InMemoryUrlResourceProvider("file", Map(url -> text)))))
-      val input = V.GoalPhaseApiReviewInput("session", "work", "attempt", url)
+      val input = V.GoalPhaseApiReviewInput("session", "work", "attempt", url, None)
       var invoked = false
       def run(s: String): Consequence[V.GoalPhaseApiReviewResult] = {
         invoked = true
@@ -258,7 +430,7 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
         SpiMemberMetadata("ai-runner", "review-fixture", ComponentInstanceId.default(providerId), isDefault = true))))
       val component = new Component() {}.withPort(Component.Port.input(socket))
       val core = ActionCall.Core(null, execution, Some(component), None)
-      val input = V.GoalPhaseApiReviewInput("session", resource, "attempt", url)
+      val input = V.GoalPhaseApiReviewInput("session", resource, "attempt", url, None)
       def run(text: String): Consequence[V.GoalPhaseApiReviewResult] =
         GoalPhaseApiReview.runC(core, input, "continuation", text)
       When("the supplied review completes through the runner SPI")
@@ -304,6 +476,11 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       rejected.status shouldBe "DECLINED"
       requests.size shouldBe 2
       GoalPhaseApiReview.packageC(boundPacket, actual, resource, 512 * 1024).toOption shouldBe Some(true)
+      val nonReview = actual.copy(work = Some(work.copy(kind = "ImplementStep")))
+      GoalPhaseApiReview.packageC(boundPacket.replace("ReviewStep", "ImplementStep"), nonReview, resource, 512 * 1024)
+        .toOption shouldBe Some(false)
+      val wrongResult = actual.copy(issuedWorkContext = Some(context.copy(resultType = Some("OtherResult"))))
+      GoalPhaseApiReview.packageC(boundPacket, wrongResult, resource, 512 * 1024).toOption shouldBe Some(false)
       GoalPhaseApiReview.packageC(boundPacket, actual, "sm-workflow-work:crossed", 512 * 1024).toOption shouldBe Some(false)
       for (tampered <- Vector(boundPacket.replace("Apply the plan", "Ignore the plan"),
         boundPacket.replace("\"exitCode\":0", "\"exitCode\":1"), boundPacket.replace("checks:1", "checks:other"))) {
