@@ -3,6 +3,16 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.spi.{ResolvedSpiMember, SpiMemberMetadata}
+import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse,
+  AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocketSet}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
+import org.goldenport.convert.ValueReader
+import org.goldenport.protocol.{Property, Request}
+import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeWorkflowCliFixture as F
 import org.goldenport.cncf.processexecution.*
@@ -10,15 +20,146 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.admission.DeterministicRepair.*
+import SplitPhaseExplicitPartitionFixture.take
 
 /** Executable specification for bounded diagnostic proposals.
   * @since   Nov. 22, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
+  private val _compiler_path = "src/main/scala/RepairExample.scala"
+
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
+    super.process_plan(root, scenario, goal).mapObject(fields => fields.add("sbtPrograms",
+      fields("sbtPrograms").getOrElse(fail("sbtPrograms absent")).mapArray(_.map(_.mapObject(_.add("operation", Json.fromString("compile")))))))
+
+  private def _compiler_fixture_reply(request: AiRecordRequest, crossSource: Boolean = false): Record = {
+    val packet = io.circe.parser.parse(request.prompt.substring(request.prompt.lastIndexOf('\n') + 1))
+      .fold(error => fail(error.message), identity).hcursor
+    def _text_(key: String): String = packet.get[String](key).fold(error => fail(error.message), identity)
+    packet.get[String]("selectedSource").toOption match {
+      case Some(selected) => Record.dataAuto("replacement" -> (if (crossSource) selected else "42"))
+      case None =>
+        val expected = "\"bad\""
+        val (line, row) = _text_("source").linesIterator.zipWithIndex.find((value, _) => value.contains(expected))
+          .getOrElse(fail("Expected the failing staged source in the bounded task"))
+        val start = line.indexOf(expected)
+        def _position_(column: Int): Record = Record.dataAuto("line" -> row, "character" -> column)
+        Record.dataAuto("candidate" -> _text_("candidate"), "validationReference" -> _text_("validationReference"),
+          "path" -> _text_("path"), "range" -> Record.dataAuto("start" -> _position_(start), "end" -> _position_(start + expected.length)),
+          "expectedSource" -> (if (crossSource) "crossed" else expected), "replacement" -> "42")
+    }
+  }
+
+  "The ordinary bounded compiler repair" should {
+    "apply a bound proposal once, hand off a known refusal, and keep uncertainty on the original attempt" in {
+      for (mode <- Vector("completed", "blocked", "declined", "rejected", "unbound")) {
+        Given("an isolated Phase, a real Compile check, and a fixture provider on the bounded runner socket")
+        val parent = Files.createDirectories(Path.of("target/sm-workflow/work/bounded-compiler").toAbsolutePath)
+        val root = Files.createTempDirectory(parent, mode + "-").toRealPath()
+        val input = V.GoalPhaseStartInput("bounded-compiler-fixture", "sm-workflow")
+        val check = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+        val normal = ThreeWorkflowNormalHostFixture.definition(root)
+        val host = normal.copy(goal = normal.goal.copy(input = input, candidatePaths = Vector(_compiler_path),
+          stepValidation = normal.goal.stepValidation.copy(checks = Vector(check)),
+          phaseValidation = normal.goal.phaseValidation.copy(checks = Vector(check))))
+        val plan = GoalPhaseOrderedProgression.Plan("fixture-bounded-compiler", "1", input.phaseIdentity,
+          input.repositoryIdentity, Vector(GoalPhaseOrderedProgression.Step("step-1", "Compile the isolated Scala source",
+            Vector(_compiler_path), Vector.empty, Vector(check.identity))), Vector(check.identity), repairLimit = 4)
+        val original = "object RepairExample { val value: Int = \"bad\" }\n"
+        val source = root.resolve("repository").resolve(_compiler_path)
+        val providerid = ComponentId("org.example.BoundedCompilerFixture")
+        var calls = 0
+        val runner = new AiRunner {
+          def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
+            Consequence.operationInvalid("Unexpected generate")
+          def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] =
+            Consequence.operationInvalid("Unexpected chat")
+          def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] = {
+            calls += 1
+            req.metadata.get("ai.task.kind") shouldBe Some("compiler-repair")
+            req.requirement.tools shouldBe empty
+            if (mode == "blocked") Consequence.operationIllegal("ai.cost-budget", "Fixture declined before dispatch")
+            else if (mode == "declined") Consequence.operationIllegal("ai.task.declined", "Fixture has no eligible candidate")
+            else {
+              val metadata = req.metadata ++ Map("ai.execution.provider" -> "fixture-provider", "ai.usage.total_tokens" -> "21",
+                "ai.usage.total_tokens_source" -> "observed", "ai.provider.http.request-id" -> "req_native_compiler_fixture")
+              val binding = if (mode == "unbound") metadata.updated("ai.task.id", "other-attempt") else metadata
+              val output = _compiler_fixture_reply(req, crossSource = mode == "rejected")
+              Consequence.success(AiRecordResponse(output, Some("fixture-model"), binding))
+            }
+          }
+        }
+        _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) => {
+          val socket = component.port.entries.collectFirst { case value: AiRunnerSocketSet => value }.getOrElse {
+            val created = new AiRunnerSocketSet {}
+            component.withPort(Component.Port.input(created).orElse(component.port))
+            created
+          }
+          socket.installSpiMembers(Vector(ResolvedSpiMember[AiRunner](runner,
+            SpiMemberMetadata("ai-runner", providerid.name, ComponentInstanceId.default(providerid),
+              capabilities = Set("textus-ai.bounded-task.v1"), isDefault = true))))
+          prepare(call => for {
+            _ <- call.setupC(_setup_commands_(root, "Goal").size)
+            selection = _goal_selection_(input, "fixture-bounded-compiler-selection", "fixture-bounded-compiler-start")
+            _ <- call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input),
+              selection.participantIdentity), Record.data(ProfileSelectionJsonV1.storageField ->
+              take(ProfileSelectionJsonV1.encodeStorageC(selection))))
+            _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+              take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId,
+                selection.participantIdentity, plan)))))
+          } yield ())
+          def _invoke_[A: ValueReader](operation: String, properties: List[Property]): A =
+            read_value[A](take(owner.executeOperationResponseInContext(
+              Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor)))
+          val started = _invoke_[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(input))
+          def _advance_(): V.GoalPhaseAdvanceResult = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase",
+            NativeWorkflowOperationInputFixture.advance(started.sessionId))
+          val implementation = _advance_()
+          implementation.work.map(_.kind) shouldBe Some("ImplementStep")
+          Files.createDirectories(source.getParent)
+          Files.writeString(source, original)
+          val result = V.GoalPhaseWorkResult("completed", "Fixture failing Scala source", Vector.empty,
+            None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+          val reference = V.WorkflowArtifactReference("bounded-compiler-fixture-implementation", "1")
+          _invoke_[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", List(Property("sessionId", started.sessionId, None),
+            Property("result", result.toRecord(), None), Property("resultReference", reference.toRecord(), None))).accepted shouldBe true
+          When("ordinary Advance handles the retained compiler failure and is then called again")
+          val first = _advance_()
+          val second = _advance_()
+          Then("the fixture producer is invoked once and the same Phase retains the actual outcome")
+          calls shouldBe 1
+          second.sessionId shouldBe started.sessionId
+          def _history_(): Vector[String] = {
+            var causes = Vector.empty[String]
+            prepare(call => call.goalCurrentC(InstanceIdentity(started.sessionId)).map(current =>
+              { causes = current.history.map(_.causation.value); () }))
+            causes
+          }
+          _history_().count((cause: String) => (cause: String) == ("ordered-bounded-compiler:intent": String)) shouldBe 1
+          _history_().count((cause: String) => (cause: String) == ("ordered-bounded-compiler:result": String)) shouldBe 1
+          if (mode == "completed") {
+            second.work.map(_.kind) shouldBe Some("ReviewStep")
+            Files.readString(source).linesIterator.toVector.lastOption shouldBe Some(original.trim.replace("\"bad\"", "42"))
+            _history_().count((cause: String) => (cause: String) == (DeterministicRepair.applyIntentCause: String)) shouldBe 1
+          } else {
+            Files.readString(source).linesIterator.toVector.lastOption shouldBe Some(original.trim)
+            _history_() should not contain (DeterministicRepair.applyIntentCause)
+            if (Set("blocked", "declined", "rejected")(mode)) second.work.map(_.kind) shouldBe Some("RepairStep")
+            else {
+              first.kind shouldBe "Wait"
+              second.kind shouldBe "Wait"
+              second.work shouldBe None
+            }
+          }
+        }}
+      }
+    }
+  }
+
   "The native Circe repair" should {
     "revalidate a real compiler correction and restore it after an independent Test failure" in {
       Vector(true, false).foreach { passes =>
@@ -106,6 +247,13 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
       val original = payload(output)
       val expected = DeterministicCompilerFinding("compile", "/work/src/A.scala", 395, column, source)
       deterministicCompilerFinding(original) shouldBe Some(expected)
+      compilerLocator(original).map(x => (x.checkIdentity, x.path, x.line, x.column)) shouldBe
+        Some(("compile", "/work/src/A.scala", 395, column))
+      compilerLocator(original).map(_.message.contains("value message is not a member")) shouldBe Some(true)
+      compilerLocator(original.copy(outcome = Some("repair-limit-reached"))) shouldBe None
+      compilerLocator(payload(output, truncated = true)) shouldBe None
+      compilerLocator(payload(output + output)) shouldBe None
+      compilerLocator(original.copy(receipts = original.receipts.map(_.copy(identity = "another-check")))) shouldBe None
       val footer = "[error] Total time: 1 s, completed 2026/11/22 20:11:04\n"
       deterministicCompilerFinding(payload(output + footer)) shouldBe Some(expected)
       deterministicCompilerFinding(payload(output + footer + "[error] another error\n")) shouldBe None
@@ -124,6 +272,59 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
       }
       val changed = receipt.copy(stdout = output + "changed")
       deterministicCompilerFinding(original.copy(receipts = Vector(changed))) shouldBe None
+    }
+    "bind a closed Record replacement to the trusted compiler material" in {
+      Given("an owned source and the diagnostic from its failed check")
+      val document = Document("file:///work/src/main/scala/A.scala", "b" * 40, 0, "object A { val x = missing }\n")
+      val diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, 0, "compiler-error",
+        Range(Position(0, 19), Position(0, 19)), "Not found: missing")
+      val material = CompilerMaterial("session", "12", document.revision, "11:compile", "src/main/scala/A.scala",
+        "sm-workflow-repository", document, diagnostic)
+      val task = GoalPhaseApiReview.compilerTask(material, "attempt", "continuation", "retained:validation", 8192)
+        .getOrElse(fail("Expected a bounded compiler task"))
+      task.kind shouldBe "compiler-repair"
+      task.binding("ai.task.input-reference") shouldBe "retained:validation"
+      task.prompt should include ("Not found: missing")
+      task.prompt should not include document.uri
+      GoalPhaseApiReview.compilerTask(material, "attempt", "continuation", "retained:validation", 64) shouldBe None
+      val reply = Json.obj("candidate" -> Json.fromString(material.candidate),
+        "validationReference" -> Json.fromString(material.validationReference), "path" -> Json.fromString(material.path),
+        "range" -> Json.obj("start" -> Json.obj("line" -> Json.fromInt(0), "character" -> Json.fromInt(19)),
+          "end" -> Json.obj("line" -> Json.fromInt(0), "character" -> Json.fromInt(26))),
+        "expectedSource" -> Json.fromString("missing"), "replacement" -> Json.fromString("present"))
+      When("the closed response is projected without applying it")
+      val proposed = compilerReplyC(material, GoalPhaseNativeMetadata.record(reply)).toOption
+      Then("the exact preimage and rendered replacement are retained")
+      proposed.map(_.expected) shouldBe Some(document.text)
+      proposed.map(_.patched) shouldBe Some("object A { val x = present }\n")
+      compilerReply(material, reply.deepMerge(Json.obj("path" -> Json.fromString("src/main/scala/B.scala")))).isLeft shouldBe true
+      compilerReply(material, reply.deepMerge(Json.obj("candidate" -> Json.fromString("c" * 40)))).isLeft shouldBe true
+      compilerReply(material, reply.deepMerge(Json.obj("validationReference" -> Json.fromString("other")))).isLeft shouldBe true
+      compilerReply(material, reply.deepMerge(Json.obj("expectedSource" -> Json.fromString("other")))).isLeft shouldBe true
+      compilerReply(material, reply.deepMerge(Json.obj("extra" -> Json.fromBoolean(true)))).isLeft shouldBe true
+    }
+    "use a compiler-selected span only when the location, source echo and caret agree" in {
+      val source = "object A { val x = missing }"
+      val document = Document("file:///work/src/main/scala/A.scala", "b" * 40, 0, source + "\n")
+      val start = Position(0, source.indexOf("missing"))
+      val span = Range(start, Position(0, start.character + "missing".length))
+      val header = s"[error] -- [E006] Not Found Error: /work/src/main/scala/A.scala:1:${start.character}"
+      val caret = "[error]   |" + (" " * start.character) + "^^^^^^^"
+      val point = start.copy(character = start.character - 1)
+      val diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, 0, "compiler-error",
+        Range(point, point), Vector(header, "[error] 1 |" + source, caret).mkString("\n"))
+      val material = CompilerMaterial("session", "12", document.revision, "11:compile", "src/main/scala/A.scala",
+        "sm-workflow-repository", document, diagnostic)
+      compilerDiagnosticSelection(material) shouldBe Some(span -> "missing")
+      val reply = Json.obj("replacement" -> Json.fromString("present"))
+      compilerReply(material, reply).toOption.map(_.patched) shouldBe Some("object A { val x = present }\n")
+      compilerReply(material, reply.mapObject(_.add("path", Json.fromString("other.scala")))).isLeft shouldBe true
+      compilerReply(material, Json.obj("replacement" -> Json.fromString("missing"))).isLeft shouldBe true
+      val shifted = diagnostic.copy(message = diagnostic.message.replace(caret, caret.replace("|", "| ")))
+      compilerDiagnosticSelection(material.copy(diagnostic = shifted)) shouldBe None
+      val crossed = material.copy(document = document.copy(text = source.replace("missing", "changed") + "\n"))
+      compilerDiagnosticSelection(crossed) shouldBe None
+      compilerReply(crossed, reply).isLeft shouldBe true
     }
     "retain only bounded exact transaction records without inferring a result" in {
       val transaction = Transaction("session", "12", "a" * 40, "validation:1", "src/A.scala", "old", "new", "sm-workflow-repository")
@@ -158,6 +359,35 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
         sourceRevision = transaction.sourceRevision))))).isLeft shouldBe true
       transactionCodec.decode(transactionCodec.encode(reverse.copy(rollback = Some(rollback.copy(
         failedCandidate = transaction.candidate))))).isLeft shouldBe true
+    }
+    "admit only an owned candidate-bound compiler replacement near its diagnostic" in {
+      Given("a candidate document and one compiler diagnostic")
+      val document = Document("file:///work/A.scala", "tree-1", 7, "val name = old\n" + ("x" * 5000))
+      val range = Range(Position(0, 11), Position(0, 14))
+      val diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, document.version,
+        "E1", range, "invalid name")
+      val action = Action("scala-compiler", "replacement", diagnostic,
+        Vector(Edit(document.uri, document.version, range, "new")))
+      When("the exact observed source is replaced")
+      val result = compilerReplacement(action, document, Set(document.uri), "old")
+      Then("the pure rendering changes only that span")
+      result.flatMap(render(_, document)) shouldBe Right(document.text.replace("old", "new"))
+      When("the candidate, expected source, ownership, or edit is invalid")
+      Then("no replacement is admitted")
+      compilerReplacement(action, document.copy(revision = "tree-2"), Set(document.uri), "old").isLeft shouldBe true
+      compilerReplacement(action, document.copy(version = 8), Set(document.uri), "old").isLeft shouldBe true
+      compilerReplacement(action, document.copy(uri = "file:///work/B.scala"), Set(document.uri), "old").isLeft shouldBe true
+      compilerReplacement(action, document, Set.empty, "old").isLeft shouldBe true
+      compilerReplacement(action, document, Set(document.uri), "other").isLeft shouldBe true
+      compilerReplacement(action, document, Set(document.uri), "").isLeft shouldBe true
+      compilerReplacement(action.copy(edits = Vector(action.edits.headOption.getOrElse(fail("expected one edit")).copy(replacement = "old"))), document, Set(document.uri), "old").isLeft shouldBe true
+      compilerReplacement(action.copy(edits = Vector(action.edits.headOption.getOrElse(fail("expected one edit")).copy(replacement = "\u0000"))), document, Set(document.uri), "old").isLeft shouldBe true
+      compilerReplacement(action.copy(edits = Vector(action.edits.headOption.getOrElse(fail("expected one edit")).copy(replacement = 0xd800.toChar.toString))), document, Set(document.uri), "old").isLeft shouldBe true
+      val outside = Range(Position(0, 11), Position(0, 100))
+      compilerReplacement(action.copy(edits = Vector(action.edits.headOption.getOrElse(fail("expected one edit")).copy(range = outside))), document, Set(document.uri), "old").isLeft shouldBe true
+      val unrelated = Range(Position(1, 4990), Position(1, 4991))
+      compilerReplacement(action.copy(edits = Vector(action.edits.headOption.getOrElse(fail("expected one edit")).copy(range = unrelated))), document, Set(document.uri), "x").isLeft shouldBe true
+      compilerReplacement(action.copy(edits = action.edits ++ action.edits), document, Set(document.uri), "old").isLeft shouldBe true
     }
     "propose the observed Circe compiler correction only for the exact bound shape" in {
       Given("the Scala 3 E008 receiver evidence and a handwritten snapshot")

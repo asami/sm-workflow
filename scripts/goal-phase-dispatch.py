@@ -5,10 +5,10 @@
 # ///
 """Portable caller adapter. No provider discovery, workflow commands or writes.
 
-prepare emits exact collaboration.spawn_agent arguments. The caller invokes that
-ordinary tool and records its actual return with launched/complete. dispatch is
-also usable with an injected supported launch callback; it performs one launch,
-never a model probe. Retain the returned state unchanged across resume.
+prepare selects one exact agent launch or configured bounded review operation.
+The caller retains the selected state and records the actual execution start
+and result. dispatch also supports an injected agent launch callback. Neither
+preparation nor dispatch probes a model. Retain state unchanged across resume.
 """
 import argparse
 import copy
@@ -258,7 +258,8 @@ def selected_request(value):
     return request
 
 
-def prepare(request, mapping, capabilities, root=None, repository=None, request_artifact=None, supplied_review=None):
+def prepare(request, mapping, capabilities, root=None, repository=None, request_artifact=None, supplied_review=None,
+            bounded_api=None, retained_api_attempt=None, supplied_review_path=None):
     """Capabilities are caller-exposed facts, not guessed from this table."""
     original = request
     request = selected_request(request)
@@ -279,7 +280,7 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
     if disposition.get('placement') != policy['placement']:
         raise ValueError('Logical policy contradicts issued disposition')
     if policy['placement'] == 'INLINE':
-        if supplied_review is not None:
+        if supplied_review is not None or retained_api_attempt is not None:
             raise ValueError('Supplied review requires delegated independent execution')
         if disposition.get('independence') == 'REQUIRED' or alias(requirement, 'reviewRequired', 'review_required'):
             raise ValueError('Independent work cannot run inline')
@@ -321,6 +322,8 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
             'DeliveryAcceptance': 'implementation'}.get(work['kind'])
     if role is None:
         raise ValueError('Unsupported semantic role')
+    if bounded_api is not None and retained_api_attempt is not None:
+        raise ValueError('A retained API attempt cannot select a new invocation')
     if supplied_review is not None:
         if role != 'review' or not isinstance(supplied_review, dict):
             raise ValueError('Supplied package is only available to review')
@@ -331,6 +334,26 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
                                   supplied_review.get('limit'))
         if verified != supplied_review:
             raise ValueError('Supplied package differs from its issued review or measured bytes')
+    if bounded_api is not None and supplied_review is not None:
+        if not isinstance(bounded_api, dict) or set(bounded_api) != {'attemptIdentity', 'packagePath'}:
+            raise ValueError('Bounded API review requires the selected attempt identity and package path')
+        return api_prepare(original, supplied_review, packet['workResource'], bounded_api['attemptIdentity'],
+                           bounded_api['packagePath'], bounded_task=True)
+    api_route = mapping.get('suppliedReviewApi')
+    if api_route not in (None, 'bounded'):
+        raise ValueError('Unknown supplied review API policy in the caller mapping')
+    if (api_route == 'bounded' and supplied_review is not None
+            and supplied_review_path is not None and retained_api_attempt is None):
+        # The identity belongs to the issued work, independent of where its
+        # package bytes were retained. Changing a package is not a retry grant.
+        work = (alias(issued, 'runId', 'run_id'), packet['workResource'],
+                packet['continuationId'], alias(issued, 'expectedRevision', 'expected_revision'))
+        if not all(isinstance(value, str) and value and value == value.strip() for value in work):
+            raise ValueError('Exact issued review identity is required for bounded API selection')
+        digest = hashlib.sha256(json.dumps(work, ensure_ascii=False, separators=(',', ':')).encode('utf-8')).hexdigest()
+        return api_prepare(original, supplied_review, packet['workResource'], 'bounded-review-' + digest,
+                           supplied_review_path, bounded_task=True)
+    handoff = None if retained_api_attempt is None else api_agent_handoff(original, retained_api_attempt)
     root = Path(root) if root else Path(__file__).resolve().parents[1]
     if repository is None:
         raise ValueError('Caller must supply the admitted working repository path')
@@ -351,6 +374,8 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
                  requestArtifact=artifact, attempts=[], status='READY', launch=None)
     if supplied_review is not None:
         state['suppliedReview'] = copy.deepcopy(supplied_review)
+    if handoff is not None:
+        state['apiHandoff'] = handoff
     return resolve(state, capabilities)
 
 
@@ -534,8 +559,10 @@ def uncertain(state, agent_id, reason):
     return state
 
 
-def api_prepare(request, supplied_review, work_resource, attempt_identity, package_path):
-    """Prepare one explicit API operation; retaining this state is caller-owned."""
+def api_prepare(request, supplied_review, work_resource, attempt_identity, package_path, bounded_task=False):
+    """Prepare one API operation; retaining this state is caller-owned."""
+    if not isinstance(bounded_task, bool):
+        raise ValueError('Bounded API selection must be explicit')
     original = request
     request = selected_request(request)
     if not isinstance(supplied_review, dict) or not isinstance(supplied_review.get('packet'), dict):
@@ -547,18 +574,24 @@ def api_prepare(request, supplied_review, work_resource, attempt_identity, packa
     if (work_resource != packet['workResource'] or not isinstance(attempt_identity, str)
             or not attempt_identity.strip() or attempt_identity.strip() != attempt_identity):
         raise ValueError('Actual work resource and explicit attempt identity are required')
-    package_json = json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    canonical = json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     path = Path(package_path)
-    if not path.is_absolute() or path.read_bytes() != package_json.encode('utf-8'):
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
         raise ValueError('Retained package file must match canonical package bytes')
+    with path.open('rb') as stream:
+        if stream.read(len(canonical) + 1) != canonical:
+            raise ValueError('Retained package file must match canonical package bytes')
     issued = alias(request, 'issuedWorkContext', 'issued_work_context')
     session = alias(issued, 'runId', 'run_id')
     if not isinstance(session, str) or not session.strip():
         raise ValueError('Issued review session identity is required')
+    arguments = dict(sessionId=session, workResource=work_resource,
+                     attemptIdentity=attempt_identity, packageResource=path.as_uri())
+    if bounded_task:
+        arguments['boundedTask'] = True
     return dict(schema='sm-workflow.api-review-attempt.v1', status='PREPARED', request=copy.deepcopy(request),
                 suppliedReview=copy.deepcopy(supplied_review), operation='GoalPhaseService.runGoalPhaseApiReview',
-                arguments=dict(input=dict(sessionId=session, workResource=work_resource,
-                                          attemptIdentity=attempt_identity, packageResource=path.as_uri())))
+                arguments=dict(input=arguments))
 
 
 def api_started(state, arguments, invocation_identity):
@@ -574,6 +607,16 @@ def api_complete(state, invocation_identity, response):
     if (state.get('status') not in ('STARTED', 'UNCERTAIN') or state.get('invocationIdentity') != invocation_identity
             or not isinstance(response, dict)):
         raise ValueError('Only the actual API invocation may return')
+    _check_api_response(state, response)
+    if response['status'] == 'COMPLETED':
+        project_result(state['request'], response.get('result'))
+    state = copy.deepcopy(state)
+    state.update(status=response['status'] if response['status'] in ('UNCERTAIN', 'BLOCKED') else 'RETURNED',
+                 response=copy.deepcopy(response))
+    return state
+
+
+def _check_api_response(state, response):
     attempt = state['arguments']['input']['attemptIdentity']
     packet = state['suppliedReview']['packet']
     if (alias(response, 'attemptIdentity', 'attempt_identity') != attempt or
@@ -582,12 +625,32 @@ def api_complete(state, invocation_identity, response):
         raise ValueError('API response crosses the issued attempt or continuation')
     if response['status'] == 'BLOCKED' and response.get('message') not in ('ai.input-budget', 'ai.cost-budget'):
         raise ValueError('BLOCKED requires an attributable policy reason')
-    if response['status'] == 'COMPLETED':
-        project_result(state['request'], response.get('result'))
-    state = copy.deepcopy(state)
-    state.update(status=response['status'] if response['status'] in ('UNCERTAIN', 'BLOCKED') else 'RETURNED',
-                 response=copy.deepcopy(response))
-    return state
+
+
+def api_agent_handoff(request, state):
+    """Use the ordinary agent route after a known terminal outcome without a review."""
+    original = request
+    request = selected_request(request)
+    if (not isinstance(state, dict) or state.get('schema') != 'sm-workflow.api-review-attempt.v1'
+            or state.get('operation') != 'GoalPhaseService.runGoalPhaseApiReview' or state.get('request') != request):
+        raise ValueError('API handoff requires the original issued review')
+    arguments = state.get('arguments', {}).get('input', {})
+    response = state.get('response')
+    invocation = state.get('invocationIdentity')
+    if (arguments.get('boundedTask') is not True or not isinstance(invocation, str) or not invocation.strip()
+            or not isinstance(response, dict) or (state.get('status'), response.get('status')) not in
+            {('RETURNED', 'DECLINED'), ('RETURNED', 'UNAVAILABLE'), ('RETURNED', 'FAILED'), ('BLOCKED', 'BLOCKED')}):
+        raise ValueError('API handoff requires a retained bounded API failure, decline, or unavailability')
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    package = state.get('suppliedReview', {})
+    packet = package.get('packet', {})
+    if (review_package(original, packet.get('files'), True, packet.get('completenessSource'), package.get('limit')) != package
+            or arguments.get('sessionId') != alias(issued, 'runId', 'run_id')
+            or arguments.get('workResource') != packet.get('workResource')):
+        raise ValueError('API handoff crosses the selected review package')
+    _check_api_response(state, response)
+    return dict(status=response['status'], attemptIdentity=arguments['attemptIdentity'],
+                invocationIdentity=invocation, workResource=arguments['workResource'])
 
 
 def api_uncertain(state, invocation_identity, reason):

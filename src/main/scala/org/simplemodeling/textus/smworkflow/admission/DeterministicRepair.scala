@@ -17,7 +17,7 @@ import scala.util.Try
 
 /** Producer-neutral, revision-bound proposals. Admission does not apply edits.
   * @since   Nov. 22, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DeterministicRepair {
@@ -41,15 +41,15 @@ private[smworkflow] object DeterministicRepair {
     given Decoder[Rollback] = deriveDecoder
   }
   private val _transactionLimit = 1024 * 1024
-  private def _exact(value: String): Boolean = value != null && value.nonEmpty && value == value.trim &&
+  private def _exact(value: String): Boolean = Option(value).exists(_.nonEmpty) && value.nonEmpty && value == value.trim &&
     value.length <= 4096 && !value.exists(_.isControl)
-  def validTransaction(value: Transaction): Boolean = value != null &&
+  def validTransaction(value: Transaction): Boolean = Option(value).isDefined &&
     Vector(value.session, value.sourceRevision, value.candidate, value.validationReference).forall(_exact) &&
     GitObjectId.parseC(value.candidate).isSuccess &&
     _exact(value.workspace) && WorkspaceId.parseC(value.workspace).isSuccess &&
     value.sourceRevision.matches("[1-9][0-9]*") && BigInt(value.sourceRevision) < BigInt(Long.MaxValue) - 4 &&
     GoalPhasePurposeRepair.path(value.path) && value.path.endsWith(".scala") &&
-    value.expected != null && value.patched != null && value.expected.length <= _transactionLimit &&
+    Option(value.expected).isDefined && Option(value.patched).isDefined && value.expected.length <= _transactionLimit &&
     value.patched.length <= _transactionLimit && value.expected != value.patched &&
     !value.expected.contains('\u0000') && !value.patched.contains('\u0000') &&
     _valid_text(value.expected) && _valid_text(value.patched)
@@ -62,11 +62,11 @@ private[smworkflow] object DeterministicRepair {
       wire <- Option(value).toRight("transaction record absent")
       record <- wire.hcursor.get[TransactionRecord]("payload").left.map(_.message)
       _ <- Either.cond(encode(record) == wire && validTransaction(record.transaction) &&
-        record.rollback != null && record.outcome != null && record.outcome.forall(Set("updated", "conflict")) &&
+        Option(record.rollback).isDefined && Option(record.outcome).isDefined && record.outcome.forall(Set("updated", "conflict")) &&
         (record.operation match {
           case "apply" => record.rollback.isEmpty
-          case "rollback" => record.rollback.exists(value => value != null &&
-            value.sourceRevision != null && value.sourceRevision.toLongOption.exists(revision =>
+          case "rollback" => record.rollback.exists(value => Option(value).isDefined &&
+            Option(value.sourceRevision).isDefined && value.sourceRevision.toLongOption.exists(revision =>
               revision > record.transaction.sourceRevision.toLong && revision.toString == value.sourceRevision) &&
             _exact(value.failedCandidate) && GitObjectId.parseC(value.failedCandidate).isSuccess &&
             value.failedCandidate != record.transaction.candidate &&
@@ -173,7 +173,7 @@ private[smworkflow] object DeterministicRepair {
   def deterministicCompilerFinding(payload: GoalPhaseNativeValidation.Payload): Option[DeterministicCompilerFinding] = {
     val kinds = Set(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Kind.TestCompile,
       WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Kind.TestOnly)
-    if (payload == null || payload.outcome == null || !payload.outcome.exists(Set("repair-required", "repair-limit-reached")) ||
+    if (Option(payload).isEmpty || Option(payload.outcome).isEmpty || !payload.outcome.exists(Set("repair-required", "repair-limit-reached")) ||
         !GoalPhaseNativeValidation.repairable(payload)) None
     else payload.receipts.zip(payload.selected).lastOption.flatMap { (receipt, check) =>
       val process = receipt.processObservation
@@ -252,6 +252,19 @@ private[smworkflow] object DeterministicRepair {
         (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(path: String)
     } yield (finding, root, path, snapshot)
     request.fold(Consequence.success(Option.empty[Transaction])) { case (finding, root, path, snapshot) =>
+      _compiler_source_c(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
+        val reference = validation.record.revision.value.toString + ":" + finding.checkIdentity
+        val document = Document(root.resolve(path).toUri.toString, snapshot.tree, 0, base)
+        _compiler_patch(finding, document, reference).toOption.map(updated =>
+          Transaction(source.identity.value, source.revision.value.toString, snapshot.tree, reference,
+            path, base, updated, workspace)).filter(validTransaction)
+      })
+    }
+  }
+
+  // One read-only Git and workspace proof shared by deterministic and ordinary repair.
+  private def _compiler_source_c(declaration: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
+    root: Path, path: String, snapshot: GoalPhaseOrderedProgression.Snapshot): Consequence[Option[(String, String)]] = {
       val git = WorkflowManagedProcessExecution
       val workspace = RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")
       val observed = for {
@@ -281,16 +294,164 @@ private[smworkflow] object DeterministicRepair {
         worktree <- WorkflowFileExecution.readTextC(core, FileTarget(target), file)
         _ <- if (worktree.text.contains(base)) Consequence.unit
           else GoalPhaseNativeRun.invalid("deterministic compiler source differs in the working tree")
-        reference = validation.record.revision.value.toString + ":" + finding.checkIdentity
-        document = Document(root.resolve(path).toUri.toString, snapshot.tree, 0, base)
-        offer = _compiler_patch(finding, document, reference).map(updated =>
-          Transaction(source.identity.value, source.revision.value.toString, snapshot.tree, reference,
-            path, base, updated, workspace))
-      } yield offer.toOption.filter(validTransaction)
-      // These are optional, read-only proofs. Missing host selection or a changed
-      // observation leaves ordinary repair available and opens no write intent.
-      Consequence.success(observed.toOption.flatten)
+      } yield (base, workspace)
+      Consequence.success(observed.toOption)
+  }
+
+  /** Candidate-bound, read-only input for an ordinary compiler repair. */
+  final case class CompilerMaterial(session: String, sourceRevision: String, candidate: String,
+    validationReference: String, path: String, workspace: String, document: Document, diagnostic: Diagnostic)
+  final case class CompilerLocator(checkIdentity: String, path: String, line: Int, column: Int, message: String)
+
+  def compilerLocator(input: GoalPhaseNativeValidation.Payload): Option[CompilerLocator] = Option(input).flatMap { payload =>
+    if (!payload.outcome.contains("repair-required") ||
+        payload.dependency.nonEmpty || payload.dependencySource.nonEmpty || payload.sourceConsumption.nonEmpty ||
+        payload.dependencyExecutions.nonEmpty || !GoalPhaseNativeValidation.repairable(payload) || payload.receipts.size > payload.selected.size ||
+        !payload.receipts.zip(payload.selected).forall((receipt, check) => receipt.identity == check.identity)) None
+    else {
+      val failures = payload.receipts.zip(payload.selected).filterNot((receipt, check) =>
+        RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind))
+      failures match {
+        case Vector((receipt, check)) if Set(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Kind.TestCompile)(check.kind) &&
+            !check.carLint && receipt.group.isEmpty && RepositorySyncNativeMergeValidation.storedProductOutputValid(receipt) &&
+            receipt.processObservation.exists(p => !p.stdout.truncated && !p.stderr.truncated &&
+              WorkflowSbtCapture.text(p.stdout).textStatus == "complete" && WorkflowSbtCapture.text(p.stderr).textStatus == "complete") =>
+          val diagnosis = IncrementalSbtFailureDiagnosis.extract(receipt, check.kind, payload.sourceRevision, payload.candidate)
+          val errors = diagnosis.groups.filter(_.kind == "compiler-error")
+          if (diagnosis.omittedGroups != 0 || diagnosis.groups.exists(g => g.omittedOccurrences != 0) ||
+              diagnosis.groups.exists(g => g.kind.startsWith("test-") || g.kind == "suite-abort") ||
+              diagnosis.testExecution.status == "executed-tests-observed" ||
+              diagnosis.testExecution.testsRun.exists(_ > 0) || diagnosis.testExecution.completedSuites.exists(_ > 0) ||
+              errors.size != 1) None
+          else for {
+            error <- errors.headOption.filter(e => e.occurrenceCount == 1 && e.occurrences.size == 1)
+            occurrence <- error.occurrences.headOption.filter(_.omittedCharacters == 0)
+            location <- occurrence.location
+            column <- location.column.filter(_ > 0)
+            diagnostic = occurrence.context.split("\\n", -1).toVector
+              .drop(occurrence.firstLine - occurrence.contextFirstLine).filter(_.startsWith("[error]"))
+              .mkString("\n")
+            if location.line > 0 && location.file.endsWith(".scala") && diagnostic.nonEmpty
+          } yield CompilerLocator(check.identity, location.file, location.line, column, diagnostic)
+        case _ => None
+      }
     }
+  }
+
+  def compilerMaterialC(session: GoalPhaseNativeRun.Session, declaration: GoalPhaseNativeRun.Declaration,
+    core: ActionCall.Core, source: InstanceRecord, candidate: GoalPhaseNativeCandidate.Saved,
+    validation: GoalPhaseNativeValidation.Saved, owned: Set[String]): Consequence[Option[CompilerMaterial]] = {
+    val request = for {
+      finding <- compilerLocator(validation.payload)
+      root <- Try(Path.of(session.started.receipt.payload.value.root).normalize).toOption
+      reported <- Try(Path.of(finding.path)).toOption
+      if root.isAbsolute && reported.isAbsolute && reported.normalize == reported && reported.startsWith(root)
+      path = root.relativize(reported).toString
+      if GoalPhasePurposeRepair.path(path) && path.endsWith(".scala") &&
+        (path.startsWith("src/main/scala/") || path.startsWith("src/test/scala/")) && owned.contains(path)
+      snapshot <- candidate.payload.candidate
+      if (candidate.record.identity: InstanceIdentity) == (source.identity: InstanceIdentity) &&
+        _retained_prefix(candidate.record, validation.record) && _retained_prefix(validation.record, source) &&
+        validation.payload.candidate == snapshot && validation.payload.step == candidate.payload.step &&
+        candidate.payload.committedWork.isEmpty && candidate.payload.continuation.isEmpty &&
+        candidate.payload.dependencyAdmission.isEmpty && candidate.payload.dependency.isEmpty &&
+        candidate.payload.dependencyOrigin.isEmpty && candidate.payload.dependencyStaged.isEmpty &&
+        candidate.payload.dependencySourceDirection.isEmpty && candidate.payload.dependencySourceGuard.isEmpty &&
+        candidate.payload.dependencySourceStages.isEmpty && candidate.payload.dependencySourceCapture.isEmpty &&
+        candidate.payload.dependencySourceScope.isEmpty && candidate.payload.primaryPublicationRepair.isEmpty &&
+        validation.payload.dependency.isEmpty && validation.payload.dependencySource.isEmpty &&
+        validation.payload.sourceConsumption.isEmpty &&
+        (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(path: String)
+    } yield (finding, root, path, snapshot)
+    request.fold(Consequence.success(Option.empty[CompilerMaterial])) { case (finding, root, path, snapshot) =>
+      _compiler_source_c(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
+        val reference = validation.record.revision.value.toString + ":" + finding.checkIdentity
+        val document = Document(root.resolve(path).toUri.toString, snapshot.tree, 0, base)
+        val point = Position(finding.line - 1, finding.column - 1)
+        val diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, document.version,
+          "compiler-error", Range(point, point), finding.message)
+        val material = CompilerMaterial(source.identity.value, source.revision.value.toString, snapshot.tree,
+          reference, path, workspace, document, diagnostic)
+        Option.when((base + finding.message + path + reference + document.uri).getBytes(UTF_8).length <= _transactionLimit &&
+          validateSelection(document, diagnostic, Set(document.uri)).isRight)(material)
+      })
+    }
+  }
+
+  /** A source span is usable only when the raw Scala 3 location, echoed line
+    * and continuous caret agree with the exact staged document. Leave other
+    * diagnostic formats on the ordinary explicit-range path.
+    */
+  private[admission] def compilerDiagnosticSelection(material: CompilerMaterial): Option[(Range, String)] = {
+    val point = material.diagnostic.range.start
+    val header = raw"\[error\] -- .+ Error: .+\.scala:(\d+):(\d+) *".r
+    val source = raw"\[error\] +(\d+) *\|(.*)".r
+    val mark = raw"\[error\] +\|( *)(\^+) *".r
+    material.diagnostic.message.linesIterator.take(3).toVector match {
+      case Vector(header(headerLine, headerColumn), source(line, echoed), mark(indent, carets))
+          if headerLine == line && line.toIntOption.contains(point.line + 1) &&
+            headerColumn.toIntOption.contains(indent.length) && point.character + 1 == indent.length &&
+            carets.length <= 4096 &&
+            echoed.forall(c => c >= ' ' && c <= '~') =>
+        // Scala 3's rendered header uses the caret's zero-based column.
+        // The existing generic locator subtracts one for the diagnostic point.
+        for {
+          actual <- material.document.text.split("\n", -1).lift(point.line).map(_.stripSuffix("\r"))
+          if actual == echoed && carets.length <= actual.length - indent.length
+          start = Position(point.line, indent.length)
+          range = Range(start, start.copy(character = start.character + carets.length))
+          span <- _offsets(material.document.text, range).toOption
+        } yield range -> material.document.text.substring(span._1, span._2)
+      case _ => None
+    }
+  }
+
+  /** Closed response to a bound task. Apply only one checked replacement. */
+  def compilerReplyC(material: CompilerMaterial, reply: org.goldenport.record.Record): Consequence[Transaction] = for {
+    text <- reply.toJsonStringC
+    json <- io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text).fold(e => GoalPhaseNativeRun.invalid(e.message), Consequence.success)
+    transaction <- compilerReply(material, json).fold(GoalPhaseNativeRun.invalid, Consequence.success)
+  } yield transaction
+
+  def compilerReply(material: CompilerMaterial, reply: Json): Either[String, Transaction] = {
+    def fields(value: Json, expected: Set[String]): Either[String, Unit] =
+      Either.cond(value.asObject.exists(obj => obj.size == expected.size && obj.keys.forall(expected.contains)), (), "unexpected compiler reply fields")
+    def position(value: Json): Either[String, Position] = for {
+      _ <- fields(value, Set("line", "character"))
+      line <- value.hcursor.get[Int]("line").left.map(_.message)
+      character <- value.hcursor.get[Int]("character").left.map(_.message)
+    } yield Position(line, character)
+    val selection = compilerDiagnosticSelection(material) match {
+      case Some(span) =>
+        fields(reply, Set("replacement")).flatMap { _ =>
+          Either.cond(material.document.revision == material.candidate, span, "compiler reply crossed its trusted binding")
+        }
+      case None => for {
+        _ <- fields(reply, Set("candidate", "validationReference", "path", "range", "expectedSource", "replacement"))
+        candidate <- reply.hcursor.get[String]("candidate").left.map(_.message)
+        validation <- reply.hcursor.get[String]("validationReference").left.map(_.message)
+        path <- reply.hcursor.get[String]("path").left.map(_.message)
+        _ <- Either.cond(candidate == material.candidate && validation == material.validationReference && path == material.path &&
+          material.document.revision == material.candidate, (), "compiler reply crossed its trusted binding")
+        range <- reply.hcursor.get[Json]("range").left.map(_.message)
+        _ <- fields(range, Set("start", "end"))
+        start <- range.hcursor.get[Json]("start").left.map(_.message).flatMap(position)
+        end <- range.hcursor.get[Json]("end").left.map(_.message).flatMap(position)
+        expected <- reply.hcursor.get[String]("expectedSource").left.map(_.message)
+      } yield Range(start, end) -> expected
+    }
+    for {
+      selected <- selection
+      (range, expected) = selected
+      replacement <- reply.hcursor.get[String]("replacement").left.map(_.message)
+      action = Action(material.diagnostic.producer, "compiler-replacement", material.diagnostic,
+        Vector(Edit(material.document.uri, material.document.version, range, replacement)))
+      patch <- compilerReplacement(action, material.document, Set(material.document.uri), expected)
+      rendered <- render(patch, material.document)
+      transaction = Transaction(material.session, material.sourceRevision, material.candidate, material.validationReference,
+        material.path, material.document.text, rendered, material.workspace)
+      _ <- Either.cond(validTransaction(transaction), (), "invalid compiler transaction")
+    } yield transaction
   }
 
   private def _retained_prefix(record: InstanceRecord, source: InstanceRecord): Boolean =
@@ -311,7 +472,8 @@ private[smworkflow] object DeterministicRepair {
         "compiler echo differs from staged source")
       patch <- circeErrorMessage(CirceMessageFinding(diagnostic, reference, 3, "io.circe.Error", handwritten = true),
         document, Set(document.uri))
-      revised <- render(patch, document)
+      admitted <- compilerReplacement(patch.action, document, Set(document.uri), "message")
+      revised <- render(admitted, document)
     } yield revised
   }
 
@@ -337,7 +499,7 @@ private[smworkflow] object DeterministicRepair {
   def applyC(session: GoalPhaseNativeRun.Session, declaration: GoalPhaseNativeRun.Declaration,
     core: ActionCall.Core, source: InstanceRecord, transaction: Transaction,
     ownedPaths: Set[String]): Consequence[TransactionObservation] = for {
-    _ <- if (validTransaction(transaction) && ownedPaths != null && ownedPaths.contains(transaction.path) &&
+    _ <- if (validTransaction(transaction) && Option(ownedPaths).isDefined && ownedPaths.contains(transaction.path) &&
       (source.identity.value: String) == (transaction.session: String) && source.revision.value.toString == transaction.sourceRevision &&
       (transaction.workspace: String) == (RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"): String)) Consequence.unit
       else GoalPhaseNativeRun.invalid("deterministic transaction is not owned")
@@ -498,6 +660,36 @@ private[smworkflow] object DeterministicRepair {
     _ <- Either.cond(ordered.nonEmpty && ordered.zip(ordered.drop(1)).forall { case (a, b) => a._2 < b._1 }, (), "ambiguous edits")
   } yield ordered.reverse.foldLeft(current.text) { case (text, (start, end, replacement)) =>
     text.substring(0, start) + replacement + text.substring(end)
+  }
+
+  /** Admit one candidate-bound compiler replacement; this grants no write authority. */
+  def compilerReplacement(action: Action, document: Document, ownedUris: Set[String],
+    expectedSource: String): Either[String, Patch] = {
+    val limit = 4096
+    val rule = new Rule {
+      def accepts(document: Document, diagnostic: Diagnostic, action: Action): Boolean =
+        action.edits match {
+          case Vector(edit) =>
+            val spans = for {
+              selected <- _offsets(document.text, edit.range)
+              reported <- _offsets(document.text, diagnostic.range)
+            } yield (selected, reported)
+            spans.exists { case ((start, end), (diagnosticStart, diagnosticEnd)) =>
+              val distance = if (end < diagnosticStart) diagnosticStart - end
+                else if (diagnosticEnd < start) start - diagnosticEnd else 0
+              end > start && end - start <= limit && expectedSource.nonEmpty &&
+                expectedSource.length <= limit && document.text.substring(start, end) == expectedSource &&
+                edit.replacement != expectedSource && distance <= limit
+            }
+          case _ => false
+        }
+    }
+    for {
+      _ <- Either.cond(document.uri.endsWith(".scala") && !document.text.contains('\u0000') &&
+        _valid_text(expectedSource) && !expectedSource.contains('\u0000') &&
+        action.edits.forall(edit => !edit.replacement.contains('\u0000')), (), "invalid compiler replacement")
+      patch <- admit(action, document, ownedUris, Vector(rule), Limits(1, limit))
+    } yield patch
   }
 
   /** A trusted caller projects an actual review finding into this internal form;
