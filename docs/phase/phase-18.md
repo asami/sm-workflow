@@ -3,7 +3,7 @@
 Status: planned; no implementation or acceptance claimed.
 Date: 2026-10-28
 Owner: sm-workflow development
-Scheduled: after [Phase 27](phase-27.md) and before [Phase 23](phase-23.md) in the [current roadmap](README.md#adopted-development-priority--2026-11-22)
+Scheduled: after [Phase 7.2](phase-7.2.md) and before [Phase 23](phase-23.md) in the [current roadmap](README.md#adopted-development-priority--2026-11-22)
 Predecessor: [Phase 6.7](phase-6.7.md) shared Task/FIX route and existing GoalPhase/RepositorySync validation
 Producer: CNCF Phase 117 (required for W4–W5)
 Checklist: [P18 acceptance](phase-18-checklist.md)
@@ -25,7 +25,7 @@ This plan starts no execution and does not change live configuration.
 
 ## Roadmap position and dependencies
 
-The 2026-11-23 roadmap places Phase 18 after Phase 27 and before Phase 23.
+The 2026-11-24 roadmap places Phase 18 after Phase 7.2 and before Phase 23.
 
 The user selected Phase 18 immediately after [Phase 9](phase-9.md) on
 2026-11-11: **7 -> 11.1 -> 8 -> 8.1 -> 9 -> 18** after the Journal split.

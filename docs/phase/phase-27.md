@@ -93,4 +93,4 @@ an authorized switch to OpenAI after a known unresolved result.
 
 ## Scheduling
 
-Follow [Phase 26](phase-26.md), the functional prerequisite, and precede [Phase 18](phase-18.md) in the [current development priority](README.md#adopted-development-priority--2026-11-22). Use applicable Phase 13 usage observations where available for routing evaluation. Planning does not start a Workflow Session or grant changes in producer repositories.
+Follow [Phase 26](phase-26.md), the functional prerequisite, and precede [Phase 20](phase-20.md) in the [current development priority](README.md#adopted-development-priority--2026-11-22). Use applicable Phase 13 usage observations where available for routing evaluation. Planning does not start a Workflow Session or grant changes in producer repositories.
