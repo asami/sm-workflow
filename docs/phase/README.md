@@ -1,5 +1,13 @@
 # sm-workflow incremental-use roadmap
 
+## Phase 7.2 temporary dependency worktree retirement — 2026-11-24
+
+[Phase 7.2](phase-7.2.md) and its [checklist](phase-7.2-checklist.md) plan
+RepositorySync-owned retirement after verified remote synchronization, including
+later manual sync after an automatic failure. Local Phase closure and
+[Phase 7.1](phase-7.1.md)'s source-project hold are unchanged. No execution or
+change of adopted priority is implied.
+
 ## Phase 7.1 source-project integration on hold — 2026-11-23
 
 [Phase 7.1](phase-7.1.md) and its [checklist](phase-7.1-checklist.md) are on hold
