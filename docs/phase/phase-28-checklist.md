@@ -40,7 +40,16 @@ issues remain open.
 | Condition | Review disposition | Remaining work |
 | --- | --- | --- |
 | P28-02 | Not evaluated | Establish comparable operational baselines for AI repair and lint. |
-| P28-02a | Unsatisfied (issue-13) | Connect the Scala Metals adapter to the runtime and qualify the connected provider. |
-| P28-05 | Unsatisfied (issue-14) | Connect deterministic formatting and lint repair to native patch application and revalidation. |
+| P28-02a | Unsatisfied (issue-13) | Connect the Scala Metals adapter to the runtime in [Phase 28.1](phase-28.1.md#p281-01--connect-metals-to-ordinary-repair), then qualify it on actual projects. |
+| P28-05 | Unsatisfied (issue-14) | Connect deterministic formatting and lint repair to native patch application and revalidation in [Phase 28.1](phase-28.1.md#p281-02--apply-deterministic-formatting-and-lint-corrections). |
 | P28-08 | Not evaluated | Verify real Scala 2.12 and Scala 3 projects and their producer interfaces. |
 | P28-09 | Not evaluated | Measure operational repair success, latency, and AI calls avoided. |
+
+## Delivery follow-up
+
+The [Metals delivery follow-up](phase-28.md#metals-delivery-follow-up--2026-11-23)
+records the clarified split. The [Phase 28.1 checklist](phase-28.1-checklist.md)
+tracks implementation and packaged acceptance for the two open issues. The
+conditions above retain their original release-time disposition. After the
+follow-up release, confirm actual project support and record supported
+versions, selected actions, and observed limitations.

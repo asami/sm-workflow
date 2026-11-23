@@ -3,7 +3,7 @@
 Status: closed
 Closed: 2026-11-22 (Asia/Tokyo)
 Planned: 2026-11-22 (Asia/Tokyo)
-Scheduled: immediately after Phase 24; followed by [Phase 25](phase-25.md), then Phases 18, 23 and 22
+Scheduled: immediately after Phase 24, followed by [Phase 25](phase-25.md), [Phase 28.1](phase-28.1.md), then Phases 18, 23 and 22
 Depends on: Phase 24 practical API-credit route
 Checklist: [Phase 28 acceptance](phase-28-checklist.md)
 Decision: [Deterministic-first development strategy](../journal/2026/11/2026-11-22-deterministic-first-auto-fix-strategy.md)
@@ -24,6 +24,15 @@ the [deferred checklist](phase-28-checklist.md#deferred-from-the-local-release)
 so this qualified path could be released locally. The two incomplete
 implementations and three unmeasured or unverified areas retain their original
 review dispositions. Repository synchronization is deferred.
+
+## Metals delivery follow-up — 2026-11-23
+
+The user clarified that verification on the actual deployment follows delivery
+of a working implementation. [Phase 28.1](phase-28.1.md) owns the unfinished
+Metals runtime connection (P28-02a) and formatting/lint correction (P28-05),
+including packaged acceptance before release. The Plan 6 deferral and existing
+local release remain historical records. Actual-project qualification and
+operational measurements follow delivery.
 
 ## Goal
 Reduce AI calls, repair latency and unnecessary edits by applying proven programmatic compiler-diagnostic and lint fixes before AI repair. Preserve existing Candidate–Admission, workspace permissions, finite retries, test evidence and Take Over. No AI inference is permitted in the deterministic stage.

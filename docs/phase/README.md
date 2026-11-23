@@ -2,18 +2,20 @@
 
 ## Adopted development priority — 2026-11-22
 
-The user placed Phase 25 immediately after Phase 28. The current priority is:
+The user placed Phase 25 immediately after Phase 28 and added Phase 28.1
+between Phase 25 and Phase 18 on 2026-11-23. The current priority is:
 
 1. **Phase 24** — formal local release complete; operational review and patch qualification follow the release.
 2. **Phase 28** — deterministic diagnostics and lint auto-fix.
 3. **Phase 25** — textus-ai Task API and routine OpenAI API use for eligible development work.
-4. **Phase 18** — tool-neutral validation and Flutter integration.
-5. **Phase 23** — strategic Phase convergence.
-6. **Phase 22** — runtime stabilization and difficult continuations.
-7. **Phase 17** — Task and Standalone Fix extensions (elevated priority).
-8. **Phase 21** — recursive repository catch-up.
-9. **Phase 15** — development workspace operations.
-10. **Phase 14** — development investigation.
+4. **[Phase 28.1](phase-28.1.md)** — Scala Metals runtime connection and native formatting/lint auto-fix.
+5. **Phase 18** — tool-neutral validation and Flutter integration.
+6. **Phase 23** — strategic Phase convergence.
+7. **Phase 22** — runtime stabilization and difficult continuations.
+8. **Phase 17** — Task and Standalone Fix extensions (elevated priority).
+9. **Phase 21** — recursive repository catch-up.
+10. **Phase 15** — development workspace operations.
+11. **Phase 14** — development investigation.
 
 **Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), 13/20 (AI usage measurement and summaries), 26/27 (multi-CLI and cross-route cost-aware expansion), and 16 (experimentation). Deferral is scheduling only: preserve all scope, ownership, dependencies and acceptance conditions. [Phase 29](phase-29.md) retains its dependency on Phase 23.
 

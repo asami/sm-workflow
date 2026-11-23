@@ -3,7 +3,7 @@
 Status: planned
 Planned: 2026-11-18 (Asia/Tokyo)
 Allocated: Phase 25 on 2026-11-19; unpublished API Phase 23 renamed
-Scheduled: immediately after [Phase 28](phase-28.md), before [Phase 18](phase-18.md)
+Scheduled: immediately after [Phase 28](phase-28.md), followed by [Phase 28.1](phase-28.1.md)
 Checklist: [Phase 25 delivery ledger](phase-25-checklist.md)
 Design input: [textus-ai Task API integration proposal](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/2026-11-18-textus-ai-task-api-integration.md)
 Decision: [allocation record](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md)
