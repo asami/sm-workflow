@@ -1,5 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import java.nio.file.Path
+import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import cats.free.Free
@@ -17,7 +19,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -126,12 +128,13 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation result differs from its exact selected target or operation")
   } yield result
 
-  def discoveryBuildAttemptC(core: ActionCall.Core, workspaceIdentity: String): Consequence[SbtExecutionAttempt] = for {
+  def discoveryBuildAttemptC(core: ActionCall.Core, workspaceIdentity: String,
+    expectedWorkspaceRoot: Option[Path] = None): Consequence[SbtExecutionAttempt] = for {
     workspace <- WorkspaceId.parseC(workspaceIdentity)
     target <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationDiscovery = true))
     execution = new Execution(core)
-    result <- execution.runSbtAttemptC(execution.prepareDiscovery(target))
-    _ <- attemptTargetC(result, target, SbtOperation.TestCompile)
+    result <- _validation_attempt_c(core, target, SbtOperation.TestCompile, expectedWorkspaceRoot)(
+      execution.runSbtAttemptC(execution.prepareDiscovery(target)))
   } yield result
 
   def validationBatchAttemptC(core: ActionCall.Core, workspaceIdentity: String,
@@ -149,18 +152,21 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     workspaceIdentity: Option[String] = None,
     estimate: Option[SbtValidationEstimate] = None,
     lintBase: Option[String] = None,
-    lintCandidateWorkspace: Option[String] = None): Consequence[SbtExecutionAttempt] =
-    repositoryValidationTargetedAttemptC(core, ordinal, kind, workspaceIdentity, estimate, lintBase, lintCandidateWorkspace)
+    lintCandidateWorkspace: Option[String] = None,
+    expectedWorkspaceRoot: Option[Path] = None): Consequence[SbtExecutionAttempt] =
+    repositoryValidationTargetedAttemptC(core, ordinal, kind, workspaceIdentity, estimate, lintBase,
+      lintCandidateWorkspace, expectedWorkspaceRoot)
       .map(_._2)
 
   private[admission] def repositoryValidationTargetedAttemptC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind, workspaceIdentity: Option[String],
     estimate: Option[SbtValidationEstimate] = None, lintBase: Option[String] = None,
-    lintCandidateWorkspace: Option[String] = None): Consequence[(SbtTarget, SbtExecutionAttempt)] = for {
+    lintCandidateWorkspace: Option[String] = None,
+    expectedWorkspaceRoot: Option[Path] = None): Consequence[(SbtTarget, SbtExecutionAttempt)] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
-    baseTarget <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationEstimate = estimate))
+    basetarget <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationEstimate = estimate))
     lint = if (kind == WorkflowSbtValidation.Kind.FixCheck)
       WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase, lintCandidateWorkspace)
       else Consequence.success(Option.empty[SbtLintInput])
@@ -170,16 +176,17 @@ private[smworkflow] object WorkflowManagedProcessExecution {
         // Preparation failed before any SBT dispatch. Retain the existing
         // admission-rejection alternative, never a process receipt or UNKNOWN
         // SBT effect inferred from a configuration/parser failure.
-        Consequence.success((baseTarget, SbtExecutionAttempt.AdmissionRejected(baseTarget, operation, reason)))
+        Consequence.success((basetarget, SbtExecutionAttempt.AdmissionRejected(basetarget, operation, reason)))
       case Consequence.Success(input) =>
-        val target = baseTarget.copy(lintInput = input)
+        val target = basetarget.copy(lintInput = input)
         val execution = new Execution(core)
-        execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind)).flatMap(result =>
-          attemptTargetC(result, target, operation).map(_ => target -> result))
+        _validation_attempt_c(core, target, operation, expectedWorkspaceRoot)(
+          execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))).map(result => target -> result)
     }
   } yield result
 
-  def validationOperationAttemptC(core: ActionCall.Core, bound: B.BoundOperation): Consequence[SbtExecutionAttempt] = for {
+  def validationOperationAttemptC(core: ActionCall.Core, bound: B.BoundOperation,
+    expectedWorkspaceRoot: Option[Path] = None): Consequence[SbtExecutionAttempt] = for {
     _ <- if (core != null && core.executionContext != null && bound != null && bound.operation != null &&
         bound.operation.selector != null && bound.intent != null && bound.intent.target != null &&
         bound.intent.target.workspaceId != null.asInstanceOf[WorkspaceId] && bound.intent.target.scenario != null &&
@@ -189,9 +196,34 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     _ <- WorkspaceId.parseC(bound.intent.target.workspaceId.value)
     target <- RepositorySyncConsumedInputs.targetC(core, bound.intent.target)
     execution = new Execution(core)
-    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, WorkflowSbtValidation.Kind.TestOnly))
-    _ <- attemptTargetC(result, target, bound.intent.operation)
+    result <- _validation_attempt_c(core, target, bound.intent.operation, expectedWorkspaceRoot)(
+      execution.runSbtAttemptC(execution.prepareSbtAttempt(target, WorkflowSbtValidation.Kind.TestOnly)))
   } yield result
+
+  private[admission] def validationWorkspaceRootC(expected: Path, actual: String): Consequence[Unit] =
+    if (expected != null && expected.isAbsolute && expected == expected.normalize && actual == expected.toString)
+      Consequence.unit
+    else Consequence.stateConflict("Workflow validation workspace does not match the selected candidate checkout")
+
+  private def _validation_attempt_c(core: ActionCall.Core, target: SbtTarget, operation: SbtOperation,
+    expected: Option[Path])(run: => Consequence[SbtExecutionAttempt]): Consequence[SbtExecutionAttempt] = {
+    val binding = expected.fold(Consequence.unit) { root =>
+      for {
+        plan <- RepositorySyncPurposeMaterializationContinuation.hostPlanC(core)
+        rows <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => Consequence.stateConflict(e.message), Consequence.success)
+        actual <- rows.filter(_.hcursor.get[String]("identity").contains(target.workspaceId.value)) match {
+          case Vector(row) => row.hcursor.get[String]("root").fold(e => Consequence.stateConflict(e.message), Consequence.success)
+          case _ => Consequence.stateConflict("Workflow validation requires one fixed workspace binding for " + target.workspaceId.value)
+        }
+        _ <- validationWorkspaceRootC(root, actual)
+      } yield ()
+    }
+    val attempt = binding match {
+      case Consequence.Success(_) => run
+      case Consequence.Failure(reason) => Consequence.success(SbtExecutionAttempt.AdmissionRejected(target, operation, reason))
+    }
+    attempt.flatMap(result => attemptTargetC(result, target, operation).map(_ => result))
+  }
 
   private[admission] def validationOperation(kind: WorkflowSbtValidation.Kind): SbtOperation = kind match {
     case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile

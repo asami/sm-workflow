@@ -120,6 +120,10 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     }
     result.get
   }
+
+  private[admission] def retainedValidationHistory(scenario: F.Scenario, sessionId: String): Map[String, String] =
+    _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, sessionId)).toMap
+
   /** Extend only this fresh specification's business Plan and ordinary host
     * declarations before Start; no native Session or history exists yet.
     */

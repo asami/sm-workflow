@@ -32,7 +32,7 @@ import GoalPhaseCanonicalCheckConsumption as Q
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -694,13 +694,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else runCheckC(check, index, store.initial.dependency.nonEmpty || store.initial.dependencySource.nonEmpty || store.dependencyChain.exists(_.accepted.nonEmpty))(
         () => store._check_progress_c(current, index), () => store.preconditionsC,
         store.saveC, store.acknowledgeC,
-        selected => if (selected.kind == WorkflowSbtValidation.Kind.TestCompile &&
+        selected => {
+          val expected = Option.when(selected.dependency.isEmpty)(store.repositoryRoot)
+          if (selected.kind == WorkflowSbtValidation.Kind.TestCompile &&
             store.requested.exists(_.metadata.exists(_.buildCheckIdentity.contains(selected.identity))))
-          E.discoveryBuildAttemptC(store.core, "sm-workflow-repository-validation-" + selected.ordinal)
+            E.discoveryBuildAttemptC(store.core, "sm-workflow-repository-validation-" + selected.ordinal, expected)
           else if (selected.operation.isEmpty) _workspace_c(selected, store.initial)
-          .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace,
-            lintBase = Some(if (store.whole) store.controller.base.head else store.base.head)))
-          else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _)),
+            .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace,
+              lintBase = Some(if (store.whole) store.controller.base.head else store.base.head), expectedWorkspaceRoot = expected))
+          else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _, expected))
+        },
         payload => store.evidenceC(payload).map(_ => ()))
     }}
 
@@ -1048,7 +1051,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       saved <- _chain_saved_c(Saved(selectionRecord.getOrElse(frontier), initial))
       current <- _actual_record_c
       next <- GoalPhaseNativeHistory.nextC(current, saved.record)
-      bounded <- readThrough.filter(_ == saved.record).filter(_ => completedMetadataPreparationPrefix(saved))
+      bounded <- readThrough.filter(_ == saved.record).filter(_ => completedDevelopmentReconstructionPrefix(saved) &&
+        (!completedPrelaunchRejectionPrefix(saved) || next.exists(_.causation.value == GoalPhaseDevelopmentReconstruction.causation)))
         .fold(Consequence.success(false))(record => GoalPhaseNativeHistory.prefixC(current, record.revision).map(_ == record))
       _ <- if (current == saved.record || next.exists(_.causation.value ==
           "ordered-validation-repair-adoption:" + saved.record.revision.value) || bounded) Consequence.unit
@@ -1359,6 +1363,23 @@ private[smworkflow] object GoalPhaseNativeValidation {
       successful(saved.payload.receipts, saved.payload.selected) &&
       saved.payload.stopped.isEmpty && saved.payload.admissionFailures.isEmpty &&
       saved.payload.uncertainties.isEmpty && saved.payload.newAttempts.isEmpty
+
+  /** The authenticated native chain ended at a typed result that never launched its check. */
+  private[admission] def completedPrelaunchRejectionPrefix(saved: Saved): Boolean =
+    continuable(saved) && {
+      val payload = saved.payload
+      val index = payload.receipts.size
+      payload.uncertainties.isEmpty && payload.newAttempts.isEmpty &&
+        successful(payload.receipts, payload.selected) && payload.receipts.forall(receipt =>
+          receipt.termination == "exited" && receipt.exitCode.contains(0) &&
+            (receipt.processObservation.nonEmpty || receipt.carLint.nonEmpty)) &&
+        payload.admissionFailures.lastOption.exists(failure =>
+          payload.selected.lift(index).exists(_.identity == failure.checkIdentity) &&
+            saved.record.causation.value == "ordered-validation:" + _attempt_key("result", index, failure.attempt))
+    }
+
+  private[admission] def completedDevelopmentReconstructionPrefix(saved: Saved): Boolean =
+    completedMetadataPreparationPrefix(saved) || completedPrelaunchRejectionPrefix(saved)
 
   /** The Store has admitted the actual chain; only its missing mechanical outcome may settle. */
   private[admission] def completedFailurePending(saved: Saved): Boolean =

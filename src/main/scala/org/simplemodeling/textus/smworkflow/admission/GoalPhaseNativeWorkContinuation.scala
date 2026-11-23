@@ -4,6 +4,7 @@ import io.circe.generic.auto.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.ComponentCreate
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeIdentity, *}
@@ -47,7 +48,7 @@ import RepositorySyncManagedGitObservation as G
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -381,12 +382,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
     } yield result
 
-    /** Reconstruction alone may use the actual completed preparation prefix;
+    /** Reconstruction alone may use an authenticated completed validation prefix;
       * ordinary validation keeps its original check-source binding.
       */
     private def _development_frontier(source: F.Session, cursor: Cursor): Cursor =
       if (source.current.suspension.isEmpty && cursor.validation.exists(saved =>
-          saved.record == source.current && GoalPhaseNativeValidation.completedMetadataPreparationPrefix(saved)))
+          saved.record == source.current && GoalPhaseNativeValidation.completedDevelopmentReconstructionPrefix(saved)))
         cursor.copy(from = source.current)
       else cursor
 
@@ -427,6 +428,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             cursor.controller.closureIntent.toVector.map(identity => "Unresolved native closure intent " + identity +
               "; a requirements choice cannot authorize commit, publication or push replay."))
         _ <- X.requireReconstructibleC(assessment)
+        prelaunch = cursor.validation.filter(saved => saved.record == cursor.from &&
+          GoalPhaseNativeValidation.completedPrelaunchRejectionPrefix(saved))
+        _ <- prelaunch.fold(Consequence.unit)(saved =>
+          _prelaunch_reconstruction_c(core, cursor, saved.payload.candidate, documents.captured.plan, observed, assessment))
         reuse = unchanged && assessment.retainEvidence && uncertainty.isEmpty &&
           cursor.developmentReconstruction.nonEmpty
         result <- if (reuse) _wait_cursor_c(cursor,
@@ -453,6 +458,31 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         } yield output
       } yield result
     } yield result
+
+    private def _prelaunch_reconstruction_c(core: ActionCall.Core, cursor: Cursor, candidate: O.Snapshot,
+      proposed: O.Plan, observed: X.Observation, assessment: X.Assessment): Consequence[Unit] = {
+      val state = cursor.controller
+      if (proposed != state.plan || assessment.reasons.nonEmpty || candidate.head != observed.head ||
+          !state.candidate.contains(candidate) || !cursor.candidate.exists(_.payload.candidate.contains(candidate)))
+        F.invalid("Validation reconstruction requires the same Plan, retained candidate and observed HEAD")
+      else if (!assessment.freshCapture)
+        F.invalid("Matching source bytes cannot establish the checkout used by retained validation receipts. " +
+          "Validation reconstruction requires an owned source change for fresh capture")
+      else {
+        val owned = state.plan.steps.lift(state.cursor).fold(state.plan.phaseOwnedPaths)(_.ownedPaths)
+        def _owned_(path: String): Boolean = owned.exists(GoalPhaseNativeCandidateBoundary.covers(_, path))
+        val worktree = observed.dirty.exists(path => Set("M", "A", "D", "R", "C", "T", "?")(path.worktree) &&
+          (_owned_(path.path) || path.renamedFrom.exists(_owned_)))
+        val changed = if (worktree || candidate.tree == observed.indexTree) Consequence.success(worktree)
+          else for {
+            before <- GitObjectId.parseC(candidate.tree)
+            after <- GitObjectId.parseC(observed.indexTree)
+            changes <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
+          } yield changes.exists(change => _owned_(change.path.value))
+        changed.flatMap(value => if (value) Consequence.unit
+          else F.invalid("Validation reconstruction has no changed source in the selected ownership"))
+      }
+    }
 
     /** Eligibility comes only from a retained formal normalization failure and
       * its exact native source. No diagnostic string supplies authority.
