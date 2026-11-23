@@ -207,19 +207,14 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, call.executionContext)
           _ <- if (payload.state.asJson == work.state.asJson && work.session == current.identity.value && work.kind == payload.state.stage && payload.state.input.task.nonEmpty)
             Consequence.unit else N.invalid("Result crosses the retained Task request")
+          _ <- if (payload.supplementalOwnedPaths.isEmpty || !payload.state.semanticReference.contains(submitted.resultReference))
+            Consequence.unit else N.invalid("A retained semantic result cannot complete the new WorkOrder")
           hydratedWork = work.copy(state = payload.state)
           _ <- S.admitResultC(hydratedWork, submitted.result.value)
           _ <- if (submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit
             else N.invalid("Actual semantic completion requires its worker identity, without inventing execution placement")
-          _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call) else for {
-            observation <- RepositorySyncManagedGitObservation.observeC(call)
-            root <- RepositorySyncManagedGitObservation.rootC(call)
-            _ <- if (root == payload.root && observation.branch == payload.branch && observation.head == payload.baseHead &&
-              observation.dirty.filterNot(d => S.owned(d.path, payload.state.input.ownedPaths)) == payload.unrelated.getOrElse(Vector.empty) &&
-              observation.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(d =>
-                !d.unmerged && S.permitted(d.path, payload.state.input) && d.renamedFrom.forall(S.permitted(_, payload.state.input))))
-              Consequence.unit else N.invalid("Semantic completion changed HEAD or exceeded ownership")
-          } yield ()
+          _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call)
+            else N.implementationFreshC(payload, call)
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
             _ <- h.review.map(_.admitStandaloneC(call, hydratedWork, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))

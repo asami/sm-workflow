@@ -9202,6 +9202,12 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            },
+            {
+              "name": "supplementManagedInventory",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

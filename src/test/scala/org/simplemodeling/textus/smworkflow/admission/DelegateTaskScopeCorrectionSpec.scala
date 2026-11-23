@@ -162,7 +162,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         val before = _state(old)
         val continuation = old.issuedWorkContext.get.continuationId
         When("the same pending Repair is described with necessary additional literal paths")
-        val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector.empty)
+        val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector.empty, None)
         def _describe_(input: V.DelegateTaskScopeCorrectionDescriptionInput) =
           _call_("describeDelegateTaskScopeCorrection", List(Property("input", input, None)))
         val description = read_value[V.DelegateTaskScopeCorrectionView](take(_describe_(descriptioninput)))
@@ -197,7 +197,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         }
         When("a condition timing change is proposed through the Repair inventory route")
         val timing = _call_("describeDelegateTaskScopeCorrection", List(Property("input",
-          V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector("behavior")), None)))
+          V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector("behavior"), None), None)))
         Then("inventory permission does not expand to changing the initial condition timing")
         timing.isSuccess shouldBe false
         Given("the exact correction selected independently by the fixture Human")
@@ -396,7 +396,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         When("the public operation describes this exact still-pending issue.")
         val description = _value_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
           List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation,
-            _added, Vector.empty), None)))
+            _added, Vector.empty, None), None)))
         Then("description alone grants no correction or execution authority.")
         description.outcome shouldBe "decision-required"
         _advance_().issuedWorkContext shouldBe old.issuedWorkContext
@@ -479,7 +479,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         val untrustedresult = owner.executeOperationResponseInContext(Request.of(component = component.name, service = "DelegateTaskService",
           operation = "describeDelegateTaskScopeCorrection", properties = List(Property("input",
             V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation,
-              _added, Vector.empty), None))), untrusted)
+              _added, Vector.empty, None), None))), untrusted)
         Then("the untrusted description is refused")
         untrustedresult.isSuccess shouldBe false
         Given("a SPECIFICATION-OWNED result for the original adopted behavior condition")
@@ -574,7 +574,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         When("the public description selects the original behavior ID for submission.")
         val description = _value_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
           List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation,
-            Vector.empty, Vector("behavior")), None)))
+            Vector.empty, Vector("behavior"), None), None)))
         Given("the exact described timing correction awaiting independently selected current-call authority")
         val correction = V.DelegateTaskScopeCorrectionInput(started.sessionId, continuation, description.target,
           "timing-selection", "participant", "timing-key", V.WorkflowArtifactReference("specification-timing-human", "1"))
@@ -616,7 +616,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         val recollected = _advance_()
         val describedagain = _value_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
           List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation,
-            Vector.empty, Vector("behavior")), None)))
+            Vector.empty, Vector("behavior"), None), None)))
         val correctedagain = _value_[V.DelegateTaskScopeCorrectionView]("correctDelegateTaskScope",
           List(Property("input", correction, None)))
         Then("the exact issue and correction remain unchanged")
@@ -626,7 +626,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         When("a fresh timing description is requested against the exact current successor")
         val replacement = _call_("describeDelegateTaskScopeCorrection", List(Property("input",
           V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, next.issuedWorkContext.get.continuationId,
-            Vector.empty, Vector("delivery")), None)))
+            Vector.empty, Vector("delivery"), None), None)))
         Then("the changed subset is described without granting authority or changing its current issue")
         replacement.isSuccess shouldBe true
         val replacementdescription = read_value[V.DelegateTaskScopeCorrectionView](take(replacement))
@@ -791,7 +791,10 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         LocalPublication.Source(committed.commit.get.identity, candidate.tree,
           Vector(LocalPublication.Change("docs/phase/other.md", " ", "M"))), "participant",
         "SPECIFICATION-OWNED retained publication", None, Vector.empty)
-      val publication = LocalPublication.Result("published", "SPECIFICATION-OWNED typed publication outcome", request)
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), empty, empty, Vector.empty, 1L, "specification-publication")
+      val publication = LocalPublication.Result("published", "SPECIFICATION-OWNED typed publication outcome", request,
+        Some(WorkflowSbtCapture.encode(process)))
       val delivered = committed.copy(stage = "DeliveryAcceptance", delivery = Some(DelegateTask.Delivery(
         destinationSessionId = Some("late-gate"), publication = Some(publication))))
       val work = S.Work("late-gate", "3", "DeliveryAcceptance", delivered)

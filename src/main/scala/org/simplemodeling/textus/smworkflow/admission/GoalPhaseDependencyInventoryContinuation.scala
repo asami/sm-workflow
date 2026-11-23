@@ -16,6 +16,7 @@ import GoalPhaseOrderedProgression as O
 import GoalPhaseDependencyScope as D
 import GoalPhaseDependencyValidation as V
 import GoalPhaseDependencyValidation.given
+import StandaloneFixExecution as S
 
 /** A native inventory receipt inherits one actual Human boundary. It never
   * creates another answer, effect grant or dependency validation receipt.
@@ -108,6 +109,35 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
   def contextValid(value: InventoryContext): Boolean = value != null && _reference(value.receipt) &&
     _reference(value.approval) && D.validateOptionC(Some(value.proposal)).isSuccess &&
     value.proposal.scopeUpdate.exists(_.approval == value.approval)
+
+  final case class ManagedInventory(parentWork: ContextReference, approval: ContextReference, purpose: ContextReference,
+    additionalPaths: Vector[String])
+  object ManagedInventory {
+    given Encoder[ManagedInventory] = deriveEncoder
+    given Decoder[ManagedInventory] = deriveDecoder[ManagedInventory].emap(value =>
+      Either.cond(_reference(value.parentWork) && _reference(value.approval) && _reference(value.purpose) &&
+        GoalPhasePurposeRepair.paths(value.additionalPaths), value, "Managed inventory requires exact references and literal paths"))
+  }
+
+  /** The caller has authenticated A's issued WorkOrder. Its captured choice and
+    * authorization bound the additional B paths selected by the Human.
+    */
+  private[admission] def supplementalManagedInventoryC(work: W.Request, parentWork: ContextReference,
+    additional: Vector[String]): Consequence[ManagedInventory] = for {
+    context <- work.decisionContext.filter(_.choice == DependencyDevelopmentDelivery.subtree).map(Consequence.success)
+      .getOrElse(F.invalid("Managed inventory supplementation requires the original local worktree choice"))
+    approval <- context.decisionReference.filter(_reference).map(Consequence.success)
+      .getOrElse(F.invalid("Managed inventory supplementation has no retained Human approval"))
+    original <- context.requestingResult.dependencyProposal.map(Consequence.success)
+      .getOrElse(F.invalid("Managed inventory supplementation has no original dependency proposal"))
+    boundary <- original.authorizationBoundary.map(Consequence.success)
+      .getOrElse(F.invalid("Managed inventory supplementation has no original authorization boundary"))
+    effective = context.inventoryContinuation.map(_.proposal).getOrElse(original)
+    _ <- _check(effective.usageContract == original.usageContract && effective.authorizationBoundary.contains(boundary) &&
+      additional.forall(path => boundary.exactPaths.forall(_.contains(path)) &&
+        !boundary.excludedPaths.exists(excluded => S.owned(path, Vector(excluded)) || S.owned(excluded, Vector(path)))),
+      "supplemental paths cross the retained dependency authorization boundary")
+  } yield ManagedInventory(parentWork, approval, boundary.purpose, additional)
 
   private[admission] final class Source private[GoalPhaseDependencyInventoryContinuation](
     val from: InstanceRecord, val controller: O.State, val input: W.Request,

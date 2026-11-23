@@ -8,6 +8,7 @@ import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.SbtOperation
 import org.goldenport.protocol.{Property, Request}
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -17,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
-import org.simplemodeling.textus.smworkflow.preparation.{NativeDelegateTaskStartInput, NativeDelegateTaskAdoptionPreparation}
+import org.simplemodeling.textus.smworkflow.preparation.{NativeDelegateTaskAdoptionPreparation, NativeDelegateTaskScopeCorrectionInput, NativeDelegateTaskStartInput}
 import ManagedDevelopment.*
 import SplitPhaseExplicitPartitionFixture.take
 
@@ -1462,6 +1463,12 @@ allowedKinds = ["text"]
     ConnectedFixture.exercise(root, "RouteMachineLocal")
   }
 
+  private[admission] def exerciseManagedDependencyInventory(leavePending: Boolean): Unit = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+      "managed-inventory-").toRealPath()
+    ConnectedFixture.exercise(root, "RouteSubtree", managedInventory = Some(leavePending))
+  }
+
   private object ConnectedFixture extends ThreeWorkflowManagedRepositoryFixture {
     override protected def standard_runtime = true
     private val connectedEdge = edge.copy(provider = edge.provider.copy(workspace = "managed-b"),
@@ -1610,7 +1617,251 @@ allowedKinds = ["text"]
             .filterNot(capability => scenario == "DirtyPostCommit" && capability == "managed-b-scoped-publish").asJson))))
     }
 
-    def exercise(root: Path, mode: String = "Connected"): Unit = {
+    private def _exercise_inventory(root: Path, leavepending: Boolean, parentsession: String,
+      parentwork: V.WorkflowArtifactReference, parentcontext: V.WorkflowIssuedWorkContext,
+      approval: V.WorkflowArtifactReference, purpose: ContextReference,
+      session: String, peersession: String, initial: V.DelegateTaskView,
+      invoke: (String, String, List[Property]) => Consequence[OperationResponse],
+      prepare: (Setup => Consequence[Unit]) => Unit): Unit = {
+      import StandaloneFixExecution.given
+      def _call_(operation: String, properties: List[Property]) = invoke("DelegateTaskService", operation, properties)
+      def _input_(operation: String, input: Any) = _call_(operation, List(Property("input", input, None)))
+      def _advance_(identity: String) = read_value[V.DelegateTaskView](take(_call_("advanceDelegateTask",
+        List(Property("sessionId", identity, None)))))
+      def _describe_(input: V.DelegateTaskScopeCorrectionDescriptionInput) =
+        _input_("describeDelegateTaskScopeCorrection", input)
+      def _correct_(input: V.DelegateTaskScopeCorrectionInput) = _input_("correctDelegateTaskScope", input)
+      def _source_revision_(view: V.DelegateTaskView): Long = {
+        val json = io.circe.parser.parse(take(view.work.get.toJsonStringC)).toOption.get
+        GoalPhaseNativeMetadata.normalizePublicJson(json).toOption.get.as[StandaloneFixExecution.Work].toOption.get.sourceRevision.toLong
+      }
+      def _destination_record_(identity: String): InstanceRecord = {
+        var saved = Option.empty[InstanceRecord]
+        prepare(_.delegateCurrentC(InstanceIdentity(identity)).map(record => { saved = Some(record); () }))
+        saved.get
+      }
+      def _parent_record_(): InstanceRecord = {
+        var saved = Option.empty[InstanceRecord]
+        prepare(_.goalCurrentC(InstanceIdentity(parentsession)).map(record => { saved = Some(record); () }))
+        saved.get
+      }
+
+      Given("the same managed destination after its own retained semantic stop and SPECIFICATION-OWNED direction")
+      val stoppedreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-inventory-destination-stop", "1")
+      val stoppedresult = V.DelegateTaskWorkResult("decision-needed", "The additional provider path requires approval",
+        Vector.empty, NonEmptyVector.one(V.DelegateTaskCondition("behavior", false, "Awaiting the dependency direction")),
+        Vector("How should the destination continue after resolving the dependency?"), None, None)
+      val workerevidence = V.WorkflowExecutionEvidence(Vector(stoppedreference), Some("specification-inventory-implementer"),
+        None, Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+          BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity)))
+      def _submit_destination_(context: V.WorkflowIssuedWorkContext, result: V.DelegateTaskWorkResult = stoppedresult,
+        reference: V.WorkflowArtifactReference = stoppedreference, evidence: V.WorkflowExecutionEvidence = workerevidence) =
+        _call_("submitDelegateTaskWorkResult", List(Property("sessionId", session, None),
+          Property("issuedWorkContext", context, None), Property("result", result, None),
+          Property("resultReference", reference, None), Property("executionEvidence", evidence, None)))
+      take(_submit_destination_(initial.issuedWorkContext.get))
+      DelegateTaskRequesterRoutingFixture.state(_advance_(session)).stage shouldBe "Human"
+      val semantic = read_value[V.DelegateTaskSemanticContinuationDescriptionResult](take(_input_(
+        "describeDelegateTaskSemanticContinuation", V.DelegateTaskSemanticContinuationDescriptionInput(session))))
+      val semantictarget = take(DelegateTaskSemanticContinuation.targetC(semantic.target))
+      val semanticreference = ContextReference("SPECIFICATION-OWNED-inventory-destination-direction", "1")
+      val direction = DelegateTaskSemanticContinuation.Direction(io.circe.parser.parse(semantic.target).toOption.get,
+        "ContinueAfterDependencyResolution", "SPECIFICATION-OWNED direction to resume the same provider destination",
+        "participant", semanticreference, Vector(ContextReference(parentwork.identity, parentwork.revision)))
+      val semanticinput = V.DelegateTaskSemanticContinuationInput(session, semantic.target, direction.choice,
+        direction.rationale, direction.participant, V.WorkflowArtifactReference(semanticreference.identity, semanticreference.revision),
+        Vector(parentwork))
+      prepare(call => for {
+        binding <- DelegateTaskSemanticContinuation.bindingC(semantictarget.componentInstance, semantictarget, direction)
+        _ <- call.evidenceC(NativeExternalEvidence.Purpose.DelegateTaskSemanticContinuation,
+          ThreeWorkflowExternalEvidencePorts.key(semanticreference.identity, semanticreference.revision),
+          semanticreference, direction.participant, binding)
+      } yield ())
+      read_value[V.DelegateTaskSemanticContinuationDescriptionResult](take(_input_(
+        "resumeDelegateTaskSemanticContinuation", semanticinput))).outcome shouldBe "resumed-awaiting-advance"
+      val old = _advance_(session)
+      old.kind shouldBe "Request"
+      val oldcontext = old.issuedWorkContext.get
+      oldcontext.continuationId should not be initial.issuedWorkContext.get.continuationId
+      val before = DelegateTaskRequesterRoutingFixture.state(old)
+      before.semanticReference shouldBe Some(ContextReference(stoppedreference.identity, stoppedreference.revision))
+      val previous = _destination_record_(session)
+      val originalparent = _parent_record_()
+      val added = Vector("src/test/scala/ProductCheck.scala")
+      val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(session, oldcontext.continuationId,
+        added, Vector.empty, Some(true))
+      val provider = root.resolve("b/repository")
+      val index = Files.readAllBytes(provider.resolve(".git/index")).toVector
+      val providersource = Files.readString(provider.resolve(_provider_path))
+      if (leavepending) {
+        val locator = Json.obj("root" -> root.toString.asJson, "parentSessionId" -> parentsession.asJson,
+          "destinationSessionId" -> session.asJson, "exactOldContinuationId" -> oldcontext.continuationId.asJson,
+          "additionalPaths" -> added.asJson, "participant" -> "participant".asJson, "componentInstance" -> "default".asJson,
+          "assemblyDescriptor" -> root.resolve(".textus/assembly.yaml").toString.asJson,
+          "testDescriptor" -> root.resolve(".textus/test.yaml").toString.asJson,
+          "descriptionInput" -> DevelopmentOperationalView.json(descriptioninput.toRecord()))
+        Files.writeString(root.resolve("managed-inventory-fixture.json"), locator.spaces2)
+        take(WorkflowInstanceRecordJsonV1.encodeC(_parent_record_())) shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(originalparent))
+      } else {
+        When("the destination describes the exact extra path through the managed continuation")
+        _describe_(descriptioninput.copy(supplementManagedInventory = None)).isSuccess shouldBe false
+        val described = read_value[V.DelegateTaskScopeCorrectionView](take(_describe_(descriptioninput)))
+        Then("the ordinary selection target discloses the retained parent WorkOrder, approval, purpose and paths")
+        described.outcome shouldBe "decision-required"
+        val target = take(DelegateTaskScopeCorrection.targetC(described.target))
+        val frozen = io.circe.parser.parse(described.target).toOption.get
+        val inventory = frozen.hcursor.downField("managedInventory")
+        def _reference_(field: String, identity: String, revision: String): Unit = {
+          inventory.downField(field).get[String]("identity").toOption shouldBe Some(identity)
+          inventory.downField(field).get[String]("revision").toOption shouldBe Some(revision)
+        }
+        _reference_("parentWork", parentwork.identity, parentwork.revision)
+        _reference_("approval", approval.identity, approval.revision)
+        _reference_("purpose", purpose.identity, purpose.revision)
+        inventory.get[Vector[String]]("additionalPaths").toOption shouldBe Some(added)
+        val correction = V.DelegateTaskScopeCorrectionInput(session, oldcontext.continuationId, described.target,
+          "inventory-correction-selection", "participant", "inventory-correction-key",
+          V.WorkflowArtifactReference("SPECIFICATION-OWNED-inventory-correction", "1"))
+        def _prepare_selection_(value: V.DelegateTaskScopeCorrectionInput): Consequence[Record] =
+          NativeDelegateTaskScopeCorrectionInput.prepareC(Map("input" -> "scope-correction.json", "selection-id" -> value.selectionId,
+            "participant" -> value.participant, "origin" -> "ExplicitHuman", "idempotency-key" -> value.idempotencyKey,
+            "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => value.toRecord().toJsonStringC)
+        def _select_(prepared: Record): Unit = prepare { call =>
+          val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          call.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        }
+        _correct_(correction).isSuccess shouldBe false
+        _select_(take(_prepare_selection_(correction)))
+        val otherpaths = Vector("src/test/scala/example/ProviderSpec.scala").asJson
+        val changed = frozen.mapObject(_.add("additionalOwnedPaths", otherpaths)
+          .add("managedInventory", inventory.focus.get.mapObject(_.add("additionalPaths", otherpaths))))
+        _correct_(correction.copy(target = changed.noSpaces)).isSuccess shouldBe false
+        val peer = _advance_(peersession).issuedWorkContext.get
+        _correct_(correction.copy(sessionId = peersession, oldContinuationId = peer.continuationId)).isSuccess shouldBe false
+        val foreign = frozen.mapObject(_.add("componentInstance", "foreign-component".asJson))
+        val crossed = correction.copy(target = foreign.noSpaces, selectionId = "foreign-inventory-selection",
+          idempotencyKey = "foreign-inventory-key")
+        _prepare_selection_(crossed) match {
+          case Consequence.Success(prepared) => _select_(prepared)
+          case Consequence.Failure(_) => ()
+        }
+        _correct_(crossed).isSuccess shouldBe false
+        val peerdescription = read_value[V.DelegateTaskScopeCorrectionView](take(_describe_(
+          descriptioninput.copy(sessionId = peersession, oldContinuationId = peer.continuationId))))
+        peerdescription.outcome shouldBe "decision-required"
+        val peercorrection = correction.copy(sessionId = peersession, oldContinuationId = peer.continuationId,
+          target = peerdescription.target, selectionId = "peer-inventory-selection", idempotencyKey = "peer-inventory-key",
+          reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-peer-inventory-correction", "1"))
+        _select_(take(_prepare_selection_(peercorrection)))
+        val peerbefore = _destination_record_(peersession)
+        _destination_record_(session).history shouldBe previous.history
+        _advance_(session).issuedWorkContext shouldBe old.issuedWorkContext
+
+        When("the fixture admits the exact independently selected correction and advances normally")
+        read_value[V.DelegateTaskScopeCorrectionView](take(_correct_(correction))).outcome shouldBe "corrected-awaiting-advance"
+        val next = _advance_(session)
+        Then("the original inputs and receipts remain in history and a single successor owns the additional path")
+        next.sessionId shouldBe old.sessionId
+        next.issuedWorkContext.get.continuationId should not be oldcontext.continuationId
+        val after = DelegateTaskRequesterRoutingFixture.state(next)
+        after.copy(input = before.input) shouldBe before
+        after.input.ownedPaths shouldBe before.input.ownedPaths ++ added
+        after.input.sourceReferences shouldBe before.input.sourceReferences :+
+          ContextReference(correction.reference.identity, correction.reference.revision)
+        after.input.copy(ownedPaths = before.input.ownedPaths, sourceReferences = before.input.sourceReferences) shouldBe before.input
+        val continued = _destination_record_(session)
+        continued.history.take(previous.history.size) shouldBe previous.history
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            before.input.repositoryIdentity, target.business.root, target.business.branch, Vector.empty, Vector.empty,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(host, definition, call.core)
+          original <- DelegateTaskNativeRun.loadPayloadC(store, session, _source_revision_(old), call.core)
+          successor <- DelegateTaskNativeRun.loadPayloadC(store, session, _source_revision_(next), call.core)
+        } yield {
+          original shouldBe target.business
+          successor.baseHead shouldBe original.baseHead
+          successor.managedDependency shouldBe original.managedDependency
+          successor.delegateSemanticContinuation shouldBe Some(direction)
+          successor.supplementalOwnedPaths shouldBe Some(added)
+          BoundedWorkRuntime.managedInventoryAllows(successor, added.head) shouldBe true
+          BoundedWorkRuntime.managedInventoryAllows(successor, added.head + "/unapproved.scala") shouldBe false
+          BoundedWorkRuntime.managedInventoryAllows(successor, _provider_path) shouldBe true
+        } }
+        read_value[V.DelegateTaskScopeCorrectionView](take(_describe_(descriptioninput))).outcome shouldBe "already-corrected"
+        read_value[V.DelegateTaskScopeCorrectionView](take(_correct_(correction))).outcome shouldBe "already-corrected"
+        _describe_(descriptioninput.copy(additionalOwnedPaths = Vector("src/test/scala/example/ProviderSpec.scala"))).isSuccess shouldBe false
+        _describe_(descriptioninput.copy(oldContinuationId = next.issuedWorkContext.get.continuationId)).isSuccess shouldBe false
+        When("the original accepted destination result is presented with the historical, superseded and successor contexts")
+        val _ = _submit_destination_(initial.issuedWorkContext.get)
+        _submit_destination_(oldcontext).isSuccess shouldBe false
+        _submit_destination_(next.issuedWorkContext.get).isSuccess shouldBe false
+        Then("no new result is applied to the successor and the native history retains the original receipt")
+        _advance_(session).issuedWorkContext shouldBe next.issuedWorkContext
+        _destination_record_(session).history shouldBe continued.history
+
+        When("a fresh result is submitted while the supplemental literal path contains an unapproved child")
+        val supplemental = provider.resolve(added.head)
+        val child = supplemental.resolve("unapproved.scala")
+        val originalbytes = Files.readAllBytes(supplemental)
+        val freshreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-inventory-fresh-destination-stop", "1")
+        val freshresult = stoppedresult.copy(summary = "SPECIFICATION-OWNED fresh provider reassessment")
+        val freshevidence = workerevidence.copy(references = Vector(freshreference))
+        Files.delete(supplemental)
+        try {
+          Files.createDirectory(supplemental)
+          Files.writeString(child, "// outside the supplemental literal inventory\n")
+          _submit_destination_(next.issuedWorkContext.get, freshresult, freshreference, freshevidence) match {
+            case Consequence.Failure(reason) =>
+              reason.status.webCode.code shouldBe 409
+              reason.displayMessage should include ("Implementation crossed the retained target or unrelated work")
+            case Consequence.Success(_) => fail("A child of the supplemental literal path was admitted")
+          }
+          Then("the successor remains pending and the B index is preserved")
+          val pending = _destination_record_(session)
+          pending.revision shouldBe continued.revision
+          pending.history shouldBe continued.history
+          pending.suspension shouldBe continued.suspension
+          Files.readAllBytes(provider.resolve(".git/index")).toVector shouldBe index
+        } finally {
+          Files.deleteIfExists(child)
+          Files.deleteIfExists(supplemental)
+          Files.write(supplemental, originalbytes)
+        }
+        _advance_(session).issuedWorkContext shouldBe next.issuedWorkContext
+        take(WorkflowInstanceRecordJsonV1.encodeC(_parent_record_())) shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(originalparent))
+
+        When("the parent independently submits a real result to its pending WorkOrder before the peer correction is applied")
+        val parentreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-inventory-parent-stop", "1")
+        val parentresult = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED parent must reassess its provider work",
+          Vector("The original provider decision is no longer current"), None, None, None, None, None, None, None, None,
+          dependencyValidation = None, diagnosticRepair = None)
+        val parentexecution = workerevidence.copy(references = Vector(parentreference), workerIdentity = Some("specification-inventory-parent-implementer"))
+        read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", "submitGoalPhaseWorkResult", List(
+          Property("sessionId", parentsession, None), Property("issuedWorkContext", parentcontext, None),
+          Property("result", parentresult, None), Property("resultReference", parentreference, None),
+          Property("executionEvidence", parentexecution, None))))).accepted shouldBe true
+        val moved = _parent_record_()
+        moved.revision.value should be > (originalparent.revision.value)
+        moved.suspension.exists(_.continuationIdentity.value == parentcontext.continuationId) shouldBe false
+        Then("the previously selected peer target conflicts with the moved parent and leaves the peer untouched")
+        _correct_(peercorrection) match {
+          case Consequence.Failure(reason) =>
+            reason.status.webCode.code shouldBe 409
+            reason.displayMessage should include ("requester reference crosses its current native suspension")
+          case Consequence.Success(_) => fail("The selected peer correction accepted the stale parent WorkOrder")
+        }
+        val peersaved = _destination_record_(peersession)
+        peersaved.revision shouldBe peerbefore.revision
+        peersaved.history shouldBe peerbefore.history
+        peersaved.suspension shouldBe peerbefore.suspension
+      }
+      Files.readAllBytes(provider.resolve(".git/index")).toVector shouldBe index
+      Files.readString(provider.resolve(_provider_path)) shouldBe providersource
+    }
+
+    def exercise(root: Path, mode: String = "Connected", managedInventory: Option[Boolean] = None): Unit = {
       val machine = mode == "RouteMachineLocal"
       val offerededge = if (machine) _machine_edge(root) else connectedEdge
       offerededge.machineLocalJar.foreach(jar => Files.createDirectories(Path.of(jar.consumerJar).getParent))
@@ -1658,7 +1909,8 @@ allowedKinds = ["text"]
       var unavailable = Option.empty[(String, V.GoalPhaseHumanQuestion, GoalPhaseDependencyScope.Proposal)]
       _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
         "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++
-        completionParameters ++ publicationparameters, componentInstance = if (machine) "default" else "repository-spec") { (owner, component, actor, prepare) =>
+        completionParameters ++ publicationparameters,
+        componentInstance = if (machine || managedInventory.nonEmpty) "default" else "repository-spec") { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("b"), mode).size, Some(root.resolve("b")), mode)).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("other"), mode).size, Some(root.resolve("other")), mode)).flatMap(_ =>
@@ -1890,7 +2142,10 @@ allowedKinds = ["text"]
             val queued = Option.when(!machine)(read_value[V.DelegateTaskView](take(start(_destination_("route-second"), "route-second"))))
             val work = advance(first.sessionId)
             work.kind shouldBe "Request"
-            if (machine) {
+            if (managedInventory.nonEmpty) {
+              _exercise_inventory(root, managedInventory.get, a.sessionId, source.get, resumed.issuedWorkContext.get, reference,
+                proposal.authorizationBoundary.get.purpose, first.sessionId, queued.get.sessionId, work, invoke, prepare)
+            } else if (machine) {
               val jar = Path.of(offerededge.machineLocalJar.get.consumerJar)
               val publisherlog = root.resolve("b/publications.txt")
               val consumerlog = root.resolve("parent-checks.txt")
@@ -2012,7 +2267,7 @@ allowedKinds = ["text"]
               advance(queued.get.sessionId).kind shouldBe (if (chosen == assigned) "Wait" else "Request")
               When("the destination asks for a scope description outside the approved provider inventory")
               val outside = V.DelegateTaskScopeCorrectionDescriptionInput(first.sessionId, work.issuedWorkContext.get.continuationId,
-                Vector("src/test/scala/ProductCheck.scala"), Vector.empty)
+                Vector("src/test/scala/ProductCheck.scala"), Vector.empty, None)
               val denied = invoke("DelegateTaskService", "describeDelegateTaskScopeCorrection", List(Property("input", outside, None)))
               Then("the shared correction owner refuses the additional path before superseding the WorkOrder")
               denied match {

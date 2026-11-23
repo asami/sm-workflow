@@ -57,7 +57,8 @@ private[smworkflow] object BoundedWorkRuntime {
     managedDependency: Option[GoalPhaseDependencyValidation.ManagedCapture] = None,
     requestReconstruction: Option[DelegateTaskRequestReconstruction.Checkpoint] = None,
     dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None,
-    queueActivated: Option[String] = None)
+    queueActivated: Option[String] = None,
+    supplementalOwnedPaths: Option[Vector[String]] = None)
   private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
   private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
   private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
@@ -69,10 +70,16 @@ private[smworkflow] object BoundedWorkRuntime {
         "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" |
         "delegateSemanticContinuation" | "delegateReviewContinuation" | "validationContinuation" | "validationRecovery" |
         "validationCaptureReservation" | "managedDependency" | "requestReconstruction" | "dependencyDelivery" |
-        "queueActivated", value) => !value.isNull
+        "queueActivated" | "supplementalOwnedPaths", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
+
+  def managedInventoryAllows(payload: Payload, path: String): Boolean =
+    payload.supplementalOwnedPaths.forall { paths =>
+      paths.contains(path) || !paths.exists(owner => path.startsWith(owner + "/")) ||
+        S.owned(path, payload.state.input.ownedPaths.filterNot(paths.contains))
+    }
 }
 
 /** Standalone business ownership over canonical CNCF persistence and execution.
@@ -1120,7 +1127,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         after <- G.observeC(core)
       } yield if (after.head == before.head && dirtyCovers(payload, after.dirty) &&
         after.dirty.filter(d => S.owned(d.path, owners)).forall(_.worktree == ' ') &&
-        selected.forall(p => S.owned(p.value, owners)))
+        selected.forall(p => S.owned(p.value, owners) && managedInventoryAllows(payload, p.value)))
         Right(S.Candidate(before.head, tree, selected.map(_.value), diff.text))
         else Left("Candidate selection requires Human: current index/worktree no longer resolves the adopted paths=" +
           owners.mkString(", ") + "; actual index paths=" + selected.map(_.value).mkString(", ") +
@@ -1132,7 +1139,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     current <- G.observeC(core)
     tree <- G.indexTreeC(core)
     _ <- if (root == payload.root && current.branch == payload.branch && current.head == payload.baseHead &&
-      payload.state.candidate.exists(c => c.head == current.head && c.tree == tree) &&
+      payload.state.candidate.exists(c => c.head == current.head && c.tree == tree &&
+        c.paths.forall(managedInventoryAllows(payload, _))) &&
       dirtyCovers(payload, current.dirty) && current.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(_.worktree == ' ')) Consequence.unit
       else invalid("Actual candidate changed; previous checks cannot be accepted for different bytes")
   } yield ()
@@ -1150,7 +1158,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
 
   private def dirtyCovers(payload: Payload, dirty: Vector[G.DirtyPath]): Boolean = {
     val owners = payload.state.input.ownedPaths
-    dirty.filterNot(d => S.owned(d.path, owners)) == payload.unrelated.getOrElse(Vector.empty) &&
+    dirty.forall(d => managedInventoryAllows(payload, d.path) && d.renamedFrom.forall(managedInventoryAllows(payload, _))) &&
+      dirty.filterNot(d => S.owned(d.path, owners)) == payload.unrelated.getOrElse(Vector.empty) &&
       dirty.filter(d => S.owned(d.path, owners)).forall(d => !d.unmerged && S.permitted(d.path, payload.state.input) &&
       d.renamedFrom.forall(S.permitted(_, payload.state.input)))
   }
@@ -1175,10 +1184,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     compatible = root == payload.root && observed.branch == payload.branch && observed.dirty.forall { entry =>
       val endpoints = entry.path +: entry.renamedFrom.toVector
       val owned = endpoints.map(S.owned(_, owners))
-      !owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, payload.state.input))
+      endpoints.forall(managedInventoryAllows(payload, _)) &&
+        (!owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, payload.state.input)))
     }
     current = observed.head == payload.baseHead && payload.state.candidate.forall(candidate =>
-      candidate.head == observed.head && candidate.tree == tree) &&
+      candidate.head == observed.head && candidate.tree == tree && candidate.paths.forall(managedInventoryAllows(payload, _))) &&
       observed.dirty.filter(d => S.owned(d.path, owners)).forall(_.worktree == ' ')
   } yield WorkflowManagementReconstruction.Assessment(
     if (compatible) Vector.empty else Vector("Current source crosses the retained root, branch or owned paths"),
@@ -1198,7 +1208,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- if (root == payload.root && observed.branch == payload.branch && observed.dirty.forall { entry =>
       val endpoints = entry.path +: entry.renamedFrom.toVector
       val owned = endpoints.map(S.owned(_, owners))
-      !entry.unmerged && (!owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, payload.state.input)))
+      !entry.unmerged && endpoints.forall(managedInventoryAllows(payload, _)) &&
+        (!owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, payload.state.input)))
     }) Consequence.unit else invalid("Current implementation source crosses the target or owned paths")
     active = payload.copy(baseHead = observed.head,
       unrelated = Some(observed.dirty.filterNot(d => S.owned(d.path, owners))))
@@ -1230,24 +1241,29 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   /** The logical selection must be registered in the actual CNCF host. The
     * Task never substitutes a Phase Step's commit selection or invents consent. */
   private def commitC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
-    core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
-    result <- if (recordPaths(h, payload).nonEmpty && payload.records.isEmpty) for {
+    core: ActionCall.Core): Consequence[V.StandaloneFixView] = {
+    val paths = recordPaths(h, payload)
+    if (paths.nonEmpty && payload.records.isEmpty) for {
       _ <- freshC(payload, core)
+      _ <- if (paths.forall(managedInventoryAllows(payload, _))) Consequence.unit
+        else invalid("Completion record paths cross the literal supplemental inventory")
       candidate <- payload.state.candidate.map(Consequence.success).getOrElse(invalid("Record preparation has no accepted candidate"))
       plan <- CompletionRecords.captureC(core, from.identity.value, wire, payload.state.input.requestIdentity, candidate.tree,
         (payload.state.receipts.map(r => "validation:" + r.identity) ++ payload.state.reviewReference.toVector.map(r => r.identity + "@" + r.revision) ++ payload.state.evidenceReferences.map(r => r.identity + "@" + r.revision)).distinct,
-        recordPaths(h, payload), payload.state.input.ownedPaths, h.paths)
+        paths, payload.state.input.ownedPaths, h.paths)
       retained = payload.copy(records = Some(plan), state = payload.state.copy(stage = "RecordsReady", message = "Accepted work retained; exact completion records prepared before local closure"))
       prepared <- saveC(h, store, from, retained, core)
       result <- recordsC(h, store, prepared, retained, core)
     } yield result else commitPreparedC(h, store, from, payload, core)
-  } yield result
+  }
 
   private def recordsC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     plan <- payload.records.filter(p => CompletionRecords.valid(p) && p.session == from.identity.value && p.family == wire &&
       p.scope == payload.state.input.requestIdentity && p.files.map(_.path) == recordPaths(h, payload))
       .map(Consequence.success).getOrElse(invalid("Record application has no exact retained owner/selection"))
+    _ <- if (plan.files.forall(file => managedInventoryAllows(payload, file.path))) Consequence.unit
+      else invalid("Completion record paths cross the literal supplemental inventory")
     _ <- implementationFreshC(payload, core)
     _ <- CompletionRecords.applyC(core, plan)
     tree <- G.indexTreeC(core)
@@ -1333,6 +1349,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   private def hygieneC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     plan <- payload.hygiene.filter(CommitHygiene.valid).map(Consequence.success).getOrElse(invalid("Missing retained hygiene plan"))
+    _ <- if (plan.corrections.forall(correction => managedInventoryAllows(payload, correction.path))) Consequence.unit
+      else invalid("Commit hygiene paths cross the literal supplemental inventory")
     _ <- implementationFreshC(payload, core)
     _ <- CommitHygiene.applyC(core, plan)
     tree <- G.indexTreeC(core)

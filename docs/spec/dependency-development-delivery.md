@@ -491,10 +491,27 @@ the existing independent Start selection and normal execution, validation,
 review, commit and the selected publication authority. Selecting a route performs no
 dispatch, installation, publication or repository synchronization.
 
-Destination scope correction may add only literal paths from the exact approved
-GoalPhase inventory. The native owner checks the current WorkOrder before either
-describing or applying a path addition. Timing-only corrections still use the
-ordinary bounded contract.
+Ordinary destination scope correction uses the approved GoalPhase inventory.
+For an unclaimed implementation issued to the selected local worktree using
+a project-private JAR, call
+`describeDelegateTaskScopeCorrection` with the same destination Session,
+the current `oldContinuationId`, the exact `additionalOwnedPaths`, and
+`supplementManagedInventory: true` to propose an addition to that inventory.
+The description binds the current parent WorkOrder, its original Human
+approval and purpose, and the literal supplemental paths. The parent
+WorkOrder, Step, managed Component and selected delivery must still match.
+The original exclusions, any explicit exact-path restriction, and the
+destination's registered ownership apply.
+
+Use `prepareDelegateTaskScopeCorrection` and the normal independently recorded
+Human selection for that exact description. Then call `correctDelegateTaskScope`
+with the selected target and reference, using `inputResource` if necessary.
+The correction retains this approval with the same destination Session. Normal
+`advanceDelegateTask` issues the amended implementation. The original parent
+WorkOrder, route and approval remain in history, as do the original destination
+issue, accepted results and repair accounting. A stale or crossed association
+requires a current description and genuine selection for that target. Timing-only
+corrections use the ordinary bounded contract.
 
 This route uses the registered local JAR publication program even when the edge
 also declares a source project. Source-project build integration and separate

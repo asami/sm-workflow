@@ -673,7 +673,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
         if (installed.isEmpty) {
           Given("a native path addition covered by the retained active repair-policy direction")
           val query = V.DelegateTaskScopeCorrectionDescriptionInput(retainedsession,
-            repair.issuedWorkContext.get.continuationId, Vector("docs/trend-extra.md"), Vector.empty)
+            repair.issuedWorkContext.get.continuationId, Vector("docs/trend-extra.md"), Vector.empty, None)
           val description = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
             List(Property("input", query, None)), Vector.empty)
           val correction = V.DelegateTaskScopeCorrectionInput(retainedsession, query.oldContinuationId,
@@ -1141,7 +1141,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       Given("an admitted path addition while the recorded Incomplete repair direction remains active")
       val incompleteIssue = _detail_(issued)
       val incompleteQuery = V.DelegateTaskScopeCorrectionDescriptionInput(session,
-        incompleteIssue.issuedWorkContext.get.continuationId, Vector("docs/extra.md"), Vector.empty)
+        incompleteIssue.issuedWorkContext.get.continuationId, Vector("docs/extra.md"), Vector.empty, None)
       val incompleteDescription = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection", incompleteQuery)
       val incompleteCorrection = V.DelegateTaskScopeCorrectionInput(session, incompleteQuery.oldContinuationId,
         incompleteDescription.target, "SPEC-incomplete-scope-selection", "participant", "SPEC-incomplete-scope-key",
@@ -1225,7 +1225,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       val oldRepair = _detail_(oldIssue)
       val oldWork = _work_(oldRepair)
       val correctionQuery = V.DelegateTaskScopeCorrectionDescriptionInput(session,
-        oldRepair.issuedWorkContext.get.continuationId, Vector("docs/other.md"), Vector.empty)
+        oldRepair.issuedWorkContext.get.continuationId, Vector("docs/other.md"), Vector.empty, None)
       val correctionDescription = _call_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection", correctionQuery)
       val correction = V.DelegateTaskScopeCorrectionInput(session, correctionQuery.oldContinuationId,
         correctionDescription.target, "SPEC-scope-selection", "participant", "SPEC-scope-key",

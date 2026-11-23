@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.WorkflowComponentStorage
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
-import BoundedWorkRuntime.{Host, Payload}
+import BoundedWorkRuntime.{Host, Payload, managedInventoryAllows}
 import RepositorySyncManagedGitObservation as G
 import StandaloneFixExecution as S
 
@@ -12,7 +12,7 @@ import StandaloneFixExecution as S
   * The ordinary mechanical checkpoint retains the prior execution base in
   * history; it does not alter the adopted business input or repository.
   * @since   Nov. 20, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 23, 2026
   */
 private[smworkflow] object DelegateTaskImplementationContinuation {
   private def invalid[A](message: String): Consequence[A] =
@@ -79,7 +79,8 @@ private[smworkflow] object DelegateTaskImplementationContinuation {
       _ <- if (observed.dirty.forall { entry =>
         val endpoints = entry.path +: entry.renamedFrom.toVector
         val owned = endpoints.map(S.owned(_, state.input.ownedPaths))
-        !entry.unmerged && (if (owned.contains(true)) owned.forall(identity) && endpoints.forall(S.permitted(_, state.input)) else true)
+        !entry.unmerged && endpoints.forall(managedInventoryAllows(payload, _)) &&
+          (!owned.contains(true) || owned.forall(identity) && endpoints.forall(S.permitted(_, state.input)))
       }) Consequence.unit else invalid("dirty work crosses the adopted ownership boundary")
       _ <- descendantC(core, observed.head, payload.baseHead)
       unrelated = observed.dirty.filterNot(d => S.owned(d.path, state.input.ownedPaths))

@@ -215,7 +215,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
 
       When("the public structured description names this still-unclaimed issue and the selected submission IDs")
       val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, oldcontext.continuationId,
-        Vector("value.txt"), Vector.empty)
+        Vector("value.txt"), Vector.empty, None)
       val describedresult = _call(scenario, "DelegateTaskService", "describeDelegateTaskScopeCorrection",
         Vector("--input", _json(descriptioninput)))
       val described = describedresult.business[V.DelegateTaskScopeCorrectionView]

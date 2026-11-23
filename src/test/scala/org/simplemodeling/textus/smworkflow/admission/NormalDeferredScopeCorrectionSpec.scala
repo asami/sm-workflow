@@ -103,7 +103,7 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
         Files.createDirectories(necessary.getParent)
         Files.writeString(necessary, "// SPECIFICATION-OWNED necessary bridge\n")
         def describe(paths: Vector[String], session: String = started.sessionId) = call("describeDelegateTaskScopeCorrection",
-          List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(session, old, paths, Vector.empty), None)))
+          List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(session, old, paths, Vector.empty, None), None)))
         When("the actual deferred description inspects the necessary new literal path")
         val described = read_value[V.DelegateTaskScopeCorrectionView](take(describe(added)))
         described.outcome shouldBe "decision-required"
@@ -127,7 +127,7 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
         }
         Then("description widens inspection only and Git retains the originally admitted paths")
         selectedPaths(request("describeDelegateTaskScopeCorrection", List(Property("input",
-          V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, old, added, Vector.empty), None)))) shouldBe before.input.ownedPaths
+          V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, old, added, Vector.empty, None), None)))) shouldBe before.input.ownedPaths
         selectedPaths(request("correctDelegateTaskScope", fields(correction))) shouldBe before.input.ownedPaths
         call("correctDelegateTaskScope", fields(correction)).isSuccess shouldBe false
         Vector(Vector("../escape"), Vector("private/secret.scala"), Vector(added.head, added.head)).foreach(paths =>
@@ -171,7 +171,7 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
         // frontier; its append-only prefix remains the original native history.
         val successorDescription = value[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection", List(Property("input",
           V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, next.issuedWorkContext.get.continuationId,
-            Vector("docs/Next.md"), Vector.empty), None)))
+            Vector("docs/Next.md"), Vector.empty, None), None)))
         val successorTarget = take(DelegateTaskScopeCorrection.targetC(successorDescription.target))
         successorTarget.frontier.hcursor.get[Vector[Json]]("history").toOption.get.take(
           target.frontier.hcursor.get[Vector[Json]]("history").toOption.get.size) shouldBe

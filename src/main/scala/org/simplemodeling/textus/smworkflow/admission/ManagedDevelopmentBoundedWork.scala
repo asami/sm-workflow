@@ -222,7 +222,8 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
   } yield found
 
   private def _admit_selected_route_c(host: Host, policy: ManagedDevelopmentRuntime.Policy, input: S.Input,
-    work: A.Request, route: D.Route, providersource: Option[(String, String)], core: ActionCall.Core): Consequence[Unit] = for {
+    work: A.Request, route: D.Route, providersource: Option[(String, String)], core: ActionCall.Core,
+    checkinventory: Boolean = true): Consequence[Unit] = for {
     context <- work.decisionContext.map(Consequence.success)
       .getOrElse(invalid("selected dependency route has no actual issued approval"))
     proposal <- context.requestingResult.dependencyProposal.map(Consequence.success)
@@ -237,7 +238,7 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
       else if (D.routeValid(route, context.choice, effective) &&
         providersource.forall(_ == (route.sourceRoot -> route.sourceBranch)) && route.destinationIdentity == contract.destinationIdentity &&
         context.decisionReference.exists(contract.authorizationReferences.contains) &&
-        input.ownedPaths.forall(effective.paths.contains)) Consequence.unit
+        (!checkinventory || input.ownedPaths.forall(effective.paths.contains))) Consequence.unit
       else invalid("destination crosses the selected route, source, approval or approved paths")
     _ <- D.readmittedC(route, effective, policy, core, host.publication)
   } yield ()
@@ -298,6 +299,33 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
           else invalid("scope correction crosses the exact approved GoalPhase dependency inventory")
       } yield () }
     } yield () }
+
+  def supplementalScopeCorrectionC(h: Host, payload: BoundedWorkRuntime.Payload, additional: Vector[String],
+    core: ActionCall.Core): Consequence[GoalPhaseDependencyInventoryContinuation.ManagedInventory] = for {
+    capture <- payload.managedDependency.map(Consequence.success)
+      .getOrElse(invalid("Supplemental inventory requires B's retained managed requester"))
+    input = payload.state.input
+    _ <- if (payload.state.participant == capture.participant && input.sourceReferences.contains(capture.work) &&
+      payload.root == h.root && payload.branch == h.branch && input.repositoryIdentity == h.repository)
+      Consequence.unit else invalid("Supplemental inventory crosses the retained participant or provider source")
+    policy <- h.managedDevelopment.map(Consequence.success)
+      .getOrElse(invalid("Supplemental inventory requires the registered managed provider"))
+    edge <- edgeC(policy)
+    _ <- if (edge == capture.edge && edge.localJar) Consequence.unit
+      else invalid("Supplemental inventory requires the same project-private local JAR edge; machine-common verification cannot use this correction")
+    original <- _requester_work_c(h, capture, core)
+    _ <- _admit_requester_c(h, capture, original._1, original._2, core)
+    work <- NativeWorkflowOperationOutput.workInputC(original._2)
+    route <- work.decisionContext.flatMap(_.deliveryRoute).filter(value => value.edge == edge &&
+      value.mode == D.subtree && payload.dependencyDelivery.contains(value.binding)).map(Consequence.success)
+      .getOrElse(invalid("Supplemental inventory requires the same retained local worktree delivery"))
+    _ <- _admit_publication_c(h, policy, edge, input)
+    // The checkpoint already owns B's admitted inventory, including paths from
+    // previous corrections. Only fresh B Starts are bounded by A's initial paths.
+    _ <- _admit_selected_route_c(h, policy, input, work, route, Some(payload.root -> payload.branch), core,
+      checkinventory = false)
+    inventory <- GoalPhaseDependencyInventoryContinuation.supplementalManagedInventoryC(work, capture.work, additional)
+  } yield inventory
 
   private def _requester_work_c(host: Host, capture: ManagedCapture, core: ActionCall.Core):
       Consequence[(WorkflowComponentStorage, WorkflowInteraction[A.Request, Nothing])] = for {

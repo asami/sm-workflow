@@ -19,6 +19,7 @@ import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import BoundedWorkRuntime.*
 import BoundedWorkRuntime.given
+import GoalPhaseDependencyInventoryContinuation.ManagedInventory
 import StandaloneFixExecution as S
 import S.given
 
@@ -36,8 +37,12 @@ private[smworkflow] object DelegateTaskScopeCorrection extends ScopeCorrectionNa
   acceptsInput = input => input.delegation.exists(_.role == "destination")) {
   final case class Target(componentInstance: String, sessionId: String, participant: String,
     frontierRevision: Long, oldContinuationId: String, frontier: Json, issued: Json,
-    business: Payload, continuationRevision: String, additionalOwnedPaths: Vector[String], submissionConditions: Option[Vector[String]] = None)
-  given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter { case ("submissionConditions", v) => !v.isNull; case _ => true }))
+    business: Payload, continuationRevision: String, additionalOwnedPaths: Vector[String],
+    submissionConditions: Option[Vector[String]] = None, managedInventory: Option[ManagedInventory] = None)
+  given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter {
+    case ("submissionConditions" | "managedInventory", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Target] = deriveDecoder
   final case class Checkpoint(target: Target, reference: ContextReference)
 
@@ -69,7 +74,7 @@ private[smworkflow] object ScopeCorrectionNativeOwner {
       }
       override protected def descriptionInputC(incoming: Request): Consequence[V.DelegateTaskScopeCorrectionDescriptionInput] =
         NativeWorkflowOperationInput.valueC[V.GoalTaskScopeCorrectionDescriptionInput](incoming, "input").map(input =>
-          V.DelegateTaskScopeCorrectionDescriptionInput(input.sessionId, input.oldContinuationId, input.additionalOwnedPaths, Vector.empty))
+          V.DelegateTaskScopeCorrectionDescriptionInput(input.sessionId, input.oldContinuationId, input.additionalOwnedPaths, Vector.empty, None))
       override protected def response(target: Target, outcome: String, message: String, paths: Vector[String]): OperationResponse =
         NativeWorkflowOperationOutput.response(V.GoalTaskScopeCorrectionView(target.sessionId, outcome, message, target.asJson.noSpaces, paths))
     }
@@ -110,7 +115,11 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     _ <- if (target.asJson == json && target.frontierRevision > 0 &&
         Vector(target.componentInstance, target.sessionId, target.participant, target.oldContinuationId,
           target.continuationRevision).forall(s => s != null && s.nonEmpty && s.trim == s) &&
-        target.frontier.isObject && target.issued.isObject && target.business.state.participant == target.participant)
+        target.frontier.isObject && target.issued.isObject && target.business.state.participant == target.participant &&
+        target.managedInventory.forall(inventory => N.entry == "DelegateTask" &&
+          target.business.state.stage == "Implement" && target.submissionConditions.isEmpty &&
+          target.business.managedDependency.exists(_.work == inventory.parentWork) &&
+          target.additionalOwnedPaths == inventory.additionalPaths))
       Consequence.unit else N.invalid("Scope target is incomplete or contains unsupported data")
     _ <- correctedInputC(target.business.state.input, target.additionalOwnedPaths, target.submissionConditions)
   } yield target
@@ -144,11 +153,12 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
   private final case class Observation(target: Target, current: InstanceRecord,
     entityrevision: org.simplemodeling.model.datatype.EntityRevision)
   private def _observe_c(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding,
-    session: String, old: String, additional: Vector[String], submission: Option[Vector[String]], core: ActionCall.Core): Consequence[Observation] = for {
+    session: String, old: String, additional: Vector[String], submission: Option[Vector[String]],
+    supplemental: Boolean, core: ActionCall.Core): Consequence[Observation] = for {
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
     pending <- adapter.inspectC(ContinuationIdentity(old), InstanceIdentity(session))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Exact pending Task issue is absent or already claimed")))
-    _ <- if (!preserveOriginalSources || (pending.continuation.status == ContinuationRuntimePersistence.Status.Available &&
+    _ <- if ((!preserveOriginalSources && !supplemental) || (pending.continuation.status == ContinuationRuntimePersistence.Status.Available &&
         pending.continuation.claimId.isEmpty)) Consequence.unit
       else N.invalid("Exact pending Task issue is not available and unclaimed")
     _ <- if (pending.current.definition == definition && pending.current.lifecycle == Lifecycle.Active)
@@ -170,14 +180,19 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
         work.state.asJson == payload.state.asJson && order.request.completionOperation == N.completionOperation &&
         payload.root == h.root && payload.branch == h.branch && payload.state.input.repositoryIdentity == h.repository)
       Consequence.unit else N.invalid("Scope correction requires the same pending implementation or a repair inventory addition without condition timing changes")
+    _ <- if (!supplemental || (N.entry == "DelegateTask" && implementation && submission.isEmpty)) Consequence.unit
+      else N.invalid("Supplemental managed inventory requires pending destination implementation with its retained condition timing")
     _ <- correctedInputC(payload.state.input, additional, submission)
     _ <- if (additional.forall(h.paths.contains)) Consequence.unit
       else N.invalid("Added paths exceed the configured host ownership")
-    _ <- ManagedDevelopmentBoundedWork.admitScopeCorrectionC(h, payload.managedDependency, additional, core)
+    inventory <- if (supplemental)
+      ManagedDevelopmentBoundedWork.supplementalScopeCorrectionC(h, payload, additional, core).map(Some(_))
+      else ManagedDevelopmentBoundedWork.admitScopeCorrectionC(h, payload.managedDependency, additional, core)
+        .map(_ => Option.empty[ManagedInventory])
     frontier <- WorkflowInstanceRecordJsonV1.encodeC(pending.current).flatMap(_parse_c)
     issued <- WorkflowWorkOrderJsonV1.encodeC(pending.issued, N.inputCodec).flatMap(_parse_c)
   } yield Observation(Target(core.component.get.core.instanceId.canonicalKey, session, payload.state.participant,
-    pending.current.revision.value, old, frontier, issued, payload, pending.entityRevision.value.toString, additional, submission),
+    pending.current.revision.value, old, frontier, issued, payload, pending.entityRevision.value.toString, additional, submission, inventory),
     pending.current, pending.entityRevision)
 
   private def _parse_c(text: String): Consequence[Json] =
@@ -285,16 +300,30 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
     saved <- _checkpoint_c(storage, current, core)
     _ <- GoalPhaseParticipantAdmission.admitC(saved.target.participant, core.executionContext)
+    original = saved.target.business
+    _ <- saved.target.managedInventory.fold(Consequence.unit) { expected => for {
+      observed <- ManagedDevelopmentBoundedWork.supplementalScopeCorrectionC(h, original,
+        saved.target.additionalOwnedPaths, core)
+      _ <- if (expected == observed) Consequence.unit else N.invalid("Supplemental managed inventory changed before Advance")
+    } yield () }
     input <- projectedInputC(saved)
     _ <- if (input.ownedPaths.forall(h.paths.contains)) Consequence.unit else N.invalid("Corrected host ownership changed")
-    original = saved.target.business
     // Preserve base, generation, repair counts, results and old source references.
     state = original.state.copy(input = input,
       evidenceReferences = if (!preserveOriginalSources && saved.target.submissionConditions.nonEmpty)
         (original.state.evidenceReferences :+ saved.reference).distinct else original.state.evidenceReferences)
-    unrelated = original.unrelated.map(_.filterNot(path => S.owned(path.path, saved.target.additionalOwnedPaths) &&
-      path.renamedFrom.forall(S.owned(_, saved.target.additionalOwnedPaths))))
-    next <- N.saveC(h, storage, current, original.copy(state = state, unrelated = unrelated), core)
+    supplemental = saved.target.managedInventory.map(inventory =>
+      (original.supplementalOwnedPaths.getOrElse(Vector.empty) ++ inventory.additionalPaths).distinct)
+      .orElse(original.supplementalOwnedPaths)
+    unrelated = original.unrelated.map(_.filterNot { entry =>
+      val endpoints = entry.path +: entry.renamedFrom.toVector
+      endpoints.forall { path =>
+        if (saved.target.managedInventory.nonEmpty) saved.target.additionalOwnedPaths.contains(path)
+        else S.owned(path, saved.target.additionalOwnedPaths)
+      }
+    })
+    next <- N.saveC(h, storage, current, original.copy(state = state, unrelated = unrelated,
+      supplementalOwnedPaths = supplemental), core)
   } yield next
 
   def operations(h: Host, definition: DefinitionBinding,
@@ -326,15 +355,20 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
           adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
           retained <- adapter.loadRetainedC(ContinuationIdentity(old), InstanceIdentity(session))(using context)
           result <- input match {
-            case Right(description) => retained match {
-              case Some(saved) if saved.receipt.payload.target.additionalOwnedPaths == description.additionalOwnedPaths.toVector &&
-                  saved.receipt.payload.target.submissionConditions == Option.when(description.submissionConditions.nonEmpty)(description.submissionConditions) =>
-                GoalPhaseParticipantAdmission.admitC(saved.receipt.payload.target.participant, context)
-                  .flatMap(_ => _output_c(saved.receipt.payload.target, "already-corrected"))
-              case Some(_) => N.invalid("Description differs from the retained scope correction")
-              case None => _observe_c(h, storage, definition, session, old, description.additionalOwnedPaths.toVector, Option.when(description.submissionConditions.nonEmpty)(description.submissionConditions), selected)
-                .flatMap(value => _output_c(value.target, "decision-required"))
-            }
+            case Right(description) =>
+              val additional = description.additionalOwnedPaths.toVector
+              val submission = Option.when(description.submissionConditions.nonEmpty)(description.submissionConditions)
+              val supplemental = description.supplementManagedInventory.contains(true)
+              retained match {
+                case Some(saved) if saved.receipt.payload.target.additionalOwnedPaths == additional &&
+                    saved.receipt.payload.target.submissionConditions == submission &&
+                    saved.receipt.payload.target.managedInventory.nonEmpty == supplemental =>
+                  GoalPhaseParticipantAdmission.admitC(saved.receipt.payload.target.participant, context)
+                    .flatMap(_ => _output_c(saved.receipt.payload.target, "already-corrected"))
+                case Some(_) => N.invalid("Description differs from the retained scope correction")
+                case None => _observe_c(h, storage, definition, session, old, additional, submission, supplemental, selected)
+                  .flatMap(value => _output_c(value.target, "decision-required"))
+              }
             case Left(value) => for {
               expected <- targetC(value.target)
               normalized <- selectionInputC(value)
@@ -354,7 +388,8 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
                 case Some(saved) if saved.receipt.payload == Checkpoint(expected, reference) => _output_c(expected, "already-corrected")
                 case Some(_) => N.invalid("Repeated correction differs from its committed target")
                 case None => for {
-                  observed <- _observe_c(h, storage, definition, session, old, expected.additionalOwnedPaths, expected.submissionConditions, selected)
+                  observed <- _observe_c(h, storage, definition, session, old, expected.additionalOwnedPaths,
+                    expected.submissionConditions, expected.managedInventory.nonEmpty, selected)
                   _ <- if (expected.asJson == observed.target.asJson) Consequence.unit else N.invalid("Scope target changed; obtain a current description")
                   _ <- adapter.executeC(ContinuationIdentity(old), observed.current.revision, observed.entityrevision,
                     observed.current, N.history(observed.current, resumeCause + old),

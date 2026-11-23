@@ -16281,7 +16281,7 @@ GoalTaskRepairContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Describe exact additional owned paths for the same unclaimed implementation or Repair. Only initial implementation may select an explicit submission-condition subset; Repair retains its timing plan, failed checks, history and allowance. All original conditions remain adopted. Passive description changes no Session or effect.
+Describe exact additional owned paths for the same unclaimed implementation or Repair. Only initial implementation may select an explicit submission-condition subset; Repair retains its timing plan, failed checks, history and allowance. With supplementManagedInventory true, describe literal additions for a pending managed local worktree implementation with project-private local JAR delivery, using the retained parent approval and authorization boundary. The complete target requires Human selection, and condition timing stays as adopted. Passive description changes no Session or effect.
 
 ##### TYPE
 
@@ -17241,6 +17241,7 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | oldContinuationId | string | 1 |
 | additionalOwnedPaths | string | * |
 | submissionConditions | string | * |
+| supplementManagedInventory | boolean | ? |
 
 # VALUE
 
