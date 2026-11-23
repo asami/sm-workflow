@@ -1,5 +1,16 @@
 # sm-workflow incremental-use roadmap
 
+## Phase 7.1 source-project integration on hold — 2026-11-23
+
+[Phase 7.1](phase-7.1.md) and its [checklist](phase-7.1-checklist.md) are on hold
+by user decision. Source-project integration is not selected for implementation;
+its original proposal is retained. The existing project-scoped local JAR route
+is recommended, and machine-wide local JAR consumption is an explicit alternative
+with shared-publication effects. Delivery location remains a separate choice.
+Preserve accepted Phase 7, the separate Phase 22 operational residual and all
+existing Sessions and histories. This decision starts no live-consumer operation
+and changes no adopted delivery slot or priority below.
+
 ## Adopted development priority — 2026-11-22
 
 The 2026-11-23 scheduling decision prioritizes reducing AI calls and repair
