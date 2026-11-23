@@ -245,6 +245,47 @@ the exact native Request and adapter-generated launch arguments. Reference
 specific decisions, files and evidence rather than copying a transcript. A
 worker's report is input to the owner's verification, not runtime acceptance.
 
+## Human decision prompts
+
+When the runtime requires a Human decision, ask what the user is deciding in
+plain Japanese. Lead with what will happen and why the decision is needed.
+Show the actual scope or effect of accepting and the consequence of the relevant
+alternatives. Use the native choice value alongside its plain-language meaning
+as needed for submission. A choice code, a recommendation label, or a link to a
+payload cannot carry the explanation on its own.
+
+For a repair or retry, name the failure or finding, what will be changed or
+run again, and any earlier effect that could be repeated.
+
+Use the actual saved question and its source, such as the proposed Plan and
+review findings. When the display summary omits the business details, read
+their exact retained references before presenting the choices. If a material
+effect is still unclear, report the missing detail and keep the decision
+pending. Apply this presentation to the existing question without adding
+another approval round trip or widening the selected operation.
+
+### Release scope changes
+
+When a Plan revision excludes a release requirement, state the affected
+capability by name, whether its implementation is missing, and what the user
+will be unable to do in that release. Name verification that can follow
+delivery separately. An unverified condition alone does not establish that
+its implementation exists. A critical capability missing from the delivered
+workflow remains an implementation gap.
+
+For example, when a proposal would release Phase 28 without the Metals
+connection and lint auto-fix, ask:
+
+> 今回のリリースから、Metalsの修正案を取得・適用する機能と、
+> lint・整形の自動修正を外してよいですか。この版では両機能が使えず、
+> リリース後の実運用でも確認できません。
+
+Present the actual alternatives in user terms, such as adopting that reduced
+release scope or keeping the original implementation requirements. Use a
+recommendation only with an explicit reason and after showing the trade-off.
+A direction to postpone real-environment checks applies to verification and
+carries no permission to postpone implementing those capabilities.
+
 ## Cross-chat result reply authority
 
 For either waiting mode, the requester includes the authorized return chat

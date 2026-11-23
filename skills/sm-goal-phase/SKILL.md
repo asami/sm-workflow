@@ -6,6 +6,8 @@ description: Route explicit Phase start/resume requests through the caller and p
 Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
 Default to English for new workflow/AI requests and results. Use Japanese for
 user-facing reports and questions. Preserve approvals and logs in their original language and wording.
+Apply the [Human decision presentation](../../docs/spec/native-host-execution.md#human-decision-prompts)
+before asking the user to accept a native choice.
 
 ## Shared Journal operations
 
@@ -1233,6 +1235,12 @@ The imported raw Plan must equal the complete submitted Proposal. Fresh
 question preparation acquires both files once through the existing File UoW
 owner, captures project acceptance and saves their typed Bound as business data.
 It grants no source permission, integrity certificate or consent.
+
+For a revision that changes a release requirement, compare the captured prior
+and proposed Plan with the actual review findings. Explain each capability that
+would be missing from the release and separate it from verification deferred
+until after delivery. Follow the shared
+[release scope change rules](../../docs/spec/native-host-execution.md#release-scope-changes).
 
 The actual saved revision question offers exactly `AdoptPlanRevision`,
 `RejectPlanRevision`, `Defer` and `Cancel`. Only independently admitted explicit
