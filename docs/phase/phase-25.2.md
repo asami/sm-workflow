@@ -16,7 +16,7 @@ record available per-execution token usage without adding a new metering service
 Keep durable cross-run attribution, cost accounting, and Phase-total
 reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
 
-## P252-01 — AI invocation counts
+## P252-01 — AI invocation counts and available token usage
 
 - Count one confirmed execution per invocation ID, including retries or fallback
   calls that actually ran. Do not count dispatch selection, an unused fallback,
@@ -60,10 +60,11 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
 
 ## P252-03 — Completion output and verification
 
-- Emit two compact Markdown tables directly in the initiating Codex chat as
+- Emit compact Markdown tables for AI usage, retained automatic repairs, and
+  operational metrics directly in the initiating Codex chat as
   part of the ordinary Workflow completion reply. A CLI-only result, log,
   attachment, or instruction to open a separate report does not satisfy this.
-  Derive both tables from the same typed completion metrics; do not ask AI to
+  Derive the tables from the same typed completion metrics; do not ask AI to
   reconstruct the numbers. Example layout (illustrative counts only):
 
   | Engine / configured route | Thinking mode | Reasoning level | Calls | Input tokens | Output tokens | Total tokens | Usage coverage |
@@ -77,6 +78,12 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
   | Metals | 1 |
   | Other / built-in correction | 1 |
 
+  | Operational metric | Observed result |
+  | --- | --- |
+  | Resolved without AI repair | 5/8 attempted repair episodes |
+  | Rework cycles | Compile 2, test 1, lint 0, review 1 |
+  | Elapsed / cumulative time by stage | Elapsed 15m; AI 4m, build/test 7m, approval wait 6m |
+
 - Keep the same counts, known token totals, coverage and missingness available
   as structured completion data. Aggregate the current Session and linked
   child executions only where evidence permits; deduplicate by stable invocation
@@ -87,3 +94,37 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
 - Verify rendering in the initiating Codex chat through the normal packaged
   completion path with representative events,
   replay, partial evidence, zero counts, rollback, and later provider extension.
+
+## P252-04 — Operational metrics in the initial release
+
+- **Resolved without AI repair:** group by stable repair episode. Among episodes
+  with an actual automatic correction attempt and a known disposition, count
+  those resolved by a retained, successfully revalidated deterministic edit
+  without an AI repair invocation for that episode. Show numerator and
+  denominator, and separately show unresolved or unobservable episodes. A
+  diagnostic-only check is not an attempt. Separate the count of successful
+  edit applications (P252-02) from the count of resolved episodes. This is an
+  observed outcome, not an estimate of avoided tokens or calls.
+- **Rework cycles:** count actual repeat compile, test, lint, and review passes
+  belonging to a rework cycle, by stage. Exclude the initial pass, skipped
+  attempts, and replay of retained events. Use retained cycle and stage
+  identities or explicitly report unavailable attribution; do not substitute
+  general run counts for rework.
+- **Time:** report elapsed Workflow Session time and separate observed
+  cumulative durations for AI execution, build/test, and human approval wait.
+  Use recorded start and end boundaries, identify incomplete intervals, and
+  do not sum concurrent activity into wall-clock elapsed time. If a duration
+  cannot be observed, mark it unknown rather than inferring it.
+
+## Secondary breakdowns from existing records
+
+- When the execution record identifies the actual task role, show AI calls
+  (and available token subtotals) by implementation, repair, review, and
+  judgment. Keep unknown roles explicit.
+- When retained routing decisions identify an actual route switch, show its
+  count and recorded reason (e.g. allowance exhausted or provider unavailable).
+  Count the switch decision once; the invocation count still covers only actual
+  AI execution. Do not attribute unrecorded reasons or change fallback policy.
+- These two breakdowns are best effort: do not add a separate instrumentation
+  project or a completion gate. Prefer observed comparable runs over a
+  speculative counterfactual savings estimate.

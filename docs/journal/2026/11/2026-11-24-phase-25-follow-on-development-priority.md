@@ -70,10 +70,21 @@ The rest of the roadmap remains in the same order.
 
 Phase 25.1 retains the separate OpenAI daily free-allowance reservation and
 settlement scope. The user put Phase 25.2 immediately after it: ordinary
-sm-workflow completion posts two tables directly in the initiating Codex
+sm-workflow completion posts Markdown tables directly in the initiating Codex
 chat, covering actual AI calls by engine, configured route, thinking mode and
 level, and retained deterministic repairs by tool (Scalafix, Metals, other).
 When the provider or host reports actual usage, record token counts alongside
 AI invocation counts and show usage coverage; missing values are unknown, not
 zero. Configured route does not establish billing. This records scope and order only;
 it starts no execution and changes no existing acceptance or Session.
+
+### Additional Phase 25.2 metrics
+
+The initial completion view adds three operational signals: the share of
+observed automatic-repair episodes that resolve without AI repair, repeat passes
+by compile/test/lint/review stage, and wall-clock time alongside cumulative
+AI/build-test/human-approval durations. Preserve denominators and incomplete
+coverage and keep parallel activity from inflating elapsed time. AI usage by
+task role and route-switch counts/reasons are secondary breakdowns using the
+records already available. Compare similar observed runs instead of estimating
+hypothetical token savings. The adopted order and other Phase scopes are unchanged.

@@ -13,9 +13,15 @@ Plan: [Phase 25.2](phase-25.2.md)
   Scalafix, Metals and other programmatic corrections. Controlled events prove
   attribution using available Phase 28.1 routes; no-op, check-only lint, rejected and rolled-back edits do not count.
   At least one currently available repair is verified end to end.
-- [ ] P252-03: Normal packaged completion displays both Markdown tables in the
+- [ ] P252-03: Normal packaged completion displays the Markdown tables in the
   initiating Codex chat, with matching structured counts for ordinary,
   zero-activity, and incomplete-evidence runs. A CLI-only artifact is not enough.
   Resume/child replay is deduplicated, with no added AI call or closure gate.
+- [ ] P252-04: Verify the non-AI resolution numerator/denominator, attempts
+  vs retained edits, repeat compile/test/lint/review cycles, and elapsed time
+  vs cumulative stage times. Include multiple edits in one episode, fallback
+  to AI, unresolved or missing dispositions, resumed/replayed events, parallel
+  spans, and unknown duration. Show AI role and route-switch reasons where
+  retained evidence is available, without requiring a new instrumentation path.
 - [ ] Record review and release evidence. Distinguish live observations from
   fixtures and unavailable tool routes.
