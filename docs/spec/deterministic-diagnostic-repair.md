@@ -33,7 +33,89 @@ fields are invalid. `enabled` defaults to true; `timeoutMillis` defaults to 1000
 `maxReplacementChars` to 65536 (0–1048576). Optional `serverIdentity` is a logical
 registration name, not a path or execution authority. Enabling policy grants no
 execution or workspace authority. An explicit `enabled: false` disables the route.
-Runtime integration and installed-server qualification belong to later steps.
+The ordinary Phase repair route consumes this policy as described below. Host
+registration remains separate from project configuration.
+
+## Fixed Metals process and ordinary repair
+
+After the existing native compiler recipe has declined a failed Compile or
+TestCompile candidate, ordinary repair can request a Metals code action. It
+authenticates the retained typed failed check, one compiler diagnostic, the
+selected Step's literal source ownership, staged UTF-8 blob, regular file mode,
+repository identity and identical worktree bytes through `compilerMaterialC`.
+Only the supported diagnostic shape proceeds to the provider. Existing compiler
+repair, rollback, retry accounting, candidate inspection and selected validation
+continue through their normal paths.
+
+The production rule selects the Scala action introduced in
+[Metals 1.5.3](https://scalameta.org/metals/blog/2025/05/13/strontium/#remove-invalid-imports-code-action)
+and implemented by [RemoveInvalidImportQuickFix](https://github.com/scalameta/metals/pull/7416).
+The admitted subset is one unindented, simple qualified import, such as
+`import scala.DoesNotExist`, followed immediately by LF. A complete Scala 2
+diagnostic must identify `object DoesNotExist is not a member of package scala`,
+echo that exact line and point its caret at either the package owner start or
+the missing final name start. The original diagnostic range must match that
+observed caret; the LSP range separately covers the missing final name. Only blank,
+simple package, simple import and closed header comments can precede it. Aliases, selector groups,
+wildcards, comments, CRLF and other source shapes use ordinary repair. The action
+must have kind `quickfix`, title `Remove invalid import of 'DoesNotExist'`, one
+edit deleting exactly that import line including LF, and no command, unresolved
+data, annotation, resource operation or other edit. Scala 3.3.8 also admits the literal missing qualifier form
+`import MissingPackage.Member` only when the E006 header, URI, source echo,
+caret span and missing-name message authenticate that exact qualifier. Its
+normalized Metals selection covers the missing qualifier; the same exact
+whole-line deletion and candidate-bound transaction apply. Competing eligible actions
+yield no proposal. The diagnostic, title and edit are checked together; the
+title alone is insufficient. Java-only missing-override actions are excluded.
+
+`serverIdentity: scala-metals-1-5-3` selects the supported logical provider.
+The host must separately register capability `sm-workflow-metals` for this
+Component with one fixed executable recipe, the shipped
+`sm-workflow-metals-bridge.py` companion itself as the absolute `executable`,
+with `fixedArguments: []`, `argumentTemplates: [[]]`, no caller working
+directory, input files, resource trees or output artifacts. The companion's
+explicit `#!/usr/bin/python3` shebang and installed mode 0755 are part of this
+fixed payload contract. Registering a generic Python interpreter with the
+companion as an argument is rejected by CNCF's direct-effect policy. The host
+fixes `SM_WORKFLOW_METALS_SERVER` to an absolute executable wrapper for its
+chosen provider. The wrapper receives no caller arguments. The companion is
+included in the component's `META-INF/sm-workflow` source distribution; this does
+not install it or change a shared CLI. Host registration and deployment are
+explicit prerequisites, and no direct process fallback bypasses admission.
+
+The component submits one finite JSON input through protected CNCF
+`process_exec`. Input and stdout are limited to 1 MiB each, stderr to 64 KiB and
+the WorkArea to 4 MiB. The whole LSP exchange shares `timeoutMillis`; CNCF adds a
+bounded launch and termination allowance. The companion starts the host-fixed
+provider with an isolated temporary directory inside the CNCF WorkArea. It writes
+only the selected source as `Main.scala`, opens that URI, negotiates UTF-16 and
+literal code actions, and requests only quick fixes. It never copies a build or
+imports a repository. Server requests, including `workspace/applyEdit` and command
+execution, receive an unsupported-operation response. Frame size, cumulative
+provider output, frame count and JSON fields are bounded. Provider edits must
+name the isolated opened URI before translation; an edit naming the original
+candidate URI directly is incompatible. Scala then applies its exact rule and
+native source admission to the translated proposal.
+
+The companion closes the document, sends shutdown and exit within the same
+deadline, terminates and waits for the provider process group, closes pipes and
+removes its isolated directory. CNCF retains ownership of the outer process
+lifecycle and WorkArea. A missing provider, deadline, incompatible encoding or
+framing, unsupported action or disabled configuration produces no patch.
+Admission rejection is distinct from an uncertain process effect. Native intent
+and result receipts retain the candidate/check relationship, typed outcome and
+bounded actual captures. An intent without a result, or unconfirmed termination,
+pauses the original attempt and cannot redispatch it.
+
+An eligible proposal passes the existing native file update, candidate admission
+and revalidation. Replay checks the same pure allowlisted transformation against
+the original authenticated diagnostic and bytes without contacting the provider.
+Failed revalidation uses the existing exact rollback and ordinary repair route.
+`DeterministicRepairSpec` contains controlled-LSP subprocess cases using the
+production companion and CNCF admission, including normal lifecycle, timeout,
+encoding and framing failures, direct candidate URI, unowned edits, commands,
+ambiguity and unavailable provider. These fixtures do not establish a deployed
+Metals build connection; qualification against real projects is post-release.
 
 ## Native terminal LF proposal
 
@@ -50,7 +132,22 @@ finding, supply its retained evidence reference, determine handwritten ownership
 and bind the exact range to the snapshot. The data constructor does not verify
 those claims. The returned action separately records the native recipe and evidence
 reference and passes the existing admission boundary; it neither applies a patch
-nor proves a check succeeded. No runtime producer is wired to this projection yet.
+nor proves a check succeeded.
+
+Ordinary Step repair selects this recipe only from a retained, admitted original
+independent `ReviewStep` repair verdict with `completionConditions.kind` equal to
+`terminal-lf`, exactly one finding and exactly one literal owned handwritten Scala
+path. Its original candidate, passed selected checks, retained result reference,
+repair generation and single open review issue must agree. The runtime preserves
+the original candidate/check context only for that eligible completion shape,
+then authenticates the staged regular UTF-8 file and current worktree bytes through
+the shared source proof. Multi-file completion conditions retain their ordinary
+semantic repair path. Other unresolved findings prevent the automatic edit.
+
+The edit uses the existing compare-and-set transaction, fresh candidate admission
+and selected checks. A failed revalidation restores only the exact applied blob
+through the existing rollback. A successful edit requires a fresh independent
+Step review. The original verdict does not accept the changed candidate.
 ## Scala 3 Circe error member
 
 `circeErrorMessage` proposes replacing only the member `message` with
@@ -86,19 +183,97 @@ RepairStep available.
 The runtime records the file-update intent before invoking the managed File
 compare-and-set and records the returned outcome separately. An applied edit
 goes through normal candidate inspection and the selected validation chain. If
-that revalidation formally fails, rollback checks that the single changed blob
-is precisely the applied edit. It restores the original bytes, stages that file
-through its selected Git program and verifies the original index. The failed
+that revalidation formally fails, rollback compares the changed blobs with the
+recorded diagnostic patch and any subsequent managed Scalafix, source-history,
+or Scalafmt writes. Each subsequent write must extend the previous exact bytes
+for that file. The resulting set of paths and byte digests must match the
+failed index. Rollback restores the original bytes with conditional writes,
+stages those files through their selected Git programs and verifies the original
+index and HEAD. The failed
 diagnostic and validation remain available to the normal RepairStep or Human
 decision. A missing effect result or a rollback conflict retains the actual
 state for resolution. The runtime makes at most one automatic compiler
 correction attempt per Step in this initial route and preserves the normal
 repair budget and independent review.
 
-The Phase route supports the narrow Circe correction above. The Scala
-terminal-LF proposal, Metals transport and formatter/Scalafix actions have
-separate producer and qualification requirements. Installed tools, deployed
-project behavior and operational savings are checked after release.
+The Phase route tries the narrow Circe correction, then the bounded Scala
+lint/terminal-LF route below, before Metals and ordinary compiler/semantic repair.
+All routes retain their original diagnostics and the single-attempt transaction
+accounting for the Step. Installed tools, deployed project behavior and operational
+savings are checked after release.
+
+## Retained read-only Scalafix correction
+
+A normal typed SBT `FixCheck` already runs the host-admitted check program.
+`GoalPhaseNativeValidation` retains an optional per-check attestation from that
+actual observed target's `SbtLintInput`; it never rereads current configuration to
+authorize an older result. The supported recipe requires the shared lint input
+identity/revision, the exact Git base, a selected `RedundantSyntax` rule,
+`RedundantSyntax.finalObject = true` and
+`RedundantSyntax.stringInterpolator = false`. Historical receipts without an
+attestation retain their previous meaning and use ordinary repair. The native
+attempt chain permits an attestation only beside its own newly observed receipt
+and preserves the exact previous attestations during reconstruction.
+
+Only one complete, failed ordinary FixCheck with complete nontruncated stdout and
+stderr, a successful check prefix and no unresolved execution uncertainty can
+supply a proposal. The accepted tool output is one unified diff naming the exact
+absolute source path and `<expected fix>`, with one hunk and three context lines.
+The parser binds every old/context line and hunk count to the original candidate's
+staged UTF-8 text. It accepts a single deletion of the `final ` prefix from a
+simple `final object Name {` or `final object Name {}` declaration, including
+optional space indentation; all other characters remain exact. The source must
+be at a lexical code position, an exact Step-owned handwritten regular Scala file
+under `src/main/scala` or `src/test/scala`, and match current worktree bytes.
+Generated path segments, additional edits/diffs, unknown error lines, clipping,
+stale bytes and absent or disabled rule configuration yield no proposal.
+
+This route launches no additional formatter or process and copies no checkout.
+The existing transaction records intent/result, performs the byte-checked update,
+and uses ordinary candidate admission, selected revalidation and exact rollback.
+Replay derives the same token deletion from the retained original output and
+attestation without rerunning FixCheck. An ineligible proposal retains ordinary
+repair and the normal AI fallback. A failed revalidation retains its actual
+failure before restoring the applied edit.
+
+`DeterministicRepairSpec` defines isolated normal runtime fixtures with pinned
+`sbt-scalafix` 0.12.1, actual typed FixCheck output, successful revalidation and
+independent compiler failure followed by rollback. Separate terminal-LF fixtures
+cover an admitted original independent verdict, fresh checks, rollback and the
+unchanged multi-file fallback. Pure capture fixtures cover unavailable rule
+configuration, clipped output, extra edits, stale bytes and historical decoding.
+These executable specifications require execution to establish qualification;
+production project qualification remains a separate post-release activity.
+
+## Ordinary Scala cleanup
+
+Candidate inspection can run allowlisted Scalafix rewrites, the existing
+source-history normalizer, and Scalafmt before staging and final validation.
+It uses selected, changed, handwritten Scala files. The formatter uses the
+resolved project configuration and a second preview of the proposed bytes
+to confirm idempotence. The existing history selection governs normalization
+and conformance, including an explicit `none` override.
+
+The host registers the fixed `sm-workflow-scalafix-preview` and
+`sm-workflow-scalafmt-preview` capabilities. The CAR contains their shared
+companion at `META-INF/sm-workflow-runtime/sm-workflow-scala-tool-bridge.py`
+inside `component/main.jar`. Install the executable from that resource and
+register the fixed Java executable and pinned tool classpath file in the host's
+recipe. The bridge previews one isolated file with Scalafix 0.12.1 or Scalafmt
+3.8.6. Tool registration does not itself enable a rule or formatter on a project.
+
+For `OrganizeImports`, the Phase route currently admits Scala 3.3.8, explicit
+`OrganizeImports.removeUnused = false`, and a region of distinct named
+`java` or `scala` imports. Declare the project's existing workspace-relative
+compiler output roots as `validation.scalaLint.semanticdbRoots.compile` and,
+where applicable, `validation.scalaLint.semanticdbRoots.test`. The Plan must
+select the corresponding existing Compile or TestCompile program. The runtime
+reuses an attributable successful compiler result with matching source and
+SemanticDB digests. Otherwise it invokes the selected compiler once for that
+scope and captures the result and any matching metadata separately. An
+unconfirmed compiler termination stops the attempt for recovery; unavailable
+metadata supplies no edit. It checks the candidate again before applying any
+proposal and admits only import reordering with the surrounding bytes preserved.
 
 ## Source-local nullable boundary evidence
 
@@ -150,9 +325,15 @@ these fixtures. Selected validation 1022 on tree
 `7034b3bdf01efb2b48720dc54a5b7c0813f0cf3c` passed Compile, TestOnly (8 tests),
 and FixCheck.
 
-The standalone terminal-LF proposal test does not establish runtime application
-of that action. A production provider seam for deployed Metals remains incomplete;
-the transport fixture does not establish actual server behavior. The adopted
+The standalone terminal-LF proposal test establishes only pure patch admission;
+the ordinary-runtime fixtures above define its application and rollback checks.
+A fixed, admitted provider seam is implemented above; the controlled
+transport fixture does not establish actual deployed server behavior. The adopted
 Plan defers qualification against deployed tools and real Scala 2.12/3 projects,
 and production latency and AI-avoidance measurements. No Phase completion is
 claimed by this local qualification.
+
+Projects using managed ScalaDoc history can explicitly configure Scalafmt with
+`docstrings.style = keep` to preserve that metadata. A formatter preview that
+changes managed history or cannot be interpreted as valid history is rejected;
+the workflow does not rewrite the header or override the project formatter.

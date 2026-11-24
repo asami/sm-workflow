@@ -787,7 +787,8 @@ application, candidate capture, revalidation and rollback. Continue semantic
 repair only from an issued WorkOrder. Preserve observed usage and the disposition
 of declined or rejected proposals. A missing or unbound result remains uncertain.
 Metals/LSP integration and automatic formatter or Scalafix repair are separate
-capabilities.
+capabilities. Their availability depends on the selected installed runtime and
+its attributable retained evidence.
 
 #### Bounded API review and provider usage
 
@@ -832,6 +833,16 @@ direction through the existing path when the runtime issues that decision.
 Use these routes only when the selected installed runtime supports them. Retain
 the actual public response and any stated eligibility limit; the presence of
 source code or a new skill is not installed qualification.
+
+For the selected installed native Phase route that supports managed Scala history,
+implementation does not make routine manual header updates. The runtime owns
+enabled normalization and conformance checking on the admitted candidate.
+Independent review consumes the attributable result for that candidate and checks
+substantive concerns, rather than repeating routine manual header checks. Commit
+preparation uses the same candidate result when applicable. Failed or interrupted
+history operations use the native recovery path below. Hand-authored and manual
+routes outside this automation retain their applicable history rules; older skills
+remain read-compatible and do not prove that the installed runtime supports it.
 
 For an interrupted history-comment normalization, obtain the current target
 through `GoalPhaseService.describeGoalPhaseSourceHistoryNormalization

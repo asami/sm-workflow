@@ -1,10 +1,34 @@
 # Phase 28.1: Deliver Scala Metals and Lint Auto-Fix
 
-Status: planned
+Status: closed
+Closed: 2026-11-24 (Asia/Tokyo)
 Planned: 2026-11-23 (Asia/Tokyo)
 Scheduled: immediately after [Phase 25](phase-25.md), followed by [Phase 25.1](phase-25.1.md)
 Depends on: [Phase 28 local release](phase-28.md#formal-local-release)
 Checklist: [Phase 28.1 acceptance](phase-28.1-checklist.md)
+
+## Human-approved formal local release — 2026-11-24
+
+The user approved a FORMAL local release under the
+[Phase 8 precedent](phase-8.md#human-approved-formal-release--2026-11-19).
+Additional release validation and independent review are **NOT RUN —
+USER-APPROVED**. The local release Step plan contains the accepted P281-01 and
+P281-02 commits `42f406ef` and `41dd8097`. The release also includes the
+implemented P281-03 candidate with its outstanding native disposition.
+
+In native Session `edba64e3bcfb3384e026e6d1b0ac4d18`, Plan
+`4-packaged-complete-scala-cleanup-inventory-4`, validation revision `1137`
+tested candidate tree `28a6af056b57fe0ff62f02a1713df01b0ab514d1`.
+Compile and all 27 focused tests passed. FixCheck exited with code 1 and
+reported 557 affected diagnostics. The issue remains `OPEN` with disposition
+`BLOCKED`, and the Session retains Human1146 and the repair count of 7/10.
+Native P281-03 acceptance and a native Phase terminal transition remain absent.
+
+Comparison analysis that could not be established and migration to stricter
+comparisons are assigned to Phase 28.2. Other unresolved diagnostics remain
+open under issue-8. The adopted follow-on order is Phase 25.1 → 25.2 → 28.2 →
+7.2. Comparison migration is a Phase 28.2 obligation. Operational qualification
+on actual development projects follows local release.
 
 ## Goal and scope
 

@@ -30,6 +30,7 @@ validation:
   sharedScalaLint: true
   metals:
     enabled: true
+    serverIdentity: scala-metals-1-5-3
     timeoutMillis: 10000
     maxEdits: 32
     maxActions: 64

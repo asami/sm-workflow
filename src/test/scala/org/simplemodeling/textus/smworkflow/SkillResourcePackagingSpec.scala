@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 24, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -57,9 +57,13 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   private val _dispatch_paths = Vector("scripts/goal-phase-dispatch.py", "skills/sm-goal-phase/dispatch-mappings.json",
     "skills/sm-goal-phase/cost-role-mapping.json")
   private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths ++
-    _agent_paths ++ _dispatch_paths ++ Vector("install-sm-workflow.py")
+    _agent_paths ++ _dispatch_paths ++ Vector("install-sm-workflow.py", "sm-workflow-metals-bridge.py")
   private def _source_path(path: String): java.nio.file.Path =
-    Paths.get(if (path == "install-sm-workflow.py") "scripts/sm-workflow-tools.py" else path)
+    Paths.get(path match {
+      case "install-sm-workflow.py" => "scripts/sm-workflow-tools.py"
+      case "sm-workflow-metals-bridge.py" => "scripts/sm-workflow-metals-bridge.py"
+      case other => other
+    })
 
   "Component-owned skill resources" should {
     "retain exactly the seven public semantic skill sources in the actual component JAR" in {
@@ -118,6 +122,24 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           }
         } finally jar.close()
       } finally zip.close()
+    }
+
+    "package the Scala tool bridge at its runtime path with exact source bytes" in {
+      Given("the official packageBin component artifact and the Scala tool bridge source")
+      val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.1-SNAPSHOT.jar")
+      withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
+      val runtimePath = "META-INF/sm-workflow-runtime/sm-workflow-scala-tool-bridge.py"
+      val jar = new JarFile(artifact.toFile)
+      try {
+        When("the runtime namespace is enumerated and its bridge is read")
+        val entries = jar.entries().asScala.filter(entry => !entry.isDirectory &&
+          entry.getName.startsWith("META-INF/sm-workflow-runtime/")).toVector
+        Then("the exact runtime path occurs once and its bytes match the authoring source")
+        entries.map(_.getName) shouldBe Vector(runtimePath)
+        val input = jar.getInputStream(entries.headOption.getOrElse(fail("Missing packaged resource")))
+        try input.readAllBytes().toVector shouldBe Files.readAllBytes(Paths.get("scripts/sm-workflow-scala-tool-bridge.py")).toVector
+        finally input.close()
+      } finally jar.close()
     }
 
     "resolve actual direct contract links from installed skill instructions within the standalone ZIP" in {

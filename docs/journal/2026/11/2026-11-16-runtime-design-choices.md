@@ -8,7 +8,7 @@ verification history.
 
 Requiring an installation UUID or manifest for every source revision would
 couple ordinary dependency development to deployment state. The
-[source-revision design](../design/goal-phase-dependency-source-revision.md)
+[source-revision design](../../../design/goal-phase-dependency-source-revision.md)
 therefore separates source/base/scope succession from fixed runtime images.
 Inventing placeholder image IDs or reviving a retired API would preserve the
 coupling under another name.
@@ -20,7 +20,7 @@ edits affect operational use. The selected CNCF launcher and published artifact
 are the intended boundary. Pinning one SNAPSHOT number would then undermine
 routine upgrades: catalog version comparison must consider both releases and
 SNAPSHOTs, with release preferred at the same version.
-See the [initialization delivery notes](../notes/project-initialization-delivery-plan.md).
+See the [initialization delivery notes](../../../notes/project-initialization-delivery-plan.md).
 
 ## Pure configuration, owned initialization
 
@@ -32,7 +32,7 @@ application-side `mkdir` as a workaround for missing framework setup.
 Deriving a normalized runtime parent in CNCF also avoids constructing `..`
 paths in application templates. A candidate alias is an execution resource,
 not another ordinary source repository. The
-[directory-list contract](../spec/repository-sync-directory-list.md) distinguishes
+[directory-list contract](../../../spec/repository-sync-directory-list.md) distinguishes
 those roles for the actual layout.
 
 ## Resource policy belongs at acquisition
@@ -42,7 +42,7 @@ own arbitrary byte/count ceiling can make recovery necessary for an unrelated
 reason. CNCF's configured acquisition/output policy is the proper boundary;
 ownership and workflow scope remain application concerns. Short presentation
 is useful when full detail is still available through an actual reference.
-See the [response inventory](../design/phase-6.11-response-inventory.md).
+See the [response inventory](../../../design/phase-6.11-response-inventory.md).
 
 ## Build execution is program work
 
@@ -67,6 +67,6 @@ generated consumers. A client-specific DTO, private CLI parser or control-center
 special path would leave other transports inconsistent. Configuration is
 resolved through CNCF/ExecutionContext; structured large input uses existing
 Resource/UoW handling. The
-[source-history driver notes](../design/source-history-external-provider.md)
+[source-history driver notes](../../../design/source-history-external-provider.md)
 likewise separate resolved style selection from comment formatting, allowing a
 small built-in driver without inventing an unavailable external provider.

@@ -89,8 +89,24 @@ lazy val runtimeTestOnly = inputKey[Unit]("Select canonical metadata, prepare se
 lazy val labelledFullTests = taskKey[Seq[LabelledTests.Selected]]("Canonical default FULL operations")
 lazy val labelledTestSelection = inputKey[Seq[TestDefinition]]("Inspect canonical test selection without executing selected bodies")
 lazy val preparePackagedTestCar = taskKey[Unit]("Build and locate the candidate CAR for selected packaged-runtime tests")
+lazy val prepareScalaToolFixture = taskKey[Unit]("Resolve isolated Scala tool classpaths for selected deterministic repair tests")
+lazy val scalafmtToolFixture = project.in(file("target/sm-workflow/scala-tool-build/scalafmt"))
+  .settings(
+    scalaVersion := "2.13.16",
+    libraryDependencies += "org.scalameta" %% "scalafmt-cli" % "3.8.6",
+    publish / skip := true
+  )
+lazy val scalafixToolFixture = project.in(file("target/sm-workflow/scala-tool-build/scalafix"))
+  .settings(
+    scalaVersion := "2.13.14",
+    libraryDependencies += "ch.epfl.scala" % "scalafix-cli_2.13.14" % "0.12.1",
+    publish / skip := true
+  )
 lazy val prepareFullTests = taskKey[Unit]("Prepare prerequisites required by default FULL metadata")
 lazy val labelledTestExecution = inputKey[Unit]("Internal standard SBT execution for exact metadata-selected suite operations")
+def needsScalaToolFixture(selected: Seq[LabelledTests.Selected]): Boolean =
+  selected.exists(test => test.requiresPackagedCar &&
+    test.definition.name == "org.simplemodeling.textus.smworkflow.admission.DeterministicRepairSpec")
 lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."), sys.env.get("TEXTUS_SM_WORKFLOW_CNCF_SOURCE_ROOT"))
 lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(source.toURI))
 lazy val textusAiDevelopmentModule = "org.simplemodeling.textus" %% "textus-ai-runtime" % "0.2.3-SNAPSHOT"
@@ -492,9 +508,24 @@ lazy val root: Project = project
       val car = cozyBuildCar.value
       IO.write(target.value / "sm-workflow" / "packaged-test-car.txt", car.getCanonicalPath, java.nio.charset.StandardCharsets.UTF_8)
     },
+    prepareScalaToolFixture := {
+      val format = (scalafmtToolFixture / Compile / dependencyClasspath).value.files
+      val fixes = (scalafixToolFixture / Compile / dependencyClasspath).value.files
+      val directory = target.value / "sm-workflow" / "scala-tool-fixture"
+      IO.write(directory / "scalafmt-classpath.txt",
+        format.map(_.getCanonicalPath).mkString(java.io.File.pathSeparator), java.nio.charset.StandardCharsets.UTF_8)
+      IO.write(directory / "scalafix-classpath.txt",
+        fixes.map(_.getCanonicalPath).mkString(java.io.File.pathSeparator), java.nio.charset.StandardCharsets.UTF_8)
+    },
     prepareFullTests := Def.taskDyn {
-      if (labelledFullTests.value.exists(_.requiresPackagedCar)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; () }
-      else if (labelledFullTests.value.exists(_.requiresRuntime)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; () }
+      val selected = labelledFullTests.value
+      if (needsScalaToolFixture(selected)) Def.task {
+        cozyPrepareRuntime.value
+        prepareTestArtifacts.value
+        preparePackagedTestCar.value
+        prepareScalaToolFixture.value
+      } else if (selected.exists(_.requiresPackagedCar)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; () }
+      else if (selected.exists(_.requiresRuntime)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; () }
       else Def.task { prepareTestArtifacts.value; () }
     }.value,
     Test / test := (Test / test).dependsOn(prepareFullTests).value,
@@ -530,7 +561,13 @@ lazy val root: Project = project
         val runs = Def.task {
           resultLogger.run(log, execution.value, "Test / labelledTestExecution")
         }
-        val prepared = if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
+        val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
+          cozyPrepareRuntime.value
+          prepareTestArtifacts.value
+          preparePackagedTestCar.value
+          prepareScalaToolFixture.value
+          runs
+        } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
           cozyPrepareRuntime.value
           prepareTestArtifacts.value
           preparePackagedTestCar.value
@@ -605,7 +642,9 @@ lazy val root: Project = project
       }
       val installer = baseDirectory.value / "scripts" / "sm-workflow-tools.py"
       if (!installer.isFile) sys.error("Missing component-owned skill installer: " + installer)
-      skills ++ contracts ++ agents ++ Seq(installer -> "install-sm-workflow.py")
+      val metalsBridge = baseDirectory.value / "scripts" / "sm-workflow-metals-bridge.py"
+      if (!metalsBridge.isFile) sys.error("Missing bounded Metals companion: " + metalsBridge)
+      skills ++ contracts ++ agents ++ Seq(installer -> "install-sm-workflow.py", metalsBridge -> "sm-workflow-metals-bridge.py")
     },
     Compile / resourceGenerators += Def.task {
       val destinationRoot = (Compile / resourceManaged).value / "META-INF" / "sm-workflow"
@@ -617,6 +656,12 @@ lazy val root: Project = project
       IO.delete(destinationRoot)
       IO.copy(copies)
       copies.map(_._2)
+    }.taskValue,
+    Compile / resourceGenerators += Def.task {
+      val source = baseDirectory.value / "scripts" / "sm-workflow-scala-tool-bridge.py"
+      val destination = (Compile / resourceManaged).value / "META-INF" / "sm-workflow-runtime" / source.getName
+      IO.copyFile(source, destination)
+      Seq(destination)
     }.taskValue,
     Compile / packageBin / mappings := {
       val prefix = "META-INF/sm-workflow/"

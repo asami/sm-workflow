@@ -1,8 +1,13 @@
 # Phase 28.1 acceptance checklist
 
-Status: planned
+Status: closed
 Plan: [Phase 28.1](phase-28.1.md)
 Source: [Phase 28 deferred conditions](phase-28-checklist.md#deferred-from-the-local-release)
+
+The [local release record](phase-28.1.md#human-approved-formal-local-release--2026-11-24)
+records the scope of the successful focused qualification, the failed FixCheck
+and the comparison work assigned to Phase 28.2. The checklist continues to
+show which requirements have no formal Phase acceptance.
 
 ## P281-01 — Metals connection (P28-02a, issue-13)
 

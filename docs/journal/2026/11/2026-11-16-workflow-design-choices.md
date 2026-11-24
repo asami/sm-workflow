@@ -5,7 +5,7 @@ their contracts, change Phase status or report implementation progress.
 
 ## Separate the judgment from the action
 
-The [deterministic closing notes](../notes/deterministic-operations-and-closing.md)
+The [deterministic closing notes](../../../notes/deterministic-operations-and-closing.md)
 separate semantic review from an actual commit. The reason is recoverability:
 an accepted review can survive a caller interruption while the effect has not
 yet happened, or an effect can succeed before its response is returned. Making
@@ -15,7 +15,7 @@ whose only purpose is waiting or bookkeeping.
 
 ## File inventory is not a new requirement decision
 
-The [repair-control design](../design/runtime-owned-repair-control.md) grew out of
+The [repair-control design](../../../design/runtime-owned-repair-control.md) grew out of
 repairs blocked because a necessary source file was missing from an earlier
 inventory. Same-purpose, same-owner implementation additions should not require
 a new Human approval for each file. Genuine changes to acceptance, ownership or
@@ -26,7 +26,7 @@ file-list detail more restrictive than the authorized development purpose.
 
 An interruption does not prove nonexecution. Conversely, a harmless setting or
 source correction should not strand a recoverable Session. The
-[validation-continuation design](../design/goal-task-validation-continuation.md)
+[validation-continuation design](../../../design/goal-task-validation-continuation.md)
 keeps those facts separate so the execution platform can collect what happened
 and resume when its real conditions are satisfied. Copying old inputs, requiring
 unchanged-body certificates or clearing an intent manually would create another
@@ -38,13 +38,13 @@ Repairing HEAD, candidate, Plan and checks merely to close an abandoned run can
 trigger an unbounded sequence of new repair work. Forced closure instead records
 the actual Human decision and incomplete work while retaining prior state.
 Accepting an outcome is not the same claim as ordinary successful validation.
-The [ending dispositions](../phase/maintenance-dispositions.md) retain actual
+The [ending dispositions](../../../phase/maintenance-dispositions.md) retain actual
 management decisions separately from this reasoning.
 
 ## Reuse evidence instead of repeating a review ritual
 
-[Candidate admission](../notes/candidate-admission-model.md) and
-[verification-cost notes](../notes/managed-test-suites-and-verification-cost-guard.md)
+[Candidate admission](../../../notes/candidate-admission-model.md) and
+[verification-cost notes](../../../notes/managed-test-suites-and-verification-cost-guard.md)
 separate applicability from the age or position of a review. An actual changed
 input can need a focused new check; a new checklist row or caller handoff alone
 does not justify repeating every successful check. This preserves quality while
@@ -52,7 +52,7 @@ reducing AI cost. Old PASS text alone is not applicable evidence either.
 
 ## Duration and special environment are different test properties
 
-The [test migration notes](../notes/label-driven-test-migration-plan.md) use the
+The [test migration notes](../../../notes/label-driven-test-migration-plan.md) use the
 standard `@DoNotDiscover` for explicit-only tests. An external DB requirement
 does not imply long duration, so marking every external-service test `@Slow`
 would misdescribe it. Slow can be combined when duration actually warrants it.

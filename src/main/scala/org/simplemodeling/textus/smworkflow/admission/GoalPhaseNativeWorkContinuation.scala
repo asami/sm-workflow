@@ -2093,6 +2093,31 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         Consequence.unit else F.invalid("historical phase dependency binding was removed or changed")
       following <- GoalPhaseNativeHistory.nextC(source.current, cursor.from)
       located <- following match {
+        case Some(entry) if (entry.causation.value: String) == (ScalaMetalsProcess.intentCause: String) => for {
+          context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
+            .getOrElse(F.invalid("Metals attempt has no failed Step"))
+          (step, candidate, validation) = context
+          saved <- ScalaMetalsProcess.retainedC(source, core, cursor.from)
+          value = saved.value
+          locator = DeterministicRepair.compilerLocator(validation.payload)
+          previous <- ScalaMetalsProcess.attemptSinceC(source, core, cursor.from, validation.record,
+            step.identity, value.candidate, value.validationReference)
+          _ <- if ((cursor.controller.stage: O.Stage) == (O.Stage.Repair: O.Stage) &&
+              value.step == step.identity && candidate.payload.candidate.exists(_.tree == value.candidate) &&
+              locator.exists { finding =>
+                val expectedReference: String = validation.record.revision.value.toString + ":" + finding.checkIdentity
+                expectedReference.equals(value.validationReference)
+              } &&
+              previous.isEmpty && !cursor.deterministicRepairs.contains(step.identity) &&
+              saved.value.proposal.forall(proposal => DeterministicRepair.matchesCompilerSource(source, cursor.from,
+                candidate, validation, proposal, step.ownedPaths.toSet))) Consequence.unit
+            else F.invalid("Metals attempt crosses failed candidate or allowlisted source")
+          result <- value.outcome match {
+            case None | Some("unknown") => _paused_c(source, cursor, "Metals process outcome remains UNKNOWN; no redispatch.")
+            case Some(_) => _walk_c(source, cursor.copy(from = saved.record),
+              soughtwork, soughthuman, soughtrecording, core, historyonly)
+          }
+        } yield result
         case Some(entry) if (entry.causation.value: String) == (BoundedCompilerSupport._compiler_intent_cause: String) => for {
           context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
             .getOrElse(F.invalid("bounded compiler attempt has no failed Step"))
@@ -2137,8 +2162,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               java.util.Objects.equals(proposal.copy(sourceRevision = cursor.from.revision.value.toString), retained.value.transaction)))
           _ <- if (java.util.Objects.equals(cursor.controller.stage, O.Stage.Repair) &&
               ((!cursor.deterministicRepairs.contains(step.identity) &&
-                DeterministicRepair.matchesCompilerSource(source, cursor.from, candidate, validation,
-                  retained.value.transaction, step.ownedPaths.toSet)) || validprovider)) Consequence.unit
+                (DeterministicRepair.matchesCompilerSource(source, cursor.from, candidate, validation,
+                  retained.value.transaction, step.ownedPaths.toSet) ||
+                  ScalaLintRepair.matches(source, cursor.from, candidate, validation, retained.value.transaction, step.ownedPaths.toSet) ||
+                  ScalaLintRepair.matchesTerminal(cursor.from, cursor.controller, candidate, validation, retained.value.transaction,
+                    cursor.lastresult, cursor.issues))) || validprovider)) Consequence.unit
             else F.invalid("deterministic repair differs from its original validated Step and ownership")
           result <- retained.value.outcome match {
             case None => _paused_c(source, cursor, "The deterministic edit has no retained result and remains UNKNOWN.")
@@ -2507,7 +2535,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     } yield new DependencyChain(authenticated.accepted, authenticated._legacy, authenticated.acceptedSources,
                       None, None, authenticated.historicalPhase :+ proof, authenticated.developmentSelections)
                     providerStop = Set("declined", "blocked")(value.completion.result.result.value.outcome)
-                    clear = !providerStop && (state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair ||
+                    keepterminal = prepared.input.kind == "ReviewStep" && state.stage == O.Stage.Repair &&
+                      cursor.candidate.exists(candidate => cursor.validation.exists(validation =>
+                        ScalaLintRepair.terminalPath(prepared.input, value.completion.result.result.value, candidate, validation).nonEmpty))
+                    clear = !keepterminal && !providerStop && (state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair ||
                       (prepared.input.kind == "RepairStep" && state.stage == O.Stage.PhaseInspection))
                     _ <- if (prepared.input.kind == "ReviewStep" && prepared.input.stepIdentity.isEmpty)
                       F.invalid("issued Step review has no Step identity") else Consequence.unit
@@ -2837,6 +2868,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates, retainedOnly = historyonly,
           primaryRepair = _active_primary_repair(cursor), repairWindow = cursor.repairWindow)
         result <- retained match {
+          case None if GoalPhaseNativeScalaCleanup.recordedAfter(cursor.from, source.current) =>
+            _paused_c(source, cursor.copy(inspectionSource = Some(cursor.from)),
+              "The candidate inspection retained Scala cleanup effects without a finished candidate. Its effects are not replayed.")
           case None if cursor.wholePhaseCandidateRecovery.nonEmpty => _paused_c(source, cursor,
             "The authorized whole-Phase observation has an unresolved intent. Original and fresh outcomes remain UNKNOWN; no automatic retry or further authorization is granted.")
           case None if cursor.controller.stage == O.Stage.PhaseInspection => for {
@@ -3208,23 +3242,24 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         Consequence.unit else F.invalid("Retained provider takeover differs from the native validation and completion history")
       _ <- if (input.providerDecline == _provider_decline(cursor, semantic))
         Consequence.unit else F.invalid("Retained provider decline differs from the prior actual returned assignment")
-      _ <- if (input.instanceIdentity == source.current.identity.value && input.sourceRevision == cursor.from.revision.value.toString &&
+      _ <- if (java.util.Objects.equals(input.instanceIdentity, source.current.identity.value) && input.sourceRevision == cursor.from.revision.value.toString &&
           input.kind == semantic.key.kind.toString && input.stepIdentity == semantic.key.step && input.generation == semantic.key.generation &&
           input.originalBase == semantic.originalBase && input.completed == semantic.completed &&
-          input.purpose == _purpose(semantic, checkfailure, context) &&
+          java.util.Objects.equals(input.purpose, ScalaLintRepair.requestPurpose(_purpose(semantic, checkfailure, context),
+            semantic.key.kind == O.WorkKind.RepairStep && semantic.key.step.exists(cursor.deterministicRestored))) &&
           input.candidate == semantic.candidate && input.checksReceipt == semantic.checksReceipt &&
           input.repairDirective == semantic.repairDirective && GoalPhaseNativeReview.sameIssuedContext(input.review, context) && input.checkFailure == checkfailure &&
           input.publicationFailure == publicationfailure &&
           input.decisionContext == cursor.decisioncontext && input.issues == cursor.issues &&
-          input.diagnosticHistory == IncrementalSbtDiagnosisRepair.selected(cursor.diagnoses, input.stepIdentity) &&
+          java.util.Objects.equals(input.diagnosticHistory, IncrementalSbtDiagnosisRepair.selected(cursor.diagnoses, input.stepIdentity)) &&
           input.triage == _triage_context(cursor, input.kind) &&
-          actual.handle.instanceIdentity.value == source.current.identity.value && order.request.runId.value == source.current.identity.value &&
-          order.request.continuationId.value == boundary.continuationIdentity.value &&
-          _assigned_id(source, input).value == boundary.continuationIdentity.value &&
-          pending.currentProgression == cursor.from.currentProgression &&
-          order.request.expectedRevision.value == pending.revision.value.toString && order.request.completionOperation == F.completionOperation &&
-          boundary.completion.value == required.metadata.completionContract.identity &&
-          order.request.requiredOperation == required.identity) Consequence.unit
+          java.util.Objects.equals(actual.handle.instanceIdentity.value, source.current.identity.value) && java.util.Objects.equals(order.request.runId.value, source.current.identity.value) &&
+          java.util.Objects.equals(order.request.continuationId.value, boundary.continuationIdentity.value) &&
+          java.util.Objects.equals(_assigned_id(source, input).value, boundary.continuationIdentity.value) &&
+          java.util.Objects.equals(pending.currentProgression, cursor.from.currentProgression) &&
+          java.util.Objects.equals(order.request.expectedRevision.value, pending.revision.value.toString) && java.util.Objects.equals(order.request.completionOperation, F.completionOperation) &&
+          java.util.Objects.equals(boundary.completion.value, required.metadata.completionContract.identity) &&
+          java.util.Objects.equals(order.request.requiredOperation, required.identity)) Consequence.unit
         else F.invalid("actual issued business input differs from its contiguous native predecessor")
     } yield Prepared(source, input, None, pending, actual, controller,
       if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
@@ -3599,8 +3634,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Repair =>
         DeterministicRepair.attemptCompilerC(source, d, core, cursor.from, cursor.controller,
           cursor.candidate, cursor.validation, cursor.deterministicRepairs).flatMap {
-          case None => BoundedCompilerSupport.executeC(source, cursor, core, d,
-            _semantic_frontier_c(source, cursor, core), _after_native_c(source, cursor, _, core))
+          case None => ScalaLintRepair.attemptC(source, d, core, cursor.from, cursor.controller,
+            cursor.candidate, cursor.validation, cursor.deterministicRepairs, cursor.lastresult, cursor.issues).flatMap {
+            case Some(saved) => F.waitC(saved.record, "Deterministic source correction observed", "Continue using the retained file update outcome.")
+              .flatMap(_after_native_c(source, cursor, _, core))
+            case None => ScalaMetalsProcess.repairC(source, cursor.from, cursor.controller, cursor.candidate, cursor.validation,
+              cursor.deterministicRepairs.keySet, core, d,
+              BoundedCompilerSupport.executeC(source, cursor, core, d,
+                _semantic_frontier_c(source, cursor, core), _after_native_c(source, cursor, _, core)),
+              _after_native_c(source, cursor, _, core))
+          }
           case Some(saved) => F.waitC(saved.record, "Deterministic correction observed", "Continue using the retained file update outcome.")
             .flatMap(_after_native_c(source, cursor, _, core))
         }
@@ -4001,10 +4044,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       publicationfailure: Option[S.PublicationFailureContext]): S.Request =
       S.Request(source.current.identity.value, cursor.from.revision.value.toString, semantic.key.kind.toString,
         semantic.key.step, semantic.key.generation,
-        _purpose(semantic, checkfailure, context) +
-          (if (semantic.key.kind == O.WorkKind.RepairStep && semantic.key.step.exists(cursor.deterministicRestored))
-            " The deterministic edit was reverted after its failed revalidation. The failure capture describes the checked candidate before rollback."
-          else ""), semantic.selectedPlan,
+        ScalaLintRepair.requestPurpose(
+          _purpose(semantic, checkfailure, context),
+          semantic.key.kind == O.WorkKind.RepairStep &&
+            semantic.key.step.exists(cursor.deterministicRestored)), semantic.selectedPlan,
         semantic.originalBase, semantic.completed, semantic.candidate, semantic.checksReceipt,
         semantic.repairDirective, context, cursor.decisioncontext, cursor.documents, checkfailure, cursor.issues,
         Some(GoalPhaseRepairProgress.snapshot(cursor.controller)),
