@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-24
-Scheduled: immediately after [Phase 25.1](phase-25.1.md) and before [Phase 18](phase-18.md).
+Scheduled: immediately after [Phase 25.2](phase-25.2.md) and before [Phase 18](phase-18.md).
 Execution started: no
 Owner: sm-workflow-dev development; RepositorySync owns retirement.
 Depends on: [Phase 7](phase-7.md) managed dependency delivery and direct synchronization.
