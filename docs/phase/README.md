@@ -15,6 +15,8 @@ Phase 18 remains in scope; its Flutter W4–W5 still require qualified CNCF Phas
 
 This decision supersedes older schedules only. It does not change acceptance, scope, historical evidence, or an active Workflow Session. See the [decision journal](../journal/2026/11/2026-11-24-phase-25-follow-on-development-priority.md).
 
+[Phase 28.2](phase-28.2.md) is a separate, unscheduled follow-up for strict Scala comparison migration and deterministic repair. It is not a Phase 28.1 completion gate and does not change the adopted order above.
+
 ## Adopted development priority — 2026-11-21
 
 > See the [2026-11-24 adopted priority](README.md#adopted-development-priority--2026-11-24); this older schedule is retained for history.
