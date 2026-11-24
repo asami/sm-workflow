@@ -1,8 +1,8 @@
 # Integration responsibility choices
 
-Related notes: [server application](../notes/sm-workflow-server-application.md),
-[service-bus events](../notes/service-bus-development-events.md),
-[security governance](../notes/textus-security-development-governance.md).
+Related notes: [server application](../../../notes/sm-workflow-server-application.md),
+[service-bus events](../../../notes/service-bus-development-events.md),
+[security governance](../../../notes/textus-security-development-governance.md).
 
 ## Operational orchestration and work orchestration are orthogonal
 

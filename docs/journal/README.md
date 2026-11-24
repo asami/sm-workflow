@@ -6,12 +6,13 @@ It does not define executable contracts or establish that a proposal shipped.
 Follow the linked design/specification and owning Phase for those facts.
 Journal documents are written in English and are created only when the user
 requests them. Routine AI work must not automatically create an entry.
+Store entries under `YYYY/MM` and prefix each filename with `YYYY-MM-DD`.
 
 | Consideration | Related rationale |
 | --- | --- |
-| Human decisions, continuation, closing and validation cost | [Workflow choices](workflow-design-choices.md) |
-| Dependency sources, installation, configuration and public input | [Runtime choices](runtime-design-choices.md) |
-| Independent services and cross-project responsibility | [Integration choices](integration-design-choices.md) |
+| Human decisions, continuation, closing and validation cost | [Workflow choices](2026/11/2026-11-16-workflow-design-choices.md) |
+| Dependency sources, installation, configuration and public input | [Runtime choices](2026/11/2026-11-16-runtime-design-choices.md) |
+| Independent services and cross-project responsibility | [Integration choices](2026/11/2026-11-16-integration-design-choices.md) |
 
 ## What belongs elsewhere
 
