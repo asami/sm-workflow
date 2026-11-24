@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-23 (Asia/Tokyo)
-Scheduled: after [Phase 25.1](phase-25.1.md), followed by [Phase 7.2](phase-7.2.md)
+Scheduled: immediately after [Phase 25](phase-25.md), followed by [Phase 25.1](phase-25.1.md), then [Phase 7.2](phase-7.2.md)
 Depends on: [Phase 28 local release](phase-28.md)
 Checklist: [Phase 28.1 acceptance](phase-28.1-checklist.md)
 
@@ -18,8 +18,7 @@ Reuse Phase 28's deterministic patch and validation path, including the
 released compiler correction. The original release, Session, review
 dispositions, and evidence remain historical records. The
 [adopted development priority](README.md#adopted-development-priority--2026-11-24)
-places Phase 28.1 after Phase 25.1. Record actual successful tool applications
-through the Phase 25.1 metrics contract when qualifying the live routes.
+places Phase 28.1 after completion of Phase 25.
 
 ## P281-01 — Connect Metals to ordinary repair
 
