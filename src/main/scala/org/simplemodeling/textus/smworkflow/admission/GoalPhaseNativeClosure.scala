@@ -66,6 +66,18 @@ private[smworkflow] object GoalPhaseNativeClosure {
     def validateC = if (policy == null || authority == null) F.invalid("native Step closure authority is missing")
       else policy.validateC
   }
+  private[admission] def plannedAuthority(start: F.Payload, plan: O.Plan,
+    current: Policy, enabled: Boolean, input: Input): Boolean =
+    enabled && start.plannedStepCommitPolicy.contains(current) &&
+      plan.identity == input.plan && plan.revision == input.planRevision &&
+      current.programs.exists(_.step == input.step) && start.plan.steps.exists(_.identity == input.step) &&
+      _same_planned_scope(start.plan, plan)
+
+  private def _same_planned_scope(start: O.Plan, current: O.Plan): Boolean =
+    current.copy(revision = start.revision, steps = start.steps) == start &&
+      current.steps.size == start.steps.size && current.steps.zip(start.steps).forall { case (actual, original) =>
+        actual.copy(ownedPaths = original.ownedPaths) == original && original.ownedPaths.forall(actual.ownedPaths.contains)
+      }
   final case class Precheck(findings: Vector[String], eofPaths: Vector[String], eofOnly: Boolean)
   final case class Change(path: String, mode: String, oldBlob: String, newBlob: String)
   final case class Payload(input: Input, ordinal: Int, commit: Option[O.Commit], attempt: Int = 0,
@@ -305,8 +317,14 @@ private[smworkflow] object GoalPhaseNativeClosure {
     dependencyPreconditions: () => Consequence[Unit] = () => Consequence.unit,
     candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Store] = for {
     input <- inputC(from, controller, candidate)
-    installation <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
-    _ <- installation.validateC
+    configured <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
+    _ <- configured.validateC
+    start = session.started.receipt.payload.value
+    planned = plannedAuthority(start, controller.plan, configured.policy, d.plannedStepCommits, input)
+    installation = if (!planned) configured else configured.copy(authority = new AuthorityPort {
+      def isGrantedC(call: ActionCall.Core, actual: Input): Consequence[Boolean] =
+        if (actual == input) Consequence.success(true) else configured.authority.isGrantedC(call, actual)
+    })
     step = controller.plan.steps(controller.cursor)
     ordinal <- installation.policy.programs.find(_.step == step.identity).map(p => Consequence.success(p.ordinal))
       .getOrElse(F.invalid("Step has no host-fixed commit program"))

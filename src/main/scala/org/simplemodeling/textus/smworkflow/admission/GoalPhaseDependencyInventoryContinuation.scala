@@ -64,7 +64,7 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
     approvals: Vector[V.Approval], decisions: Vector[W.DecisionContext]): Consequence[Assessment] = for {
     _ <- D.validateProposalC(proposed)
     original <- Option(input).flatMap(_.decisionContext).filter(context =>
-      DependencyDevelopmentDelivery.humanScopeApproval(context.choice) &&
+      DependencyDevelopmentDelivery.inventoryApproval(context.choice) &&
         context.decisionReference == proposed.scopeUpdate.map(_.approval))
       .map(Consequence.success).getOrElse(F.invalid("inventory approval link is stale for this actual issued assignment"))
     _ <- _check(decisions != null && decisions.count(_ == original) == 1,
@@ -119,15 +119,16 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
         GoalPhasePurposeRepair.paths(value.additionalPaths), value, "Managed inventory requires exact references and literal paths"))
   }
 
-  /** The caller has authenticated A's issued WorkOrder. Its captured choice and
-    * authorization bound the additional B paths selected by the Human.
+  /** The caller has authenticated A's issued WorkOrder. Its captured route and
+    * authorization bound the additional B paths.
     */
   private[admission] def supplementalManagedInventoryC(work: W.Request, parentWork: ContextReference,
     additional: Vector[String]): Consequence[ManagedInventory] = for {
-    context <- work.decisionContext.filter(_.choice == DependencyDevelopmentDelivery.subtree).map(Consequence.success)
+    context <- work.decisionContext.filter(c => DependencyDevelopmentDelivery.inventoryApproval(c.choice) &&
+      c.deliveryRoute.exists(_.mode == DependencyDevelopmentDelivery.subtree)).map(Consequence.success)
       .getOrElse(F.invalid("Managed inventory supplementation requires the original local worktree choice"))
     approval <- context.decisionReference.filter(_reference).map(Consequence.success)
-      .getOrElse(F.invalid("Managed inventory supplementation has no retained Human approval"))
+      .getOrElse(F.invalid("Managed inventory supplementation has no retained scope admission"))
     original <- context.requestingResult.dependencyProposal.map(Consequence.success)
       .getOrElse(F.invalid("Managed inventory supplementation has no original dependency proposal"))
     boundary <- original.authorizationBoundary.map(Consequence.success)
@@ -304,7 +305,7 @@ private[smworkflow] object GoalPhaseDependencyInventoryContinuation {
     _reference(value.requestingResult) && V.approvalValid(value.approval) && value.approval.step == value.step &&
     value.originalResult != null && W.resultCodec.decode(W.resultCodec.encode(value.originalResult)).contains(value.originalResult) &&
     value.originalResult.dependencyProposal.nonEmpty && value.originalResult.outcome == "decision-needed" &&
-    DependencyDevelopmentDelivery.humanScopeApproval(value.choice) && GoalPhasePurposeRepair.text(value.rationale) &&
+    DependencyDevelopmentDelivery.inventoryApproval(value.choice) && GoalPhasePurposeRepair.text(value.rationale) &&
     D.validateOptionC(Some(value.proposed)).isSuccess && value.proposed.scopeUpdate.exists(_.approval == value.approval.decision) &&
     assessC(value.step, value.proposed, Vector(value.approval)).map {
       case WithinBoundary(_) => true

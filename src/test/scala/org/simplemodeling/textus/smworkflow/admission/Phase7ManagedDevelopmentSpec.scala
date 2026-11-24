@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.{Files, Path}
+import javax.xml.parsers.DocumentBuilderFactory
 import cats.data.NonEmptyVector
 import io.circe.Json
 import io.circe.generic.auto.*
@@ -244,10 +245,15 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
     }
 
     "disclose missing or Fixed dependency delivery routes and refuse an unavailable answer" in {
-      Vector("RouteMissingChat", "RouteMissingRepository", "RouteMissingEdge", "RouteFixed").foreach { mode =>
+      Vector("RouteMissingRepository", "RouteMissingEdge", "RouteFixed").foreach { mode =>
         val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "delivery-unavailable-").toRealPath()
         ConnectedFixture.exercise(root, mode)
       }
+    }
+
+    "carry the planned local worktree and private delivery across Start without Human direction" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "phase-local-route-").toRealPath()
+      ConnectedFixture.exercise(root, "RouteMissingChat")
     }
 
     "resume an actual dependency Decision from retained Phase policy without a fabricated Human answer" in {
@@ -997,9 +1003,19 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
     "connect the adopted batch and selected generator through native Operations in two consumers" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "generation-").toRealPath()
       val local = Path.of(System.getProperty("user.home"), ".ivy2/local")
+      val cozy = Coordinate("org.simplemodeling", "cozy_2.12", "0.3.3-SNAPSHOT")
+      val cozyIvy = local.resolve(cozy.organization).resolve(cozy.module).resolve(cozy.version).resolve("ivys/ivy.xml")
+      val factory = DocumentBuilderFactory.newDefaultInstance()
+      factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+      val dependencies = factory.newDocumentBuilder().parse(cozyIvy.toFile).getElementsByTagName("dependency")
+      val modelerVersions = (0 until dependencies.getLength).iterator.map(i =>
+        dependencies.item(i).asInstanceOf[org.w3c.dom.Element]).filter(d =>
+        d.getAttribute("org") == "org.simplemodeling" && d.getAttribute("name") == "simplemodeler_2.12")
+        .map(_.getAttribute("rev")).filter(_.nonEmpty).toVector.distinct
+      withClue(s"Expected one SimpleModeler version in $cozyIvy: ") { modelerVersions should have size 1 }
       val roots = Vector(
-        ("cozy", Coordinate("org.simplemodeling", "cozy_2.12", "0.3.3-SNAPSHOT"), "cozy", "2.12.20"),
-        ("modeler", Coordinate("org.simplemodeling", "simplemodeler_2.12", "1.1.26-SNAPSHOT"), "simplemodeler", "2.12.20"),
+        ("cozy", cozy, "cozy", "2.12.20"),
+        ("modeler", Coordinate("org.simplemodeling", "simplemodeler_2.12", modelerVersions.head), "simplemodeler", "2.12.20"),
         ("cncf", Coordinate("org.goldenport", "goldenport-cncf_3", "0.5.6-SNAPSHOT"), "goldenport-cncf", "3.3.8"))
       val batch = Batch(roots.map((project, c, _, _) => ProjectModule(project, c)), Vector(roots.last._2),
         Some(Generator(roots.head._2.version, roots(1)._2.version, roots.take(2).map(_._2))))
@@ -2184,6 +2200,22 @@ allowedKinds = ["text"]
             "GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
           When("the owning Phase advances from the submitted dependency proposal")
           val question = _advance_goal_()
+          if (mode == "RouteMissingChat") {
+            Then("the Start-selected local route is admitted by Phase policy and retains its native provenance")
+            val resumed = if (question.kind == "Request") question else _advance_goal_()
+            resumed.kind shouldBe "Request"
+            resumed.human shouldBe None
+            resumed.sessionId shouldBe a.sessionId
+            val direction = resumed.work.get.decisionContext.get
+            direction.choice shouldBe GoalPhasePolicyDependencyContinuation.choice
+            direction.decisionReference.get.identity should include (":phase-policy-dependency:")
+            val route = DevelopmentOperationalView.json(direction.deliveryRoute.get)
+            route.hcursor.get[String]("mode").toOption shouldBe Some(local)
+            route.hcursor.get[String]("destinationIdentity").toOption shouldBe Some("managed-worktree:" + connectedEdge.provider.workspace)
+            resumed.repairProgress shouldBe original.repairProgress
+            _advance_goal_().issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+              resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+          } else {
           Then("the retained Human decision lists both routes and the actual prerequisites for each")
           question.kind shouldBe "Human"
           val human = question.human.get
@@ -2434,6 +2466,7 @@ allowedKinds = ["text"]
               _advance_goal_().issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
                 resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
             }
+          }
           }
         } else if (mode.startsWith("PhasePolicy")) {
           var activeWork = original
