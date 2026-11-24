@@ -696,12 +696,26 @@ Do not disable platform controls or broaden the command to evade a denial.
 The existing host completion and caller-loop contracts still govern accepted
 Submit and the following explicit Advance.
 
-For the supported finite paired completion, the parent directly executes the
-deployed `../../scripts/native-goal-command.py --action complete` relative to an
-installed sm skill, passing `--executable <absolute installed sm-workflow>` and
-the explicit runtime-root/task/request/submission/fresh-output paths. Use managed Python
-and scoped escalation for this exact finite invocation, with no general shell or
-interpreter approval prefix. This is the existing host-owned pair, not a command
+### Finite caller invocation
+
+Resolve the installed skill to its real directory and use the absolute path to
+its shared `scripts/native-goal-command.py`. Start the finite Python caller
+through the workstation's managed Python on the first call:
+
+```text
+uv run --no-cache --managed-python --no-python-downloads --script /absolute/shared/scripts/native-goal-command.py <arguments>
+```
+
+The installed helper is distributed as a regular non-executable file. Use this
+route for supported actions such as `prepare-goal-input`, `advance` and `complete`.
+Public operations outside the helper continue to use the installed
+`sm-workflow` executable directly.
+
+For the supported finite paired completion, pass `--action complete`,
+`--executable <absolute installed sm-workflow>` and the explicit
+runtime-root/task/request/submission/fresh-output paths. Request one-shot
+escalation for the complete invocation, including the selected executable and
+arguments. This is the existing host-owned pair, not a command
 subagent or a substitute Workflow. The helper launches only the selected
 installed executable with `<fixed Operation>`, selecting `<runtime-root>` as the process cwd; it never
 constructs a development classpath or selects an artifact. It retains/displays
@@ -902,6 +916,14 @@ the runtime working directory; it does not declare the target a CAR/SAR project
 or require `.textus/config.json` and `.textus/assembly.yaml` there. Retain an
 existing Session's selected host and storage; do not move it to another root to
 work around a configuration error.
+
+When configuring a new dedicated host, choose its CNCF assembly `subsystem`
+and instance labels independently of the Phase number. Each label starts with
+a letter and may contain letters, digits, underscores and hyphens. For a Phase
+named `28.1`, a subsystem label such as `sm-workflow-phase-28-1` is valid.
+Keep `28.1` in the Plan and in paths where it identifies the Phase. Bind the
+host configuration to the actual chosen labels. Use the existing CNCF
+configuration resolver to validate them.
 
 The installed launcher and finite callers validate their executable, selected
 directory and owned task/output paths. CNCF's normal runtime configuration
@@ -1266,8 +1288,21 @@ signal or add a second collector to an already-running call for display repair.
 
 ### Chat progress indicators
 
+Show two distinct boundaries in ordinary chat for every sm-workflow invocation.
+Before sending it, show **⚙️ sm-workflow 呼び出し準備** with the operation.
+At the first tool return with a terminal response, show **⚙️ 🔵 ◀ sm-workflow
+応答受信・制御返却 ━━━━━━━━━━━** for the same operation, before inspecting its
+business result or starting the next invocation. Use the matching error or
+unknown marker if the call failed or its completion is unconfirmed. A quick
+call can have no live start/progress event and still has both display boundaries.
+For a paired `complete`, the pair brackets the outer Submit/Advance exchange.
+
 Direct installed-CLI calls, including calls whose streams are redirected to
 retained files, must forward the same invocation indicators as helper calls.
+Forward those records from each already-required tool return, including short
+reads and resumed work. For a direct call whose return exposes a usable
+terminal response but no presentation record, render `response` from that
+same return and forward it in chat.
 The AI activity renderer deliberately does not supply them. Before launch and
 at actual start/return/error boundaries, use the bundled
 `command_activity_record(event, context, observation)` and forward its nonempty
@@ -1424,14 +1459,24 @@ ends the ongoing runtime interval.
 
 ### Subagent call display
 
+Display the generated **🤖 ▶ subagent 呼出し** after actual dispatch and
+**🤖 ◀ subagent 結果受領** when the same agent's result arrives. Keep both
+distinct in user-facing chat, even for an immediate result or a dispatch
+without intermediate progress. At receipt, identify the same request and
+agent and say that the parent has received the result. Its inspection and
+runtime acceptance follow separately.
+
 Before each authorized spawn/resume tool call, the caller must display an
 ordinary user-facing commentary starting with `subagent依頼：`. Give the short
 request name, selected task name or existing agent ID, role, purpose, owned scope
-and expected result. This announces intent, not confirmed execution: a new ID
-is unknown until returned. For a parallel batch, show each assignment before
-dispatch. Tool payloads, terminal output and a later result marker do not
-substitute for this announcement. This ordinary pre-call prose is separate from
-the program-generated observed activity markers and requires no new API event.
+and expected result. Include the selected model ID and reasoning effort in that
+same visible line, for example `モデル gpt-6.2-sol / 思考レベル medium（指定）`.
+For explicit launch arguments use the requested values. For a fixed registered
+role use the known configured values, and for resume use the retained selection
+for that agent. Mark each missing value `不明`. The announcement describes
+selection and does not establish the actual executing model, start or a new ID.
+For a parallel batch, show each assignment before dispatch. Tool payloads,
+terminal output and later markers do not substitute for the announcement.
 
 All six native skills use the [AI activity API](#program-generated-ai-activity)
 at actual authorized dispatch/resume and result handling, including reuse and an
@@ -1439,6 +1484,16 @@ already authorized alternate. Keep purpose, role, Session/Step and the real
 returned agent ID together. A role is not an agent ID. Retain the returned
 `activityContext` in the caller's ordinary continuation context for the paired
 result; this is neither a display ledger nor an admission receipt.
+Pass the selected model and reasoning effort to the renderer as `requested` or
+`configured` context. A dispatch acknowledgement that returns only the agent ID
+leaves that context intact. Use `observed` only for explicit runtime data.
+For a spawn with explicit launch arguments, map `model` to
+`context.model` and `reasoning_effort` to `context.reasoningEffort`, each as
+`{value: <selected value>, provenance: "requested"}`. The observation
+whitelist ignores `configuredModel` and `configuredReasoningEffort`.
+Reuse that dispatch record's `activityContext` for working, waiting and
+receipt for the same agent. Alongside the working marker, identify the subagent
+or its role in the existing progress text.
 Repeat the announced request name and actual agent identity in the surrounding
 dispatch/result update. At receipt, summarize the actual outcome and any known
 remaining issue without implying inspection or native acceptance. A failed or
@@ -1499,7 +1554,7 @@ callers, including a resumed turn and work without any subagent dispatch.
 | Parent begins a real investigation, planning, edit or repair segment | Send `actor=parent, event=working` and its purpose; forward generated commentary in the first normal progress update, before continuing that segment's tools/work. |
 | Before an authorized subagent spawn/resume call | Display `subagent依頼：` with the planned assignment and expected result; do not claim a returned ID or actual start yet. |
 | Subagent dispatch/resume returns | Forward the dispatch indication with actual identity and available model/effort provenance. A generic `Agent Use` block does not replace it. |
-| Existing dispatch output or worker message confirms active execution | Also forward `actor=subagent, event=working` with that identity in the same ordinary update, producing **🤖 ✨ AI作業中**. No extra status query; an acknowledgement without a start observation stays dispatch-only. |
+| Existing dispatch output or worker message confirms active execution | Use the retained dispatch context for `actor=subagent, event=working` and identify the subagent in the same ordinary update as **🤖 ✨ AI作業中**. An acknowledgement without a start observation stays dispatch-only. |
 | Parent waits while a child works | Preserve the child's observed activity and distinguish the parent's wait; do not label the parent working merely because it is collecting/waiting. |
 | Actual result arrives | Forward the receipt marker at the first caller opportunity, before file/diff inspection or Submit; follow [receipt ordering](#result-receipt-inspection-and-runtime-acceptance). |
 | Actual wait or runtime control transfer | Reflect that transition in the ordinary update; preserve existing gear intervals and the actual actor. |
@@ -1643,13 +1698,22 @@ chat commentary output, not a new tool/service):
 ```python
 # The existing caller first announces the planned request in ordinary chat.
 forward_commentary(request_announcement)  # request name, task/role, scope, expected result
+# Use the same explicit arguments being passed to the spawn, if supplied.
+display_context = dict(selected_context)
+for source, field in (("model", "model"), ("reasoning_effort", "reasoningEffort")):
+    if launch_args.get(source):
+        display_context[field] = {"value": launch_args[source], "provenance": "requested"}
 # Existing authorized dispatch/resume returns its actual response.
 spawn_response = authorized_dispatch(existing_request)
 display = native_caller.observe_ai_activity(
-    "dispatch", selected_context,
+    "dispatch", display_context,
     {"agentId": spawn_response["agent_id"]})
 forward_commentary(display["presentation"]["commentary"])  # VERBATIM
 activity_context = display["activityContext"]  # normal continuation context
+
+# When an existing observation confirms this agent is working:
+# display = native_caller.observe_ai_activity("working", activity_context, actual_observation)
+# forward_commentary(display["presentation"]["commentary"])
 
 # Later, the same existing result handler receives the actual result.
 # Render/forward receipt BEFORE artifact reads, diff inspection or runtime Submit.
@@ -2456,9 +2520,10 @@ for availability, provenance and acquisition; display control output without
 expanding full historical bodies. This extends transport while preserving local
 waiting-mode, reporting, activity-display and actual-call interval rules.
 
-When an assigned semantic body is represented by `retainedWork`, perform one
-explicit `native-goal-command.py --action read-work --request <control-artifact>`
-with the ordinary executable/runtime-root/task/output arguments, or use its
+When an assigned semantic body is represented by `retainedWork`, use the
+[finite caller invocation](#finite-caller-invocation) with
+`--action read-work --request <control-artifact>` and the ordinary
+executable/runtime-root/task/output arguments, or use its
 actual `WorkflowRetainedWorkService.readWorkflowRetainedWork` reference. Preserve
 the detail wrapper (`availability`, exact `reference`, original `response`);
 the dispatch and submission adapters consume it directly. Shared evidence

@@ -24,6 +24,11 @@ return contract. A reference or successful detail read is not workflow acceptanc
 
 ## AI activity in chat
 
+Show the preparation and matching return/error for each
+[sm-workflow call](../../docs/spec/native-host-execution.md#chat-progress-indicators).
+Show each [subagent dispatch and result receipt](../../docs/spec/native-host-execution.md#subagent-call-display)
+as its own chat update.
+
 The owning caller follows the shared [AI activity quick start](../../docs/spec/native-host-execution.md#ai-activity-quick-start)
 from its first work update and on resumed work. Forward generated parent/subagent
 work, wait and result markers to chat; `Agent Use` or tool stdout alone is
@@ -129,7 +134,8 @@ not establish their availability. Report a missing operation as a runtime setup
 gap and retain the existing Session instead of substituting another workflow.
 
 Before each authorized subagent spawn/resume, announce `subagent依頼：` with
-the request name, task/role, scope and expected result. Follow the shared
+the request name, task/role, scope, expected result, and selected model ID and
+reasoning effort. Include these in chat before the tool call. Follow the shared
 [request and result pairing](../../docs/spec/native-host-execution.md#subagent-call-display);
 the later generated dispatch/receipt markers do not replace this pre-call notice.
 

@@ -28,11 +28,17 @@ return contract. A reference or successful detail read is not workflow acceptanc
 
 ## Show who is working
 
+Show the preparation and matching return/error for each
+[sm-workflow call](../../docs/spec/native-host-execution.md#chat-progress-indicators).
+Show each [subagent dispatch and result receipt](../../docs/spec/native-host-execution.md#subagent-call-display)
+as its own chat update.
+
 Use the shared [AI activity quick start](../../docs/spec/native-host-execution.md#ai-activity-quick-start)
 for the renderer location and actual chat forwarding.
 
 Before each authorized subagent spawn/resume, announce `subagent依頼：` with
-the request name, task/role, scope and expected result. Follow the shared
+the request name, task/role, scope, expected result, and selected model ID and
+reasoning effort. Include these in chat before the tool call. Follow the shared
 [request and result pairing](../../docs/spec/native-host-execution.md#subagent-call-display);
 the later generated dispatch/receipt markers do not replace this pre-call notice.
 

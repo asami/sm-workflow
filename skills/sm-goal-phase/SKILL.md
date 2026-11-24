@@ -30,13 +30,22 @@ return contract. A reference or successful detail read is not workflow acceptanc
 
 ## Show who is working
 
+Pair each sm-workflow call's preparation and matching return/error in chat.
+Pair each subagent dispatch and actual result receipt for the same request.
+Forward both boundaries even when there is no intermediate progress to report.
+Follow the [runtime call display](../../docs/spec/native-host-execution.md#chat-progress-indicators)
+and [subagent call display](../../docs/spec/native-host-execution.md#subagent-call-display).
+
 Use the shared [AI activity quick start](../../docs/spec/native-host-execution.md#ai-activity-quick-start)
 for the renderer location and actual chat forwarding.
 
 Before each authorized subagent spawn/resume, announce `subagent依頼：` with
-the request name, task/role, scope and expected result. Follow the shared
+the request name, task/role, scope, expected result, and selected model ID and
+reasoning effort. Include these in chat before the tool call. Follow the shared
 [request and result pairing](../../docs/spec/native-host-execution.md#subagent-call-display);
 the later generated dispatch/receipt markers do not replace this pre-call notice.
+Map the launch's model and effort into the renderer's context. Reuse that
+context with the actual agent ID in working, waiting and result updates.
 
 Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)
 from the first actual work segment, including a resumed turn. Parent-only
@@ -307,9 +316,15 @@ executable as the approval prefix. Follow the
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
 
-For an action already supported by the deployed finite caller, including ordinary
-`advance` and paired `complete`, use `../../scripts/native-goal-command.py` with
-the selected installed executable, runtime root, existing task and output directory.
+When configuring a new dedicated host, use the
+[CNCF assembly label rules](../../docs/spec/native-host-execution.md#runtime-configuration-boundary)
+for its subsystem identity and preserve the Phase number in the Plan.
+
+For an action already supported by the deployed finite caller, including
+`prepare-goal-input`, ordinary `advance` and paired `complete`, use the
+[managed Python invocation](../../docs/spec/native-host-execution.md#finite-caller-invocation)
+from the first call. Pass the selected installed executable, runtime root,
+existing task and output directory.
 It invokes that same CLI and already retains `response.json` and `stderr.log`
 while forwarding execution events. Keep the helper's stdout/stderr connected to
 the command tool; do not redirect them to files or capture them until process exit.
@@ -606,9 +621,9 @@ The caller admits Start selection, persists routing, displays actual Start/Advan
 messages and owns explicit outer Advance and the caller loop. Perform only the
 issued semantic work, supply its actual typed result and genuine consumed
 metadata, then return control to the caller. For supported issued routes the caller
-uses the deployed `../../scripts/native-goal-command.py --action complete`
-(relative to this installed skill) with explicit `--executable <absolute installed
-sm-workflow>`, runtime-root/task/fresh-output options and
+uses the [finite caller invocation](../../docs/spec/native-host-execution.md#finite-caller-invocation)
+with `--action complete`, explicit `--executable <absolute installed sm-workflow>`,
+runtime-root/task/fresh-output options and
 the exact `--request` and `--submission`. This is a HOST action, not the semantic
 skill's authority to Advance. It uses only the existing fixed Goal pair, three
 Split pairs or three Repository review/repair/conflict pairs compatible with the

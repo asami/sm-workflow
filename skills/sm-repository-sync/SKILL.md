@@ -56,11 +56,17 @@ return contract. A reference or successful detail read is not workflow acceptanc
 
 ## Show who is working
 
+Show the preparation and matching return/error for each
+[sm-workflow call](../../docs/spec/native-host-execution.md#chat-progress-indicators).
+Show each [subagent dispatch and result receipt](../../docs/spec/native-host-execution.md#subagent-call-display)
+as its own chat update.
+
 Use the shared [AI activity quick start](../../docs/spec/native-host-execution.md#ai-activity-quick-start)
 for the renderer location and actual chat forwarding.
 
 Before each authorized subagent spawn/resume, announce `subagent依頼：` with
-the request name, task/role, scope and expected result. Follow the shared
+the request name, task/role, scope, expected result, and selected model ID and
+reasoning effort. Include these in chat before the tool call. Follow the shared
 [request and result pairing](../../docs/spec/native-host-execution.md#subagent-call-display);
 the later generated dispatch/receipt markers do not replace this pre-call notice.
 
@@ -589,9 +595,9 @@ The caller admits Start selection, persists routing, displays actual Start/Advan
 messages and owns explicit outer Advance and the caller loop. Perform only the
 issued semantic work, supply its actual typed result and genuine consumed
 metadata, then return control to the caller. For supported issued routes the caller
-uses the deployed `../../scripts/native-goal-command.py --action complete`
-(relative to this installed skill) with explicit `--executable <absolute installed
-sm-workflow>`, runtime-root/task/fresh-output options and
+uses the [finite caller invocation](../../docs/spec/native-host-execution.md#finite-caller-invocation)
+with `--action complete`, explicit `--executable <absolute installed sm-workflow>`,
+runtime-root/task/fresh-output options and
 the exact `--request` and `--submission`. This is a HOST action, not the semantic
 skill's authority to Advance. It uses only the existing fixed Goal pair, three
 Split pairs or three Repository review/repair/conflict pairs compatible with the
