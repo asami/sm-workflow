@@ -9,11 +9,13 @@ Ordinary Wait, Request, Human, Terminal and forwarded repository child outputs
 carry no closing authority context. The fifteen normal Operations and their
 Start, Advance and Submit parameters remain unchanged.
 
-Accepted review supplies no Step commit, repository child Start or remote effect
-permission. The genuinely responsible operator must independently decide whether
-to authorize the selected target and supply the actual authorization reference,
-participant, trusted issuer and historical event time. Test fixture rows and
-command-line flags are not independently issued operator authorization.
+Ordinary Step closure uses the policy retained by an authenticated Phase Start
+when it covers the selected Step and accepted candidate. A historical Session
+without applicable Start policy continues through the exact authority route
+described here. For that route, the responsible operator supplies the actual
+authorization reference, participant, trusted issuer and historical event time.
+Review acceptance and test fixture inputs supply no repository child Start or
+remote effect authority.
 
 ## Public passive preparation
 

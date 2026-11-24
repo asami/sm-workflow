@@ -21,7 +21,8 @@ import GoalPhaseDependencyValidation.given
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  *  version Nov. 18, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -160,7 +161,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     context: ExecutionContext, settings: Definition): Consequence[ThreeWorkflowLauncherAssembly.RuntimeComposition] = for {
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       selectedpolicy <- parameters.resolve(completionPolicy).map(_.value.getOrElse(GoalPhasePostCompletionSync.localPolicy))
-      stepcommits <- parameters.resolve(plannedStepCommits).map(_.value.contains(true))
+      stepcommits <- parameters.resolve(plannedStepCommits).map(_.value.getOrElse(true))
       callersource <- parameters.resolve(validationRepairCallerSource).map(_.value)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)

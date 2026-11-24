@@ -30,13 +30,16 @@ import GoalPhaseAcceptanceBoundary as B
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 21, 2026
+  *  version Nov. 21, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
+  override protected def requires_separate_step_authority: Boolean = false
+
   override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
     if (goal.closure.programs.map(_.step) == Vector("step-1", "step-2") &&
         goal.candidatePaths == Vector("one.scala", "two.scala"))
@@ -68,7 +71,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
     view.operation.getString("operation") shouldBe Some(request.operation.operation)
     view.completionOperation.getString("service") shouldBe Some(request.completionOperation.service)
     view.completionOperation.getString("operation") shouldBe Some(request.completionOperation.operation)
-    view.context shouldBe native.getRecord("context").get
+    view.context.removeKeys(Set("operatingProfile")) shouldBe native.getRecord("context").get
+    val profile = request.input.flatMap(_.value match {
+      case input: GoalPhaseNativeWork.Request => input.operatingProfile.map(p => GoalPhaseNativeMetadata.record(p.asJson))
+      case _ => None
+    })
+    view.context.getRecord("operatingProfile") shouldBe profile
     view.completion shouldBe native.getRecord("completion").get
     view.evidence shouldBe native.getRecord("evidence").get
     view.executionRequirement shouldBe canonical.getRecord("requirement").get
@@ -326,6 +334,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           parameters.updated(B.declaration.name, current.asJson.mapObject(_.add("schemaVersion", io.circe.Json.fromString(B.schemaVersion))).noSpaces)
         }
       }
+      val ordinarycommits = !withDecisions && !mapped && !boundary && !renewWindow
+      def _host_parameters_(session: String): Map[String, String] = {
+        val parameters = _episode_parameters_(session)
+        if (ordinarycommits) parameters
+        else parameters.updated(ThreeWorkflowRuntimeParameters.plannedStepCommits.name, "false")
+      }
       var expectedissues = Map.empty[String, (ExecutionDisposition, String)]
       var hostsessions = Map.empty[String, NativeWorkflowCallerExecution.Prepared]
       var usedreviewalternate = false
@@ -333,7 +347,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         Vector("implement-1", "review-repair", "repair") ++
         (if (renewWindow) Vector("review-exhausted", "repair-continued") else Vector.empty) ++
         Vector("review-1", "implement-2", "review-2", "phase-review", "repository-close")
-      for (session <- sessions) _with_runtime_(root, "Goal", Some(host), _episode_parameters_(session)) { (owner, component, actor, prepare) =>
+      for (session <- sessions) _with_runtime_(root, "Goal", Some(host), _host_parameters_(session)) { (owner, component, actor, prepare) =>
         val invocationcontext = actor
         Given("every normal episode uses the actual invocation session across managed SQLite runtimes")
         def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -998,39 +1012,41 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               Given("E5: the actual accepted Step review and current Closing frontier without a recorded commit grant")
               val current = _current_()
               val parent = input.completed.lastOption.map(s => O.Snapshot(s.commit.identity, s.commit.tree)).getOrElse(input.originalBase)
-              When("explicit Advance reaches actual missing Step authority")
-              val waiting = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
-              Then("the Step remains Active at the same revision and reviewed target without a commit")
-              waiting.kind shouldBe "Wait"
-              waiting.issuedWorkContext shouldBe None
-              waiting.authorityContext should not be empty
-              waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
-              _current_().lifecycle shouldBe Lifecycle.Active
-              _current_().revision shouldBe current.revision
-              var before = Option.empty[RepositorySyncManagedGitObservation.Observed]
-              prepare(call => call.observeC().map(value => { before = Some(value); () }))
-              before.get.head shouldBe parent.head
-              Given("the actual closing Wait crosses strict generated JSON intake with explicit specification-owned operator metadata")
-              When("the full saved Step Wait crosses the strict generated reader")
-              val decoded = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(take(waiting.toRecord().toJsonStringC)))))
-              val context = decoded.authorityContext.get
-              Then("the selected context retains the actual current Step parent candidate generation and review")
-              context.scope.getString("instance") shouldBe Some(identity.value)
-              context.scope.getString("sourceRevision") shouldBe Some(current.revision.value.toString)
-              context.scope.getString("step") shouldBe input.stepIdentity
-              context.scope.getString("reviewEvidence") shouldBe Some(result.resultReference.identity)
-              val target = NativeAuthorityPreparationFixture.json(context.scope)
-              target.hcursor.get[Long]("generation").toOption shouldBe Some(input.generation)
-              target.hcursor.downField("parent").get[String]("head").toOption shouldBe Some(parent.head)
-              target.hcursor.downField("candidate").get[String]("tree").toOption shouldBe Some(input.candidate.get.tree)
-              When("public passive Step preparation supplies input for existing managed specification Create")
-              prepare(call => for {
-                prepared <- NativeAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-step-authority", "1"),
-                  "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
-                _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
-              } yield ())
-              Then("preparation and input provisioning neither commit nor Advance the native revision")
-              _current_().revision shouldBe current.revision
+              if (!ordinarycommits) {
+                When("explicit Advance reaches actual missing Step authority")
+                val waiting = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
+                Then("the Step remains Active at the same revision and reviewed target without a commit")
+                waiting.kind shouldBe "Wait"
+                waiting.issuedWorkContext shouldBe None
+                waiting.authorityContext should not be empty
+                waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+                _current_().lifecycle shouldBe Lifecycle.Active
+                _current_().revision shouldBe current.revision
+                var before = Option.empty[RepositorySyncManagedGitObservation.Observed]
+                prepare(call => call.observeC().map(value => { before = Some(value); () }))
+                before.get.head shouldBe parent.head
+                Given("the actual closing Wait crosses strict generated JSON intake with explicit specification-owned operator metadata")
+                When("the full saved Step Wait crosses the strict generated reader")
+                val decoded = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(take(waiting.toRecord().toJsonStringC)))))
+                val context = decoded.authorityContext.get
+                Then("the selected context retains the actual current Step parent candidate generation and review")
+                context.scope.getString("instance") shouldBe Some(identity.value)
+                context.scope.getString("sourceRevision") shouldBe Some(current.revision.value.toString)
+                context.scope.getString("step") shouldBe input.stepIdentity
+                context.scope.getString("reviewEvidence") shouldBe Some(result.resultReference.identity)
+                val target = NativeAuthorityPreparationFixture.json(context.scope)
+                target.hcursor.get[Long]("generation").toOption shouldBe Some(input.generation)
+                target.hcursor.downField("parent").get[String]("head").toOption shouldBe Some(parent.head)
+                target.hcursor.downField("candidate").get[String]("tree").toOption shouldBe Some(input.candidate.get.tree)
+                When("public passive Step preparation supplies input for existing managed specification Create")
+                prepare(call => for {
+                  prepared <- NativeAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-step-authority", "1"),
+                    "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+                  _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+                } yield ())
+                Then("preparation and input provisioning neither commit nor Advance the native revision")
+                _current_().revision shouldBe current.revision
+              }
               When("owning advance commits only the reviewed Step and selects the next ordered frontier")
               _retain_(_next_())
               completed = _input_(assigned.get).completed

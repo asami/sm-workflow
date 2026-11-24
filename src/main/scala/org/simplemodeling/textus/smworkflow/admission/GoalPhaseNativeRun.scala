@@ -25,7 +25,8 @@ import RepositorySyncManagedGitObservation as G
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 21, 2026
+  *  version Nov. 21, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -83,7 +84,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None,
     private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
     private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None,
-    plannedStepCommits: Boolean = false)
+    plannedStepCommits: Boolean = true)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {

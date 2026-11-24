@@ -17,7 +17,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 25, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -28,32 +29,40 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
   private val _plan = O.Plan("closure-plan", "1", "PHASE-6.3", "sm-workflow", Vector(
     O.Step("S1", "Implement the first selected boundary", _paths, Vector.empty, Vector("test")),
     O.Step("S2", "Implement the next boundary", Vector("docs/next.md"), Vector("S1"), Vector("test"))), Vector("test"))
-  private def _controller: O.State = {
-    val initial = take(O.startC(_plan, _base))
+  private def _controller: O.State = _reviewed(_plan)
+
+  private def _reviewed(plan: O.Plan): O.State = {
+    val initial = take(O.startC(plan, _base))
     val ready = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "implemented")))
     val seen = take(ready.acceptC(O.CandidateObserved(_candidate)))
-    val checked = take(seen.acceptC(O.ChecksObserved(_candidate, Vector("test"), "checks-original", true)))
+    val checked = take(seen.acceptC(O.ChecksObserved(_candidate, plan.steps.head.checks, "checks-original", true)))
     take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, _candidate,
       "checks-original", "review-original", O.ReviewOutcome.Accept)))
   }
   "Planned Step closure authority" should {
-    "reuse a retained host program only for its enabled original plan and selected Step" in {
+    "reuse the original host program for the admitted Step candidate and retain explicit restrictions" in {
+      Given("the normal Closing frontier with an accepted review and the policy retained by Start")
       val policy = K.Policy("planned-commits", 1, Vector(K.StepProgram("S1", 1)))
       val started = GoalPhaseNativeRun.Payload("participant", "/workspace", "main", _plan, _base,
         plannedStepCommitPolicy = Some(policy))
-      val input = K.Input("session", "4", _plan.identity, _plan.revision, "S1", 1L, _base, _candidate, "review")
-      K.plannedAuthority(started, _plan, policy, true, input) shouldBe true
-      K.plannedAuthority(started, _plan, policy, false, input) shouldBe false
-      K.plannedAuthority(started.copy(plannedStepCommitPolicy = None), _plan, policy, true, input) shouldBe false
-      K.plannedAuthority(started, _plan, policy.copy(revision = 2), true, input) shouldBe false
-      K.plannedAuthority(started, _plan, policy, true, input.copy(planRevision = "2")) shouldBe false
-      K.plannedAuthority(started, _plan, policy, true, input.copy(step = "S2")) shouldBe false
+      val closing = _controller
+      val input = K.Input("session", "4", _plan.identity, _plan.revision, "S1", closing.generation,
+        _base, _candidate, closing.reviewEvidence)
+      When("the retained policy is applied to the current ordinary closing candidate")
+      K.plannedAuthority(started, closing, policy, true, input) shouldBe true
+      Then("explicit disabled policy, a historical Start, another candidate or a crossed selection cannot supply planned authority")
+      K.plannedAuthority(started, closing, policy, false, input) shouldBe false
+      K.plannedAuthority(started.copy(plannedStepCommitPolicy = None), closing, policy, true, input) shouldBe false
+      K.plannedAuthority(started, closing, policy.copy(revision = 2), true, input) shouldBe false
+      K.plannedAuthority(started, closing, policy, true, input.copy(candidate = _base)) shouldBe false
+      K.plannedAuthority(started, closing, policy, true, input.copy(planRevision = "2")) shouldBe false
+      K.plannedAuthority(started, closing, policy, true, input.copy(step = "S2")) shouldBe false
       val expanded = _plan.copy(revision = "2", steps = _plan.steps.updated(0,
         _plan.steps.head.copy(ownedPaths = _paths :+ "src/another.scala")))
       val later = input.copy(planRevision = "2")
-      K.plannedAuthority(started, expanded, policy, true, later) shouldBe true
+      K.plannedAuthority(started, _reviewed(expanded), policy, true, later) shouldBe true
       val changedChecks = expanded.copy(steps = expanded.steps.updated(0, expanded.steps.head.copy(checks = Vector("compile"))))
-      K.plannedAuthority(started, changedChecks, policy, true, later) shouldBe false
+      K.plannedAuthority(started, _reviewed(changedChecks), policy, true, later) shouldBe false
       val codec = GoalPhaseNativeRun.codec
       codec.decode(codec.encode(started)) shouldBe Right(started)
       val historical = started.copy(plannedStepCommitPolicy = None)

@@ -25,7 +25,8 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 24, 2026
+  *  version Nov. 24, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -2831,8 +2832,10 @@ private[admission] object NativeWorkflowCliFixture {
       Option.when(readroots.nonEmpty)("textus.resource.url.file.roots" ->
         readroots.map(_.toAbsolutePath.normalize.toString).mkString(",")).toVector
     val directory = Files.createDirectories(root.resolve(".textus"))
-    Files.writeString(directory.resolve("config.json"),
-      Json.obj(values.toVector.sortBy(_._1).map((key, value) => key -> Json.fromString(value))*).noSpaces)
+    val config = Json.obj(values.toVector.sortBy(_._1).map((key, value) => key -> Json.fromString(value))*)
+    // These retained-history fixtures specify the independently authorized Step path.
+    Files.writeString(directory.resolve("config.json"), config.mapObject(_.add(
+      ThreeWorkflowRuntimeParameters.plannedStepCommits.name, Json.False)).noSpaces)
     Files.writeString(directory.resolve("assembly.yaml"),
       """subsystem: native-workflow-cli
         |components:

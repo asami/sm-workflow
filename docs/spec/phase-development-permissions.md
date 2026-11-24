@@ -101,9 +101,11 @@ reference. When a literal restriction was selected, preserve it during the
 continuation. Necessary paths within the purpose and retained restrictions use
 the same mechanical append and source checks as a Human-admitted inventory.
 
-When the trusted host sets `sm-workflow.goal-phase.planned-step-commits` to
-`true`, Start retains the selected Step commit program policy. Ordinary Step
-closure can consume it for an original selected Step under the same Plan and
+A normal authenticated Start retains its selected ordinary Step commit
+program policy by default. Setting
+`sm-workflow.goal-phase.planned-step-commits` to `false` disables that grant
+at Start and at Closing. Ordinary Step closure can consume retained policy
+for an original selected Step and its accepted candidate under the same Plan and
 current host program policy, including a Plan revision limited to necessary
 file inventory additions. Native candidate freshness, validation, review or
 formal Admission, Git permissions and commit intent/provenance still apply.

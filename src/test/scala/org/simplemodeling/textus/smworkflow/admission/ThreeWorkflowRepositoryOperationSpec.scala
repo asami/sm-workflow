@@ -43,7 +43,8 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 21, 2026
+  *  version Nov. 21, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -378,6 +379,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
 
   protected def subsystemName: String = "direct-repository-spec"
 
+  protected def requires_separate_step_authority: Boolean = true
+
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
     hostParameters: Map[String, String] = Map.empty,
@@ -415,7 +418,12 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       hostParameters // Explicit specification-owned configuration selected before this episode boots.
     val raw = if (standard_runtime) configured - ThreeWorkflowRuntimeParameters.definition.name else configured
     val directory = Files.createDirectories(root.resolve(".textus"))
-    Files.writeString(directory.resolve("config.json"), Json.obj(raw.toVector.map((key, value) => key -> Json.fromString(value))*).noSpaces)
+    val stepauthority = ThreeWorkflowRuntimeParameters.plannedStepCommits.name
+    val config = Json.obj((raw - stepauthority).toVector.map((key, value) => key -> Json.fromString(value))*)
+    val configuredauthority = raw.get(stepauthority).map(value => Json.fromBoolean(value.toBoolean))
+      .orElse(Option.when(requires_separate_step_authority)(Json.False))
+    Files.writeString(directory.resolve("config.json"),
+      configuredauthority.fold(config)(value => config.mapObject(_.add(stepauthority, value))).noSpaces)
     Files.writeString(directory.resolve("assembly.yaml"),
       s"""subsystem: $subsystemName
         |components: []

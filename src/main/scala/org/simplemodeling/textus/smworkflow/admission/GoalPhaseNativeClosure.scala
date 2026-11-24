@@ -23,7 +23,8 @@ import GoalPhasePartialCommitClosure as P
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -66,12 +67,18 @@ private[smworkflow] object GoalPhaseNativeClosure {
     def validateC = if (policy == null || authority == null) F.invalid("native Step closure authority is missing")
       else policy.validateC
   }
-  private[admission] def plannedAuthority(start: F.Payload, plan: O.Plan,
-    current: Policy, enabled: Boolean, input: Input): Boolean =
+  private[admission] def plannedAuthority(start: F.Payload, controller: O.State,
+    current: Policy, enabled: Boolean, input: Input): Boolean = {
+    val plan = controller.plan
     enabled && start.plannedStepCommitPolicy.contains(current) &&
       plan.identity == input.plan && plan.revision == input.planRevision &&
+      controller.stage == O.Stage.Closing && plan.steps.lift(controller.cursor).exists(_.identity == input.step) &&
+      controller.candidate.contains(input.candidate) && controller.candidateBase == input.parent &&
+      controller.generation == input.generation && controller.reviewEvidence == input.reviewEvidence &&
+      controller.stepAdmission == input.admission && input.committedWork.isEmpty &&
       current.programs.exists(_.step == input.step) && start.plan.steps.exists(_.identity == input.step) &&
       _same_planned_scope(start.plan, plan)
+  }
 
   private def _same_planned_scope(start: O.Plan, current: O.Plan): Boolean =
     current.copy(revision = start.revision, steps = start.steps) == start &&
@@ -320,7 +327,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
     configured <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
     _ <- configured.validateC
     start = session.started.receipt.payload.value
-    planned = plannedAuthority(start, controller.plan, configured.policy, d.plannedStepCommits, input)
+    planned = session.started.receipt.next.identity == from.identity &&
+      plannedAuthority(start, controller, configured.policy, d.plannedStepCommits, input)
     installation = if (!planned) configured else configured.copy(authority = new AuthorityPort {
       def isGrantedC(call: ActionCall.Core, actual: Input): Consequence[Boolean] =
         if (actual == input) Consequence.success(true) else configured.authority.isGrantedC(call, actual)
