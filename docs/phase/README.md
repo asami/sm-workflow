@@ -2,14 +2,14 @@
 
 ## Adopted development priority — 2026-11-24
 
-Complete the immediate AI-cost work, then strengthen validation, quality, and everyday development support before expanding the provider pool. Phases 24 and 28 have formal local releases; Phase 25 remains in progress and its existing T1–T3 plan is unchanged.
+Complete the immediate AI-cost work, then strengthen validation, quality, and everyday development support before expanding the provider pool. Phases 24 and 28 have formal local releases. The Phase 25 T1–T3 scope is unchanged. Phase 25.1 adds observational completion metrics before Phase 28.1 adds new repair routes.
 
 | Order | Group | Phases |
 | --- | --- | --- |
-| 1–2 | Immediate AI-cost reductions | [25](phase-25.md) (OpenAI Task API) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
-| 3–7 | Validation, quality, and stabilization | [7.2](phase-7.2.md) (safe temporary worktree retirement after verified sync) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
-| 8–11 | Everyday development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
-| 12–15 | Usage measurement and AI execution expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared server and multiple CLIs) → [27](phase-27.md) (capability- and cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+| 1–3 | Immediate AI-cost reductions and measurement | [25](phase-25.md) (OpenAI Task API) → [25.1](phase-25.1.md) (Workflow completion metrics) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
+| 4–8 | Validation, quality, and stabilization | [7.2](phase-7.2.md) (safe temporary worktree retirement after verified sync) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
+| 9–12 | Everyday development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
+| 13–16 | Usage measurement and AI execution expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared server and multiple CLIs) → [27](phase-27.md) (capability- and cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
 
 Phase 18 remains in scope; its Flutter W4–W5 still require qualified CNCF Phase 117 delivery. Phase 26 remains the functional prerequisite for Phase 27. Phase 13 starts usage measurement before the expansion and supplies the prerequisite for Phase 20. Phase 21 remains before Phase 15. Phases 10, 19, and 16 remain deferred. Phase 7.1 remains on hold, and [Phase 7.2](phase-7.2.md) starts the stabilization group to prevent temporary worktree accumulation.
 
@@ -690,6 +690,7 @@ in Phase 6, using the corrected runtime contract.
 | [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Planned after API-use delivery; preserve 9 -> 18 priority; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
 | [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, existing textus-ai/OpenAI connection, ordinary acceptance, bounded agent handoff and no-paid-overage setup | Consumer lane: stabilization -> remaining Phase 7 -> concrete producer/setup prerequisites -> 24; [checklist](phase-24-checklist.md); preserves canonical 22/23 |
 | [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, capability/quota-aware provider selection and selected additional-provider integration | After 24's usable delivery; [checklist](phase-25-checklist.md); no prerequisite for 24 |
+| [25.1: Workflow completion metrics](phase-25.1.md) | Session-level AI invocation and deterministic repair counts | After 25, before 28.1; [checklist](phase-25.1-checklist.md) |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal single-entry decisions, issues and handoffs](phase-11.1.md) | Linked semantic records, single-entry correction/history, state/query and one real consumer | After 7 and before 8; reuse 11 without reopening its trial |
