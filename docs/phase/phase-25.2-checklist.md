@@ -6,6 +6,9 @@ Plan: [Phase 25.2](phase-25.2.md)
   route (Codex, OpenAI monthly, OpenAI daily, named other), mode, and level.
   A mixed run distinguishes actual execution, rejected dispatch, retry, fallback,
   unknown execution, and replay without claiming billing status.
+  Report available input/output/total token usage and coverage. Fixtures cover
+  complete, partial, absent and known-zero usage, cumulative and replayed
+  usage, and token subcategories without double-counting.
 - [ ] P252-02: Completion reports retained, revalidated repair applications by
   Scalafix, Metals and other programmatic corrections. Controlled events prove
   attribution using available Phase 28.1 routes; no-op, check-only lint, rejected and rolled-back edits do not count.

@@ -12,7 +12,8 @@ Checklist: [Phase 25.2 acceptance](phase-25.2-checklist.md)
 At ordinary sm-workflow completion, show how often AI was actually called and
 which deterministic tools actually fixed the candidate. Use existing execution,
 repair, and result evidence. Deliver a useful per-Workflow Session view now;
-keep durable cross-run usage attribution, token/cost accounting, and Phase-total
+record available per-execution token usage without adding a new metering service.
+Keep durable cross-run attribution, cost accounting, and Phase-total
 reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
 
 ## P252-01 — AI invocation counts
@@ -31,6 +32,17 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
 - A configured monthly/daily route is not proof of actual billing or free usage.
   Label the route as configured, and show unknown if it is not known. Do not
   query billing services, infer credit consumption, or change routing.
+
+- Record provider- or host-reported tokens for confirmed invocations when
+  available: input, output and total as reported or derivable from an explicit
+  usage contract. Preserve provenance. Do not add cached or reasoning token
+  subsets again; do not subtract them or infer charges. Avoid double-counting
+  cumulative events, retries or duplicate results for the same invocation.
+- Show observed token subtotals by the same breakdown and for the Session, along
+  with usage coverage (calls with usage / confirmed calls). When some calls
+  lack usage, label the subtotal incomplete; when none report usage, show
+  unknown, not zero. Keep genuinely reported zero distinct from unknown. Do
+  not estimate missing tokens or make additional calls to obtain them.
 
 ## P252-02 — Successful deterministic repairs
 
@@ -54,10 +66,10 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
   Derive both tables from the same typed completion metrics; do not ask AI to
   reconstruct the numbers. Example layout (illustrative counts only):
 
-  | Engine / configured route | Thinking mode | Reasoning level | Calls |
-  | --- | --- | --- | ---: |
-  | Codex | Review | High | 2 |
-  | OpenAI API / daily | Repair | Medium | 1 |
+  | Engine / configured route | Thinking mode | Reasoning level | Calls | Input tokens | Output tokens | Total tokens | Usage coverage |
+  | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+  | Codex | Review | High | 2 | Unknown | Unknown | Unknown | 0/2 |
+  | OpenAI API / daily | Repair | Medium | 1 | 1,400 | 300 | 1,700 | 1/1 |
 
   | Successful repair tool | Applications |
   | --- | ---: |
@@ -65,7 +77,8 @@ reporting in [Phase 13](phase-13.md) and [Phase 20](phase-20.md).
   | Metals | 1 |
   | Other / built-in correction | 1 |
 
-- Keep the same counts available as structured completion data. Aggregate the current Session and linked
+- Keep the same counts, known token totals, coverage and missingness available
+  as structured completion data. Aggregate the current Session and linked
   child executions only where evidence permits; deduplicate by stable invocation
   or repair ID across resumes. Mark incomplete coverage, including older or
   opaque external executions; never read prompts, source, or secrets to estimate it.

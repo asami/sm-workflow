@@ -73,5 +73,7 @@ settlement scope. The user put Phase 25.2 immediately after it: ordinary
 sm-workflow completion posts two tables directly in the initiating Codex
 chat, covering actual AI calls by engine, configured route, thinking mode and
 level, and retained deterministic repairs by tool (Scalafix, Metals, other).
-Configured route does not establish billing. This records scope and order only;
+When the provider or host reports actual usage, record token counts alongside
+AI invocation counts and show usage coverage; missing values are unknown, not
+zero. Configured route does not establish billing. This records scope and order only;
 it starts no execution and changes no existing acceptance or Session.
