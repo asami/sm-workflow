@@ -351,6 +351,18 @@ Report buffered or failed delivery honestly in the normal update. Add no AI
 call, agent, polling, dedicated wait, display ledger or sm-workflow command for
 presentation.
 
+## Managed Scala source history
+
+When the selected installed native Phase route supports managed Scala history on
+an admitted candidate, implementation leaves routine history header changes to
+the runtime. The runtime normalizes and checks the enabled rule on that candidate;
+review consumes its attributable normalization and conformance result and focuses
+on substantive concerns, without repeating routine manual header checks. Commit
+preparation uses the result for the same candidate. An interrupted or failed
+history operation follows the native recovery contract below. Hand-authored or
+manual routes outside this automation retain their applicable history rules;
+older installed skills remain readable and do not establish this capability.
+
 ## Source-history comment recovery
 
 Follow the [current-source and source-history continuation contract](../../docs/spec/native-host-execution.md#current-source-and-source-history-continuation).

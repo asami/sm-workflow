@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -808,7 +808,13 @@ private[admission] object NativeWorkflowCliFixture {
       val initialpaths = if (_sbt_repair.nonEmpty) Vector("docs/phase.md", ".gitignore", "build.sbt",
         "project/build.properties", "src/test/scala/ProductCheck.scala", "value.txt") ++
         Option.when(sourceHistory)("src/main/scala/HistoryExample.scala").toVector ++
-        Option.when(documentRevision)("docs/checklist.md").toVector else Vector("docs/phase.md")
+        Option.when(documentRevision)("docs/checklist.md").toVector ++
+        (if (Files.exists(root.resolve("packaged-scala-tools")))
+          Vector("project.yaml", ".scalafmt.conf", ".scalafix.conf", "src/main/scala/RepairExample.scala",
+            "project/plugins.sbt", "project/ScalaLintInput.scala", "project/ScalaLintDelta.scala",
+            "project/ScalaLintAdmission.scala")
+            .filter(path => Files.isRegularFile(repository.resolve(path))) else Vector.empty)
+        else Vector("docs/phase.md")
       val commands = Vector(Vector("init", "--bare", "--initial-branch=main", host.target.endpoint),
         Vector("init", "--initial-branch=main", repository.toString),
         Vector("-C", repository.toString, "--literal-pathspecs", "add", "--") ++ initialpaths,
@@ -952,6 +958,247 @@ private[admission] object NativeWorkflowCliFixture {
       _commit_(repository, "Local owned product input")
       _sequence = Vector.empty
     }
+  }
+
+  private def _install_companion(car: Path, root: Path, resource: String, name: String): Path = {
+    val archive = new java.util.zip.ZipFile(car.toFile)
+    try {
+      val component = Option(archive.getEntry("component/main.jar"))
+        .getOrElse(throw new AssertionError("Candidate CAR has no component/main.jar"))
+      val jar = new java.util.jar.JarInputStream(archive.getInputStream(component))
+      try {
+        val entry = Iterator.continually(Option(jar.getNextJarEntry())).takeWhile(_.nonEmpty).flatten
+          .find(value => !value.isDirectory && value.getName == resource)
+        require(entry.nonEmpty, "Candidate CAR does not contain " + resource)
+        val destination = root.resolve(name)
+        Files.write(destination, jar.readAllBytes(), StandardOpenOption.CREATE_NEW)
+        require(destination.toFile.setExecutable(true, true))
+        destination
+      } finally jar.close()
+    } finally archive.close()
+  }
+
+  /** Isolated host with the checks required for the selected packaged fixture. */
+  def freshPackagedMetals(car: Path, scala3: Boolean, serverSource: String, mode: String,
+    formatter: Boolean = false, excludeFormatter: Boolean = false, scalafixRule: Option[String] = None,
+    history: Boolean = false, rejectFormattedCandidate: Boolean = false, structuralLint: Boolean = false): Scenario = {
+    require(Set("completed", "unavailable", "refactor", "source")(mode))
+    require(!rejectFormattedCandidate || (scala3 && formatter && scalafixRule.contains("ProcedureSyntax")))
+    require(!scalafixRule.contains("OrganizeImports") || (scala3 && formatter && history))
+    require(!structuralLint || (scala3 && formatter && !excludeFormatter && scalafixRule.isEmpty))
+    val parent = Files.createDirectories(_primary.resolve("target/sm-workflow/work/native-cli"))
+    val root = Files.createTempDirectory(parent, if (scala3) "packaged-metals-3-" else "packaged-metals-2-").toRealPath()
+    TypedSbtHostPlanFixture.build(root, true)
+    val repository = root.resolve("repository")
+    if (formatter || scalafixRule.nonEmpty) Files.writeString(root.resolve("packaged-scala-tools"), "enabled")
+    val build = repository.resolve("build.sbt")
+    if (scala3) Files.writeString(build, Files.readString(build).replace("2.12.18", "3.3.8"))
+    if (formatter || scalafixRule.nonEmpty) Files.writeString(repository.resolve("project.yaml"),
+      "build:\n  scalaVersion: \"" + (if (scala3) "3.3.8" else "2.12.18") + "\"\n" +
+        "validation:\n  sharedScalaLint: true\n" +
+        (if (scalafixRule.contains("OrganizeImports"))
+          "  scalaLint:\n    semanticdbRoots:\n      compile: target/semanticdb\n  metals:\n    enabled: true\n    serverIdentity: scala-metals-1-5-3\n    timeoutMillis: 1000\n"
+         else "  metals:\n    enabled: false\n"))
+    scalafixRule.foreach { rule =>
+      require(Set("RedundantSyntax", "ProcedureSyntax", "OrganizeImports")(rule))
+      Files.writeString(repository.resolve(".scalafix.conf"), "rules = [" + rule + "]\n" +
+        (if (rule == "RedundantSyntax") "RedundantSyntax.finalObject = true\nRedundantSyntax.stringInterpolator = false\n"
+         else if (rule == "OrganizeImports") "OrganizeImports.removeUnused = false\n" else ""))
+      if (rule == "OrganizeImports") Files.writeString(build, Files.readString(build) + """
+        |Compile / scalacOptions ++= Seq("-Xsemanticdb", "-sourceroot", baseDirectory.value.toString,
+        |  "-semanticdb-target", (baseDirectory.value / "target" / "semanticdb").toString)
+        |Compile / sourceGenerators += Def.task {
+        |  val source = IO.read(baseDirectory.value / "src/main/scala/RepairExample.scala")
+        |  val snapshots = baseDirectory.value.getParentFile / "compiler-inputs"
+        |  IO.createDirectory(snapshots)
+        |  val index = Option(snapshots.list()).toSeq.flatten.size
+        |  IO.write(snapshots / (index.toString + ".scala"), source)
+        |  Seq.empty[java.io.File]
+        |}.taskValue
+        |Compile / compile := {
+        |  val result = (Compile / compile).value
+        |  val input = IO.readBytes(baseDirectory.value / "src/main/scala/RepairExample.scala")
+        |  val hash = java.security.MessageDigest.getInstance("SHA-256").digest(input).map(b => f"${b & 0xff}%02x").mkString
+        |  IO.append(baseDirectory.value.getParentFile / "successful-compiles.txt", hash + "\n")
+        |  result
+        |}
+        |""".stripMargin)
+      if (rule == "ProcedureSyntax") Files.writeString(build, Files.readString(build) +
+        "\nscalacOptions ++= Seq(\"-source:3.0-migration\", \"-Werror\", \"-color:never\")\n")
+    }
+    if (rejectFormattedCandidate) Files.writeString(build, Files.readString(build) + """
+      |Compile / compile := {
+      |  val result = (Compile / compile).value
+      |  val source = IO.read(baseDirectory.value / "src/main/scala/RepairExample.scala")
+      |  if (source.contains("val value = 1")) {
+      |    IO.write(target.value / "observed-formatted-candidate.txt", source)
+      |    sys.error("Fixture revalidation rejected the formatted candidate")
+      |  }
+      |  result
+      |}
+      |""".stripMargin)
+    if (formatter) Files.writeString(repository.resolve(".scalafmt.conf"),
+      "version = \"3.8.6\"\nrunner.dialect = " + (if (scala3) "scala3" else "scala212") + "\n" +
+        (if (history) "docstrings.style = keep\n" else "") +
+        (if (excludeFormatter) "project.excludePaths = [\"src/main/scala/RepairExample.scala\"]\n" else ""))
+    if (structuralLint) _packaged_structural_lint(repository)
+    if (history) {
+      val source = repository.resolve("src/main/scala/RepairExample.scala")
+      Files.createDirectories(source.getParent)
+      Files.writeString(source, "/**\n  * @since   Nov. 1, 2025\n  * @version Nov. 1, 2025\n  * @author  Fixture\n  */\nobject RepairExample {}\n")
+    }
+    val input = V.GoalPhaseStartInput("packaged-metals", "smwf-packaged-metals")
+    val paths = Vector("src/main/scala/RepairExample.scala", "project.yaml")
+    val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)) ++
+      Option.when(structuralLint)(GoalPhaseNativeValidation.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck))
+    val normal = ThreeWorkflowNormalHostFixture.definition(root)
+    val host = normal.copy(target = normal.target.copy(root = repository.toString), goal = normal.goal.copy(
+      input = input, candidatePaths = paths, stepValidation = normal.goal.stepValidation.copy(checks = checks),
+      phaseValidation = normal.goal.phaseValidation.copy(checks = checks)),
+      repository = normal.repository.copy(input = normal.repository.input.copy(repositoryIdentity = input.repositoryIdentity)))
+    val plan = GoalPhaseOrderedProgression.Plan("packaged-metals", "1", input.phaseIdentity, input.repositoryIdentity,
+      Vector(GoalPhaseOrderedProgression.Step("step-1", "Remove one invalid Scala import", paths, Vector.empty,
+        checks.map(_.identity))), checks.map(_.identity), repairLimit = 4)
+    val scenario = new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable))
+    _host_files(scenario, Vector(root), false, Some(Vector("POST")), false, None)
+    val server = root.resolve("metals-fixture-server")
+    Files.writeString(server, serverSource)
+    require(server.toFile.setExecutable(true))
+    val companion = _install_companion(car, root, "META-INF/sm-workflow/sm-workflow-metals-bridge.py",
+      "sm-workflow-metals-bridge.py")
+    val limits = Json.obj(Vector("launchTimeoutMillis" -> 5000L, "executionTimeoutMillis" -> 70000L,
+      "terminationGraceMillis" -> 1000L, "stdinBytes" -> 1048576L, "stdoutBytes" -> 1048576L,
+      "stderrBytes" -> 65536L, "argumentCount" -> 16L, "argumentBytes" -> 4096L,
+      "artifactCount" -> 1L, "artifactBytes" -> 1L, "workAreaBytes" -> 4194304L)
+      .map((key, value) => key -> Json.fromLong(value))*)
+    val program = Json.obj("capability" -> Json.fromString(ScalaMetalsProcess.capability),
+      "identity" -> Json.fromString("controlled-metals-companion"), "executable" -> Json.fromString(companion.toString),
+      "fixedArguments" -> Json.arr(), "argumentTemplates" -> Json.arr(Json.arr()), "limits" -> limits,
+      "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin"),
+        "SM_WORKFLOW_METALS_SERVER" -> Json.fromString(server.toString),
+        "METALS_FIXTURE_TRACE" -> Json.fromString(root.resolve("metals.trace").toString),
+        "METALS_FIXTURE_MODE" -> Json.fromString(mode)), "allowedArtifacts" -> Json.arr(),
+      "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False)
+    val configPath = root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configPath)).fold(throw _, identity)
+    val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").fold(throw _, identity)).fold(throw _, identity)
+    val sbt = process.hcursor.get[Vector[Json]]("sbtPrograms").fold(throw _, identity).map(
+      _.mapObject(_.add("operation", Json.fromString("compile"))))
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = Vector(GitOperationKind.CommitMetadata,
+      GitOperationKind.TreeChanges, GitOperationKind.BlobContent))
+    val gitPrograms = git.hcursor.get[Vector[Json]]("gitPrograms").fold(throw _, identity)
+    val gitCapabilities = gitPrograms.map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing git capability")))
+    val formatcap = WorkflowScalaToolProcess.capability
+    val formatprogram = if (!formatter && scalafixRule.isEmpty) Vector.empty else {
+      val script = _install_companion(car, root, "META-INF/sm-workflow-runtime/sm-workflow-scala-tool-bridge.py",
+        "sm-workflow-scala-tool-bridge.py")
+      val java = Path.of(System.getProperty("java.home"), "bin", "java").toRealPath()
+      val classpath = _primary.resolve("target/sm-workflow/scala-tool-fixture/scalafmt-classpath.txt").toRealPath()
+      val fixclasspath = _primary.resolve("target/sm-workflow/scala-tool-fixture/scalafix-classpath.txt").toRealPath()
+      (if (formatter) Vector(Json.obj("capability" -> Json.fromString(formatcap),
+        "identity" -> Json.fromString("fixture-scalafmt-3-8-6"), "executable" -> Json.fromString(script.toString),
+        "fixedArguments" -> Json.arr(Json.fromString("--java"), Json.fromString(java.toString),
+          Json.fromString("--classpath-file"), Json.fromString(classpath.toString)),
+        "argumentTemplates" -> Json.arr(Json.arr()), "limits" -> limits,
+        "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin")),
+        "allowedArtifacts" -> Json.arr(), "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False)) else Vector.empty) ++
+        Vector(Json.obj("capability" -> Json.fromString(WorkflowScalaToolProcess.scalafixCapability),
+          "identity" -> Json.fromString("fixture-scalafix-0-12-1"), "executable" -> Json.fromString(script.toString),
+          "fixedArguments" -> Json.arr(Json.fromString("--tool"), Json.fromString("scalafix"),
+            Json.fromString("--java"), Json.fromString(java.toString), Json.fromString("--classpath-file"),
+            Json.fromString(fixclasspath.toString)), "argumentTemplates" -> Json.arr(Json.arr()), "limits" -> limits,
+          "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin")), "allowedArtifacts" -> Json.arr(),
+          "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False))
+    }
+    val lint = Option.when(structuralLint)(TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable,
+      Vector(2), operation = org.goldenport.cncf.processexecution.SbtOperation.FixCheck))
+    def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).fold(throw _, identity)
+    val lintprograms = lint.toVector.flatMap(_array_(_, "sbtPrograms")).map(_.mapObject(_.add("lintInput", Json.True)))
+    val grants = _array_(process, "grants").map { grant =>
+      val capabilities = grant.hcursor.get[Vector[Json]]("capabilities").fold(throw _, identity)
+      val added = (if (scalafixRule.contains("ProcedureSyntax")) Vector.empty else Vector(Json.fromString(ScalaMetalsProcess.capability))) ++
+        (if (formatter) Vector(Json.fromString(formatcap)) else Vector.empty) ++
+        (if (formatter || scalafixRule.nonEmpty) Vector(Json.fromString(WorkflowScalaToolProcess.scalafixCapability)) else Vector.empty)
+      grant.mapObject(_.add("capabilities", Json.fromValues(capabilities ++ added ++
+        lintprograms.map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing lint capability"))) ++ gitCapabilities)))
+    }
+    val programs = process.hcursor.get[Vector[Json]]("programs").toOption.getOrElse(Vector.empty)
+    val updated = process.mapObject(_.add("gitPrograms", Json.fromValues(_array_(process, "gitPrograms") ++ gitPrograms))
+      .add("sbtPrograms", Json.fromValues(sbt ++ lintprograms))
+      .add("workspaces", Json.fromValues(_array_(process, "workspaces") ++ lint.toVector.flatMap(_array_(_, "workspaces"))))
+      .add("workspaceGrants", Json.fromValues(_array_(process, "workspaceGrants") ++ lint.toVector.flatMap(_array_(_, "workspaceGrants"))))
+      .add("grants", Json.fromValues(grants))
+      .add("programs", Json.fromValues(programs ++ (if (scalafixRule.contains("ProcedureSyntax")) Vector.empty else Vector(program)) ++ formatprogram)))
+    val configured = config.mapObject { fields =>
+      val base = fields.add("textus.subsystem.process-execution.plan", Json.fromString(updated.noSpaces))
+      if (history) base.add("sm-workflow.source.history.style", Json.fromString("goldenport"))
+        .add("sm-workflow.source.history.rule", PrimaryGenerationHistorySpecificationFixture.rule)
+      else if (excludeFormatter) base.add("sm-workflow.source.style", Json.fromString("goldenport"))
+        .add("sm-workflow.source.history.style", Json.fromString("none"))
+      else base.add("sm-workflow.source.history.style", Json.fromString("none"))
+    }
+    Files.writeString(configPath, configured.noSpaces)
+    scenario.prepareRepository()
+    if (mode == "unavailable") Files.delete(server)
+    scenario
+  }
+
+  private def _packaged_structural_lint(repository: Path): Unit = {
+    val project = repository.resolve("project")
+    Vector("ScalaLintInput.scala", "ScalaLintDelta.scala", "ScalaLintAdmission.scala").foreach { name =>
+      Files.copy(_primary.resolve("project").resolve(name), project.resolve(name))
+    }
+    Files.writeString(project.resolve("plugins.sbt"),
+      "addSbtPlugin(\"ch.epfl.scala\" % \"sbt-scalafix\" % \"0.12.1\")\n" +
+        "libraryDependencies += \"com.typesafe\" % \"config\" % \"1.4.3\"\n" +
+        "libraryDependencies += \"org.scalameta\" %% \"scalameta\" % \"4.9.3\"\n")
+    Files.writeString(repository.resolve(".scalafix.conf"),
+      "NoStructuralIndentation.structuralDslSymbols = [\"example/RepairExample.compose().\"]\n")
+    val build = """
+      |semanticdbEnabled := true
+      |scalafixScalaBinaryVersion := "2.13"
+      |ScalafixConfig / internalDependencyClasspath += Attributed.blank(new java.io.File(java.net.URI.create(__RULE_ARTIFACT__)))
+      |libraryDependencies += "com.typesafe" % "config" % "1.4.3" % ScalafixConfig
+      |scalafixConfig := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map { selected =>
+      |  val destination = target.value / "scala-lint" / "actual.conf"
+      |  IO.write(destination, selected.json, java.nio.charset.StandardCharsets.UTF_8)
+      |  destination
+      |}.orElse(Some(baseDirectory.value / ".scalafix.conf"))
+      |lazy val selectedReporter = settingKey[Option[org.simplemodeling.scalalint.ScalaLintAdmission.Reporter]]("Actual selected lint reporter")
+      |lazy val selectedCheck = taskKey[Unit]("Actual affected lint admission")
+      |selectedReporter := org.simplemodeling.scalalint.ScalaLintInput.selected(sys.props.toMap).map(input =>
+      |  new org.simplemodeling.scalalint.ScalaLintAdmission.Reporter(baseDirectory.value.toPath, input, text => System.out.println(text)))
+      |ThisBuild / scalafixCallback := (LocalRootProject / selectedReporter).value
+      |  .getOrElse((ThisBuild / scalafixCallback).value)
+      |Compile / scalafix / unmanagedSources := {
+      |  val sources = (Compile / unmanagedSources).value
+      |  selectedReporter.value.fold(sources)(reporter => sources.filter(reporter.selected))
+      |}
+      |Compile / scalafix / managedSources := Nil
+      |Compile / scalafix / aggregate := false
+      |selectedCheck := Def.taskDyn {
+      |  val reporter = selectedReporter.value.getOrElse(sys.error("Selected native lint input is absent"))
+      |  if (!(Compile / unmanagedSources).value.exists(reporter.selected))
+      |    sys.error("Fixture requires a selected handwritten Compile source")
+      |  else Def.task {
+      |    val result = (Compile / scalafix).toTask(" --check").result.value
+      |    result match {
+      |      case Value(_) => ()
+      |      case Inc(failure) =>
+      |        val exceptions = Incomplete.allExceptions(failure)
+      |        if (exceptions.isEmpty || !exceptions.forall {
+      |          case error: _root_.scalafix.sbt.ScalafixFailed => error.errors.nonEmpty && error.errors.forall(_ == _root_.scalafix.interfaces.ScalafixError.LinterError)
+      |          case _ => false
+      |        }) throw failure
+      |    }
+      |    reporter.finish()
+      |  }
+      |}.value
+      |addCommandAlias("fixCheck", "selectedCheck")
+      |""".stripMargin.replace("__RULE_ARTIFACT__", Json.fromString(_shared_lint_rule_artifact()).noSpaces)
+    Files.writeString(repository.resolve("build.sbt"), build, StandardOpenOption.APPEND)
   }
 
   def fresh(name: String, remote: Boolean = false, resourceRoots: Vector[Path] = Vector.empty,
@@ -1921,6 +2168,17 @@ private[admission] object NativeWorkflowCliFixture {
   val sharedLintInitialSource = "package org.simplemodeling.textus.smworkflow.p62authored\n" +
     "object LineWriter { def render(value: String): String = value.reverse + \"\\n\" }\n" +
     "object ExistingPartial { def unsafe(value: Option[Int]): Int = value.get }\n"
+
+  private def _shared_lint_rule_artifact(): String = {
+    val properties = new java.util.Properties()
+    val input = Option(getClass.getResourceAsStream("/phase81-scala-lint.properties"))
+      .getOrElse(throw new IllegalArgumentException("Prepare the normal independent rule artifact input"))
+    try properties.load(input) finally input.close()
+    val artifact = Option(properties.getProperty("ruleArtifact"))
+      .getOrElse(throw new IllegalArgumentException("Actual rules package is absent"))
+    require(Files.isRegularFile(Path.of(java.net.URI.create(artifact))), "Actual rules package is absent")
+    artifact
+  }
 
   /** Fixed setup of one tiny shared-profile consumer before Start. The normal
     * selected build owns compiler/Scalafix execution; no workflow facts are

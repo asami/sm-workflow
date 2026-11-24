@@ -7,7 +7,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitPath}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitPath, GitSelectionParameters}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -83,6 +83,7 @@ private[smworkflow] object DeterministicRepair {
       source.revision.value + ":" + operation + ":" + kind, "1")
   private def _cause(operation: String, kind: String) = "ordered-deterministic-repair:" + operation + ":" + kind
   private[admission] val applyIntentCause = _cause("apply", "intent")
+  private[admission] val applyResultCause = _cause("apply", "result")
   private[admission] val rollbackIntentCause = _cause("rollback", "intent")
   private def _pure = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
 
@@ -384,7 +385,7 @@ private[smworkflow] object DeterministicRepair {
     */
   private[admission] def compilerDiagnosticSelection(material: CompilerMaterial): Option[(Range, String)] = {
     val point = material.diagnostic.range.start
-    val header = raw"\[error\] -- .+ Error: .+\.scala:(\d+):(\d+) *".r
+    val header = raw"\[error\] -- (?:.+ )?Error: .+\.scala:(\d+):(\d+) *".r
     val source = raw"\[error\] +(\d+) *\|(.*)".r
     val mark = raw"\[error\] +\|( *)(\^+) *".r
     material.diagnostic.message.linesIterator.take(3).toVector match {
@@ -489,7 +490,7 @@ private[smworkflow] object DeterministicRepair {
       if root.resolve(transaction.path).toString == finding.reportedPath && transaction.validationReference == reference
       rendered <- _compiler_patch(finding, document, reference).toOption
     } yield rendered
-    val metalsproof = for {
+    val toolproof = for {
       finding <- compilerLocator(validation.payload)
       root <- Try(Path.of(session.started.receipt.payload.value.root).normalize).toOption
       if root.resolve(transaction.path).toString == finding.path &&
@@ -499,13 +500,13 @@ private[smworkflow] object DeterministicRepair {
       diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, 0, "compiler-error", Range(point, point), finding.message)
       material = CompilerMaterial(transaction.session, transaction.sourceRevision, transaction.candidate,
         transaction.validationReference, transaction.path, transaction.workspace, document, diagnostic)
-      rendered <- ScalaMetalsRepair.productionRendered(material)
+      rendered <- ScalaMetalsRepair.productionRendered(material).orElse(ScalaLintRepair.procedureRendered(material))
     } yield rendered
     retainedPrefix(validation.record, source) && retainedPrefix(candidate.record, validation.record) &&
       candidate.payload.candidate.contains(validation.payload.candidate) && transaction.candidate == validation.payload.candidate.tree &&
       candidate.payload.step == validation.payload.step && owned.contains(transaction.path) &&
       (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(transaction.path: String) &&
-      (proof.contains(transaction.patched) || metalsproof.contains(transaction.patched))
+      (proof.contains(transaction.patched) || toolproof.contains(transaction.patched))
   }
 
   /** Caller supplies the admitted source. An unknown intent is never replayed. */
@@ -558,8 +559,8 @@ private[smworkflow] object DeterministicRepair {
   } yield Rollback(source.revision.value.toString, snapshot.tree,
     validation.record.revision.value.toString + ":" + receipt.identity)
 
-  /** Reverse only the observed patch, including its selected index entry.
-    * A durable rollback receipt requires both effects and the original tree. */
+  /** Reverse the diagnostic patch and any attributable edits performed while
+    * inspecting its successor. Completion requires the original index tree. */
   def rollbackC(session: GoalPhaseNativeRun.Session, declaration: GoalPhaseNativeRun.Declaration,
     core: ActionCall.Core, source: InstanceRecord, applied: TransactionObservation,
     candidate: GoalPhaseNativeCandidate.Saved, validation: GoalPhaseNativeValidation.Saved): Consequence[TransactionObservation] = {
@@ -577,52 +578,34 @@ private[smworkflow] object DeterministicRepair {
           _ <- if (session.current == source && (transaction.workspace: String) == (RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"): String)) Consequence.unit
             else GoalPhaseNativeRun.invalid("deterministic rollback workspace or frontier changed")
           workspace <- WorkspaceId.parseC(transaction.workspace)
-          path <- WorkspaceFilePath.parseC(transaction.path)
           oldtree <- GitObjectId.parseC(transaction.candidate)
           newtree <- GitObjectId.parseC(recovery.failedCandidate)
           expectedHead <- GitObjectId.parseC(validation.payload.candidate.head)
-          selectedPath <- GitPath.parseC(transaction.path)
-          selection <- GoalPhaseNativeCandidate.primaryRepairSelectionC(declaration.candidatePaths, transaction.path)
-          _ <- GoalPhaseNativeCandidate.primaryRepairPreflightC(core, declaration.candidatePaths, Vector(transaction.path))
           root <- git.executeGitC(core, GitOperation.Root).flatMap(_.valueC)
           branch <- git.executeGitC(core, GitOperation.Branch).flatMap(_.valueC)
           head <- git.executeGitC(core, GitOperation.Head).flatMap(_.valueC)
           tree <- git.executeGitC(core, GitOperation.IndexTree).flatMap(_.valueC)
-          changes <- git.executeGitC(core, GitOperation.TreeChanges(oldtree, newtree)).flatMap(_.valueC)
-          change <- changes match {
-            case Vector(value) if root == session.started.receipt.payload.value.root && root == declaration.target.root.toString &&
-                branch == declaration.target.localBranch && head == expectedHead && tree == newtree &&
-                (value.path: GitPath) == selectedPath && (value.oldMode: String) == "100644" &&
-                (value.newMode: String) == "100644" =>
-              Consequence.success(value)
-            case _ => GoalPhaseNativeRun.invalid("deterministic rollback does not have exactly the applied file in its index")
-          }
-          previous <- change.oldBlob.map(Consequence.success)
-            .getOrElse(GoalPhaseNativeRun.invalid("deterministic rollback lost its original blob"))
-          current <- change.newBlob.map(Consequence.success)
-            .getOrElse(GoalPhaseNativeRun.invalid("deterministic rollback lost its patched blob"))
-          before <- git.executeGitC(core, GitOperation.BlobContent(previous)).flatMap(_.valueC)
-          patched <- git.executeGitC(core, GitOperation.BlobContent(current)).flatMap(_.valueC)
-          _ <- if ((before.bytes: Vector[Byte]) == (transaction.expected.getBytes(UTF_8).toVector: Vector[Byte]) &&
-              (patched.bytes: Vector[Byte]) == (transaction.patched.getBytes(UTF_8).toVector: Vector[Byte])) Consequence.unit
-            else GoalPhaseNativeRun.invalid("deterministic rollback source is no longer exact")
+          _ <- if (root == session.started.receipt.payload.value.root && root == declaration.target.root.toString &&
+              branch == declaration.target.localBranch && head == expectedHead && tree == newtree) Consequence.unit
+            else GoalPhaseNativeRun.invalid("deterministic rollback crosses its failed candidate workspace, HEAD or index")
+          additions <- GoalPhaseNativeScalaCleanup.rollbackChangesC(session, core, applied.record,
+            candidate.record, candidate.payload.step, oldtree.value)
+          edits <- _rollback_paths_c(core, declaration, candidate, transaction, oldtree, newtree, additions)
           adapter <- session.storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, transactionCodec)
           intended <- _saveTransactionC(adapter, declaration, core, source, source, initial, "intent")
-          written <- WorkflowFileExecution.writeTextC(core, FileTarget(workspace), path,
-            transaction.expected, FileWriteMode.UpdateExisting(transaction.patched))
-          outcome <- written.outcome match {
-            case FileWriteOutcome.Conflict(_) => Consequence.success("conflict")
-            case FileWriteOutcome.Updated => for {
+          outcome <- _restore_c(core, FileTarget(workspace), edits).flatMap {
+            case false => Consequence.success("conflict")
+            case true => for {
               still <- git.executeGitC(core, GitOperation.IndexTree).flatMap(_.valueC)
               _ <- if (still == newtree) Consequence.unit else GoalPhaseNativeRun.invalid("deterministic rollback index changed before staging")
-              _ <- git.executeSelectedGitC(core, GitOperation.StageSelectedAll(selection.identity), selection,
-                transaction.workspace).flatMap(_.valueC)
+              _ <- edits.foldLeft(Consequence.unit) { (prior, edit) => prior.flatMap(_ =>
+                git.executeSelectedGitC(core, GitOperation.StageSelectedAll(edit.selection.identity), edit.selection,
+                  transaction.workspace).flatMap(_.valueC)) }
               restored <- git.executeGitC(core, GitOperation.IndexTree).flatMap(_.valueC)
               parent <- git.executeGitC(core, GitOperation.Head).flatMap(_.valueC)
               _ <- if (restored == oldtree && parent == head) Consequence.unit
                 else GoalPhaseNativeRun.invalid("deterministic rollback did not observe its original index and HEAD")
             } yield "updated"
-            case _ => GoalPhaseNativeRun.invalid("deterministic rollback outcome is unknown; do not replay")
           }
           recorded = initial.copy(outcome = Some(outcome))
           next <- _saveTransactionC(adapter, declaration, core, source, intended, recorded, "result")
@@ -630,6 +613,71 @@ private[smworkflow] object DeterministicRepair {
       }
     } yield result
   }
+
+  private final case class RollbackPath(path: WorkspaceFilePath, original: String, patched: String,
+    selection: GitSelectionParameters)
+
+  private def _rollback_paths_c(core: ActionCall.Core, declaration: GoalPhaseNativeRun.Declaration,
+    candidate: GoalPhaseNativeCandidate.Saved, transaction: Transaction, before: GitObjectId, after: GitObjectId,
+    additions: Vector[GoalPhaseNativeScalaCleanup.ByteChange]): Consequence[Vector[RollbackPath]] = {
+    import GoalPhaseNativeScalaCleanup.{ByteChange, hashText}
+    val git = WorkflowManagedProcessExecution
+    val repair = ByteChange(transaction.path, hashText(transaction.expected), hashText(transaction.patched))
+    for {
+      changes <- _byte_chain_c(repair, additions)
+      actual <- git.executeGitC(core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
+      _ <- if (actual.map(_.path.value).sorted == changes.keys.toVector.sorted &&
+          actual.forall(file => file.oldMode == "100644" && file.newMode == "100644" &&
+            candidate.payload.stagedPaths.exists(path => path == file.path.value || file.path.value.startsWith(path + "/"))))
+        Consequence.unit
+        else GoalPhaseNativeRun.invalid("deterministic rollback index differs from its recorded file edits")
+      _ <- GoalPhaseNativeCandidate.primaryRepairPreflightC(core, declaration.candidatePaths, actual.map(_.path.value))
+      paths <- actual.foldLeft(Consequence.success(Vector.empty[RollbackPath])) { (prior, file) => for {
+        accumulated <- prior
+        oldblob <- file.oldBlob.map(Consequence.success)
+          .getOrElse(GoalPhaseNativeRun.invalid("deterministic rollback lost its original blob"))
+        newblob <- file.newBlob.map(Consequence.success)
+          .getOrElse(GoalPhaseNativeRun.invalid("deterministic rollback lost its patched blob"))
+        original <- _blob_text_c(core, oldblob)
+        patched <- _blob_text_c(core, newblob)
+        path <- WorkspaceFilePath.parseC(file.path.value)
+        expected = changes(path.value)
+        _ <- if (hashText(original) == expected.before && hashText(patched) == expected.after &&
+            (path.value != transaction.path || original == transaction.expected)) Consequence.unit
+          else GoalPhaseNativeRun.invalid("deterministic rollback bytes differ from the recorded edit sequence")
+        selection <- GoalPhaseNativeCandidate.primaryRepairSelectionC(declaration.candidatePaths, path.value)
+      } yield accumulated :+ RollbackPath(path, original, patched, selection) }
+    } yield paths
+  }
+
+  private def _byte_chain_c(repair: GoalPhaseNativeScalaCleanup.ByteChange,
+    additions: Vector[GoalPhaseNativeScalaCleanup.ByteChange]): Consequence[Map[String, GoalPhaseNativeScalaCleanup.ByteChange]] = {
+    additions.foldLeft(Consequence.success(Map(repair.path -> repair))) { (prior, edit) => prior.flatMap { changes =>
+      changes.get(edit.path) match {
+        case None => Consequence.success(changes.updated(edit.path, edit))
+        case Some(earlier) if earlier.after == edit.before =>
+          Consequence.success(changes.updated(edit.path, earlier.copy(after = edit.after)))
+        case _ => GoalPhaseNativeRun.invalid("deterministic rollback edit has no exact predecessor bytes")
+      }
+    }}.map(_.filter { case (_, change) => change.before != change.after })
+  }
+
+  private def _blob_text_c(core: ActionCall.Core, identity: GitObjectId): Consequence[String] =
+    WorkflowManagedProcessExecution.executeGitC(core, GitOperation.BlobContent(identity)).flatMap(_.valueC).flatMap { blob =>
+      Try(UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(blob.bytes.toArray)).toString)
+        .fold(_ => GoalPhaseNativeRun.invalid("deterministic rollback blob is not complete UTF-8"), Consequence.success)
+    }
+
+  private def _restore_c(core: ActionCall.Core, target: FileTarget, edits: Vector[RollbackPath]): Consequence[Boolean] =
+    edits.zipWithIndex.foldLeft(Consequence.success(true)) { case (prior, (edit, ordinal)) => prior.flatMap {
+      case false => Consequence.success(false)
+      case true => WorkflowFileExecution.writeTextC(core, target, edit.path, edit.original,
+        FileWriteMode.UpdateExisting(edit.patched)).flatMap { written => written.outcome match {
+        case FileWriteOutcome.Updated => Consequence.success(true)
+        case FileWriteOutcome.Conflict(_) if ordinal == 0 => Consequence.success(false)
+        case _ => GoalPhaseNativeRun.invalid("deterministic rollback did not confirm every replacement; do not replay")
+      }}
+    }}
 
   private def _saveTransactionC(adapter: WorkflowManagedMechanicalTransition[TransactionRecord],
     declaration: GoalPhaseNativeRun.Declaration, core: ActionCall.Core, source: InstanceRecord,

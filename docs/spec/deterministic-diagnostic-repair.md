@@ -183,9 +183,13 @@ RepairStep available.
 The runtime records the file-update intent before invoking the managed File
 compare-and-set and records the returned outcome separately. An applied edit
 goes through normal candidate inspection and the selected validation chain. If
-that revalidation formally fails, rollback checks that the single changed blob
-is precisely the applied edit. It restores the original bytes, stages that file
-through its selected Git program and verifies the original index. The failed
+that revalidation formally fails, rollback compares the changed blobs with the
+recorded diagnostic patch and any subsequent managed Scalafix, source-history,
+or Scalafmt writes. Each subsequent write must extend the previous exact bytes
+for that file. The resulting set of paths and byte digests must match the
+failed index. Rollback restores the original bytes with conditional writes,
+stages those files through their selected Git programs and verifies the original
+index and HEAD. The failed
 diagnostic and validation remain available to the normal RepairStep or Human
 decision. A missing effect result or a rollback conflict retains the actual
 state for resolution. The runtime makes at most one automatic compiler
@@ -240,6 +244,36 @@ unchanged multi-file fallback. Pure capture fixtures cover unavailable rule
 configuration, clipped output, extra edits, stale bytes and historical decoding.
 These executable specifications require execution to establish qualification;
 production project qualification remains a separate post-release activity.
+
+## Ordinary Scala cleanup
+
+Candidate inspection can run allowlisted Scalafix rewrites, the existing
+source-history normalizer, and Scalafmt before staging and final validation.
+It uses selected, changed, handwritten Scala files. The formatter uses the
+resolved project configuration and a second preview of the proposed bytes
+to confirm idempotence. The existing history selection governs normalization
+and conformance, including an explicit `none` override.
+
+The host registers the fixed `sm-workflow-scalafix-preview` and
+`sm-workflow-scalafmt-preview` capabilities. The CAR contains their shared
+companion at `META-INF/sm-workflow-runtime/sm-workflow-scala-tool-bridge.py`
+inside `component/main.jar`. Install the executable from that resource and
+register the fixed Java executable and pinned tool classpath file in the host's
+recipe. The bridge previews one isolated file with Scalafix 0.12.1 or Scalafmt
+3.8.6. Tool registration does not itself enable a rule or formatter on a project.
+
+For `OrganizeImports`, the Phase route currently admits Scala 3.3.8, explicit
+`OrganizeImports.removeUnused = false`, and a region of distinct named
+`java` or `scala` imports. Declare the project's existing workspace-relative
+compiler output roots as `validation.scalaLint.semanticdbRoots.compile` and,
+where applicable, `validation.scalaLint.semanticdbRoots.test`. The Plan must
+select the corresponding existing Compile or TestCompile program. The runtime
+reuses an attributable successful compiler result with matching source and
+SemanticDB digests. Otherwise it invokes the selected compiler once for that
+scope and captures the result and any matching metadata separately. An
+unconfirmed compiler termination stops the attempt for recovery; unavailable
+metadata supplies no edit. It checks the candidate again before applying any
+proposal and admits only import reordering with the surrounding bytes preserved.
 
 ## Source-local nullable boundary evidence
 
@@ -298,3 +332,8 @@ transport fixture does not establish actual deployed server behavior. The adopte
 Plan defers qualification against deployed tools and real Scala 2.12/3 projects,
 and production latency and AI-avoidance measurements. No Phase completion is
 claimed by this local qualification.
+
+Projects using managed ScalaDoc history can explicitly configure Scalafmt with
+`docstrings.style = keep` to preserve that metadata. A formatter preview that
+changes managed history or cannot be interpreted as valid history is rejected;
+the workflow does not rewrite the header or override the project formatter.

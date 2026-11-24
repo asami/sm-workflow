@@ -2868,6 +2868,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates, retainedOnly = historyonly,
           primaryRepair = _active_primary_repair(cursor), repairWindow = cursor.repairWindow)
         result <- retained match {
+          case None if GoalPhaseNativeScalaCleanup.recordedAfter(cursor.from, source.current) =>
+            _paused_c(source, cursor.copy(inspectionSource = Some(cursor.from)),
+              "The candidate inspection retained Scala cleanup effects without a finished candidate. Its effects are not replayed.")
           case None if cursor.wholePhaseCandidateRecovery.nonEmpty => _paused_c(source, cursor,
             "The authorized whole-Phase observation has an unresolved intent. Original and fresh outcomes remain UNKNOWN; no automatic retry or further authorization is granted.")
           case None if cursor.controller.stage == O.Stage.PhaseInspection => for {

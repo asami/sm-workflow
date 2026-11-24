@@ -34,6 +34,26 @@ private[smworkflow] object ScalaLintRepair {
 
   private val _recipe = "scalafix-redundant-final-object-v1"
 
+  /** Narrow Scala 3 migration diagnostic whose fix is consumable by the
+    * pinned Scala 2 parser. The provider must propose these exact bytes. */
+  def procedureRendered(material: CompilerMaterial): Option[String] = {
+    val diagnostic = material.diagnostic
+    val lines = material.document.text.split("\\n", -1).toVector
+    val message = "Procedure syntax no longer supported; `: Unit =` should be inserted here"
+    for {
+      (span, token) <- DeterministicRepair.compilerDiagnosticSelection(material)
+      point = span.start
+      line <- lines.lift(point.line)
+      if diagnostic.message.linesIterator.exists(_.trim.endsWith(message)) &&
+        token == "{" && !material.document.text.contains('\r') &&
+        point.character > 0 && point.character < line.length && line.charAt(point.character) == '{' &&
+        line.take(point.character).matches(" +def [A-Za-z_][A-Za-z0-9_]* ") &&
+        DeterministicRepair.codeAtLine(lines, point.line)
+      before = point.character - 1
+      replacement = line.take(before) + ": Unit =" + line.drop(before)
+    } yield lines.updated(point.line, replacement).mkString("\n")
+  }
+
   /** Called only with the actual Observed SBT target; no current-config reread. */
   def attest(checkIdentity: String, input: SbtLintInput): Option[Attestation] = Try {
     val config = ConfigFactory.parseString(input.configJson, com.typesafe.config.ConfigParseOptions.defaults().setSyntax(com.typesafe.config.ConfigSyntax.JSON))

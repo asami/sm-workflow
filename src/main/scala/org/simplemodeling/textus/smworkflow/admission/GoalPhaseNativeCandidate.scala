@@ -25,7 +25,7 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -540,9 +540,21 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- store.reusedCaptureC(initial)
     selected <- store.saveC("inspection", store.from, initial)
     _ <- if (store.whole) store.acknowledgeC("goal-whole-phase-candidate-inspected") else Consequence.unit
+    toolcleanup = !store.whole && store.primaryRepair.isEmpty && reused.isEmpty
+    trackcleanup = toolcleanup && store.from.causation.value == DeterministicRepair.applyResultCause &&
+      GoalPhaseNativeScalaCleanup.configured(store.core)
+    preflight = () => store.inspectPinnedC(parent).map(_ => ())
+    cleaned <- if (toolcleanup) GoalPhaseNativeScalaCleanup.cleanupC(store.session, store.d, store.core, store.from,
+      selected.record, store.scopeIdentity, historypaths, preflight) else Consequence.success(selected.record)
+    organized <- if (toolcleanup && store.dependencySourceDirection.isEmpty && store.dependencyAdmission.isEmpty)
+      GoalPhaseNativeScalaCleanup.organizeImportsC(store.session, store.d, store.core, store.from,
+        cleaned, store.plan, store.scopeIdentity, historypaths, () => store.inspectPinnedC(parent))
+      else Consequence.success(cleaned)
     normalized <- GoalPhaseNativeSourceHistory.advanceC(store.session, store.d, store.core, store.from,
-      selected.record, store.controller, store.scopeIdentity, store.inspectionStage, history, store.acknowledgeC)
-    staged <- selected.payload.selectedPaths.zipWithIndex.foldLeft(Consequence.success(selected.copy(record = normalized))) {
+      organized, store.controller, store.scopeIdentity, store.inspectionStage, history, store.acknowledgeC, trackcleanup)
+    formatted <- if (toolcleanup) GoalPhaseNativeScalaCleanup.formatC(store.session, store.d, store.core, store.from,
+      normalized, store.scopeIdentity, historypaths, preflight, history) else Consequence.success(normalized)
+    staged <- selected.payload.selectedPaths.zipWithIndex.foldLeft(Consequence.success(selected.copy(record = formatted))) {
       case (prior, (path, index)) => prior.flatMap { current =>
         if (current.payload.stagedPaths.size != index) Consequence.success(current)
         else for {

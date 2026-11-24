@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigIncludeContext, ConfigIncluder, ConfigIncluderFile,
   ConfigIncluderURL, ConfigIncluderClasspath, ConfigObject, ConfigParseOptions, ConfigRenderOptions, ConfigValueFactory}
+import com.typesafe.config.ConfigResolveOptions
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Path
 import io.circe.Json
@@ -16,12 +17,57 @@ import org.simplemodeling.scalalint.{ScalaLintDelta, ScalaLintInput, ScalaLintPr
 
 /** Prepare optional typed FixCheck input from the Session candidate's lint policy.
   * @since   Nov. 19, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowScalaLintAction {
   private def invalid[A](message: String): Consequence[A] =
     Consequence.configurationInvalid("Shared Scala lint Action: " + message)
+
+  final case class Rewrite(scalaVersion: String, configuration: String,
+    semanticdbRoots: Map[String, String] = Map.empty)
+
+  private[admission] def formatterConfigurationC(core: ActionCall.Core, root: Path, workspace: String):
+    Consequence[Option[String]] = for {
+    supplied <- new Reader(core, root, workspace).projectC(root.resolve(".scalafmt.conf"))
+    rendered <- scala.util.Try(supplied.map(config =>
+      config.resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false)).root
+        .render(ConfigRenderOptions.concise().setJson(true)))).fold(e => invalid(e.getMessage), Consequence.success)
+    _ <- if (rendered.forall(_.getBytes(UTF_8).length <= 65536)) Consequence.unit
+      else invalid("effective formatter configuration exceeds the input bounds")
+  } yield rendered
+
+  /** Resolve the same project configuration as FixCheck. Selection is independent
+    * of the staged lint delta because cleanup consumes the current owned sources. */
+  private[admission] def rewriteC(core: ActionCall.Core, root: Path, workspace: String,
+    rule: String): Consequence[Option[Rewrite]] = {
+    val reader = new Reader(core, root, workspace)
+    for {
+      declaration <- reader.textC(root.resolve("project.yaml"))
+      lint <- WorkflowProjectDeclaration.lintTextC(declaration)
+      version <- WorkflowProjectDeclaration.scalaVersionTextC(declaration)
+      selected <- version.filter(_ => lint.enabled).fold(Consequence.success(Option.empty[Rewrite])) { value => for {
+        project <- reader.projectC(root.resolve(".scalafix.conf"))
+        _ <- if (project.forall(!_.hasPathOrNull(ScalaLintInput.contextKey))) Consequence.unit
+          else invalid("project configuration cannot override native lint context")
+        effective <- WorkflowScalaLintParameters.resolveSelectionC(lint.selection, project)
+        enabled <- scala.util.Try(effective.rules.contains(rule) && (rule match {
+          case "RedundantSyntax" => effective.config.getBoolean("RedundantSyntax.finalObject") &&
+            !effective.config.getBoolean("RedundantSyntax.stringInterpolator")
+          case "ProcedureSyntax" => value == "3.3.8"
+          case "OrganizeImports" => value == "3.3.8" &&
+            effective.config.hasPath("OrganizeImports.removeUnused") &&
+            !effective.config.getBoolean("OrganizeImports.removeUnused")
+          case _ => false
+        })).fold(e => invalid(e.getMessage), Consequence.success)
+        configuration = effective.config.root.render(ConfigRenderOptions.concise().setJson(true))
+        _ <- if (!enabled || configuration.getBytes(UTF_8).length <= 65536) Consequence.unit
+          else invalid("effective rewrite configuration exceeds lint input bounds")
+        roots <- if (enabled && rule == "OrganizeImports") WorkflowProjectDeclaration.semanticdbRootsTextC(declaration)
+          else Consequence.success(Map.empty[String, String])
+      } yield Option.when(enabled)(Rewrite(value, configuration, roots)) }
+    } yield selected
+  }
 
   def inputC(parameters: ResolvedParameters, project: Option[Config], base: String,
     delta: Vector[ScalaLintDelta.File] = Vector.empty): Consequence[SbtLintInput] =
@@ -140,13 +186,14 @@ private[smworkflow] object WorkflowScalaLintAction {
         relative <- WorkspaceFilePath.parseC(root.relativize(path).toString)
         result <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), relative, FileReadPolicy(ResourceReadLimits(65536)))
       } yield result.text
-    private def parseC(path: Path, depth: Int, optional: Boolean): Consequence[Option[Config]] = for {
+    private def parseC(path: Path, depth: Int, optional: Boolean): Consequence[Option[Config]] = {
+      for {
       _ <- if (depth <= 16 && remaining > 0) Consequence.unit else invalid("project include bounds exceeded")
       text <- textC(path)
       parsed <- text match {
         case None if optional => Consequence.success(Option.empty[Config])
         case None => invalid("required project include is absent")
-        case Some(raw) =>
+        case Some(raw) => {
           remaining -= raw.getBytes(UTF_8).length
           if (remaining < 0) invalid("project include bytes exceed the input bound")
           else scala.util.Try {
@@ -168,8 +215,10 @@ private[smworkflow] object WorkflowScalaLintAction {
             }
             ConfigFactory.parseString(raw, ConfigParseOptions.defaults().setOriginDescription(path.toString).setIncluder(includer))
           }.fold(e => invalid(e.getMessage), value => Consequence.success(Some(value)))
+        }
       }
-    } yield parsed
+      } yield parsed
+    }
     def projectC(path: Path): Consequence[Option[Config]] = parseC(path, 0, optional = true)
   }
 }

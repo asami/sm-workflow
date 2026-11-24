@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.parser.parse
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
@@ -28,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.PackagedRuntimeTestDeclaration])
 final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _compiler_path = "src/main/scala/RepairExample.scala"
 
@@ -187,7 +188,7 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
         "compiler-error", Range(point, point), message))
   }
 
-  private val _metals_server_source = """#!/usr/bin/python3
+  private[admission] val metalsServerSource = """#!/usr/bin/python3
 import json, os, sys, time
 from pathlib import Path
 trace = Path(os.environ["METALS_FIXTURE_TRACE"])
@@ -229,6 +230,7 @@ while True:
     elif method == "shutdown":
         result = None
     elif method == "textDocument/codeAction":
+        log("only:" + json.dumps(message["params"]["context"].get("only")))
         if mode == "timeout":
             time.sleep(10)
         if mode == "framing":
@@ -242,6 +244,8 @@ while True:
         edit = {"range": {"start": {"line": row, "character": 0}, "end": {"line": row + 1, "character": 0}}, "newText": ""}
         action = {"title": "Remove invalid import of '" + missing + "'", "kind": "quickfix",
                   "edit": {"documentChanges": [{"textDocument": {"uri": target, "version": version}, "edits": [edit]}]}}
+        if mode in ("refactor", "source"):
+            action["kind"] = mode + ".rewrite"
         if mode == "original-legacy-uri":
             action["edit"] = {"changes": {target: [edit]}}
         if mode == "command":
@@ -383,7 +387,7 @@ while True:
       val root = Files.createTempDirectory(parent, if (scala3) "scala3-" else "scala2-").toRealPath()
       if (scala3) Files.writeString(root.resolve("scala3-fixture"), "3.3.8")
       val server = root.resolve("metals-fixture-server")
-      Files.writeString(server, _metals_server_source)
+      Files.writeString(server, metalsServerSource)
       server.toFile.setExecutable(true) shouldBe true
       Files.writeString(root.resolve("metals.mode"), "completed")
       val input = V.GoalPhaseStartInput("native-metals-fixture", "sm-workflow")
@@ -438,6 +442,7 @@ while True:
         causes.count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
         causes should not contain "ordered-bounded-compiler:intent"
         Files.readString(root.resolve("metals.trace")).linesIterator.count(value => java.util.Objects.equals(value, "textDocument/codeAction")) shouldBe 1
+        Files.readString(root.resolve("metals.trace")) should include ("only:[\"quickfix\"]")
       }
       }
     }
@@ -479,7 +484,8 @@ while True:
       ScalaMetalsRepair.productionRendered(material.copy(diagnostic = material.diagnostic.copy(
         range = Range(Position(0, selector), Position(0, selector))))) shouldBe None
       ScalaMetalsRepair.productionTransaction(material, ScalaMetalsRepair.Policy(), Json.arr(action, action)) shouldBe None
-      for ((field, value) <- Vector("title" -> Json.fromString("other"), "kind" -> Json.fromString("refactor"), "command" -> Json.obj())) {
+      for ((field, value) <- Vector("title" -> Json.fromString("other"), "kind" -> Json.fromString("refactor.rewrite"),
+          "kind" -> Json.fromString("source.organizeImports"), "command" -> Json.obj())) {
         ScalaMetalsRepair.productionTransaction(material, ScalaMetalsRepair.Policy(), Json.arr(action.mapObject(_.add(field, value)))) shouldBe None
       }
       for (source <- Vector(" " + material.document.text, material.document.text.replace("DoesNotExist", "Other"),
@@ -492,12 +498,12 @@ while True:
     }
 
     "use the admitted finite-input companion with a controlled LSP process and confirmed cleanup" in {
-      for (mode <- Vector("completed", "timeout", "encoding", "framing", "original-uri", "original-legacy-uri", "unowned", "command", "ambiguous", "unavailable")) {
+      for (mode <- Vector("completed", "timeout", "encoding", "framing", "original-uri", "original-legacy-uri", "unowned", "command", "ambiguous", "refactor", "source", "unavailable")) {
         Given("one fixture-owned fixed capability and an isolated subprocess with bounded stdio")
         val parent = Files.createDirectories(Path.of("target/sm-workflow/work/metals-process").toAbsolutePath)
         val root = Files.createTempDirectory(parent, mode + "-").toRealPath()
         val server = root.resolve("metals-fixture-server")
-        Files.writeString(server, _metals_server_source)
+        Files.writeString(server, metalsServerSource)
         server.toFile.setExecutable(true) shouldBe true
         Files.writeString(root.resolve("metals.mode"), mode)
         val material = _metals_material()
@@ -542,8 +548,10 @@ while True:
             .getOrElse(fail("expected isolated cwd"))
           cwd should not be root.resolve("repository")
           Files.exists(cwd) shouldBe false
-          if (Set("completed", "unowned", "command", "ambiguous")(mode))
+          if (Set("completed", "unowned", "command", "ambiguous", "refactor", "source")(mode)) {
+            trace should contain ("only:[\"quickfix\"]")
             trace.takeRight(3) shouldBe Vector("textDocument/didClose", "shutdown", "exit")
+          }
         }
       }
     }
@@ -1044,4 +1052,286 @@ while True:
       WorkflowProjectDeclaration.metalsPolicyC(Json.obj("validation" -> Json.obj("metals" -> Json.obj("unexpected" -> Json.True)))).toOption.nonEmpty shouldBe false
     }
   }
+
+  "Packaged Metals repair" should {
+    "repair real Scala 2 and 3 invalid imports and reject an ineligible action" in {
+      val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+      val command = F.candidateCommand(car)
+      val installed = F.PackagedInstalled(Path.of(command.headOption.getOrElse(fail("Candidate command is empty"))), car, Some(command(2)))
+      Vector((false, "completed"), (true, "completed"), (false, "refactor"),
+        (false, "source"), (false, "unavailable")).foreach { (scala3, mode) =>
+        val scenario = F.freshPackagedMetals(car, scala3, metalsServerSource, mode)
+        scenario.selectPackagedInstalled(installed)
+        val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+        withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+        scenario.selectPreparedImport(prepared)
+        val task = scenario.ownTask("packaged-metals")
+        val started = scenario.start().business[V.GoalPhaseStartResult]
+        scenario.retain(task, started)
+        val issued = scenario.readGoalPhaseResult(scenario.advance(task))
+        issued.work.map(_.kind) shouldBe Some("ImplementStep")
+        val source = Path.of(scenario.host.target.root).resolve("src/main/scala/RepairExample.scala")
+        Files.createDirectories(source.getParent)
+        val invalid = if (scala3) "import MissingPackage.Member" else "import scala.DoesNotExist"
+        Files.writeString(source, invalid + "\nobject RepairExample {}\n")
+        Files.writeString(Path.of(scenario.host.target.root).resolve("project.yaml"),
+          "validation:\n  metals:\n    enabled: true\n    serverIdentity: scala-metals-1-5-3\n    timeoutMillis: 1000\n")
+        val result = V.GoalPhaseWorkResult("completed", "Fixture invalid import", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        val reference = V.WorkflowArtifactReference("packaged-metals-implementation", "1")
+        val operation = issued.submitOperation.getOrElse(fail("Issued work has no submission operation"))
+        val session = issued.submitSessionId.getOrElse(fail("Issued work has no submission session"))
+        val submitted = scenario.call("command", operation, Vector("--sessionId", session,
+          "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+          "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+        submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        val first = scenario.readGoalPhaseResult(scenario.advance(task))
+        val finalResult = if (first.work.exists(_.kind == "ReviewStep") || first.work.exists(_.kind == "RepairStep")) first
+          else scenario.readGoalPhaseResult(scenario.advance(task))
+        val trace = scenario.root.resolve("metals.trace")
+        if (mode == "unavailable") Files.exists(trace) shouldBe false
+        else Files.readString(trace) should include ("only:[\"quickfix\"]")
+        if (mode == "completed") {
+          finalResult.work.map(_.kind) shouldBe Some("ReviewStep")
+          Files.readString(source) shouldBe "object RepairExample {}\n"
+        } else {
+          finalResult.work.map(_.kind) shouldBe Some("RepairStep")
+          Files.readString(source) should include (invalid)
+        }
+      }
+    }
+  }
+
+  "Packaged Scala formatter" should {
+    Vector((false, false), (true, false), (false, true)).foreach { (scala3, excluded) =>
+      s"format a compile-clean candidate (scala3=$scala3, excluded=$excluded)" in {
+      Given("an explicitly registered formatter and an isolated project")
+      val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+      val command = F.candidateCommand(car)
+      val installed = F.PackagedInstalled(Path.of(command.headOption.getOrElse(fail("Candidate command is empty"))), car, Some(command(2)))
+        val cleanup = !scala3 && !excluded
+        val scenario = F.freshPackagedMetals(car, scala3, metalsServerSource, "completed", formatter = true,
+          excludeFormatter = excluded, scalafixRule = Option.when(cleanup)("RedundantSyntax"), history = cleanup,
+          structuralLint = scala3)
+        scenario.selectPackagedInstalled(installed)
+        val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+        withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+        scenario.selectPreparedImport(prepared)
+        val task = scenario.ownTask("packaged-formatter")
+        val started = scenario.start().business[V.GoalPhaseStartResult]
+        scenario.retain(task, started)
+        val issued = scenario.readGoalPhaseResult(scenario.advance(task))
+        issued.work.map(_.kind) shouldBe Some("ImplementStep")
+        val source = Path.of(scenario.host.target.root).resolve("src/main/scala/RepairExample.scala")
+        Files.createDirectories(source.getParent)
+        val header = if (cleanup || excluded)
+          "/**\n  * @since   Nov. 1, 2025\n  * @version Nov. 1, 2025\n  * @author  Fixture\n  */\n" else ""
+        val original = if (scala3) """package example
+          |object RepairExample {
+          |  def compose(body: => Int): Int = body
+          |  def compute(n: Int): Int =
+          |    if n>0 then
+          |      n+1
+          |    else
+          |      0
+          |  val value=compose {
+          |    val input=2
+          |    compute(input)
+          |  }
+          |}
+          |""".stripMargin else header + (if (cleanup) "final " else "") + "object RepairExample {\n  val value=1\n}\n"
+        Files.writeString(source, original)
+        val result = V.GoalPhaseWorkResult("completed", "Fixture compile-clean candidate", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        val reference = V.WorkflowArtifactReference("packaged-formatter-implementation", "1")
+        val operation = issued.submitOperation.getOrElse(fail("Issued work has no submission operation"))
+        val session = issued.submitSessionId.getOrElse(fail("Issued work has no submission session"))
+        When("the ordinary workflow inspects and validates the candidate")
+        val submitted = scenario.call("command", operation, Vector("--sessionId", session,
+          "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+          "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+        submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        val next = scenario.readGoalPhaseResult(scenario.advance(task))
+        Then("the included candidate is formatted and the excluded candidate keeps its history under explicit none")
+        next.work.map(_.kind) shouldBe Some("ReviewStep")
+        val expectedChecks = Vector("compile" -> Some(0)) ++
+          Option.when(scala3)("scala-lint" -> Some(0))
+        next.work.getOrElse(fail("Missing work")).review.getOrElse(fail("Missing review")).checks.map(check => check.identity -> check.exitCode) shouldBe expectedChecks
+        if (excluded) Files.readString(source) shouldBe original
+        else {
+          val formatted = Files.readString(source)
+          formatted should not be original
+          formatted should include ("object RepairExample {")
+          if (scala3) {
+            formatted should include ("val value = compose {")
+            formatted should include ("def compute(n: Int): Int =\n")
+            formatted should include ("if n > 0 then")
+            val actual = parse(Files.readString(Path.of(scenario.host.target.root).resolve("target/scala-lint/actual.conf"))).fold(throw _, identity)
+            actual.hcursor.get[Vector[String]]("rules").fold(throw _, identity) should contain ("NoStructuralIndentation")
+            actual.hcursor.downField("NoStructuralIndentation").get[Vector[String]]("structuralDslSymbols").fold(throw _, identity) should
+              contain ("example/RepairExample.compose().")
+          }
+          if (cleanup) {
+            Files.readString(source) should not include ("final object")
+            formatted should include ("@since   Nov.  1, 2025")
+            formatted should include ("@author  Fixture")
+            formatted should not include ("@version Nov.  1, 2025")
+          }
+        }
+      }
+    }
+  }
+
+  "Packaged Scalafix compiler repair" should {
+    "repair a real Scala 3 migration diagnostic using the pinned Scala 2 parser" in {
+      Given("an isolated Scala 3.3.8 compiler and only the fixed ProcedureSyntax provider")
+      val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+      val command = F.candidateCommand(car)
+      val scenario = F.freshPackagedMetals(car, true, metalsServerSource, "completed", scalafixRule = Some("ProcedureSyntax"))
+      scenario.selectPackagedInstalled(F.PackagedInstalled(Path.of(command.headOption.getOrElse(fail("Candidate command is empty"))), car, Some(command(2))))
+      val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+      withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+      scenario.selectPreparedImport(prepared)
+      val task = scenario.ownTask("packaged-procedure-syntax")
+      val started = scenario.start().business[V.GoalPhaseStartResult]
+      scenario.retain(task, started)
+      val issued = scenario.readGoalPhaseResult(scenario.advance(task))
+      issued.work.map(_.kind) shouldBe Some("ImplementStep")
+      val source = Path.of(scenario.host.target.root).resolve("src/main/scala/RepairExample.scala")
+      Files.createDirectories(source.getParent)
+      Files.writeString(source, "object RepairExample {\n  def run { println(\"ok\") }\n}\n")
+      val result = V.GoalPhaseWorkResult("completed", "Fixture procedure syntax", Vector.empty,
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+      val reference = V.WorkflowArtifactReference("packaged-procedure-implementation", "1")
+      val operation = issued.submitOperation.getOrElse(fail("Issued work has no submission operation"))
+      val session = issued.submitSessionId.getOrElse(fail("Issued work has no submission session"))
+      When("the ordinary workflow observes and repairs the compiler diagnostic")
+      val submitted = scenario.call("command", operation, Vector("--sessionId", session,
+        "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+        "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+      submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val first = scenario.readGoalPhaseResult(scenario.advance(task))
+      val next = if (first.work.exists(_.kind == "ReviewStep") || first.work.exists(_.kind == "RepairStep")) first
+        else scenario.readGoalPhaseResult(scenario.advance(task))
+      Then("the corrected candidate recompiles without AI")
+      next.work.map(_.kind) shouldBe Some("ReviewStep")
+      Files.readString(source) should include (": Unit =")
+    }
+
+    "restore the original file after diagnostic repair and formatting fail revalidation" in {
+      Given("one packaged workspace with the pinned diagnostic rewrite and formatter")
+      val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+      val command = F.candidateCommand(car)
+      val scenario = F.freshPackagedMetals(car, true, metalsServerSource, "completed", formatter = true,
+        scalafixRule = Some("ProcedureSyntax"), rejectFormattedCandidate = true)
+      scenario.selectPackagedInstalled(F.PackagedInstalled(Path.of(command.headOption.getOrElse(fail("Candidate command is empty"))), car, Some(command(2))))
+      val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+      withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+      scenario.selectPreparedImport(prepared)
+      val task = scenario.ownTask("packaged-combined-rollback")
+      val started = scenario.start().business[V.GoalPhaseStartResult]
+      scenario.retain(task, started)
+      val work = scenario.readGoalPhaseResult(scenario.advance(task))
+      work.work.map(_.kind) shouldBe Some("ImplementStep")
+      val repository = Path.of(scenario.host.target.root)
+      val source = repository.resolve(_compiler_path)
+      Files.createDirectories(source.getParent)
+      val original = "object RepairExample {\n  def run { val value=1; println(value) }\n}\n"
+      Files.writeString(source, original)
+      val result = V.GoalPhaseWorkResult("completed", "Fixture diagnostic and formatter revalidation", Vector.empty,
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+      val reference = V.WorkflowArtifactReference("packaged-combined-rollback-implementation", "1")
+      val submitted = scenario.call("command", work.submitOperation.getOrElse(fail("Missing submit operation")), Vector("--sessionId", work.submitSessionId.getOrElse(fail("Missing submit session")),
+        "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+        "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+      submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      When("the native Compile check rejects the formatted successor")
+      val next = Iterator.continually(scenario.readGoalPhaseResult(scenario.advance(task))).take(5)
+        .find(_.work.exists(result => Set("ReviewStep", "RepairStep")(result.kind))).getOrElse(fail("No successor was issued"))
+      Then("the fallback receives a candidate restored to its original source")
+      next.work.map(_.kind) shouldBe Some("RepairStep")
+      val compiled = Files.readString(repository.resolve("target/observed-formatted-candidate.txt"))
+      compiled should include (": Unit =")
+      compiled should include ("val value = 1")
+      Files.readString(source) shouldBe original
+    }
+  }
+
+  "Packaged combined semantic cleanup" should {
+    "repair an invalid import, refresh SemanticDB, organize imports, normalize history, and format one candidate" in {
+      Given("an isolated Scala 3.3.8 project with explicitly selected providers and semantic configuration")
+      val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+      val command = F.candidateCommand(car)
+      val scenario = F.freshPackagedMetals(car, true, metalsServerSource, "completed", formatter = true,
+        scalafixRule = Some("OrganizeImports"), history = true)
+      scenario.selectPackagedInstalled(F.PackagedInstalled(Path.of(command.headOption.getOrElse(fail("Candidate command is empty"))), car, Some(command(2))))
+      val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+      withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+      scenario.selectPreparedImport(prepared)
+      val task = scenario.ownTask("packaged-combined-semantic")
+      val started = scenario.start().business[V.GoalPhaseStartResult]
+      scenario.retain(task, started)
+      val issued = scenario.readGoalPhaseResult(scenario.advance(task))
+      issued.work.map(_.kind) shouldBe Some("ImplementStep")
+      val repository = Path.of(scenario.host.target.root)
+      val source = repository.resolve(_compiler_path)
+      val original = "/**\n  * @since   Nov. 1, 2025\n  * @version Nov. 1, 2025\n  * @author  Fixture\n  */\n" +
+        "import MissingPackage.Member\nimport scala.util.Try\nimport scala.util.Success\n" +
+        "object RepairExample { val value=Try(1).map(Success(_)) }\n"
+      Files.writeString(source, original)
+      val result = V.GoalPhaseWorkResult("completed", "Fixture combined semantic candidate", Vector.empty,
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+      val reference = V.WorkflowArtifactReference("packaged-combined-semantic-implementation", "1")
+      When("the actual packaged workflow handles the diagnostic and final candidate")
+      val submitted = scenario.call("command", issued.submitOperation.getOrElse(fail("Missing submit operation")), Vector("--sessionId", issued.submitSessionId.getOrElse(fail("Missing submit session")),
+        "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+        "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+      submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val next = Iterator.continually(scenario.readGoalPhaseResult(scenario.advance(task))).take(12)
+        .find(_.work.exists(result => Set("ReviewStep", "RepairStep")(result.kind))).getOrElse(fail("No successor was issued"))
+      Then("the final candidate retains history, sorted imports and formatting after successful compilation")
+      next.work.map(_.kind) shouldBe Some("ReviewStep")
+      next.work.getOrElse(fail("Missing work")).review.getOrElse(fail("Missing review")).checks.map(check => check.identity -> check.exitCode) shouldBe Vector("compile" -> Some(0))
+      val finaltext = Files.readString(source)
+      finaltext should not include ("MissingPackage")
+      finaltext.indexOf("import scala.util.Success") should be < finaltext.indexOf("import scala.util.Try")
+      finaltext should include ("val value =")
+      finaltext should include ("@since   Nov.  1, 2025")
+      finaltext should include ("@author  Fixture")
+      finaltext should not include ("@version Nov.  1, 2025")
+      Files.isRegularFile(repository.resolve("target/semanticdb/META-INF/semanticdb/" + _compiler_path + ".semanticdb")) shouldBe true
+      val snapshots = scenario.root.resolve("compiler-inputs")
+      val inputs = Files.list(snapshots)
+      val captured = try inputs.toArray.map(_.asInstanceOf[Path]).toVector
+        .sortBy(_.getFileName.toString.stripSuffix(".scala").toInt).map(Files.readString(_)) finally inputs.close()
+      val initial = captured.find(_.contains("import MissingPackage.Member")).getOrElse(fail("Missing failed compiler input"))
+      val repaired = initial.replace("import MissingPackage.Member\n", "")
+      captured should contain (repaired)
+      captured should contain (finaltext)
+      Files.readString(scenario.root.resolve("successful-compiles.txt")).linesIterator.toVector shouldBe Vector(
+        GoalPhaseNativeScalaCleanup.hashText(repaired), GoalPhaseNativeScalaCleanup.hashText(finaltext))
+      Files.readString(scenario.root.resolve("metals.trace")) should include ("only:[\"quickfix\"]")
+    }
+  }
+
+  "Scala formatter preview admission" should {
+    "bind a finite source to a literal path and fixed capability" in {
+      Given("a bounded source and selected formatter configuration")
+      val input = WorkflowScalaToolProcess.Input("src/main/scala/Example.scala", "object Example {}\n",
+        Map(".scalafmt.conf" -> "version = 3.8.6\n"))
+      When("the fixed preview request is admitted")
+      val request = WorkflowScalaToolProcess.requestC(input).toOption.getOrElse(fail("Invalid preview input"))
+      Then("the request retains its fixed boundary and rejects invalid inputs")
+      request.capability.value shouldBe WorkflowScalaToolProcess.capability
+      request.arguments shouldBe empty
+      request.workingDirectory shouldBe empty
+      WorkflowScalaToolProcess.requestC(input.copy(path = "../Example.scala")).isSuccess shouldBe false
+      WorkflowScalaToolProcess.requestC(input.copy(configFiles = Map.empty)).isSuccess shouldBe false
+      WorkflowScalaToolProcess.requestC(input.copy(source = "x" * 1048577)).isSuccess shouldBe false
+      WorkflowProjectDeclaration.scalaVersionTextC(Some("build:\n  scalaVersion: \"3.3.8\"\n")).toOption shouldBe Some(Some("3.3.8"))
+      WorkflowProjectDeclaration.scalaVersionTextC(Some("build:\n  scalaVersion: null\n")).toOption shouldBe Some(None)
+      WorkflowProjectDeclaration.scalaVersionTextC(Some("build:\n  scalaVersion: [3, 3, 8]\n")).isSuccess shouldBe false
+    }
+  }
+
 }

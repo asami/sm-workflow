@@ -12,6 +12,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.goldenport.cncf.workspace.{FileTarget, WorkspaceFilePath, WorkspaceId}
+import org.goldenport.cncf.workspace.{FileWriteMode, FileWriteOutcome}
 import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
 
@@ -19,7 +20,7 @@ import GoalPhaseOrderedProgression as O
   * Partial history is retained by the existing candidate continuation without replay.
   * @since   Oct. 17, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeSourceHistory {
@@ -27,10 +28,11 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     rule: WorkflowSourceHistoryRule.Rule, sources: Vector[WorkflowSourceHistory.Source])
   final case class Payload(sourceRevision: String, step: String, path: String, style: String,
     providerIdentity: String, updatedOn: String, dateUncertain: Boolean, outcome: Option[String],
-    invocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None, historyPolicy: Option[Json] = None)
+    invocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None, historyPolicy: Option[Json] = None,
+    change: Option[GoalPhaseNativeScalaCleanup.ByteChange] = None)
   object Payload {
     given io.circe.Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(fields =>
-      Vector("invocation", "historyPolicy").foldLeft(fields)((selected, key) =>
+      Vector("invocation", "historyPolicy", "change").foldLeft(fields)((selected, key) =>
         if (selected(key).exists(_.isNull)) selected.remove(key) else selected)))
     given io.circe.Decoder[Payload] = deriveDecoder
   }
@@ -107,16 +109,20 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     val typeIdentity = "GoalPhaseNativeSourceHistoryReceipt"
     def encode(value: Payload): Json = Json.obj(
       "schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-source-history." +
-        (if (value.invocation.nonEmpty) "v2" else "v1")), "payload" -> value.asJson)
+        (if (value.change.nonEmpty) "v3" else if (value.invocation.nonEmpty) "v2" else "v1")), "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native source history is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(Set("sm-workflow.goal-phase-native-source-history.v1",
-        "sm-workflow.goal-phase-native-source-history.v2")(schema), (), "native source history schema differs")
+        "sm-workflow.goal-phase-native-source-history.v2", "sm-workflow.goal-phase-native-source-history.v3")(schema),
+        (), "native source history schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(_valid_payload(payload) && (if (schema.endsWith(".v2"))
-        payload.invocation.nonEmpty && payload.historyPolicy.nonEmpty && encode(payload) == wire
-        else payload.invocation.isEmpty && payload.historyPolicy.isEmpty &&
+      _ <- Either.cond(_valid_payload(payload) && (if (schema.endsWith(".v3"))
+        payload.change.nonEmpty && encode(payload) == wire
+        else if (schema.endsWith(".v2"))
+          payload.change.isEmpty && payload.invocation.nonEmpty && payload.historyPolicy.nonEmpty && encode(payload) == wire
+        else payload.change.isEmpty && payload.invocation.isEmpty && payload.historyPolicy.isEmpty &&
+          !wire.hcursor.downField("payload").downField("change").succeeded &&
           !wire.hcursor.downField("payload").downField("invocation").succeeded &&
           !wire.hcursor.downField("payload").downField("historyPolicy").succeeded), (), "native source history payload is invalid")
     } yield payload
@@ -146,6 +152,24 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
         }
         case _ => Consequence.configurationInvalid("Source history: unsupported selected style")
       }
+    }
+
+  /** A formatter preview must preserve the already normalized metadata.
+    * This observes a pure rule result, without updating the dates a second time. */
+  private[admission] def formattedC(prepared: Option[Prepared], path: String,
+    original: String, formatted: String): Consequence[Boolean] =
+    prepared.flatMap(selection => selection.sources.find(_.path == path).map(selection.rule -> _)) match {
+      case None => Consequence.success(true)
+      case Some((rule, source)) =>
+        val tags = Vector(rule.tags.since, rule.tags.version, rule.tags.history, rule.tags.author)
+        def _managed_lines_(value: String): Vector[String] =
+          value.linesIterator.map(_.trim.stripPrefix("*").trim).filter(line =>
+            tags.exists(tag => line.startsWith(tag + " ") || line.startsWith(tag + "\t"))).toVector
+        if (_managed_lines_(formatted) != _managed_lines_(original)) Consequence.success(false)
+        else Consequence.success(WorkflowSourceHistoryRule.applyC(rule,
+          WorkflowSourceHistoryRule.Input(path, formatted, source.updatedOn,
+            source.createdOn, source.author, source.dateUncertain)).toOption.exists(result =>
+          result.outcome == "unchanged" && result.text == formatted))
     }
 
   /** Read-only reuse admission precedes fresh inspection persistence and every normalization write. */
@@ -195,7 +219,8 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     source: InstanceRecord, current: InstanceRecord, controller: O.State, scopeIdentity: String, inspectionStage: String,
-    prepared: Option[Prepared], acknowledgement: String => Consequence[Unit]): Consequence[InstanceRecord] = prepared match {
+    prepared: Option[Prepared], acknowledgement: String => Consequence[Unit],
+    trackChanges: Boolean = false): Consequence[InstanceRecord] = prepared match {
     case None => Consequence.success(current)
     case Some(selected) => for {
       _ <- _frontier_c(session, core, source, current, controller, scopeIdentity, inspectionStage, acknowledgement)
@@ -216,12 +241,15 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
       recorded <- selected.sources.zipWithIndex.foldLeft(Consequence.success(current)) {
         case (prior, (input, index)) => prior.flatMap { from => for {
           _ <- _frontier_c(session, core, source, from, controller, scopeIdentity, inspectionStage, acknowledgement)
+          tracked <- if (trackChanges) _tracked_c(core, FileTarget(workspace), selected.rule, input).map(Some(_))
+            else Consequence.success(Option.empty[Tracked])
           payload = Payload(source.revision.value.toString, scopeIdentity, input.path, "goldenport",
             selected.rule.identity, input.updatedOn.toString, input.dateUncertain, None,
-            d.sourceHistoryInvocation, d.sourceHistoryInvocation.map(_ => selected.rule.asJson))
+            d.sourceHistoryInvocation, d.sourceHistoryInvocation.map(_ => selected.rule.asJson), tracked.flatMap(_.change))
           intent <- _save_c(adapter, d, core, source, from, inspectionStage, "source-history-intent-" + index, payload)
           _ <- _ack_c(acknowledgement, "goal-source-history-prepared:" + input.path)
-          actual <- WorkflowSourceHistory.applyC(core, FileTarget(workspace), input)
+          actual <- tracked.fold(WorkflowSourceHistory.applyC(core, FileTarget(workspace), input))(_.applyC(
+            core, FileTarget(workspace), selected.rule.identity, input.dateUncertain))
           _ <- _ack_c(acknowledgement, "goal-source-history-executed:" + input.path)
           _ <- if (actual != null && actual.style == payload.style && actual.providerIdentity == Some(payload.providerIdentity) &&
               _outcomes(actual.outcome) && actual.dateUncertain == input.dateUncertain) Consequence.unit
@@ -234,6 +262,40 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
       }
     } yield recorded
   }
+
+  private final case class Tracked(path: WorkspaceFilePath, original: Option[String],
+    interpreted: Option[WorkflowSourceHistoryRule.Result]) {
+    def change: Option[GoalPhaseNativeScalaCleanup.ByteChange] = for {
+      text <- original
+      value <- interpreted if value.outcome == "updated"
+    } yield GoalPhaseNativeScalaCleanup.ByteChange(path.value, GoalPhaseNativeScalaCleanup.hashText(text),
+      GoalPhaseNativeScalaCleanup.hashText(value.text))
+
+    def applyC(core: ActionCall.Core, target: FileTarget, provider: String,
+      dateUncertain: Boolean): Consequence[WorkflowSourceHistory.Result] = (original, interpreted) match {
+      case (None, None) => Consequence.success(WorkflowSourceHistory.Result("goldenport", "missing", Some(provider), dateUncertain))
+      case (Some(text), Some(value)) if value.outcome == "updated" =>
+        WorkflowFileExecution.writeTextC(core, target, path, value.text,
+          FileWriteMode.UpdateExisting(text)).flatMap { written => written.outcome match {
+          case FileWriteOutcome.Updated => Consequence.success(WorkflowSourceHistory.Result(
+            "goldenport", "updated", Some(provider), dateUncertain))
+          case _ => F.invalid("The tracked source history write did not confirm the prepared replacement")
+        }}
+      case (Some(_), Some(value)) if value.outcome == "unchanged" =>
+        Consequence.success(WorkflowSourceHistory.Result("goldenport", "unchanged", Some(provider), dateUncertain))
+      case _ => F.invalid("Tracked source history has no supported result")
+    }
+  }
+
+  private def _tracked_c(core: ActionCall.Core, target: FileTarget,
+    rule: WorkflowSourceHistoryRule.Rule, source: WorkflowSourceHistory.Source): Consequence[Tracked] = for {
+    path <- WorkspaceFilePath.parseC(source.path)
+    read <- WorkflowFileExecution.readTextC(core, target, path)
+    proposed <- read.text.fold(Consequence.success(Option.empty[WorkflowSourceHistoryRule.Result])) { text =>
+      WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(source.path, text,
+        source.updatedOn, source.createdOn, source.author, source.dateUncertain)).map(Some(_))
+    }
+  } yield Tracked(path, read.text, proposed)
 
   private def _frontier_c(session: F.Session, core: ActionCall.Core, source: InstanceRecord,
     current: InstanceRecord, controller: O.State, scope: String, stage: String,
@@ -287,6 +349,8 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     _exact(value.providerIdentity) && value.updatedOn != null &&
     scala.util.Try(LocalDate.parse(value.updatedOn)).toOption.exists(_.toString == value.updatedOn) &&
     value.outcome != null && value.outcome.forall(_outcomes) && value.invocation != null && value.historyPolicy != null &&
+    value.change != null && value.change.forall(c => c.path == value.path && c.valid &&
+      value.outcome.forall(_ == "updated")) &&
     ((value.invocation, value.historyPolicy) match {
       case (None, None) => true
       case (Some(invocation), Some(policy)) => GoalPhaseSourceHistoryAutomatic.validInvocation(invocation) &&

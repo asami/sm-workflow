@@ -24,14 +24,15 @@ and changes no adopted delivery slot or priority below.
 The 2026-11-24 scheduling decision keeps the immediate AI-cost reductions
 first, then brings forward validation, workflow stabilization, and everyday
 development support before expanding the provider pool. Phases 24, 25 and 28
-have completed locally.
+have completed locally. [Phase 28.1](phase-28.1.md#human-approved-formal-local-release--2026-11-24)
+has a user-approved formal local release with comparison work carried to Phase 28.2.
 
 | Order | Group | Phases |
 | --- | --- | --- |
-| 1–2 | Immediate AI-cost reductions | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) |
-| 3–7 | Worktree retirement, validation, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
-| 8–11 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
-| 12–15 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+| 1–5 | Immediate AI-cost reductions and Scala comparison follow-up | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes, locally released) → 25.1 → 25.2 → 28.2 |
+| 6–10 | Worktree retirement, validation, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
+| 11–14 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
+| 15–18 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
 
 **Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), and 16
 (experimentation). Phase 7.1 remains on hold. Phase 7.2 starts the second

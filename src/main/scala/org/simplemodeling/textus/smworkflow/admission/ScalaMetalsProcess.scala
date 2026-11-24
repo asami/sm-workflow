@@ -41,19 +41,27 @@ private[smworkflow] object ScalaMetalsProcess {
             material <- DeterministicRepair.compilerMaterialC(source, declaration, core, frontier, selected, checked, step.ownedPaths.toSet)
             proposal <- saved.value.proposal.map(Consequence.success).getOrElse(GoalPhaseNativeRun.invalid("Metals proposal absent"))
             _ <- if (material.exists(current => java.util.Objects.equals(current.document.text, proposal.expected) && java.util.Objects.equals(current.path, proposal.path) &&
-              java.util.Objects.equals(current.workspace, proposal.workspace) && ScalaMetalsRepair.productionRendered(current).contains(proposal.patched)))
-              Consequence.unit else GoalPhaseNativeRun.invalid("Metals proposal is no longer bound to its staged source")
+              java.util.Objects.equals(current.workspace, proposal.workspace) && _rendered(current, saved.value.tool).contains(proposal.patched)))
+              Consequence.unit else GoalPhaseNativeRun.invalid("Scala diagnostic proposal is no longer bound to its staged source")
             applied <- DeterministicRepair.applyC(source, declaration, core, frontier,
               proposal.copy(sourceRevision = frontier.revision.value.toString), step.ownedPaths.toSet)
-            result <- GoalPhaseNativeRun.waitC(applied.record, "Metals correction observed", "Continue with normal candidate inspection and validation.").flatMap(after)
+            title = if (saved.value.tool.isEmpty) "Metals correction observed" else "Scalafix diagnostic correction observed"
+            result <- GoalPhaseNativeRun.waitC(applied.record, title, "Continue with normal candidate inspection and validation.").flatMap(after)
           } yield result
           case Some(_) => fallback
           case None => for {
             material <- DeterministicRepair.compilerMaterialC(source, declaration, core, frontier, selected, checked, step.ownedPaths.toSet)
-            result <- material.filter(value => ScalaMetalsRepair.productionDiagnostic(value).nonEmpty) match {
-              case None => fallback
-              case Some(value) => executeC(source, declaration, core, frontier, step.identity, value).flatMap(saved =>
+            result <- material match {
+              case Some(value) if ScalaMetalsRepair.productionDiagnostic(value).nonEmpty =>
+                executeC(source, declaration, core, frontier, step.identity, value).flatMap(saved =>
                 GoalPhaseNativeRun.waitC(saved.record, "Metals attempt retained", "Continue using the actual bounded process outcome.").flatMap(after))
+              case Some(value) if ScalaLintRepair.procedureRendered(value).nonEmpty =>
+                _procedure_c(source, declaration, core, frontier, step.identity, value).flatMap {
+                  case None => fallback
+                  case Some(saved) => GoalPhaseNativeRun.waitC(saved.record, "Scalafix diagnostic attempt retained",
+                    "Continue using the actual bounded process outcome.").flatMap(after)
+                }
+              case _ => fallback
             }
           } yield result
         }
@@ -95,18 +103,23 @@ private[smworkflow] object ScalaMetalsProcess {
 
   final case class Observation(termination: String, program: String, elapsedMillis: Long,
     stdout: String, stderr: String, truncated: Boolean)
+  final case class DiagnosticTool(name: String, inputHash: String, engine: String, program: Option[String])
   final case class Attempt(session: String, sourceRevision: String, step: String, candidate: String,
     validationReference: String, outcome: Option[String], diagnostic: Option[String],
-    proposal: Option[Transaction], process: Option[Observation])
+    proposal: Option[Transaction], process: Option[Observation], tool: Option[DiagnosticTool] = None)
   final case class Saved(record: InstanceRecord, value: Attempt)
   private given Encoder[Observation] = deriveEncoder
   private given Decoder[Observation] = deriveDecoder
-  private given Encoder[Attempt] = deriveEncoder
+  private given Encoder[DiagnosticTool] = deriveEncoder
+  private given Decoder[DiagnosticTool] = deriveDecoder
+  private given Encoder[Attempt] = deriveEncoder[Attempt].mapJson(_.mapObject(fields =>
+    if (fields("tool").exists(_.isNull)) fields.remove("tool") else fields))
   private given Decoder[Attempt] = deriveDecoder
 
   val codec: WorkflowResultJsonV1.PayloadCodec[Attempt] = new WorkflowResultJsonV1.PayloadCodec[Attempt] {
     val typeIdentity = "ScalaMetalsAttempt"
-    def encode(value: Attempt): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.scala-metals-attempt.v1"),
+    def encode(value: Attempt): Json = Json.obj("schemaVersion" -> Json.fromString(
+      if (value.tool.isEmpty) "sm-workflow.scala-metals-attempt.v1" else "sm-workflow.scala-diagnostic-tool-attempt.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Attempt] = for {
       result <- value.hcursor.get[Attempt]("payload").left.map(_.message)
@@ -119,7 +132,12 @@ private[smworkflow] object ScalaMetalsProcess {
           p.sourceRevision == result.sourceRevision && p.validationReference == result.validationReference) &&
         result.diagnostic.forall(_.length <= 4096) && result.process.forall(p => p.stdout.getBytes(UTF_8).length <= _max_bytes &&
           p.stderr.getBytes(UTF_8).length <= 65536 && p.elapsedMillis >= 0) &&
-        (result.outcome.nonEmpty || (result.proposal.isEmpty && result.diagnostic.isEmpty && result.process.isEmpty)),
+        (result.outcome.nonEmpty || (result.proposal.isEmpty && result.diagnostic.isEmpty && result.process.isEmpty)) &&
+        result.tool.forall(tool => tool.name == "scalafix-procedure-syntax" && result.process.isEmpty &&
+          (result.outcome.isEmpty && tool.inputHash.isEmpty && tool.engine.isEmpty && tool.program.isEmpty ||
+            result.outcome.nonEmpty && tool.inputHash.matches("[0-9a-f]{64}") && tool.engine == "0.12.1" &&
+              tool.program.forall(program => program.nonEmpty && program.length <= 256 && !program.exists(_.isControl)) &&
+              (!result.outcome.contains("completed") || tool.program.nonEmpty))),
         (), "invalid retained Metals attempt")
     } yield result
   }
@@ -148,12 +166,45 @@ private[smworkflow] object ScalaMetalsProcess {
       case None => Consequence.success(Saved(intended, initial))
       case Some(found) => for {
         value <- codec.decode(codec.encode(found.receipt.payload.value)).fold(GoalPhaseNativeRun.invalid, Consequence.success)
-        _ <- if (value.copy(outcome = None, diagnostic = None, proposal = None, process = None) == initial && value.outcome.nonEmpty)
+        initialtool = value.tool.map(_.copy(inputHash = "", engine = "", program = None))
+        _ <- if (value.copy(outcome = None, diagnostic = None, proposal = None, process = None, tool = initialtool) == initial && value.outcome.nonEmpty)
           Consequence.unit else GoalPhaseNativeRun.invalid("Metals result crosses its intent")
         next <- GoalPhaseSourceHistoryRecovery._adjacent_c(session.current, intended, found.receipt.next, _result_cause)
       } yield Saved(next, value)
     }
   } yield saved
+
+  private def _rendered(material: CompilerMaterial, tool: Option[DiagnosticTool]): Option[String] =
+    if (tool.isEmpty) ScalaMetalsRepair.productionRendered(material) else ScalaLintRepair.procedureRendered(material)
+
+  private def _procedure_c(session: GoalPhaseNativeRun.Session, declaration: GoalPhaseNativeRun.Declaration,
+    core: ActionCall.Core, frontier: InstanceRecord, step: String, material: CompilerMaterial): Consequence[Option[Saved]] = for {
+    selected <- WorkflowScalaLintAction.rewriteC(core, declaration.target.root, material.workspace, "ProcedureSyntax")
+    result <- selected.fold(Consequence.success(Option.empty[Saved])) { config => for {
+      adapter <- session.storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, codec)
+      initial = Attempt(material.session, frontier.revision.value.toString, step, material.candidate,
+        material.validationReference, None, None, None, None, Some(DiagnosticTool("scalafix-procedure-syntax", "", "", None)))
+      intended <- _save_c(adapter, declaration, core, frontier, frontier, initial, "intent")
+      preview <- WorkflowScalaToolProcess.scalafixC(core, WorkflowScalaToolProcess.Input(material.path,
+        material.document.text, Map(".scalafix.conf" -> config.configuration)), "ProcedureSyntax", config.scalaVersion)
+      proposal = for {
+        replacement <- preview.replacement
+        if ScalaLintRepair.procedureRendered(material).contains(replacement)
+        transaction = Transaction(material.session, frontier.revision.value.toString, material.candidate,
+          material.validationReference, material.path, material.document.text, replacement, material.workspace)
+        if validTransaction(transaction)
+      } yield transaction
+      outcome = preview.status match {
+        case WorkflowScalaToolProcess.PreviewStatus.Applied if proposal.nonEmpty => "completed"
+        case WorkflowScalaToolProcess.PreviewStatus.Unavailable => "unavailable"
+        case WorkflowScalaToolProcess.PreviewStatus.Uncertain => "unknown"
+        case _ => "no-action"
+      }
+      recorded = initial.copy(outcome = Some(outcome), diagnostic = preview.diagnostic, proposal = proposal,
+        tool = initial.tool.map(_.copy(inputHash = preview.inputHash, engine = preview.engineVersion, program = preview.programIdentity)))
+      next <- _save_c(adapter, declaration, core, frontier, intended, recorded, "result")
+    } yield Some(Saved(next, recorded)) }
+  } yield result
 
   /** Resolve one attempt in the authenticated history since the selected validation. */
   def attemptSinceC(session: GoalPhaseNativeRun.Session, core: ActionCall.Core, frontier: InstanceRecord,

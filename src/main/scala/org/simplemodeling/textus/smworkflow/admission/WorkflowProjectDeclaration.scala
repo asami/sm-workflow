@@ -101,6 +101,39 @@ private[smworkflow] object WorkflowProjectDeclaration {
     parsed.fold(message => Consequence.configurationInvalid("project.yaml Metals policy: " + message), Consequence.success)
   }
 
+  /** The declared compiler version is data, never inferred from build.sbt. */
+  def scalaVersionTextC(value: Option[String]): Consequence[Option[String]] = value match {
+    case None => Consequence.success(None)
+    case Some(raw) => _decode_yaml_c(raw).flatMap { project =>
+      val build = project.hcursor.downField("build").focus
+      val version = build.flatMap(_.hcursor.downField("scalaVersion").focus)
+      if (build.exists(!_.isObject) || version.exists(_.isNull))
+        Consequence.configurationInvalid("project.yaml build.scalaVersion must be a version string")
+      else version match {
+        case None => Consequence.success(None)
+        case Some(json) => json.asString.filter(text => text.matches("[0-9]+\\.[0-9]+\\.[0-9]+")) match {
+          case Some(text) => Consequence.success(Some(text))
+          case None => Consequence.configurationInvalid("project.yaml build.scalaVersion must be a version string")
+        }
+      }
+    }
+  }
+
+  /** The roots locate compiler outputs in the owning workspace. They do not
+    * select a compiler or expand the File read grant. */
+  private[admission] def semanticdbRootsTextC(value: Option[String]): Consequence[Map[String, String]] =
+    value.fold(Consequence.success(Map.empty[String, String])) { raw => _decode_yaml_c(raw).flatMap { project =>
+      val roots = project.hcursor.downField("validation").downField("scalaLint").downField("semanticdbRoots")
+      if (!roots.succeeded) Consequence.success(Map.empty[String, String])
+      else roots.as[Map[String, String]].fold(
+        _ => _lint_configuration_c("semanticdbRoots must map compile or test to a literal relative directory"),
+        selected => if (selected.forall { case (scope, root) =>
+          Set("compile", "test")(scope) && GoalPhasePurposeRepair.path(root) &&
+            org.goldenport.cncf.workspace.WorkspaceFilePath.parseC(root).isSuccess
+        }) Consequence.success(selected)
+        else _lint_configuration_c("semanticdbRoots must map compile or test to a literal relative directory"))
+    }}
+
   def metalsTextC(value: Option[String]): Consequence[ScalaMetalsRepair.Policy] =
     value.fold(Consequence.success(ScalaMetalsRepair.Policy()))(_decode_yaml_c(_).flatMap(metalsPolicyC))
 
