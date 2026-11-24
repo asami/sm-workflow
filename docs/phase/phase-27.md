@@ -3,7 +3,7 @@
 Status: planned
 Planned: 2026-11-21 (Asia/Tokyo)
 Depends on: Phase 26 dual-CLI practical interoperability
-Related: [Phase 9](phase-9.md), [Phase 13](phase-13.md), [Phase 24](phase-24.md), [Phase 25](phase-25.md), [Phase 26](phase-26.md)
+Related: [Phase 9](phase-9.md), [Phase 13](phase-13.md), [Phase 24](phase-24.md), [Phase 25](phase-25.md), [Phase 25.1](phase-25.1.md), [Phase 26](phase-26.md)
 Checklist: [Phase 27 acceptance](phase-27-checklist.md)
 
 ## Goal
@@ -37,6 +37,9 @@ SDK is **not** assumed to be an independent inference API or separate quota. Dis
 - Qualify at least one additional real route from an available API, Copilot CLI or Copilot SDK using a bounded real task; choose based on actual accessible entitlement and supported execution.
 - Apply a deterministic policy combining task suitability, availability, quota eligibility and bounded cost; avoid an AI call solely for routing.
 - Reuse textus-ai provider adapters and existing Phase 9 Take Over semantics. A CLI agent continuation is not interchangeable with a stateless API inference response.
+
+- Consume the [Phase 25.1](phase-25.1.md) OpenAI daily allowance admission
+  and settlement capability when evaluating OpenAI routes.
 
 #### Configurable provider order for small compiler repairs
 

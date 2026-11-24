@@ -41,3 +41,13 @@ This is a scheduling decision, not an acceptance or Session change. Preserve
 Phase 25's T1–T3 plan, the local releases of Phases 24 and 28, the Phase 7.1
 hold, and Phase 7.2 ownership and protections. Phases 10, 19, and 16 remain
 deferred.
+
+## Daily allowance work moved forward — 2026-11-24
+
+The user placed [Phase 25.1](../../../phase/phase-25.1.md) immediately after
+Phase 28.1 and before Phase 7.2. The fixed reservation for each short review or
+repair made most of the daily allowance unusable in normal operation. Phase 25.1
+applies task-sized limits and settles confirmed usage to return unused tokens.
+It also checks whether a verified free-only admission mechanism can remove the
+need for local reservations. This work moves from Phase 27, which consumes the
+result for routing. Other scheduled phases keep their relative order.

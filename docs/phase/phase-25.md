@@ -115,6 +115,8 @@ observations from ongoing use, follows the release. Perform that work in
 parallel with development of the next scheduled phase, [Phase 18](phase-18.md).
 Compare total tokens per admitted task across selected models, including
 retries and rework, as part of that observation.
+[Phase 25.1](phase-25.1.md) owns the subsequent daily allowance sizing and
+settlement improvement.
 
 ## Reuse and completion
 
