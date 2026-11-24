@@ -89,21 +89,35 @@ private[smworkflow] object GoalPhaseNativeValidation {
     assessment: Option[GoalPhaseStepAssessment.Result] = None,
     dependencySource: Option[GoalPhaseDependencySourceRevision.Capture] = None,
     sourceConsumption: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord] = None,
-    qualification: Option[GoalPhaseQualification.Selection] = None)
+    qualification: Option[GoalPhaseQualification.Selection] = None,
+    lintRepairs: Vector[ScalaLintRepair.Attestation] = Vector.empty)
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(value => value.mapObject(fields =>
-      Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(fields) { (prior, key) =>
+      Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions", "lintRepairs").foldLeft(fields) { (prior, key) =>
         if (prior(key).exists(_.asArray.exists(_.isEmpty))) prior.remove(key) else prior
       }.filter { case (key, value) => !Set("dependency", "assessment", "dependencySource", "sourceConsumption", "qualification")(key) || !value.isNull }))
     private val _decoder: Decoder[Payload] = deriveDecoder
     given Decoder[Payload] = Decoder.instance { cursor =>
-      val normalized = Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(cursor.value) { (prior, key) =>
+      val normalized = Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions", "lintRepairs").foldLeft(cursor.value) { (prior, key) =>
         if (cursor.downField(key).focus.isEmpty) prior.mapObject(_.add(key, Json.arr())) else prior
       }
       _decoder.decodeJson(normalized).flatMap(value => if (!Vector("dependency", "dependencySource", "sourceConsumption", "qualification").exists(name =>
-          cursor.downField(name).focus.exists(_.isNull)) && _valid_payload(value)) Right(value)
+          cursor.downField(name).focus.exists(_.isNull)) && _valid_payload(value) && validLintRepairs(value)) Right(value)
         else Left(DecodingFailure("Invalid native validation payload", cursor.history)))
     }
+
+    def validLintRepairs(value: Payload): Boolean =
+      Option(value.lintRepairs).exists { attestations =>
+        attestations.forall { attestation =>
+          ScalaLintRepair.valid(attestation) &&
+            value.selected.exists(check => check.identity == attestation.checkIdentity &&
+              check.kind == WorkflowSbtValidation.Kind.FixCheck && check.dependency.isEmpty && !check.carLint) &&
+            value.receipts.exists(_.identity == attestation.checkIdentity)
+        } && {
+          val identities = attestations.foldLeft(Set.empty[String])((seen, attestation) => seen.incl(attestation.checkIdentity))
+          identities.size == attestations.size
+        }
+      }
   }
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeValidationReceipt"
@@ -758,23 +772,28 @@ private[smworkflow] object GoalPhaseNativeValidation {
     case SbtExecutionAttempt.Observed(result) => for {
       workspace <- _workspace_c(check, previous)
       _ <- _attempt_target_c(check, workspace, result.target, result.operation)
-      _ <- if (check.kind != WorkflowSbtValidation.Kind.TestCompile ||
-          !previous.qualification.exists(_.target.supplemental.exists(_.metadata.exists(_.buildCheckIdentity.contains(check.identity))))) Consequence.unit
-        else if (result.target.validationDiscovery && result.target.workspaceId.value ==
-            "sm-workflow-repository-validation-" + check.ordinal && result.discovery.exists {
+      discoveryChecks = if (check.kind == WorkflowSbtValidation.Kind.TestCompile)
+        previous.qualification.toVector.flatMap(_.target.supplemental).flatMap(_.metadata)
+          .filter(_.buildCheckIdentity.contains(check.identity))
+        else Vector.empty
+      _ <- if (discoveryChecks.isEmpty) Consequence.unit
+        else if (result.target.validationDiscovery && java.util.Objects.equals(result.target.workspaceId.value,
+            "sm-workflow-repository-validation-" + check.ordinal) && result.discovery.exists {
               case org.goldenport.cncf.processexecution.SbtValidationDiscovery.Result.Available(build) =>
-                previous.qualification.get.target.supplemental.filter(_.metadata.exists(_.buildCheckIdentity.contains(check.identity)))
-                  .forall(c => N.buildBindingMatches(c.metadata.get, build, check.ordinal))
+                discoveryChecks.forall(metadata =>
+                  N.buildBindingMatches(metadata, build, check.ordinal))
               case org.goldenport.cncf.processexecution.SbtValidationDiscovery.Result.Unavailable(_) => true
             }) Consequence.unit else F.invalid("Managed discovery attempt crosses its captured build binding or workspace")
-      _ <- if (_source_program(check, previous).forall(p => result.processResult != null &&
-          p.program == result.processResult.safeProgramIdentity)) Consequence.unit
+      _ <- if (_source_program(check, previous).forall(p => Option(result.processResult)
+          .exists(process => java.util.Objects.equals(p.program, process.safeProgramIdentity)))) Consequence.unit
         else F.invalid("source-consumption check used a different admitted program")
       receipt <- V.sbtReceiptC(check.identity, check.kind, result)
       execution = workspace.filter(_ => check.dependency.nonEmpty).map(w => GoalPhaseDependencyValidation.Execution(check.identity, attempt, w, check.kind.wire))
       executions = previous.dependencyExecutions ++ execution
     } yield if (_not_executed(receipt)) previous.copy(stopped = previous.stopped :+ receipt, dependencyExecutions = executions)
-      else previous.copy(receipts = previous.receipts :+ receipt, dependencyExecutions = executions)
+      else previous.copy(receipts = previous.receipts :+ receipt, dependencyExecutions = executions,
+        lintRepairs = previous.lintRepairs ++ (if (check.kind == WorkflowSbtValidation.Kind.FixCheck && check.dependency.isEmpty)
+          result.target.lintInput.flatMap(input => ScalaLintRepair.attest(check.identity, input)).toVector else Vector.empty))
     case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) => for {
       workspace <- _workspace_c(check, previous)
       _ <- _attempt_target_c(check, workspace, target, operation)
@@ -937,11 +956,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
       } yield saved
     def retainedSelectionC(saved: Saved): Consequence[Store] = for {
       prefix <- _prefix_saved_c(true)
-      _ <- if (requested.exists(_.metadata.nonEmpty) && saved != null && saved.record != null && saved.payload != null &&
+      _ <- if (requested.exists(_.metadata.nonEmpty) && Option(saved).exists(value =>
+          Option(value.record).nonEmpty && Option(value.payload).nonEmpty) &&
           saved.payload.sourceRevision == frontier.revision.value.toString && saved.payload.step == initial.step &&
           saved.payload.candidate == initial.candidate && saved.payload.qualification == initial.qualification &&
           saved.payload.receipts == prefix.payload.receipts &&
-          _same_attempt_facts(saved.payload, prefix.payload) && saved.payload.outcome.isEmpty)
+          _same_attempt_facts(saved.payload, prefix.payload) && saved.payload.lintRepairs == prefix.payload.lintRepairs && saved.payload.outcome.isEmpty)
         Consequence.unit else F.invalid("Retained native metadata selection crosses its Validation frontier")
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:selection", frontier.currentProgression)
       _ <- N.validateRetainedC(requested, saved.payload.selected, saved.payload.metadata, _authenticated_checks(saved.payload))
@@ -1135,9 +1155,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _compatible_payload(initial, payload)
     def completedC(saved: Saved): Consequence[Saved] = for {
       prefix <- _chain_saved_c(Saved(selectionRecord.getOrElse(frontier), initial))
-      _ <- if (saved != null && compatible(saved.payload)) Consequence.unit
+      _ <- if (Option(saved).exists(value => compatible(value.payload))) Consequence.unit
         else F.invalid("retained check outcome crosses its selected candidate or binding")
-      _ <- if (saved.payload.receipts == prefix.payload.receipts && _same_attempt_facts(saved.payload, prefix.payload) &&
+      _ <- if (saved.payload.receipts == prefix.payload.receipts && _same_attempt_facts(saved.payload, prefix.payload) && saved.payload.lintRepairs == prefix.payload.lintRepairs &&
           saved.payload.dependencyExecutions == prefix.payload.dependencyExecutions &&
           (prefix.payload.receipts.size == initial.selected.size || !successful(prefix.payload.receipts, initial.selected)))
         Consequence.unit else F.invalid("retained outcome has no actual complete or failed check chain")
@@ -1204,7 +1224,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   /** Reconcile actual immutable attempts only; missing results never establish execution facts. */
   private[admission] def reconcileAttemptsC(previous: Saved, initial: Payload, index: Int,
     attempts: Vector[Attempt]): Consequence[CheckProgress] = for {
-    _ <- if (previous != null && previous.record != null && _valid_payload(initial) &&
+    _ <- if (Option(previous).exists(value => Option(value.record).nonEmpty) && _valid_payload(initial) &&
         _compatible_payload(initial, previous.payload) && initial.outcome.isEmpty && previous.payload.outcome.isEmpty &&
         index >= 0 && index < initial.selected.size && previous.payload.receipts.size == index &&
         successful(previous.payload.receipts, initial.selected) && initial.receipts.size <= index &&
@@ -1215,14 +1235,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
         previous.payload.uncertainties.forall(_.checkIdentity != initial.selected(index).identity) &&
         previous.payload.newAttempts.forall(_.checkIdentity != initial.selected(index).identity) &&
         previous.record.suspension.isEmpty && previous.record.currentProgression.exists(p =>
-          p == ProgressionReference("phase.Validation") || p == ProgressionReference("phase.PhaseValidation")) &&
+          java.util.Objects.equals(p, ProgressionReference("phase.Validation")) ||
+            java.util.Objects.equals(p, ProgressionReference("phase.PhaseValidation"))) &&
         initial.sourceRevision.toLongOption.exists(v => v > 0 && v.toString == initial.sourceRevision &&
           v <= previous.record.revision.value) &&
-        attempts != null) Consequence.unit else F.invalid("Retained attempts have no exact selected Validation input")
+        Option(attempts).nonEmpty) Consequence.unit else F.invalid("Retained attempts have no exact selected Validation input")
     _ <- previous.record.validateC
     progress <- attempts.zipWithIndex.foldLeft(Consequence.success(CheckProgress(previous, Some(0)))) {
       case (prior, (attempt, ordinal)) => prior.flatMap { current =>
-        if (attempt == null || attempt.intent == null || attempt.result == null || attempt.recovery == null || !current.nextAttempt.contains(ordinal))
+        if (!Option(attempt).exists(value => Option(value.intent).nonEmpty && Option(value.result).nonEmpty &&
+            Option(value.recovery).nonEmpty) || !current.nextAttempt.contains(ordinal))
           F.invalid("Retained check attempts follow an unresolved or completed attempt")
         else attempt match {
           case Attempt(None, None, None) =>
@@ -1230,14 +1252,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
             else F.invalid("Retained check attempts have a missing pair before a later attempt")
           case Attempt(None, _, _) => F.invalid("Retained check result or recovery has no matching intent")
           case Attempt(Some(intent), result, recovery) => for {
-            _ <- if (intent != null && intent.payload == current.saved.payload) Consequence.unit
+            _ <- if (Option(intent).exists(value => value.payload == current.saved.payload)) Consequence.unit
               else F.invalid("Retained intent changes its actual prior payload")
             _ <- _adjacent_record_c(current.saved.record, intent.record,
               "ordered-validation:" + _attempt_key("intent", index, ordinal), current.saved.record.currentProgression)
             observed <- result match {
               case None => Consequence.success(CheckProgress(intent, None))
               case Some(saved) => for {
-                _ <- if (saved != null && _compatible_payload(initial, saved.payload) && saved.payload.outcome.isEmpty)
+                _ <- if (Option(saved).exists(value => _compatible_payload(initial, value.payload) && value.payload.outcome.isEmpty))
                   Consequence.unit else F.invalid("Retained result crosses its selected metadata or candidate")
                 _ <- _adjacent_record_c(intent.record, saved.record,
                   "ordered-validation:" + _attempt_key("result", index, ordinal), intent.record.currentProgression)
@@ -1247,10 +1269,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
                   saved.payload.admissionFailures == current.saved.payload.admissionFailures &&
                   saved.payload.uncertainties == current.saved.payload.uncertainties &&
                   saved.payload.newAttempts == current.saved.payload.newAttempts &&
-                  saved.payload.stopped.lastOption.exists(r => r.identity == initial.selected(index).identity && _not_executed(r))
+                  saved.payload.stopped.lastOption.exists(r => r.identity == initial.selected(index).identity && _not_executed(r)) &&
+                  saved.payload.lintRepairs == current.saved.payload.lintRepairs
                 completed = saved.payload.receipts.size == index + 1 &&
                   saved.payload.receipts.dropRight(1) == current.saved.payload.receipts &&
-                  _same_attempt_facts(saved.payload, current.saved.payload)
+                  _same_attempt_facts(saved.payload, current.saved.payload) &&
+                  ScalaLintRepair.appendValid(current.saved.payload.lintRepairs, saved.payload.lintRepairs, initial.selected(index).identity)
                 rejected = saved.payload.admissionFailures.size == current.saved.payload.admissionFailures.size + 1 &&
                   saved.payload.admissionFailures.dropRight(1) == current.saved.payload.admissionFailures &&
                   saved.payload.admissionFailures.lastOption.exists(f => f.checkIdentity == initial.selected(index).identity && f.attempt == ordinal) &&
@@ -1260,10 +1284,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
                   saved.payload.uncertainties.lastOption.exists(f => f.checkIdentity == initial.selected(index).identity && f.attempt == ordinal) &&
                   saved.payload.copy(uncertainties = current.saved.payload.uncertainties) == current.saved.payload
                 workspace <- _workspace_c(initial.selected(index), initial)
-                executions = if (initial.selected(index).dependency.nonEmpty && (stopped || completed))
-                  current.saved.payload.dependencyExecutions :+ GoalPhaseDependencyValidation.Execution(
-                    initial.selected(index).identity, ordinal, workspace.get,
-                    initial.selected(index).kind.wire) else current.saved.payload.dependencyExecutions
+                executions <- if (initial.selected(index).dependency.nonEmpty && (stopped || completed))
+                  workspace.map(value => Consequence.success(current.saved.payload.dependencyExecutions :+
+                    GoalPhaseDependencyValidation.Execution(initial.selected(index).identity, ordinal, value,
+                      initial.selected(index).kind.wire)))
+                    .getOrElse(F.invalid("Retained dependency execution has no admitted workspace"))
+                  else Consequence.success(current.saved.payload.dependencyExecutions)
                 _ <- if (Vector(stopped, completed, rejected, uncertain).count(identity) == 1 &&
                     saved.payload.dependencyExecutions == executions) Consequence.unit
                   else F.invalid("Retained result rewrites its prefix or contradicts its single terminal receipt")
@@ -1278,7 +1304,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
                 _ <- if (observed.nextAttempt.isEmpty && observed.saved.payload.receipts.size == index &&
                     (result.isEmpty || observed.saved.payload.uncertainties.lastOption.exists(f =>
                       f.checkIdentity == initial.selected(index).identity && f.attempt == ordinal)) &&
-                    saved != null && _compatible_payload(initial, saved.payload) &&
+                    Option(saved).exists(value => _compatible_payload(initial, value.payload)) &&
                     saved.payload.newAttempts.size == observed.saved.payload.newAttempts.size + 1 &&
                     saved.payload.newAttempts.dropRight(1) == observed.saved.payload.newAttempts &&
                     saved.payload.newAttempts.lastOption.exists(f => f.checkIdentity == initial.selected(index).identity &&
@@ -1444,13 +1470,17 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _prefix_record_c(previous: Saved, saved: Saved, initial: Payload,
     receipts: Vector[V.Receipt]): Consequence[Saved] = for {
-    _ <- if (saved != null && saved.record != null && _compatible_payload(initial, saved.payload) &&
+    _ <- if (Option(saved).exists(value => Option(value.record).nonEmpty && _compatible_payload(initial, value.payload)) &&
         saved.payload.outcome.isEmpty && saved.payload.receipts == receipts && _same_attempt_facts(saved.payload, previous.payload) &&
-        saved.record.identity == previous.record.identity && saved.record.definition == previous.record.definition &&
+        (if (saved.payload.receipts == previous.payload.receipts) saved.payload.lintRepairs == previous.payload.lintRepairs
+         else saved.payload.receipts.lastOption.exists(receipt => ScalaLintRepair.appendValid(
+           previous.payload.lintRepairs, saved.payload.lintRepairs, receipt.identity))) &&
+        java.util.Objects.equals(saved.record.identity, previous.record.identity) &&
+        java.util.Objects.equals(saved.record.definition, previous.record.definition) &&
         saved.record.revision.value == previous.record.revision.value + 1 &&
-        saved.record.currentProgression == previous.record.currentProgression && saved.record.suspension.isEmpty &&
+        java.util.Objects.equals(saved.record.currentProgression, previous.record.currentProgression) && saved.record.suspension.isEmpty &&
         saved.record.history.size == previous.record.history.size + 1 &&
-        saved.record.history.dropRight(1) == previous.record.history) Consequence.unit
+        java.util.Objects.equals(saved.record.history.dropRight(1), previous.record.history)) Consequence.unit
       else F.invalid("Retained ordinary prefix crosses its actual source, candidate or native record")
     _ <- saved.record.validateC
   } yield saved
@@ -1468,6 +1498,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _attempt_facts_prefix(prefix: Payload, value: Payload): Boolean =
     value.dependencyExecutions.take(prefix.dependencyExecutions.size) == prefix.dependencyExecutions &&
+    value.lintRepairs.take(prefix.lintRepairs.size) == prefix.lintRepairs &&
     value.stopped.take(prefix.stopped.size) == prefix.stopped &&
       value.admissionFailures.take(prefix.admissionFailures.size) == prefix.admissionFailures &&
       value.uncertainties.take(prefix.uncertainties.size) == prefix.uncertainties &&

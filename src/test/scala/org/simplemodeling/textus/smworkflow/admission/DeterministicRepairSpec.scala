@@ -34,6 +34,28 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
 
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
     super._prepare_sbt_build_(root, scenario)
+    if (Files.exists(root.resolve("format-fixture"))) {
+      val build = root.resolve("repository/build.sbt")
+      if (Files.readString(root.resolve("format-fixture")) == "lint") Files.writeString(build, """scalaVersion := "2.12.18"
+        |scalafixScalaBinaryVersion := "2.13"
+        |scalafixConfig := sys.props.get("cncf.sbt.lint.input").map { encoded =>
+        |  val text = new String(java.util.Base64.getUrlDecoder.decode(encoded), "UTF-8")
+        |  val selected = com.typesafe.config.ConfigFactory.parseString(text).getConfig("config")
+        |  val destination = target.value / "selected-lint.conf"
+        |  IO.write(destination, selected.root.render())
+        |  destination
+        |}.orElse(Some(baseDirectory.value / ".scalafix.conf"))
+        |addCommandAlias("fixCheck", "Compile / scalafix --check")
+        |""".stripMargin)
+      else if (Files.exists(root.resolve("format-rollback"))) Files.writeString(build, Files.readString(build) + """
+        |Compile / compile := {
+        |  val result = (Compile / compile).value
+        |  if (!IO.read(baseDirectory.value / "src/main/scala/RepairExample.scala").endsWith("\n\n"))
+        |    sys.error("Independent fixture revalidation failure after LF correction")
+        |  result
+        |}
+        |""".stripMargin)
+    }
     if (Files.exists(root.resolve("scala3-fixture"))) {
       val build = root.resolve("repository/build.sbt")
       Files.writeString(build, Files.readString(build).replace("2.12.18", "3.3.8"))
@@ -42,7 +64,13 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
 
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val plan = super.process_plan(root, scenario, goal).mapObject(fields => fields.add("sbtPrograms",
-      fields("sbtPrograms").getOrElse(fail("sbtPrograms absent")).mapArray(_.map(_.mapObject(_.add("operation", Json.fromString("compile")))))))
+      fields("sbtPrograms").getOrElse(fail("sbtPrograms absent")).mapArray(_.map { program =>
+        val target = program.hcursor.get[String]("target").toOption.getOrElse(fail("SBT target absent"))
+        val operation = if (Files.exists(root.resolve("format-fixture")))
+          (goal.stepValidation.checks ++ goal.phaseValidation.checks).find(check => target.endsWith("-" + check.ordinal))
+            .map(_.kind.wire).getOrElse("compile") else "compile"
+        program.mapObject(_.add("operation", Json.fromString(operation)))
+      })))
     val server = root.resolve("metals-fixture-server")
     if (!Files.isRegularFile(server)) plan else {
       val companion = Path.of("scripts/sm-workflow-metals-bridge.py").toRealPath()
@@ -66,6 +94,84 @@ final class DeterministicRepairSpec extends AnyWordSpec with Matchers with Given
         grant.mapObject(_.add("capabilities", Json.fromValues(capabilities :+ Json.fromString(ScalaMetalsProcess.capability))))
       }
       plan.mapObject(_.add("programs", Json.fromValues(programs :+ program)).add("grants", Json.fromValues(grants)))
+    }
+  }
+
+  private def _format_fixture(lint: Boolean, rollback: Boolean)(body: (Path, () => V.GoalPhaseAdvanceResult,
+    (V.GoalPhaseWorkResult, V.GoalPhaseAdvanceResult) => Unit, () => Vector[String]) => Unit): Unit = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/format-native").toAbsolutePath),
+      (if (lint) "scalafix-" else "terminal-lf-") + (if (rollback) "rollback-" else "pass-")).toRealPath()
+    Files.writeString(root.resolve("format-fixture"), if (lint) "lint" else "terminal")
+    if (rollback) Files.writeString(root.resolve("format-rollback"), "true")
+    val input = V.GoalPhaseStartInput("native-format-fixture", "sm-workflow")
+    val checks = if (lint) Vector(GoalPhaseNativeValidation.Check("fix-check", 1, WorkflowSbtValidation.Kind.FixCheck),
+      GoalPhaseNativeValidation.Check("compile", 2, WorkflowSbtValidation.Kind.Compile))
+      else Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile))
+    val paths = Vector(_compiler_path, "project.yaml", ".scalafix.conf", "project/plugins.sbt")
+    val normal = ThreeWorkflowNormalHostFixture.definition(root)
+    val host = normal.copy(goal = normal.goal.copy(input = input, candidatePaths = paths,
+      stepValidation = normal.goal.stepValidation.copy(checks = checks), phaseValidation = normal.goal.phaseValidation.copy(checks = checks)))
+    val plan = GoalPhaseOrderedProgression.Plan("fixture-format", "1", input.phaseIdentity, input.repositoryIdentity,
+      Vector(GoalPhaseOrderedProgression.Step("step-1", "Apply one bounded Scala source correction", paths, Vector.empty,
+        checks.map(_.identity))), checks.map(_.identity), repairLimit = 4)
+    _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
+      prepare(call => for {
+        _ <- call.setupC(_setup_commands_(root, "Goal").size)
+        selection = _goal_selection_(input, "format-selection", "format-start")
+        _ <- call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input), selection.participantIdentity),
+          Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selection))))
+        _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+          take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId, selection.participantIdentity, plan)))))
+      } yield ())
+      def _invoke_[A: ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(
+        owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
+          properties = properties), actor)))
+      val started = _invoke_[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(input))
+      def _advance_(): V.GoalPhaseAdvanceResult = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(started.sessionId))
+      def _submit_(value: V.GoalPhaseWorkResult, display: V.GoalPhaseAdvanceResult): Unit = {
+        var pending = Option.empty[org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]]
+        prepare(call => call.goalWorkC(InstanceIdentity(started.sessionId)).map(work => { pending = Some(work); () }))
+        val work = pending.getOrElse(fail("format fixture has no actual issued work"))
+        val order = work.current.asInstanceOf[org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]].request
+        val reference = org.goldenport.cncf.workflow.ContextReference("format-" + order.continuationId.value, "1")
+        val internal = GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
+          completionConditions = take(GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)))
+        val evidence = org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionEvidence(Vector(reference),
+          Some(if (display.work.exists(work => java.util.Objects.equals(work.kind, "ReviewStep"))) "specification-reviewer" else "participant"))
+        val result = org.goldenport.cncf.workflow.WorkflowProtocolV1.ContinuationResult(work.handle, order.runId, order.continuationId,
+          order.expectedRevision, order.context.snapshot, org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue(
+            GoalPhaseNativeWork.resultCodec.typeIdentity, internal), reference, Vector.empty, evidence)
+        if (display.work.exists(work => java.util.Objects.equals(work.kind, "ReviewStep"))) prepare(call => for {
+          prepared <- org.simplemodeling.textus.smworkflow.preparation.NativeReviewPreparation.goalC(
+            display.work.flatMap(_.review).flatMap(_.reviewContext).getOrElse(fail("review context missing")), value, V.WorkflowArtifactReference(reference.identity, reference.revision),
+            V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
+            "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+          _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+        } yield ())
+        _invoke_[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(result))).accepted shouldBe true
+      }
+      def _history_(): Vector[String] = {
+        var causes = Vector.empty[String]
+        prepare(call => call.goalCurrentC(InstanceIdentity(started.sessionId)).map(current => { causes = current.history.map(_.causation.value); () }))
+        causes
+      }
+      val implementation = _advance_()
+      implementation.work.map(_.kind) shouldBe Some("ImplementStep")
+      val source = root.resolve("repository").resolve(_compiler_path)
+      Files.createDirectories(source.getParent)
+      Files.writeString(source, if (lint) (if (rollback) "final object RepairExample {\n  val value: Int = \"broken\"\n}\n" else "final object RepairExample {}\n")
+        else "object RepairExample {}\n\n\n")
+      Files.writeString(root.resolve("repository/project.yaml"), "validation:\n  metals:\n    enabled: false\n  sharedScalaLint: true\n")
+      Files.writeString(root.resolve("repository/.scalafix.conf"), "rules = []\n\n\n")
+      if (lint) {
+        val baseline = take(WorkflowScalaLintParameters.resolveSelectionC(org.simplemodeling.scalalint.ScalaLintProfiles.Selection("none", "none"), None)).rules
+        Files.writeString(root.resolve("repository/.scalafix.conf"), "rules = [RedundantSyntax]\nRedundantSyntax.finalObject = true\nRedundantSyntax.stringInterpolator = false\n" +
+          "sm-workflow.scala-lint.remove-rules = " + Json.fromValues(baseline.map(Json.fromString)).noSpaces + "\n")
+        Files.writeString(root.resolve("repository/project/plugins.sbt"), "addSbtPlugin(\"ch.epfl.scala\" % \"sbt-scalafix\" % \"0.12.1\")\n")
+      }
+      _submit_(V.GoalPhaseWorkResult("completed", "Specification-owned formatting fixture", Vector.empty, None, None, None, None, None,
+        None, None, None, dependencyValidation = None, diagnosticRepair = None), implementation)
+      body(source, _advance_, _submit_, _history_)
     }
   }
 
@@ -147,6 +253,127 @@ while True:
     sys.stdout.buffer.write(b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
     sys.stdout.buffer.flush()
 """
+
+  "Ordinary formatting repair" should {
+    "derive an exact token deletion from real pinned Scalafix and revalidate or roll back through native admission" in {
+      Vector(false, true).foreach { rollback =>
+        Given("an isolated ordinary Phase using typed FixCheck and sbt-scalafix 0.12.1 RedundantSyntax.finalObject")
+        _format_fixture(lint = true, rollback = rollback) { (source, advance, _, history) =>
+          When("ordinary Advance consumes the real check's proposed diff")
+          advance()
+          val result = advance()
+          Then("exactly one checked edit is observed without a compiler provider or semantic repair")
+          history().count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+          history() should not contain ScalaMetalsProcess.intentCause
+          history() should not contain "ordered-bounded-compiler:intent"
+          if (rollback) {
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.rollbackIntentCause)) shouldBe 1
+            Files.readString(source) should include("final object RepairExample")
+            result.work.map(_.kind) shouldBe Some("RepairStep")
+            val repeated = advance()
+            repeated.work shouldBe result.work
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.rollbackIntentCause)) shouldBe 1
+          } else {
+            result.work.map(_.kind) shouldBe Some("ReviewStep")
+            Files.readString(source) should not include "final object RepairExample"
+            Files.readString(source) should endWith("object RepairExample {}\n")
+            val repeated = advance()
+            repeated.work.map(_.kind) shouldBe Some("ReviewStep")
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+          }
+        }
+      }
+    }
+
+    "use one original independent terminal-LF verdict then require fresh checks and an independent review" in {
+      Vector(false, true).foreach { rollback =>
+        Given("one owned handwritten source and an independently admitted single terminal-LF review finding")
+        _format_fixture(lint = false, rollback = rollback) { (source, advance, submit, history) =>
+          val review = advance()
+          review.work.map(_.kind) shouldBe Some("ReviewStep")
+          val conditions = Record.data("kind" -> "terminal-lf", "paths" -> Vector(_compiler_path))
+          val verdict = V.GoalPhaseWorkResult("repair", "Remove only the extra terminal LF", Vector("Remove extra terminal LF in " + _compiler_path),
+            None, None, None, None, None, None, Some(conditions), None, dependencyValidation = None, diagnosticRepair = None)
+          submit(verdict, review)
+          When("normal Advance reconstructs the retained verdict and its original passed candidate")
+          advance()
+          val next = advance()
+          Then("the single exact edit uses the normal transaction and cannot bypass revalidation or independent review")
+          history().count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+          if (rollback) {
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.rollbackIntentCause)) shouldBe 1
+            Files.readString(source) should endWith("object RepairExample {}\n\n\n")
+            next.work.map(_.kind) shouldBe Some("RepairStep")
+            val repeated = advance()
+            repeated.work shouldBe next.work
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+            history().count(value => java.util.Objects.equals(value, DeterministicRepair.rollbackIntentCause)) shouldBe 1
+          } else {
+            Files.readString(source) should endWith("object RepairExample {}\n")
+            Files.readString(source) should not endWith "\n\n"
+            next.work.map(_.kind) shouldBe Some("ReviewStep")
+          }
+        }
+      }
+    }
+
+    "leave a multi-file terminal-LF review on its ordinary semantic repair path" in {
+      Given("an original independent verdict with two owned terminal-LF conditions")
+      _format_fixture(lint = false, rollback = false) { (source, advance, submit, history) =>
+        val review = advance()
+        review.work.map(_.kind) shouldBe Some("ReviewStep")
+        val conditions = Record.data("kind" -> "terminal-lf", "paths" -> Vector(_compiler_path, ".scalafix.conf"))
+        val verdict = V.GoalPhaseWorkResult("repair", "Remove only the two extra terminal LF sequences",
+          Vector("Remove extra terminal LF in " + _compiler_path, "Remove extra terminal LF in .scalafix.conf"),
+          None, None, None, None, None, None, Some(conditions), None, dependencyValidation = None, diagnosticRepair = None)
+        submit(verdict, review)
+        When("ordinary Advance encounters the retained multi-file contract")
+        val next = advance()
+        Then("no single-file shortcut consumes that verdict")
+        next.work.map(_.kind) shouldBe Some("RepairStep")
+        Files.readString(source) should endWith("object RepairExample {}\n\n\n")
+        history() should not contain DeterministicRepair.applyIntentCause
+      }
+    }
+
+    "refuse clipped, additional, stale or unconfigured lint proposals" in {
+      Given("one complete actual-shaped FixCheck capture with the configured allowlisted rule")
+      val source = "final object A {}\n"
+      val document = Document("file:///work/src/main/scala/A.scala", "b" * 40, 0, source)
+      val check = GoalPhaseNativeValidation.Check("fix-check", 1, WorkflowSbtValidation.Kind.FixCheck)
+      val input = org.goldenport.cncf.processexecution.SbtLintInput("sm-workflow-shared-scala-lint", "1",
+        "{\"rules\":[\"RedundantSyntax\"],\"RedundantSyntax\":{\"finalObject\":true,\"stringInterpolator\":false}," +
+          "\"sm-workflow\":{\"scala-lint\":{\"context\":{\"diffBase\":\"" + ("a" * 40) + "\"}}}}")
+      val proof = ScalaLintRepair.attest(check.identity, input).getOrElse(fail("configured fixture attestation absent"))
+      val diff = "--- /work/src/main/scala/A.scala\n+++ <expected fix>\n@@ -1,1 +1,1 @@\n-final object A {}\n+object A {}\n"
+      def _payload_(output: String, clipped: Boolean = false): GoalPhaseNativeValidation.Payload = {
+        val bytes = output.getBytes(UTF_8).toVector
+        val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(1), ProcessExecutionCapture(bytes, bytes.size.toLong, clipped),
+          ProcessExecutionCapture(Vector.empty, 0L, false), Vector.empty, 1L, "fixture-fix-check")
+        val receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(1), output, "",
+          Some(WorkflowSbtValidation.Facts(check.kind, WorkflowSbtValidation.Outcome.Failed, None, None)), Some(process))
+        GoalPhaseNativeValidation.Payload("1", "step-1", GoalPhaseOrderedProgression.Snapshot("a" * 40, document.revision),
+          Vector(check), Vector(receipt), Some("repair-required"), lintRepairs = Vector(proof))
+      }
+      When("the candidate-bound parser admits only the complete single tool correction")
+      val finding = ScalaLintRepair.finding(_payload_(diff + "[error] (Compile / scalafix) TestError\n")).getOrElse(fail("fixture diff absent"))
+      Then("only the supported final token is removed and uncertain observations stay on ordinary repair")
+      ScalaLintRepair.rendered(finding, document) shouldBe Some("object A {}\n")
+      ScalaLintRepair.finding(_payload_(diff, clipped = true)) shouldBe None
+      ScalaLintRepair.finding(_payload_(diff + diff)) shouldBe None
+      ScalaLintRepair.finding(_payload_(diff + "[error] unrelated failure\n")) shouldBe None
+      ScalaLintRepair.finding(_payload_(diff).copy(lintRepairs = Vector.empty)) shouldBe None
+      ScalaLintRepair.finding(_payload_(diff).copy(lintRepairs = Vector(proof.copy(diffBase = "c" * 40)))) shouldBe None
+      ScalaLintRepair.rendered(finding, document.copy(text = "final object B {}\n")) shouldBe None
+      ScalaLintRepair.rendered(finding.copy(diff = finding.diff.updated(2, "+object B {}")), document) shouldBe None
+      ScalaLintRepair.attest(check.identity, input.copy(configJson = input.configJson.replace("true", "false"))) shouldBe None
+      ScalaLintRepair.appendValid(Vector(proof), Vector(proof.copy(recipe = "unregistered")), check.identity) shouldBe false
+      GoalPhaseNativeValidation.codec.decode(GoalPhaseNativeValidation.codec.encode(_payload_(diff))) shouldBe Right(_payload_(diff))
+      val legacy = _payload_(diff).copy(lintRepairs = Vector.empty)
+      GoalPhaseNativeValidation.codec.decode(GoalPhaseNativeValidation.codec.encode(legacy)) shouldBe Right(legacy)
+    }
+  }
 
   "The fixed Metals production route" should {
     "apply the exact subprocess proposal through ordinary Step admission and real Scala 2 and 3 revalidation without AI" in {

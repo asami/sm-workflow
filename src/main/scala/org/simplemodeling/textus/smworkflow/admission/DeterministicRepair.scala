@@ -245,14 +245,14 @@ private[smworkflow] object DeterministicRepair {
         (path.startsWith("src/main/scala/") || path.startsWith("src/test/scala/")) && owned.contains(path)
       snapshot <- candidate.payload.candidate
       if (candidate.record.identity: InstanceIdentity) == (source.identity: InstanceIdentity) &&
-        _retained_prefix(validation.record, source) &&
+        retainedPrefix(validation.record, source) &&
         validation.payload.candidate == snapshot && validation.payload.step == candidate.payload.step &&
         candidate.payload.committedWork.isEmpty && candidate.payload.continuation.isEmpty &&
         candidate.payload.dependencyAdmission.isEmpty && validation.payload.dependency.isEmpty &&
         (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(path: String)
     } yield (finding, root, path, snapshot)
     request.fold(Consequence.success(Option.empty[Transaction])) { case (finding, root, path, snapshot) =>
-      _compiler_source_c(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
+      sourceC(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
         val reference = validation.record.revision.value.toString + ":" + finding.checkIdentity
         val document = Document(root.resolve(path).toUri.toString, snapshot.tree, 0, base)
         _compiler_patch(finding, document, reference).toOption.map(updated =>
@@ -263,7 +263,7 @@ private[smworkflow] object DeterministicRepair {
   }
 
   // One read-only Git and workspace proof shared by deterministic and ordinary repair.
-  private def _compiler_source_c(declaration: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
+  private[admission] def sourceC(declaration: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
     root: Path, path: String, snapshot: GoalPhaseOrderedProgression.Snapshot): Consequence[Option[(String, String)]] = {
       val git = WorkflowManagedProcessExecution
       val workspace = RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")
@@ -351,7 +351,7 @@ private[smworkflow] object DeterministicRepair {
         (path.startsWith("src/main/scala/") || path.startsWith("src/test/scala/")) && owned.contains(path)
       snapshot <- candidate.payload.candidate
       if (candidate.record.identity: InstanceIdentity) == (source.identity: InstanceIdentity) &&
-        _retained_prefix(candidate.record, validation.record) && _retained_prefix(validation.record, source) &&
+        retainedPrefix(candidate.record, validation.record) && retainedPrefix(validation.record, source) &&
         validation.payload.candidate == snapshot && validation.payload.step == candidate.payload.step &&
         candidate.payload.committedWork.isEmpty && candidate.payload.continuation.isEmpty &&
         candidate.payload.dependencyAdmission.isEmpty && candidate.payload.dependency.isEmpty &&
@@ -364,7 +364,7 @@ private[smworkflow] object DeterministicRepair {
         (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(path: String)
     } yield (finding, root, path, snapshot)
     request.fold(Consequence.success(Option.empty[CompilerMaterial])) { case (finding, root, path, snapshot) =>
-      _compiler_source_c(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
+      sourceC(declaration, core, root, path, snapshot).map(_.flatMap { case (base, workspace) =>
         val reference = validation.record.revision.value.toString + ":" + finding.checkIdentity
         val document = Document(root.resolve(path).toUri.toString, snapshot.tree, 0, base)
         val point = Position(finding.line - 1, finding.column - 1)
@@ -454,7 +454,7 @@ private[smworkflow] object DeterministicRepair {
     } yield transaction
   }
 
-  private def _retained_prefix(record: InstanceRecord, source: InstanceRecord): Boolean =
+  private[admission] def retainedPrefix(record: InstanceRecord, source: InstanceRecord): Boolean =
     (record.identity: InstanceIdentity) == (source.identity: InstanceIdentity) &&
       (record.definition: DefinitionBinding) == (source.definition: DefinitionBinding) &&
       record.revision.value <= source.revision.value && source.history.startsWith(record.history)
@@ -501,7 +501,7 @@ private[smworkflow] object DeterministicRepair {
         transaction.validationReference, transaction.path, transaction.workspace, document, diagnostic)
       rendered <- ScalaMetalsRepair.productionRendered(material)
     } yield rendered
-    _retained_prefix(validation.record, source) && _retained_prefix(candidate.record, validation.record) &&
+    retainedPrefix(validation.record, source) && retainedPrefix(candidate.record, validation.record) &&
       candidate.payload.candidate.contains(validation.payload.candidate) && transaction.candidate == validation.payload.candidate.tree &&
       candidate.payload.step == validation.payload.step && owned.contains(transaction.path) &&
       (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(transaction.path: String) &&
@@ -549,8 +549,8 @@ private[smworkflow] object DeterministicRepair {
     _ <- GitObjectId.parseC(snapshot.head).toOption
     failedTree <- GitObjectId.parseC(snapshot.tree).toOption
     oldTree <- GitObjectId.parseC(applied.value.transaction.candidate).toOption
-    if _retained_prefix(validation.record, source) && _retained_prefix(applied.record, candidate.record) &&
-      _retained_prefix(candidate.record, validation.record) && applied.record.revision.value < candidate.record.revision.value &&
+    if retainedPrefix(validation.record, source) && retainedPrefix(applied.record, candidate.record) &&
+      retainedPrefix(candidate.record, validation.record) && applied.record.revision.value < candidate.record.revision.value &&
       candidate.record.revision.value < validation.record.revision.value &&
       applied.value.operation == "apply" && applied.value.outcome.contains("updated") &&
       GoalPhaseNativeValidation.repairable(validation.payload) && validation.payload.candidate == snapshot &&
@@ -753,12 +753,12 @@ private[smworkflow] object DeterministicRepair {
       val expected: Range = Range(Position(line, column), Position(line, column + 7))
       text.length - indent == shape.length && text.startsWith(shape, indent) &&
         observed == expected &&
-        _code_at_line(lines, line)
+        codeAtLine(lines, line)
     }
   }
 
   // Reject a matching line inside comments or literals; uncertain character literals fail closed.
-  private def _code_at_line(lines: Vector[String], target: Int): Boolean = {
+  private[admission] def codeAtLine(lines: Vector[String], target: Int): Boolean = {
     val prefix = lines.take(target).mkString("\n") + (if (target > 0) "\n" else "")
     var index = 0
     var block = 0

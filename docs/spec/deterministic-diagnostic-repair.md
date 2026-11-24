@@ -132,7 +132,22 @@ finding, supply its retained evidence reference, determine handwritten ownership
 and bind the exact range to the snapshot. The data constructor does not verify
 those claims. The returned action separately records the native recipe and evidence
 reference and passes the existing admission boundary; it neither applies a patch
-nor proves a check succeeded. No runtime producer is wired to this projection yet.
+nor proves a check succeeded.
+
+Ordinary Step repair selects this recipe only from a retained, admitted original
+independent `ReviewStep` repair verdict with `completionConditions.kind` equal to
+`terminal-lf`, exactly one finding and exactly one literal owned handwritten Scala
+path. Its original candidate, passed selected checks, retained result reference,
+repair generation and single open review issue must agree. The runtime preserves
+the original candidate/check context only for that eligible completion shape,
+then authenticates the staged regular UTF-8 file and current worktree bytes through
+the shared source proof. Multi-file completion conditions retain their ordinary
+semantic repair path. Other unresolved findings prevent the automatic edit.
+
+The edit uses the existing compare-and-set transaction, fresh candidate admission
+and selected checks. A failed revalidation restores only the exact applied blob
+through the existing rollback. A successful edit requires a fresh independent
+Step review. The original verdict does not accept the changed candidate.
 ## Scala 3 Circe error member
 
 `circeErrorMessage` proposes replacing only the member `message` with
@@ -177,10 +192,54 @@ state for resolution. The runtime makes at most one automatic compiler
 correction attempt per Step in this initial route and preserves the normal
 repair budget and independent review.
 
-The Phase route supports the narrow Circe correction above and the configured
-Metals route. The Scala terminal-LF proposal and formatter/Scalafix actions have
-separate producer and qualification requirements. Installed tools, deployed
-project behavior and operational savings are checked after release.
+The Phase route tries the narrow Circe correction, then the bounded Scala
+lint/terminal-LF route below, before Metals and ordinary compiler/semantic repair.
+All routes retain their original diagnostics and the single-attempt transaction
+accounting for the Step. Installed tools, deployed project behavior and operational
+savings are checked after release.
+
+## Retained read-only Scalafix correction
+
+A normal typed SBT `FixCheck` already runs the host-admitted check program.
+`GoalPhaseNativeValidation` retains an optional per-check attestation from that
+actual observed target's `SbtLintInput`; it never rereads current configuration to
+authorize an older result. The supported recipe requires the shared lint input
+identity/revision, the exact Git base, a selected `RedundantSyntax` rule,
+`RedundantSyntax.finalObject = true` and
+`RedundantSyntax.stringInterpolator = false`. Historical receipts without an
+attestation retain their previous meaning and use ordinary repair. The native
+attempt chain permits an attestation only beside its own newly observed receipt
+and preserves the exact previous attestations during reconstruction.
+
+Only one complete, failed ordinary FixCheck with complete nontruncated stdout and
+stderr, a successful check prefix and no unresolved execution uncertainty can
+supply a proposal. The accepted tool output is one unified diff naming the exact
+absolute source path and `<expected fix>`, with one hunk and three context lines.
+The parser binds every old/context line and hunk count to the original candidate's
+staged UTF-8 text. It accepts a single deletion of the `final ` prefix from a
+simple `final object Name {` or `final object Name {}` declaration, including
+optional space indentation; all other characters remain exact. The source must
+be at a lexical code position, an exact Step-owned handwritten regular Scala file
+under `src/main/scala` or `src/test/scala`, and match current worktree bytes.
+Generated path segments, additional edits/diffs, unknown error lines, clipping,
+stale bytes and absent or disabled rule configuration yield no proposal.
+
+This route launches no additional formatter or process and copies no checkout.
+The existing transaction records intent/result, performs the byte-checked update,
+and uses ordinary candidate admission, selected revalidation and exact rollback.
+Replay derives the same token deletion from the retained original output and
+attestation without rerunning FixCheck. An ineligible proposal retains ordinary
+repair and the normal AI fallback. A failed revalidation retains its actual
+failure before restoring the applied edit.
+
+`DeterministicRepairSpec` defines isolated normal runtime fixtures with pinned
+`sbt-scalafix` 0.12.1, actual typed FixCheck output, successful revalidation and
+independent compiler failure followed by rollback. Separate terminal-LF fixtures
+cover an admitted original independent verdict, fresh checks, rollback and the
+unchanged multi-file fallback. Pure capture fixtures cover unavailable rule
+configuration, clipped output, extra edits, stale bytes and historical decoding.
+These executable specifications require execution to establish qualification;
+production project qualification remains a separate post-release activity.
 
 ## Source-local nullable boundary evidence
 
@@ -232,8 +291,9 @@ these fixtures. Selected validation 1022 on tree
 `7034b3bdf01efb2b48720dc54a5b7c0813f0cf3c` passed Compile, TestOnly (8 tests),
 and FixCheck.
 
-The standalone terminal-LF proposal test does not establish runtime application
-of that action. A fixed, admitted provider seam is implemented above; the controlled
+The standalone terminal-LF proposal test establishes only pure patch admission;
+the ordinary-runtime fixtures above define its application and rollback checks.
+A fixed, admitted provider seam is implemented above; the controlled
 transport fixture does not establish actual deployed server behavior. The adopted
 Plan defers qualification against deployed tools and real Scala 2.12/3 projects,
 and production latency and AI-avoidance measurements. No Phase completion is
