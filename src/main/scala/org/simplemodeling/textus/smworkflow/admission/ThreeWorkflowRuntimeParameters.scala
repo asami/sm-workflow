@@ -101,6 +101,11 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("GoalPhase completion policy is unsupported")
     })
+  val plannedStepCommits = ComponentParameterKey.optional("sm-workflow.goal-phase.planned-step-commits",
+    ComponentParameterDecoder[Boolean] {
+      case ConfigurationValue.BooleanValue(value) => Consequence.success(value)
+      case _ => Consequence.configurationInvalid("Planned Step commits require a Boolean host setting")
+    })
   val validationRepairCallerSource = ComponentParameterKey.optional(
     "sm-workflow.goal-phase.validation-repair.caller-source", ComponentParameterDecoder[GoalPhaseValidationPriorInvocation.CallerSourcePolicy] {
       case value: ConfigurationValue.ObjectValue => json(value).as[GoalPhaseValidationPriorInvocation.CallerSourcePolicy]
@@ -120,7 +125,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       GoalPhaseNativeExecution.declaration, GoalPhaseNativeExecution.logicalOrigin, GoalPhaseRetainedObservations.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseOperatingProfiles.cost, GoalPhaseOperatingProfiles.quality, GoalPhaseOperatingProfiles.localExperiment, GoalPhaseDispatchPolicy.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, RepositorySyncDirectoryList.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy, validationRepairCallerSource, developmentObservation, GoalPhaseQualification.declaration, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
+      completionPolicy, plannedStepCommits, validationRepairCallerSource, developmentObservation, GoalPhaseQualification.declaration, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
       ManagedDevelopmentRepositorySync.mainIntegration, RepositorySyncPolicies.uncommittedPolicy, RepositorySyncLocalMain.mappings,
       CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
@@ -155,6 +160,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     context: ExecutionContext, settings: Definition): Consequence[ThreeWorkflowLauncherAssembly.RuntimeComposition] = for {
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       selectedpolicy <- parameters.resolve(completionPolicy).map(_.value.getOrElse(GoalPhasePostCompletionSync.localPolicy))
+      stepcommits <- parameters.resolve(plannedStepCommits).map(_.value.contains(true))
       callersource <- parameters.resolve(validationRepairCallerSource).map(_.value)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
@@ -215,7 +221,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhasePrerequisitePublicationRecovery.Installation(ports.prerequisitePublicationRecovery,
           Some(ports.prerequisitePublicationObservation))), dispatchPolicy = dispatchpolicy,
         logicalOrigin = logicalorigin, retainedObservations = retainedobservations,
-        qualificationPolicy = qualification, managedDevelopment = managedDevelopment)
+        qualificationPolicy = qualification, managedDevelopment = managedDevelopment, plannedStepCommits = stepcommits)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

@@ -1222,6 +1222,18 @@ inputs or AI validation. Those require their separate actual evidence.
 
 ### Current-Step necessary-file inventory
 
+At Start, use the existing managed development registration for planned
+providers and their project-private worktrees and artifacts. Carry an explicit
+delivery choice and literal prohibitions. With the host's planned Step commit
+permission enabled, native Start retains the fixed commit policy and ordinary
+Step closure consumes it after the normal checks and Admission.
+
+For managed dependency proposals, put the current necessary files in
+`paths`. Set `authorizationBoundary.exactPaths` only when the selected
+authority actually restricts work to that literal set. Use the actual
+retained scope reference for a same-purpose inventory update, regardless of
+whether the original admission came from the Phase policy or Human direction.
+
 For actual runtime-issued implementation or repair with a current Step identity,
 return `decision-needed` with a complete raw `planRevision` Proposal, a fresh
 Plan revision when concrete necessary files are missing from that Step's
@@ -1243,6 +1255,19 @@ to qualify automatically. Runtime retains Session, original base, completed
 Steps, history and repair counters. It may natively supersede an existing
 unanswered question proven inventory-only, retaining the question without
 fabricating a Human answer.
+
+### Correction of a Phase-owned check registration
+
+Use a phase-private validation program whose cases match the selected Plan
+before starting the Phase. For offline validation, inspect explicit-only suites
+before selecting them. When a definitely ended failure proves an incorrect
+registration, correct the Phase-owned selection within the already authorized
+validation boundary and continue through the existing RepairStep and native
+validation. Retain the original attempt and show which exact selection changed.
+Use the normal completed repair result after making the correction. Changes to
+required checks, coverage, effect authorization or an unresolved execution go
+through their existing decision paths. If trusted host setup is missing, report
+that configuration gap and preserve the actual Session.
 
 For a non-inventory business change, use the existing Plan route below.
 When implementation or repair discovers a genuine test, suite, requirement or

@@ -13,6 +13,7 @@ import GoalPhaseNativeRun as F
 import GoalPhaseNativeWork as W
 import GoalPhaseOrderedProgression as O
 import GoalPhaseDevelopmentPermissions as P
+import DependencyDevelopmentDelivery as D
 
 /** One ordinary native admission receipt derived from the selected Phase policy
   * and exact proposal. It does not synthesize an ApproveDependencyScope answer.
@@ -23,17 +24,26 @@ import GoalPhaseDevelopmentPermissions as P
 private[smworkflow] object GoalPhasePolicyDependencyContinuation {
   val causation = "ordered-phase-policy-dependency-admitted"
   val choice = "AdmitPhaseDependencyPolicy"
+  private val _localDeliveryOperations = Set("edit-source", "validate", "independent-review", "publish-local")
+
+  private def _managed_route_valid(route: D.Route, proposal: GoalPhaseDependencyScope.Proposal,
+    authority: P.Authority): Boolean =
+    D.routeValid(route, choice, proposal) && authority.managedEdge.contains(route.edge) &&
+      proposal.authorizationBoundary.exists(_.permittedOperations.forall(_localDeliveryOperations))
   final case class Source(from: InstanceRecord, controller: O.State, input: W.Request,
-    result: ContinuationResult[W.Result], authority: P.Authority) {
+    result: ContinuationResult[W.Result], authority: P.Authority, route: Option[D.Route]) {
     def reference: WorkflowMechanicalTransition.Reference = WorkflowMechanicalTransition.Reference(
       from.identity.value + ":phase-policy-dependency:" + from.revision.value, "1")
   }
   final case class Payload(sourceRevision: Long, requestingResult: ContextReference,
-    proposal: GoalPhaseDependencyScope.Proposal, authority: P.Authority)
+    proposal: GoalPhaseDependencyScope.Proposal, authority: P.Authority, route: Option[D.Route] = None)
   object Payload {
     private given Encoder[ContextReference] = deriveEncoder
     private given Decoder[ContextReference] = deriveDecoder
-    given Encoder[Payload] = deriveEncoder
+    given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
+      case ("route", value) => !value.isNull
+      case _ => true
+    }))
     given Decoder[Payload] = deriveDecoder
   }
   val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
@@ -46,11 +56,12 @@ private[smworkflow] object GoalPhasePolicyDependencyContinuation {
     def approval: GoalPhaseDependencyValidation.Approval = GoalPhaseDependencyValidation.Approval(
       source.input.stepIdentity.get, payload.proposal, decision)
     def context: W.DecisionContext = W.DecisionContext(source.result.result.value, choice,
-      "Necessary dependency work admitted from the retained Phase policy and concrete graph; this is not a Human answer", Some(decision))
+      "Necessary dependency work admitted from the retained Phase policy and concrete graph; this is not a Human answer",
+      Some(decision), deliveryRoute = payload.route)
   }
 
   private def sourceC(from: InstanceRecord, controller: O.State, input: W.Request,
-    result: ContinuationResult[W.Result], authority: P.Authority): Consequence[Source] = for {
+    result: ContinuationResult[W.Result], authority: P.Authority, route: Option[D.Route]): Consequence[Source] = for {
     _ <- if (from.lifecycle == Lifecycle.Active && from.suspension.isEmpty &&
       from.currentProgression.contains(ProgressionReference("phase.Decision")) && controller.stage == O.Stage.Decision &&
       controller.decisionSource.exists(Set(O.Stage.Implementation, O.Stage.Repair)) &&
@@ -69,27 +80,35 @@ private[smworkflow] object GoalPhasePolicyDependencyContinuation {
     completed <- GoalPhaseNativeHistory.completionC(from, pending, result.resultReference, "Decision")
     _ <- if (completed == from && pending.suspension.exists(_.continuationIdentity.value == result.continuationId.value))
       Consequence.unit else F.invalid("Phase policy does not bind the adjacent actual semantic completion")
-    assessed <- P.assessC(controller.plan, result.result.value.dependencyProposal.get, authority)
+    proposal = result.result.value.dependencyProposal.get
+    _ <- if (route.forall(_managed_route_valid(_, proposal, authority))) Consequence.unit
+      else F.invalid("Phase-policy route crosses the planned local delivery boundary")
+    assessed <- P.assessC(controller.plan, proposal, authority)
     _ <- if (assessed.status == "admitted") Consequence.unit else F.invalid(assessed.reason)
-  } yield Source(from, controller, input, result, authority)
+  } yield Source(from, controller, input, result, authority, route)
 
   def selectC(from: InstanceRecord, controller: O.State, last: Option[(W.Request, ContinuationResult[W.Result])],
-    configured: Option[ManagedDevelopmentRuntime.Policy]): Consequence[Option[Source]] = last match {
+    configured: Option[ManagedDevelopmentRuntime.Policy], startRoute: Option[D.Route],
+    core: ActionCall.Core): Consequence[Option[Source]] = last match {
     case Some((input, result)) if result.result.value.dependencyProposal.exists(_.scopeUpdate.isEmpty) &&
       controller.stage == O.Stage.Decision && controller.decisionSource.exists(Set(O.Stage.Implementation, O.Stage.Repair)) &&
-      !DependencyDevelopmentDelivery.requiresDirection(input, result.result.value, configured) &&
       input.decisionContext.forall(context => !Set("RejectDependencyScope", "Defer", "Cancel")(context.choice)) =>
       val proposal = result.result.value.dependencyProposal.get
       val authority = P.capture(controller.plan, proposal, configured)
+      val requiresRoute = D.requiresDirection(input, result.result.value, configured)
+      val route = startRoute.filter(value => requiresRoute && _managed_route_valid(value, proposal, authority))
       P.assessC(controller.plan, proposal, authority).flatMap { assessment =>
-        if (assessment.status == "admitted") sourceC(from, controller, input, result, authority).map(Some(_))
-        else Consequence.success(None)
+        if (assessment.status != "admitted" || (requiresRoute && route.isEmpty)) Consequence.success(None)
+        else route.fold(Consequence.unit) { selected =>
+          configured.map(D.readmittedC(selected, proposal, _, core))
+            .getOrElse(F.invalid("Phase-policy route has no current managed development registration"))
+        }.flatMap(_ => sourceC(from, controller, input, result, authority, route).map(Some(_)))
       }
     case _ => Consequence.success(None)
   }
 
   private def expected(source: Source): Payload = Payload(source.from.revision.value,
-    source.result.resultReference, source.result.result.value.dependencyProposal.get, source.authority)
+    source.result.resultReference, source.result.result.value.dependencyProposal.get, source.authority, source.route)
   private def savedC(source: Source, record: InstanceRecord, value: Payload): Consequence[Saved] = for {
     _ <- if (value == expected(source)) Consequence.unit else F.invalid("Phase-policy receipt changes its actual proposal/source")
     resumed <- source.controller.acceptC(O.DecisionResumptionAdmitted(source.reference.identity))
@@ -109,7 +128,10 @@ private[smworkflow] object GoalPhasePolicyDependencyContinuation {
     actual <- adapter.loadRetainedC(reference)(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Phase-policy history has no actual native receipt")))
     pair <- last.map(Consequence.success).getOrElse(F.invalid("Phase-policy history has no original semantic result"))
-    source <- sourceC(from, controller, pair._1, pair._2, actual.receipt.payload.value.authority)
+    route = actual.receipt.payload.value.route
+    _ <- if (route.forall(session.started.receipt.payload.value.managedDependencyRoute.contains))
+      Consequence.unit else F.invalid("Phase-policy route is not the retained Start route")
+    source <- sourceC(from, controller, pair._1, pair._2, actual.receipt.payload.value.authority, route)
     next <- GoalPhaseNativeHistory.prefixC(session.current, actual.receipt.next.revision)
     _ <- if (next == actual.receipt.next) Consequence.unit else F.invalid("Phase-policy receipt crosses actual native history")
     saved <- savedC(source, next, actual.receipt.payload.value)

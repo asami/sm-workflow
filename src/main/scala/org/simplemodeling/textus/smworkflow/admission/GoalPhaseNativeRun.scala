@@ -82,7 +82,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     qualificationPolicy: Option[GoalPhaseQualification.Policy] = None,
     managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None,
     private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
-    private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None)
+    private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None,
+    plannedStepCommits: Boolean = false)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -96,7 +97,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     completionPolicy: Option[String] = None, developmentStartedAt: Option[String] = None,
     repairPolicy: Option[String] = None, operatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None,
     sourceMetrics: Option[GoalPhasePhaseMetrics.Endpoint] = None,
-    dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None)
+    dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None,
+    managedDependencyRoute: Option[DependencyDevelopmentDelivery.Route] = None,
+    plannedStepCommitPolicy: Option[GoalPhaseNativeClosure.Policy] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -111,7 +114,9 @@ private[smworkflow] object GoalPhaseNativeRun {
         val repair = if (value.repairPolicy.isEmpty) occurrence.remove("repairPolicy") else occurrence
         val profile = if (value.operatingProfile.isEmpty) repair.remove("operatingProfile") else repair
         val metrics = if (value.sourceMetrics.isEmpty) profile.remove("sourceMetrics") else profile
-        if (value.dependencyDelivery.isEmpty) metrics.remove("dependencyDelivery") else metrics
+        val delivery = if (value.dependencyDelivery.isEmpty) metrics.remove("dependencyDelivery") else metrics
+        val route = if (value.managedDependencyRoute.isEmpty) delivery.remove("managedDependencyRoute") else delivery
+        if (value.plannedStepCommitPolicy.isEmpty) route.remove("plannedStepCommitPolicy") else route
       }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
@@ -131,6 +136,11 @@ private[smworkflow] object GoalPhaseNativeRun {
         "native ordered Start repair policy must be omitted or explicitly supported")
       _ <- Either.cond(payload.developmentStartedAt != null && payload.developmentStartedAt.forall(at =>
         scala.util.Try(java.time.Instant.parse(at)).isSuccess), (), "native ordered Start occurrence time is invalid")
+      _ <- Either.cond(!wire.hcursor.downField("payload").downField("managedDependencyRoute").focus.contains(Json.Null) &&
+        payload.managedDependencyRoute.forall(DependencyDevelopmentDelivery.startRouteValid(_, payload.plan.repository)),
+        (), "native ordered Start managed dependency route is invalid")
+      _ <- Either.cond(!wire.hcursor.downField("payload").downField("plannedStepCommitPolicy").focus.contains(Json.Null) &&
+        payload.plannedStepCommitPolicy.forall(_.validateC.isSuccess), (), "native ordered Start Step commit policy is invalid")
     } yield payload
   }
 
@@ -166,7 +176,9 @@ private[smworkflow] object GoalPhaseNativeRun {
       Some(d.selectedCompletionPolicy), d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
       Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile, Some(metrics), d.managedDevelopment.filter(p =>
         p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == plan.repository)))
-        .flatMap(DependencyDevelopmentDelivery.binding))
+        .flatMap(DependencyDevelopmentDelivery.binding),
+      DependencyDevelopmentDelivery.startRoute(plan.repository, d.managedDevelopment, core),
+      d.closureInstallation.filter(_ => d.plannedStepCommits).map(_.policy))
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)

@@ -55,9 +55,16 @@ private[smworkflow] object DependencyDevelopmentDelivery {
   def humanScopeApproval(choice: String): Boolean =
     choice == "ApproveDependencyScope" || routeChoices.contains(choice)
 
+  def inventoryApproval(choice: String): Boolean =
+    humanScopeApproval(choice) || choice == GoalPhasePolicyDependencyContinuation.choice
+
   def routeValid(route: Route, choice: String, proposal: D.Proposal): Boolean =
-    route != null && route.edge != null && routeChoices.contains(choice) && route.mode == choice &&
+    _route_valid(route, if (choice == GoalPhasePolicyDependencyContinuation.choice) subtree else choice) &&
       route.edge.consumer == proposal.requester && route.edge.provider == proposal.dependency &&
+      (choice != GoalPhasePolicyDependencyContinuation.choice || route.edge.localJar)
+
+  private def _route_valid(route: Route, choice: String): Boolean =
+    route != null && route.edge != null && routeChoices.contains(choice) && route.mode == choice &&
       route.artifactWorkspace == route.edge.localRepository &&
       ManagedDevelopment.validateC(ManagedDevelopment.Definition(route.scope, route.artifactWorkspace,
         route.artifactRepository, route.artifactStaging, Vector(route.edge))).isSuccess &&
@@ -85,11 +92,24 @@ private[smworkflow] object DependencyDevelopmentDelivery {
 
   def offer(work: W.Request, result: W.Result, configured: Option[ManagedDevelopmentRuntime.Policy],
     core: ActionCall.Core, publication: Option[LocalPublicationRuntime.Policy] = None): Option[Offer] =
-    _fresh_proposal(work, result).map(_offer(_, configured, core, publication))
+    _fresh_proposal(work, result).map(p => _offer(p.dependency, p.requester, configured, core, publication))
+
+  def startRoute(repository: String, configured: Option[ManagedDevelopmentRuntime.Policy],
+    core: ActionCall.Core): Option[Route] = for {
+    policy <- configured
+    identity <- policy.dependencyWorkEdge
+    edge <- policy.definition.edges.find(e =>
+      e.identity == identity && e.consumer.repository == repository && e.localJar)
+    if binding(policy).forall(_.mode == subtree)
+    route <- _offer(edge.provider, edge.consumer, configured, core, None).route(subtree)
+  } yield route
+
+  def startRouteValid(route: Route, repository: String): Boolean =
+    _route_valid(route, subtree) && route.edge.localJar && route.edge.consumer.repository == repository
 
   def readmittedC(saved: Route, proposal: D.Proposal, policy: ManagedDevelopmentRuntime.Policy,
     core: ActionCall.Core, publication: Option[LocalPublicationRuntime.Policy] = None): Consequence[Unit] = {
-    val current = _offer(proposal, Some(policy), core, publication)
+    val current = _offer(proposal.dependency, proposal.requester, Some(policy), core, publication)
     if (current.route(saved.mode).contains(saved)) Consequence.unit
     else _invalid(current.alternatives.find(_.choice == saved.mode).flatMap(_.reason)
       .getOrElse("selected dependency route crosses its registered source, scope, artifact owner or destination"))
@@ -105,17 +125,15 @@ private[smworkflow] object DependencyDevelopmentDelivery {
           (humanScopeApproval(context.choice) || context.choice == GoalPhasePolicyDependencyContinuation.choice) &&
             context.inventoryContinuation.map(_.proposal).orElse(context.requestingResult.dependencyProposal).contains(proposal)))
 
-  private def _endpoints(edge: ManagedDevelopment.Edge, proposal: D.Proposal): Boolean =
-    edge.provider == proposal.dependency && edge.consumer == proposal.requester
-
   private def _label(choice: String): String =
     if (choice == subtree) "Local worktree" else "Assigned development chat"
 
   private def _subtree_destination(edge: ManagedDevelopment.Edge): String = "managed-worktree:" + edge.provider.workspace
 
-  private def _offer(proposal: D.Proposal, configured: Option[ManagedDevelopmentRuntime.Policy], core: ActionCall.Core,
+  private def _offer(provider: D.Component, consumer: D.Component,
+    configured: Option[ManagedDevelopmentRuntime.Policy], core: ActionCall.Core,
     publication: Option[LocalPublicationRuntime.Policy]): Offer = {
-    val edges = configured.toVector.flatMap(_.definition.edges.filter(_endpoints(_, proposal)))
+    val edges = configured.toVector.flatMap(_.definition.edges.filter(e => e.provider == provider && e.consumer == consumer))
     val active = edges match {
       case Vector(edge) if configured.exists(_.dependencyWorkEdge.contains(edge.identity)) => Some(edge)
       case _ => None

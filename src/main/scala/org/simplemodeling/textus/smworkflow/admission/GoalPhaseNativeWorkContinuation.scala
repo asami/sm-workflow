@@ -3805,7 +3805,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         initial <- _initial_phase_repair_source_c(cursor)
         inventory <- K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
         currentinventory <- _current_inventory_source_c(source, cursor)
-        policyDependency <- GoalPhasePolicyDependencyContinuation.selectC(cursor.from, cursor.controller, cursor.lastresult, d.managedDevelopment)
+        policyDependency <- GoalPhasePolicyDependencyContinuation.selectC(cursor.from, cursor.controller,
+          cursor.lastresult, d.managedDevelopment, source.started.receipt.payload.value.managedDependencyRoute, core)
         wire <- if (policyDependency.nonEmpty) policyDependency.map(Consequence.success)
           .getOrElse(F.invalid("phase dependency policy selection is absent"))
           .flatMap(GoalPhasePolicyDependencyContinuation.advanceC(source, d, _, core)).flatMap { saved =>

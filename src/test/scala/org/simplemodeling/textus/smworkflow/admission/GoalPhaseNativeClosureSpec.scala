@@ -36,6 +36,31 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
     take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, _candidate,
       "checks-original", "review-original", O.ReviewOutcome.Accept)))
   }
+  "Planned Step closure authority" should {
+    "reuse a retained host program only for its enabled original plan and selected Step" in {
+      val policy = K.Policy("planned-commits", 1, Vector(K.StepProgram("S1", 1)))
+      val started = GoalPhaseNativeRun.Payload("participant", "/workspace", "main", _plan, _base,
+        plannedStepCommitPolicy = Some(policy))
+      val input = K.Input("session", "4", _plan.identity, _plan.revision, "S1", 1L, _base, _candidate, "review")
+      K.plannedAuthority(started, _plan, policy, true, input) shouldBe true
+      K.plannedAuthority(started, _plan, policy, false, input) shouldBe false
+      K.plannedAuthority(started.copy(plannedStepCommitPolicy = None), _plan, policy, true, input) shouldBe false
+      K.plannedAuthority(started, _plan, policy.copy(revision = 2), true, input) shouldBe false
+      K.plannedAuthority(started, _plan, policy, true, input.copy(planRevision = "2")) shouldBe false
+      K.plannedAuthority(started, _plan, policy, true, input.copy(step = "S2")) shouldBe false
+      val expanded = _plan.copy(revision = "2", steps = _plan.steps.updated(0,
+        _plan.steps.head.copy(ownedPaths = _paths :+ "src/another.scala")))
+      val later = input.copy(planRevision = "2")
+      K.plannedAuthority(started, expanded, policy, true, later) shouldBe true
+      val changedChecks = expanded.copy(steps = expanded.steps.updated(0, expanded.steps.head.copy(checks = Vector("compile"))))
+      K.plannedAuthority(started, changedChecks, policy, true, later) shouldBe false
+      val codec = GoalPhaseNativeRun.codec
+      codec.decode(codec.encode(started)) shouldBe Right(started)
+      val historical = started.copy(plannedStepCommitPolicy = None)
+      codec.decode(codec.encode(historical)) shouldBe Right(historical)
+    }
+  }
+
   "Qualified existing work closure v5" should {
     "bind the exact reviewed supplement without introducing commit intent or execution facts" in {
       Given("P611-CHECKPOINT-A-01: specification-owned adjacent supplement, checks and independent review history")

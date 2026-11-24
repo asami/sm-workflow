@@ -125,13 +125,14 @@ private[smworkflow] object GoalPhaseNativeWork {
         Vector(reference.identity, reference.revision).forall(text => _bounded_text(text) && !text.exists(_.isControl)))
       val dependency = DependencyDevelopmentDelivery.humanScopeApproval(value.choice) ||
         Set("RejectDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(value.choice)
-      val route = DependencyDevelopmentDelivery.routeChoices.contains(value.choice) == value.deliveryRoute.nonEmpty &&
+      val route = (value.choice == GoalPhasePolicyDependencyContinuation.choice ||
+        DependencyDevelopmentDelivery.routeChoices.contains(value.choice) == value.deliveryRoute.nonEmpty) &&
         value.deliveryRoute.forall(route => value.requestingResult != null &&
           value.requestingResult.dependencyProposal.exists(proposal =>
             DependencyDevelopmentDelivery.routeValid(route, value.choice, proposal)))
       val inventory = value.inventoryContinuation.forall(context =>
         GoalPhaseDependencyInventoryContinuation.contextValid(context) &&
-          DependencyDevelopmentDelivery.humanScopeApproval(value.choice) &&
+          DependencyDevelopmentDelivery.inventoryApproval(value.choice) &&
           value.decisionReference.contains(context.approval) && value.requestingResult != null &&
           value.requestingResult.dependencyProposal.exists(original =>
             GoalPhaseDependencyInventoryContinuation.assessC("context", context.proposal,

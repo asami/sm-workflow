@@ -88,6 +88,29 @@ live property nor answers an existing Human question.
 
 ## Connected qualification
 
+For a new authenticated Start, retain the configured consumer worktree route
+when the active managed dependency edge selects a project-private JAR and uses
+the default or explicit local worktree mode. At dependency admission, recheck the
+captured route against the selected Plan, concrete proposal and current host
+registration. Carry the route in the existing Phase-policy receipt for managed
+local delivery. An omitted route in historical Start or policy receipts retains
+the historical behavior. Existing external and assigned-chat rules still apply.
+
+Use the existing inventory continuation for a matching Phase-policy scope
+reference. When a literal restriction was selected, preserve it during the
+continuation. Necessary paths within the purpose and retained restrictions use
+the same mechanical append and source checks as a Human-admitted inventory.
+
+When the trusted host sets `sm-workflow.goal-phase.planned-step-commits` to
+`true`, Start retains the selected Step commit program policy. Ordinary Step
+closure can consume it for an original selected Step under the same Plan and
+current host program policy, including a Plan revision limited to necessary
+file inventory additions. Native candidate freshness, validation, review or
+formal Admission, Git permissions and commit intent/provenance still apply.
+Historical Starts and changed Plan/program bindings continue to use existing
+exact authority. Phase release, push and repository synchronization remain
+governed by their existing policies.
+
 PDP-09. Qualify through the actual installed public route:
 
 - Omitted/false keep external-repair and CLI policy disabled; already managed
