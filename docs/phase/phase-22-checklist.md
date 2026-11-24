@@ -49,6 +49,25 @@ evidence and accepted Steps. It does not retroactively condition that release.
       exercise the post-commit refusal for both tracked and untracked changes
       before B publication or A certification. Preserve the prior failures and
       the successful connected delivery result.
+- [ ] P22-12: [Caller results and on-demand diagnostics](phase-22.md#caller-results-and-on-demand-diagnostics)
+      remove `responseReference` and `stderrReference` and their handling
+      from invocation context, progress, caller handoffs and ordinary results.
+      A successful projection continues using the short structured fields in
+      its ordinary result. For a failed call, a read Operation returns
+      selected response fields or filtered diagnostics from the exact attempt
+      using the association recorded by the caller program at save time.
+      Verify that the read needs no AI-supplied file path, replay or Session
+      advance, and compare the AI-visible data and handoffs before and after.
+- [ ] P22-13: [Hygiene and related-project warnings](phase-22.md#hygiene-and-related-project-warnings)
+      inventory unresolved Hygiene from each target repository's `docs/journal`,
+      including items with no current warning. Apply the bounded selection in
+      the plan. Resolve selected Hygiene and build warnings, including selected
+      production and test compiler warnings. Attribute
+      fixes to their owning repositories, pass the affected producer checks,
+      and confirm the removed warnings in sm-workflow's connected validation
+      using the fixed artifacts.
+      Update the original Hygiene records and retain unselected or unresolved
+      items with their owners.
 
 Retain the Phase 8 origin Session and its 10/10 history. Planning this Phase
 changes neither that history nor any earlier successful or uncertain result.

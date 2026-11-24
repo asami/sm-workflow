@@ -48,6 +48,67 @@ commit cannot trigger publication or certify A. Retain the independently
 observed B failure and the passing connected delivery case. Record the original
 failed test results and complete the unfinished assertions during stabilization.
 
+## Caller results and on-demand diagnostics
+
+P22-12 removes redundant parameter handling to reduce the data the AI caller
+has to receive, retain and pass through each workflow call. In Phase 28.1's
+`projectSemanticWorkResult`, the caller carried the saved response and stderr
+paths in its shared invocation context and forwarded them with progress events.
+These paths describe the call's outputs.
+
+Remove `responseReference` and `stderrReference` from invocation context,
+intermediate progress, caller handoffs and ordinary return values. Remove the
+logic that copies or interprets these path parameters. Return the short values
+needed to continue, such as the outcome and next issued action, directly as
+structured fields. Keep the existing call and return indicators.
+
+When diagnosis requires more detail, query sm-workflow through a read
+Operation. Reuse `EvidenceService.readEvidenceRange` for bounded reads of
+managed Evidence and the selection model of
+`GoalPhaseService.resolveGoalPhaseDiagnosticInformation` for focused diagnosis.
+The latter operates on retained failed-check context for an issued RepairStep.
+For caller-owned `response.json` and `stderr.log`, connect the capture to
+managed Evidence at save time. The caller program associates the files with
+the exact invocation or attempt using the existing result or Evidence
+identity. The read Operation resolves that association without an
+AI-supplied filesystem path.
+Project only the requested data into a suitable format, for example selected
+response fields, a structured error summary or bounded matching stderr lines.
+The ordinary path completes without fetching those details. The read has no
+effect on Session progression or the original execution.
+
+Verify a successful projection can continue from its ordinary result alone.
+For a failed call, verify that the read Operation returns selected diagnostics
+from the exact attempt, including when a Session contains multiple attempts.
+Confirm both routes omit the path parameters throughout ordinary processing.
+Compare the information delivered to the AI and the required caller handoffs
+before and after on these cases so any reduction is grounded in observation.
+
+## Hygiene and related-project warnings
+
+P22-13 inventories Hygiene and build warnings in sm-workflow and the related
+projects that supply its build, validation or runtime. Identify the affected
+repositories and current warnings at stabilization start.
+Inventory every unresolved Hygiene entry in each in-scope repository's
+`docs/journal`, including entries unrelated to a current build warning.
+Reconcile duplicates and already-resolved items against current evidence.
+Select a bounded subset for this Phase under the existing
+[Phase 23 Hygiene policy](phase-23.md#hygiene-selection-during-stabilization-planning--2026-11-19).
+Record the selected items and their acceptance conditions. Keep unselected
+items open with their original owners.
+
+Attribute each warning to its emitting build step and producing repository.
+Prioritize compiler warnings in production and test sources, together with
+warning noise in the normal connected build and validation path. Fix selected
+warnings in the owning project or generator, under its existing configuration
+and validation route. Keep unrelated maintenance in its existing backlog.
+
+Pass the affected producers' build checks and confirm that the selected
+warnings are gone in sm-workflow's connected validation using the fixed
+artifacts. Update the original Hygiene dispositions with attributable
+results. Keep any unresolved Hygiene or warning explicit with its owner and
+reason.
+
 ## Selected residual work
 
 | Item | Work and acceptance boundary |
