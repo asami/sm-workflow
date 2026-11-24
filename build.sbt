@@ -111,6 +111,7 @@ lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."),
 lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(source.toURI))
 lazy val textusAiDevelopmentModule = "org.simplemodeling.textus" %% "textus-ai-runtime" % "0.2.3-SNAPSHOT"
 lazy val selectedTextusAiDependency = settingKey[ModuleID]("Selected task-private Textus AI dependency")
+lazy val phase251AllowanceFixtureJar = settingKey[Option[File]]("Verified task-private provider JAR for offline allowance fixtures")
 lazy val validateCncfSource = taskKey[Unit]("Validate the selected source dependency against the declared CNCF coordinates")
 lazy val validateCncfPublicationClasspath = taskKey[Unit]("Verify the normal attributed source JAR in the application publication closure")
 lazy val strictGeneratedQualification = settingKey[Boolean]("Explicitly qualify fresh B04 generated strict consumers")
@@ -355,6 +356,31 @@ lazy val root: Project = project
       labelledTestExecution := Defaults.inputTests(labelledTestExecution).evaluated
     )))
   .settings(
+    phase251AllowanceFixtureJar := {
+      val path = sys.env.get("SM_WORKFLOW_SPEC_P251_ALLOWANCE_JAR")
+      val expected = sys.env.get("SM_WORKFLOW_SPEC_P251_ALLOWANCE_SHA256")
+      (path, expected) match {
+        case (None, None) => None
+        case (Some(p), Some(hash)) if p.nonEmpty && hash.matches("[0-9a-fA-F]{64}") =>
+          val jar = file(p)
+          require(jar.isFile && jar.canRead, "P251 allowance fixture JAR must be a readable file")
+          val digest = java.security.MessageDigest.getInstance("SHA-256")
+          val input = new java.io.FileInputStream(jar)
+          try {
+            val buffer = new Array[Byte](8192)
+            var count = input.read(buffer)
+            while (count != -1) {
+              digest.update(buffer, 0, count)
+              count = input.read(buffer)
+            }
+          } finally input.close()
+          val actual = digest.digest().map(b => f"${b & 0xff}%02x").mkString
+          require(actual.equalsIgnoreCase(hash), "P251 allowance fixture JAR SHA-256 mismatch")
+          Some(jar)
+        case _ => sys.error("Set both P251 allowance fixture JAR and SHA-256, with a valid SHA-256")
+      }
+    },
+    Test / unmanagedJars ++= phase251AllowanceFixtureJar.value.toSeq.map(Attributed.blank),
     cozyDevelopmentProjectReferences := Some(Seq(
       ProjectReference(ProjectRef(thisProjectRef.value.build, "scalaLintRules"),
         Coordinate("org.simplemodeling", "scala-lint-rules_2.13", "0.1.0-SNAPSHOT"), "scalafix", "scalafix")
@@ -490,7 +516,12 @@ lazy val root: Project = project
     Test / unmanagedSources := {
       val strictspec = baseDirectory.value /
         "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"
-      (Test / unmanagedSources).value.filterNot(_ == strictspec)
+      val fixtureSources = Set(
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/Phase251OfflineAllowanceIntegrationSpec.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase251OfflineAllowanceFixture.scala"
+      )
+      (Test / unmanagedSources).value.filterNot(source =>
+        source == strictspec || (phase251AllowanceFixtureJar.value.isEmpty && fixtureSources(source)))
     },
     Test / compile := {
       val compiled = (Test / compile).value
