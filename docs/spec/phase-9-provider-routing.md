@@ -75,6 +75,25 @@ allocation at the UTC boundary and use the same reservation store for the
 participating callers. Traffic outside that store can still cause overage.
 Credential configuration alone supplies no allowance. The configured local
 provider remains available when OpenAI has no eligible allowance.
+
+For a daily reservation, the built-in Textus AI ledger settles a complete,
+valid provider usage observation bound to the dispatched request and response
+before application acceptance or rejection. It charges the observed input and
+output once and returns only the unused reservation to the original UTC-day
+scope. Identical settlement is idempotent; a conflicting repeat cannot reclaim
+more. Missing, malformed, mismatched or uncertain usage, uncertain dispatch,
+and a response arriving after the deadline retain the full reservation. Earlier
+reservations, claims and settlement history remain in the store. This applies
+to the built-in ledger-backed daily path; a custom authority has its own
+contract. Promotional credit remains a separate admission path and token usage
+does not imply a credit refund.
+
+The delivered provider behavior was exercised with offline fixtures, including
+concurrent admission, application rejection and ledger reconstruction. A
+separate process reopened the fixture database after test termination; the
+production application was not relaunched in that observation. Deadline closure
+was simulated directly rather than through an end-to-end caller interruption.
+These observations do not establish live provider or billing behavior.
 The bound response records the verified allowance admission separately from
 observed token usage and provider-reported cost. A successful allowance check
 does not supply an invoice amount.
