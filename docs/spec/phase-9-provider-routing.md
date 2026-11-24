@@ -76,6 +76,30 @@ participating callers. Traffic outside that store can still cause overage.
 Credential configuration alone supplies no allowance. The configured local
 provider remains available when OpenAI has no eligible allowance.
 
+### Provider-side admission evidence
+
+Public OpenAI documentation examined on 2026-11-25 describes the
+[complimentary-token policy](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai):
+the daily allocation is scoped by organization and model group, resets at UTC
+midnight, and a request crossing the cumulative daily limit is billed in full.
+The documented [spend limits](https://developers.openai.com/api/docs/guides/spend-limits)
+are monthly organization or project caps and may be exceeded while enforcement
+catches up. [Rate limits](https://developers.openai.com/api/docs/guides/rate-limits)
+limit request or token rates; the
+[Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
+reports usage after execution. These sources do not verify a free-only
+pre-dispatch admission control for the exact organization, model group and UTC
+day, including concurrent callers. This is a documentation assessment, not a
+live quota-boundary or concurrency test or a claim about an invoice.
+
+Consequently, the built-in daily path continues to reserve the request-sized
+bound locally before ordinary review and bounded repair dispatch, including the
+configured margin and outstanding reservations. Usage reporting alone cannot
+replace admission. Continue retaining the request claim, usage and outcome; a
+reservation-free path would require verified pre-dispatch enforcement at the
+quota boundary under concurrency. The separate verified promotional-credit
+policy remains unchanged.
+
 For a daily reservation, the built-in Textus AI ledger settles a complete,
 valid provider usage observation bound to the dispatched request and response
 before application acceptance or rejection. It charges the observed input and

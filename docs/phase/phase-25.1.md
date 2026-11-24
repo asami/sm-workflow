@@ -51,6 +51,15 @@ can charge the whole request that crosses the daily limit. Usage reporting
 alone does not qualify as free-only admission. Deliver request-sized reservation
 and settlement when no such admission mechanism is verified.
 
+The public provider documentation examined on 2026-11-25 does not establish
+such pre-dispatch enforcement for the selected organization, model group and
+UTC day under concurrent requests. The documented monthly spend caps can be
+exceeded before enforcement takes effect, and rate limits and post-execution
+usage reporting do not enforce the daily complimentary-token boundary. The
+[routing evidence](../spec/phase-9-provider-routing.md#provider-side-admission-evidence)
+therefore retains local request-sized admission, usage and outcomes. No live
+quota-boundary or concurrent billing test was authorized or performed.
+
 ### P251-04 — Qualify the ordinary Task API routes
 
 Use offline provider fixtures for review, bug repair, concurrent requests,
