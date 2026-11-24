@@ -58,3 +58,20 @@ worktree. The same path covers a later manual RepositorySync after a failed
 automatic sync. Keep failed or uncertain syncs and unsafe worktrees intact;
 local Phase closure remains independent. This moves the schedule only;
 implementation and existing worktrees are unchanged.
+
+## Daily allowance and Codex completion metrics — 2026-11-24 (Asia/Tokyo)
+
+The adopted order is **[25](../../../phase/phase-25.md) →
+[28.1](../../../phase/phase-28.1.md) → [25.1](../../../phase/phase-25.1.md) →
+[25.2](../../../phase/phase-25.2.md) → [7.2](../../../phase/phase-7.2.md) →
+[18](../../../phase/phase-18.md)**. This supersedes the immediate-predecessor
+sequence in the previous entry; Phase 7.2 still opens the stabilization group.
+The rest of the roadmap remains in the same order.
+
+Phase 25.1 retains the separate OpenAI daily free-allowance reservation and
+settlement scope. The user put Phase 25.2 immediately after it: ordinary
+sm-workflow completion posts two tables directly in the initiating Codex
+chat, covering actual AI calls by engine, configured route, thinking mode and
+level, and retained deterministic repairs by tool (Scalafix, Metals, other).
+Configured route does not establish billing. This records scope and order only;
+it starts no execution and changes no existing acceptance or Session.
