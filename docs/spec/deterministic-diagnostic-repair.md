@@ -33,7 +33,89 @@ fields are invalid. `enabled` defaults to true; `timeoutMillis` defaults to 1000
 `maxReplacementChars` to 65536 (0–1048576). Optional `serverIdentity` is a logical
 registration name, not a path or execution authority. Enabling policy grants no
 execution or workspace authority. An explicit `enabled: false` disables the route.
-Runtime integration and installed-server qualification belong to later steps.
+The ordinary Phase repair route consumes this policy as described below. Host
+registration remains separate from project configuration.
+
+## Fixed Metals process and ordinary repair
+
+After the existing native compiler recipe has declined a failed Compile or
+TestCompile candidate, ordinary repair can request a Metals code action. It
+authenticates the retained typed failed check, one compiler diagnostic, the
+selected Step's literal source ownership, staged UTF-8 blob, regular file mode,
+repository identity and identical worktree bytes through `compilerMaterialC`.
+Only the supported diagnostic shape proceeds to the provider. Existing compiler
+repair, rollback, retry accounting, candidate inspection and selected validation
+continue through their normal paths.
+
+The production rule selects the Scala action introduced in
+[Metals 1.5.3](https://scalameta.org/metals/blog/2025/05/13/strontium/#remove-invalid-imports-code-action)
+and implemented by [RemoveInvalidImportQuickFix](https://github.com/scalameta/metals/pull/7416).
+The admitted subset is one unindented, simple qualified import, such as
+`import scala.DoesNotExist`, followed immediately by LF. A complete Scala 2
+diagnostic must identify `object DoesNotExist is not a member of package scala`,
+echo that exact line and point its caret at either the package owner start or
+the missing final name start. The original diagnostic range must match that
+observed caret; the LSP range separately covers the missing final name. Only blank,
+simple package, simple import and closed header comments can precede it. Aliases, selector groups,
+wildcards, comments, CRLF and other source shapes use ordinary repair. The action
+must have kind `quickfix`, title `Remove invalid import of 'DoesNotExist'`, one
+edit deleting exactly that import line including LF, and no command, unresolved
+data, annotation, resource operation or other edit. Scala 3.3.8 also admits the literal missing qualifier form
+`import MissingPackage.Member` only when the E006 header, URI, source echo,
+caret span and missing-name message authenticate that exact qualifier. Its
+normalized Metals selection covers the missing qualifier; the same exact
+whole-line deletion and candidate-bound transaction apply. Competing eligible actions
+yield no proposal. The diagnostic, title and edit are checked together; the
+title alone is insufficient. Java-only missing-override actions are excluded.
+
+`serverIdentity: scala-metals-1-5-3` selects the supported logical provider.
+The host must separately register capability `sm-workflow-metals` for this
+Component with one fixed executable recipe, the shipped
+`sm-workflow-metals-bridge.py` companion itself as the absolute `executable`,
+with `fixedArguments: []`, `argumentTemplates: [[]]`, no caller working
+directory, input files, resource trees or output artifacts. The companion's
+explicit `#!/usr/bin/python3` shebang and installed mode 0755 are part of this
+fixed payload contract. Registering a generic Python interpreter with the
+companion as an argument is rejected by CNCF's direct-effect policy. The host
+fixes `SM_WORKFLOW_METALS_SERVER` to an absolute executable wrapper for its
+chosen provider. The wrapper receives no caller arguments. The companion is
+included in the component's `META-INF/sm-workflow` source distribution; this does
+not install it or change a shared CLI. Host registration and deployment are
+explicit prerequisites, and no direct process fallback bypasses admission.
+
+The component submits one finite JSON input through protected CNCF
+`process_exec`. Input and stdout are limited to 1 MiB each, stderr to 64 KiB and
+the WorkArea to 4 MiB. The whole LSP exchange shares `timeoutMillis`; CNCF adds a
+bounded launch and termination allowance. The companion starts the host-fixed
+provider with an isolated temporary directory inside the CNCF WorkArea. It writes
+only the selected source as `Main.scala`, opens that URI, negotiates UTF-16 and
+literal code actions, and requests only quick fixes. It never copies a build or
+imports a repository. Server requests, including `workspace/applyEdit` and command
+execution, receive an unsupported-operation response. Frame size, cumulative
+provider output, frame count and JSON fields are bounded. Provider edits must
+name the isolated opened URI before translation; an edit naming the original
+candidate URI directly is incompatible. Scala then applies its exact rule and
+native source admission to the translated proposal.
+
+The companion closes the document, sends shutdown and exit within the same
+deadline, terminates and waits for the provider process group, closes pipes and
+removes its isolated directory. CNCF retains ownership of the outer process
+lifecycle and WorkArea. A missing provider, deadline, incompatible encoding or
+framing, unsupported action or disabled configuration produces no patch.
+Admission rejection is distinct from an uncertain process effect. Native intent
+and result receipts retain the candidate/check relationship, typed outcome and
+bounded actual captures. An intent without a result, or unconfirmed termination,
+pauses the original attempt and cannot redispatch it.
+
+An eligible proposal passes the existing native file update, candidate admission
+and revalidation. Replay checks the same pure allowlisted transformation against
+the original authenticated diagnostic and bytes without contacting the provider.
+Failed revalidation uses the existing exact rollback and ordinary repair route.
+`DeterministicRepairSpec` contains controlled-LSP subprocess cases using the
+production companion and CNCF admission, including normal lifecycle, timeout,
+encoding and framing failures, direct candidate URI, unowned edits, commands,
+ambiguity and unavailable provider. These fixtures do not establish a deployed
+Metals build connection; qualification against real projects is post-release.
 
 ## Native terminal LF proposal
 
@@ -95,8 +177,8 @@ state for resolution. The runtime makes at most one automatic compiler
 correction attempt per Step in this initial route and preserves the normal
 repair budget and independent review.
 
-The Phase route supports the narrow Circe correction above. The Scala
-terminal-LF proposal, Metals transport and formatter/Scalafix actions have
+The Phase route supports the narrow Circe correction above and the configured
+Metals route. The Scala terminal-LF proposal and formatter/Scalafix actions have
 separate producer and qualification requirements. Installed tools, deployed
 project behavior and operational savings are checked after release.
 
@@ -151,8 +233,8 @@ these fixtures. Selected validation 1022 on tree
 and FixCheck.
 
 The standalone terminal-LF proposal test does not establish runtime application
-of that action. A production provider seam for deployed Metals remains incomplete;
-the transport fixture does not establish actual server behavior. The adopted
+of that action. A fixed, admitted provider seam is implemented above; the controlled
+transport fixture does not establish actual deployed server behavior. The adopted
 Plan defers qualification against deployed tools and real Scala 2.12/3 projects,
 and production latency and AI-avoidance measurements. No Phase completion is
 claimed by this local qualification.

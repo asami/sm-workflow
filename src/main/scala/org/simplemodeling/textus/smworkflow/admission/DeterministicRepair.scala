@@ -17,7 +17,7 @@ import scala.util.Try
 
 /** Producer-neutral, revision-bound proposals. Admission does not apply edits.
   * @since   Nov. 22, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DeterministicRepair {
@@ -489,10 +489,23 @@ private[smworkflow] object DeterministicRepair {
       if root.resolve(transaction.path).toString == finding.reportedPath && transaction.validationReference == reference
       rendered <- _compiler_patch(finding, document, reference).toOption
     } yield rendered
+    val metalsproof = for {
+      finding <- compilerLocator(validation.payload)
+      root <- Try(Path.of(session.started.receipt.payload.value.root).normalize).toOption
+      if root.resolve(transaction.path).toString == finding.path &&
+        java.util.Objects.equals(transaction.validationReference, validation.record.revision.value.toString + ":" + finding.checkIdentity)
+      document = Document(root.resolve(transaction.path).toUri.toString, transaction.candidate, 0, transaction.expected)
+      point = Position(finding.line - 1, finding.column - 1)
+      diagnostic = Diagnostic("scala-compiler", document.uri, document.revision, 0, "compiler-error", Range(point, point), finding.message)
+      material = CompilerMaterial(transaction.session, transaction.sourceRevision, transaction.candidate,
+        transaction.validationReference, transaction.path, transaction.workspace, document, diagnostic)
+      rendered <- ScalaMetalsRepair.productionRendered(material)
+    } yield rendered
     _retained_prefix(validation.record, source) && _retained_prefix(candidate.record, validation.record) &&
       candidate.payload.candidate.contains(validation.payload.candidate) && transaction.candidate == validation.payload.candidate.tree &&
       candidate.payload.step == validation.payload.step && owned.contains(transaction.path) &&
-      (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(transaction.path: String) && proof.contains(transaction.patched)
+      (GoalPhaseNativeCandidate.workPaths(candidate.payload): Vector[String]).contains(transaction.path: String) &&
+      (proof.contains(transaction.patched) || metalsproof.contains(transaction.patched))
   }
 
   /** Caller supplies the admitted source. An unknown intent is never replayed. */

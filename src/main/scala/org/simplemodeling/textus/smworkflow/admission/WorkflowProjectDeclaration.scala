@@ -13,7 +13,7 @@ import org.simplemodeling.scalalint.ScalaLintProfiles
 /** Read ordinary project declarations through the owning runtime's resource reader.
   * Optional discovery grants no file access and never executes a build definition.
   * @since   Nov.  9, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowProjectDeclaration {
@@ -100,6 +100,9 @@ private[smworkflow] object WorkflowProjectDeclaration {
     } yield policy
     parsed.fold(message => Consequence.configurationInvalid("project.yaml Metals policy: " + message), Consequence.success)
   }
+
+  def metalsTextC(value: Option[String]): Consequence[ScalaMetalsRepair.Policy] =
+    value.fold(Consequence.success(ScalaMetalsRepair.Policy()))(_decode_yaml_c(_).flatMap(metalsPolicyC))
 
   def lintTextC(value: Option[String]): Consequence[LintPolicy] =
     value.fold(Consequence.success(LintPolicy.default))(_decode_yaml_c(_).flatMap(lintPolicyC))

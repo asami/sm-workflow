@@ -2093,6 +2093,31 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         Consequence.unit else F.invalid("historical phase dependency binding was removed or changed")
       following <- GoalPhaseNativeHistory.nextC(source.current, cursor.from)
       located <- following match {
+        case Some(entry) if (entry.causation.value: String) == (ScalaMetalsProcess.intentCause: String) => for {
+          context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
+            .getOrElse(F.invalid("Metals attempt has no failed Step"))
+          (step, candidate, validation) = context
+          saved <- ScalaMetalsProcess.retainedC(source, core, cursor.from)
+          value = saved.value
+          locator = DeterministicRepair.compilerLocator(validation.payload)
+          previous <- ScalaMetalsProcess.attemptSinceC(source, core, cursor.from, validation.record,
+            step.identity, value.candidate, value.validationReference)
+          _ <- if ((cursor.controller.stage: O.Stage) == (O.Stage.Repair: O.Stage) &&
+              value.step == step.identity && candidate.payload.candidate.exists(_.tree == value.candidate) &&
+              locator.exists { finding =>
+                val expectedReference: String = validation.record.revision.value.toString + ":" + finding.checkIdentity
+                expectedReference.equals(value.validationReference)
+              } &&
+              previous.isEmpty && !cursor.deterministicRepairs.contains(step.identity) &&
+              saved.value.proposal.forall(proposal => DeterministicRepair.matchesCompilerSource(source, cursor.from,
+                candidate, validation, proposal, step.ownedPaths.toSet))) Consequence.unit
+            else F.invalid("Metals attempt crosses failed candidate or allowlisted source")
+          result <- value.outcome match {
+            case None | Some("unknown") => _paused_c(source, cursor, "Metals process outcome remains UNKNOWN; no redispatch.")
+            case Some(_) => _walk_c(source, cursor.copy(from = saved.record),
+              soughtwork, soughthuman, soughtrecording, core, historyonly)
+          }
+        } yield result
         case Some(entry) if (entry.causation.value: String) == (BoundedCompilerSupport._compiler_intent_cause: String) => for {
           context <- DeterministicRepair.stepContext(cursor.controller, cursor.candidate, cursor.validation).map(Consequence.success)
             .getOrElse(F.invalid("bounded compiler attempt has no failed Step"))
@@ -3599,8 +3624,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Repair =>
         DeterministicRepair.attemptCompilerC(source, d, core, cursor.from, cursor.controller,
           cursor.candidate, cursor.validation, cursor.deterministicRepairs).flatMap {
-          case None => BoundedCompilerSupport.executeC(source, cursor, core, d,
-            _semantic_frontier_c(source, cursor, core), _after_native_c(source, cursor, _, core))
+          case None => ScalaMetalsProcess.repairC(source, cursor.from, cursor.controller, cursor.candidate, cursor.validation,
+            cursor.deterministicRepairs.keySet, core, d,
+            BoundedCompilerSupport.executeC(source, cursor, core, d,
+              _semantic_frontier_c(source, cursor, core), _after_native_c(source, cursor, _, core)),
+            _after_native_c(source, cursor, _, core))
           case Some(saved) => F.waitC(saved.record, "Deterministic correction observed", "Continue using the retained file update outcome.")
             .flatMap(_after_native_c(source, cursor, _, core))
         }

@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Executable specification for bounded diagnostic proposals.
   * @since   Nov. 22, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,9 +32,295 @@ import SplitPhaseExplicitPartitionFixture.take
 final class DeterministicRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _compiler_path = "src/main/scala/RepairExample.scala"
 
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
-    super.process_plan(root, scenario, goal).mapObject(fields => fields.add("sbtPrograms",
+  override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
+    super._prepare_sbt_build_(root, scenario)
+    if (Files.exists(root.resolve("scala3-fixture"))) {
+      val build = root.resolve("repository/build.sbt")
+      Files.writeString(build, Files.readString(build).replace("2.12.18", "3.3.8"))
+    }
+  }
+
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
+    val plan = super.process_plan(root, scenario, goal).mapObject(fields => fields.add("sbtPrograms",
       fields("sbtPrograms").getOrElse(fail("sbtPrograms absent")).mapArray(_.map(_.mapObject(_.add("operation", Json.fromString("compile")))))))
+    val server = root.resolve("metals-fixture-server")
+    if (!Files.isRegularFile(server)) plan else {
+      val companion = Path.of("scripts/sm-workflow-metals-bridge.py").toRealPath()
+      Files.isExecutable(companion) shouldBe true
+      val limits = Json.obj(Vector("launchTimeoutMillis" -> 5000L, "executionTimeoutMillis" -> 70000L,
+        "terminationGraceMillis" -> 1000L, "stdinBytes" -> 1048576L, "stdoutBytes" -> 1048576L,
+        "stderrBytes" -> 65536L, "argumentCount" -> 16L, "argumentBytes" -> 4096L,
+        "artifactCount" -> 1L, "artifactBytes" -> 1L, "workAreaBytes" -> 4194304L).map((key, value) => key -> Json.fromLong(value))*)
+      val program = Json.obj("capability" -> Json.fromString(ScalaMetalsProcess.capability),
+        "identity" -> Json.fromString("controlled-metals-companion"), "executable" -> Json.fromString(companion.toString),
+        "fixedArguments" -> Json.arr(),
+        "argumentTemplates" -> Json.arr(Json.arr()), "limits" -> limits,
+        "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin"),
+          "SM_WORKFLOW_METALS_SERVER" -> Json.fromString(server.toString),
+          "METALS_FIXTURE_TRACE" -> Json.fromString(root.resolve("metals.trace").toString),
+          "METALS_FIXTURE_MODE" -> Json.fromString(Files.readString(root.resolve("metals.mode")))),
+        "allowedArtifacts" -> Json.arr(), "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False)
+      val programs = plan.hcursor.get[Vector[Json]]("programs").toOption.getOrElse(Vector.empty)
+      val grants = plan.hcursor.get[Vector[Json]]("grants").toOption.getOrElse(fail("grants absent")).map { grant =>
+        val capabilities = grant.hcursor.get[Vector[Json]]("capabilities").toOption.getOrElse(fail("capabilities absent"))
+        grant.mapObject(_.add("capabilities", Json.fromValues(capabilities :+ Json.fromString(ScalaMetalsProcess.capability))))
+      }
+      plan.mapObject(_.add("programs", Json.fromValues(programs :+ program)).add("grants", Json.fromValues(grants)))
+    }
+  }
+
+  private def _metals_material(column: Int = 7): CompilerMaterial = {
+    val source = "import scala.DoesNotExist\nobject A\n"
+    val uri = "file:///work/src/main/scala/A.scala"
+    val point = Position(0, column)
+    val message = s"[error] /work/src/main/scala/A.scala:1:${column + 1}: object DoesNotExist is not a member of package scala\n" +
+      "[error] import scala.DoesNotExist\n[error] " + (" " * column) + "^"
+    val document = Document(uri, "a" * 40, 0, source)
+    CompilerMaterial("fixture-session", "12", document.revision, "11:compile", "src/main/scala/A.scala",
+      "sm-workflow-repository", document, Diagnostic("scala-compiler", uri, document.revision, 0,
+        "compiler-error", Range(point, point), message))
+  }
+
+  private val _metals_server_source = """#!/usr/bin/python3
+import json, os, sys, time
+from pathlib import Path
+trace = Path(os.environ["METALS_FIXTURE_TRACE"])
+mode = os.environ["METALS_FIXTURE_MODE"]
+def log(value):
+    with trace.open("a") as stream:
+        stream.write(value + "\n")
+log("pid:" + str(os.getpid()))
+log("cwd:" + str(Path.cwd()))
+uri = None
+version = None
+missing = "DoesNotExist"
+while True:
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        if line == b"\r\n":
+            break
+        if line.lower().startswith(b"content-length:"):
+            length = int(line.split(b":", 1)[1])
+    message = json.loads(sys.stdin.buffer.read(length))
+    method = message["method"]
+    log(method)
+    if method == "exit":
+        sys.exit(0)
+    if method == "textDocument/didOpen":
+        document = message["params"]["textDocument"]
+        uri, version = document["uri"], document["version"]
+        missing = "MissingPackage" if "import MissingPackage.Member" in document["text"] else "DoesNotExist"
+        if document["text"] != Path(uri.removeprefix("file://")).read_text():
+            sys.exit(2)
+    if "id" not in message:
+        continue
+    if method == "initialize":
+        encoding = "utf-8" if mode == "encoding" else "utf-16"
+        result = {"capabilities": {"codeActionProvider": True, "positionEncoding": encoding}}
+    elif method == "shutdown":
+        result = None
+    elif method == "textDocument/codeAction":
+        if mode == "timeout":
+            time.sleep(10)
+        if mode == "framing":
+            sys.stdout.buffer.write(b"Content-Length: 99999999\r\n\r\n")
+            sys.stdout.buffer.flush()
+            continue
+        target = uri if mode != "unowned" else "file:///other.scala"
+        if mode in ("original-uri", "original-legacy-uri"):
+            target = "file:///work/src/main/scala/A.scala"
+        row = message["params"]["range"]["start"]["line"]
+        edit = {"range": {"start": {"line": row, "character": 0}, "end": {"line": row + 1, "character": 0}}, "newText": ""}
+        action = {"title": "Remove invalid import of '" + missing + "'", "kind": "quickfix",
+                  "edit": {"documentChanges": [{"textDocument": {"uri": target, "version": version}, "edits": [edit]}]}}
+        if mode == "original-legacy-uri":
+            action["edit"] = {"changes": {target: [edit]}}
+        if mode == "command":
+            action["command"] = {"command": "execute-arbitrary"}
+        result = [action, action] if mode == "ambiguous" else [action]
+    else:
+        sys.exit(3)
+    body = json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}).encode()
+    sys.stdout.buffer.write(b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+    sys.stdout.buffer.flush()
+"""
+
+  "The fixed Metals production route" should {
+    "apply the exact subprocess proposal through ordinary Step admission and real Scala 2 and 3 revalidation without AI" in {
+      Vector(false, true).foreach { scala3 =>
+      Given("an isolated native Phase with a configured fixed Metals recipe and one invalid import")
+      val parent = Files.createDirectories(Path.of("target/sm-workflow/work/metals-native").toAbsolutePath)
+      val root = Files.createTempDirectory(parent, if (scala3) "scala3-" else "scala2-").toRealPath()
+      if (scala3) Files.writeString(root.resolve("scala3-fixture"), "3.3.8")
+      val server = root.resolve("metals-fixture-server")
+      Files.writeString(server, _metals_server_source)
+      server.toFile.setExecutable(true) shouldBe true
+      Files.writeString(root.resolve("metals.mode"), "completed")
+      val input = V.GoalPhaseStartInput("native-metals-fixture", "sm-workflow")
+      val check = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+      val paths = Vector(_compiler_path, "project.yaml")
+      val normal = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = normal.copy(goal = normal.goal.copy(input = input, candidatePaths = paths,
+        stepValidation = normal.goal.stepValidation.copy(checks = Vector(check)),
+        phaseValidation = normal.goal.phaseValidation.copy(checks = Vector(check))))
+      val plan = GoalPhaseOrderedProgression.Plan("fixture-native-metals", "1", input.phaseIdentity, input.repositoryIdentity,
+        Vector(GoalPhaseOrderedProgression.Step("step-1", "Remove one invalid literal Scala import", paths, Vector.empty,
+          Vector(check.identity))), Vector(check.identity), repairLimit = 4)
+      _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
+        prepare(call => for {
+          _ <- call.setupC(_setup_commands_(root, "Goal").size)
+          selection = _goal_selection_(input, "fixture-native-metals-selection", "fixture-native-metals-start")
+          _ <- call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input),
+            selection.participantIdentity), Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selection))))
+          _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+            take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId, selection.participantIdentity, plan)))))
+        } yield ())
+        def _invoke_[A: ValueReader](operation: String, properties: List[Property]): A =
+          read_value[A](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor)))
+        val started = _invoke_[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(input))
+        def _advance_(): V.GoalPhaseAdvanceResult = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase",
+          NativeWorkflowOperationInputFixture.advance(started.sessionId))
+        _advance_().work.map(_.kind) shouldBe Some("ImplementStep")
+        val source = root.resolve("repository").resolve(_compiler_path)
+        Files.createDirectories(source.getParent)
+        val invalidImport = if (scala3) "import MissingPackage.Member" else "import scala.DoesNotExist"
+        Files.writeString(source, invalidImport + "\nobject RepairExample {}\n")
+        Files.writeString(root.resolve("repository/project.yaml"),
+          "validation:\n  metals:\n    enabled: true\n    serverIdentity: scala-metals-1-5-3\n    timeoutMillis: 1000\n")
+        val result = V.GoalPhaseWorkResult("completed", "Fixture invalid import", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        val reference = V.WorkflowArtifactReference("native-metals-implementation", "1")
+        _invoke_[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", List(Property("sessionId", started.sessionId, None),
+          Property("result", result.toRecord(), None), Property("resultReference", reference.toRecord(), None))).accepted shouldBe true
+        When("ordinary Advance authenticates the compiler error and uses the production process transport")
+        _advance_()
+        val resumed = _advance_()
+        Then("the native file update is revalidated and the same Step reaches independent review")
+        resumed.work.map(_.kind) shouldBe Some("ReviewStep")
+        Files.readString(source) should not include invalidImport
+        Files.readString(source).linesIterator.toVector.lastOption shouldBe Some("object RepairExample {}")
+        var causes = Vector.empty[String]
+        prepare(call => call.goalCurrentC(InstanceIdentity(started.sessionId)).map(current =>
+          { causes = current.history.map(_.causation.value); () }))
+        causes.count(value => java.util.Objects.equals(value, ScalaMetalsProcess.intentCause)) shouldBe 1
+        causes.count(value => java.util.Objects.equals(value, "ordered-scala-metals:result")) shouldBe 1
+        causes.count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+        causes should not contain "ordered-bounded-compiler:intent"
+        Files.readString(root.resolve("metals.trace")).linesIterator.count(value => java.util.Objects.equals(value, "textDocument/codeAction")) shouldBe 1
+      }
+      }
+    }
+
+    "admit only the authenticated whole-line invalid-import deletion" in {
+      Given("a persisted Scala 2 compiler diagnostic and the exact staged import")
+      val material = _metals_material()
+      val output = material.diagnostic.message + "\n[error] one error found\n[error] (Compile / compileIncremental) Compilation failed\n"
+      val bytes = output.getBytes(UTF_8).toVector
+      val check = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(1),
+        ProcessExecutionCapture(bytes, bytes.size.toLong, false), ProcessExecutionCapture(Vector.empty, 0L, false),
+        Vector.empty, 1L, "controlled-scala2-compile")
+      val receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(1), output, "",
+        Some(WorkflowSbtValidation.Facts(check.kind, WorkflowSbtValidation.Outcome.Failed, None, None)), Some(process))
+      val payload = GoalPhaseNativeValidation.Payload("1", "step-1", GoalPhaseOrderedProgression.Snapshot("b" * 40, material.candidate),
+        Vector(check), Vector(receipt), Some("repair-required"))
+      compilerLocator(payload).map(finding => (finding.path, finding.line, finding.column)) shouldBe
+        Some(("/work/src/main/scala/A.scala", 1, material.diagnostic.range.start.character + 1))
+      val diagnostic = ScalaMetalsRepair.productionDiagnostic(material).getOrElse(fail("expected supported compiler evidence"))
+      val range = Json.obj("start" -> Json.obj("line" -> Json.fromInt(0), "character" -> Json.fromInt(0)),
+        "end" -> Json.obj("line" -> Json.fromInt(1), "character" -> Json.fromInt(0)))
+      val action = Json.obj("title" -> Json.fromString("Remove invalid import of 'DoesNotExist'"), "kind" -> Json.fromString("quickfix"),
+        "edit" -> Json.obj("changes" -> Json.obj(material.document.uri -> Json.arr(Json.obj("range" -> range, "newText" -> Json.fromString(""))))))
+      When("the real allowlist receives the exact upstream action shape")
+      val proposal = ScalaMetalsRepair.productionTransaction(material, ScalaMetalsRepair.Policy(), Json.arr(action))
+      Then("the pure replay transformation deletes exactly the import and preserves all remaining bytes")
+      proposal.map(_.patched) shouldBe Some("object A\n")
+      ScalaMetalsRepair.productionRendered(material) shouldBe proposal.map(_.patched)
+      diagnostic.message shouldBe "object DoesNotExist is not a member of package scala"
+      val selector = material.document.text.indexOf("DoesNotExist")
+      diagnostic.range shouldBe Range(Position(0, selector), Position(0, selector + "DoesNotExist".length))
+      ScalaMetalsRepair.productionRendered(_metals_material(selector)) shouldBe proposal.map(_.patched)
+      When("the title, kind, source, diagnostic or number of eligible actions differs")
+      Then("the production gate returns no transaction")
+      for (column <- Vector(0, 6, 8, 12, 14, 23)) {
+        ScalaMetalsRepair.productionRendered(_metals_material(column)) shouldBe None
+      }
+      ScalaMetalsRepair.productionRendered(material.copy(diagnostic = material.diagnostic.copy(
+        range = Range(Position(0, selector), Position(0, selector))))) shouldBe None
+      ScalaMetalsRepair.productionTransaction(material, ScalaMetalsRepair.Policy(), Json.arr(action, action)) shouldBe None
+      for ((field, value) <- Vector("title" -> Json.fromString("other"), "kind" -> Json.fromString("refactor"), "command" -> Json.obj())) {
+        ScalaMetalsRepair.productionTransaction(material, ScalaMetalsRepair.Policy(), Json.arr(action.mapObject(_.add(field, value)))) shouldBe None
+      }
+      for (source <- Vector(" " + material.document.text, material.document.text.replace("DoesNotExist", "Other"),
+          material.document.text.replace("DoesNotExist\n", "DoesNotExist // comment\n"), "/*\n" + material.document.text + "*/\n")) {
+        ScalaMetalsRepair.productionRendered(material.copy(document = material.document.copy(text = source))) shouldBe None
+      }
+      ScalaMetalsRepair.productionRendered(material.copy(diagnostic = material.diagnostic.copy(message =
+        material.diagnostic.message.replace("package scala", "package other")))) shouldBe None
+      ScalaMetalsRepair.productionRendered(material.copy(document = material.document.copy(revision = "b" * 40))) shouldBe None
+    }
+
+    "use the admitted finite-input companion with a controlled LSP process and confirmed cleanup" in {
+      for (mode <- Vector("completed", "timeout", "encoding", "framing", "original-uri", "original-legacy-uri", "unowned", "command", "ambiguous", "unavailable")) {
+        Given("one fixture-owned fixed capability and an isolated subprocess with bounded stdio")
+        val parent = Files.createDirectories(Path.of("target/sm-workflow/work/metals-process").toAbsolutePath)
+        val root = Files.createTempDirectory(parent, mode + "-").toRealPath()
+        val server = root.resolve("metals-fixture-server")
+        Files.writeString(server, _metals_server_source)
+        server.toFile.setExecutable(true) shouldBe true
+        Files.writeString(root.resolve("metals.mode"), mode)
+        val material = _metals_material()
+        val policy = ScalaMetalsRepair.Policy(timeoutMillis = 1000, serverIdentity = Some(ScalaMetalsProcess.serverIdentity))
+        val request = take(ScalaMetalsProcess.requestC(material, policy))
+        request.arguments shouldBe empty
+        request.workingDirectory shouldBe None
+        request.resourceTrees shouldBe empty
+        request.inputFiles shouldBe empty
+        request.validateC.isSuccess shouldBe true
+        var observation = Option.empty[ProcessExecutionResult]
+        _with_runtime_(root, "Goal") { (_, _, _, prepare) =>
+          if (mode == "unavailable") Files.delete(server)
+          When("the owning UoW invokes the production protected process route")
+          prepare(call => ScalaMetalsProcess.metalsAttemptC(call.core, request).map {
+            case ScalaMetalsProcess.MetalsAttempt.Observed(result) => observation = Some(result)
+            case other => fail(other.toString)
+          })
+        }
+        val actual = observation.getOrElse(fail("expected actual process observation"))
+        actual.termination shouldBe ProcessExecutionTermination.Exited(0)
+        val initial = ScalaMetalsProcess.Attempt(material.session, material.sourceRevision, "step-1", material.candidate,
+          material.validationReference, None, None, None, None)
+        val outcome = ScalaMetalsProcess.complete(initial, material, policy, actual)
+        Then("the retained typed result reports the actual outcome and never admits unsupported edits")
+        val expected = mode match {
+          case "completed" => "completed"
+          case "timeout" => "timed-out"
+          case "encoding" | "framing" | "original-uri" | "original-legacy-uri" => "incompatible"
+          case "unavailable" => "unavailable"
+          case _ => "no-action"
+        }
+        outcome.outcome shouldBe Some(expected)
+        outcome.proposal.map(_.patched) shouldBe Option.when(mode == "completed")("object A\n")
+        ScalaMetalsProcess.codec.decode(ScalaMetalsProcess.codec.encode(outcome)) shouldBe Right(outcome)
+        if (mode != "unavailable") {
+          val trace = Files.readString(root.resolve("metals.trace")).linesIterator.toVector
+          val pid = trace.collectFirst { case value if value.startsWith("pid:") => value.stripPrefix("pid:").toLong }
+            .getOrElse(fail("expected child pid observation"))
+          java.lang.ProcessHandle.of(pid).isPresent && java.lang.ProcessHandle.of(pid).get.isAlive shouldBe false
+          val cwd = trace.collectFirst { case value if value.startsWith("cwd:") => Path.of(value.stripPrefix("cwd:")) }
+            .getOrElse(fail("expected isolated cwd"))
+          cwd should not be root.resolve("repository")
+          Files.exists(cwd) shouldBe false
+          if (Set("completed", "unowned", "command", "ambiguous")(mode))
+            trace.takeRight(3) shouldBe Vector("textDocument/didClose", "shutdown", "exit")
+        }
+      }
+    }
+  }
 
   private def _compiler_fixture_reply(request: AiRecordRequest, crossSource: Boolean = false): Record = {
     val packet = io.circe.parser.parse(request.prompt.substring(request.prompt.lastIndexOf('\n') + 1))

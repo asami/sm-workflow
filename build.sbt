@@ -605,7 +605,9 @@ lazy val root: Project = project
       }
       val installer = baseDirectory.value / "scripts" / "sm-workflow-tools.py"
       if (!installer.isFile) sys.error("Missing component-owned skill installer: " + installer)
-      skills ++ contracts ++ agents ++ Seq(installer -> "install-sm-workflow.py")
+      val metalsBridge = baseDirectory.value / "scripts" / "sm-workflow-metals-bridge.py"
+      if (!metalsBridge.isFile) sys.error("Missing bounded Metals companion: " + metalsBridge)
+      skills ++ contracts ++ agents ++ Seq(installer -> "install-sm-workflow.py", metalsBridge -> "sm-workflow-metals-bridge.py")
     },
     Compile / resourceGenerators += Def.task {
       val destinationRoot = (Compile / resourceManaged).value / "META-INF" / "sm-workflow"
