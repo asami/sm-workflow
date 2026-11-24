@@ -18,3 +18,12 @@ semantics; unresolved analysis is not permission to rewrite.
 
 This is planning only. Phase 28.1's active repair and acceptance scope,
 Phase 29 lint-policy ownership, and the adopted execution order are unchanged.
+
+## Adopted execution slot
+
+The user adopted Phase 25.1 → Phase 25.2 → Phase 28.2 → Phase 7.2. Deliver
+completion metrics before changing comparison repair so comparable workloads can
+be observed before and after. Leave the migration as deferred work until
+Phase 28.2 rather than requiring it in Phase 28.1. Preserve unresolved or
+failed FixCheck evidence as recorded; this does not start a Phase or mark a
+check passed.

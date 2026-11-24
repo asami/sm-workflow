@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-24 (Asia/Tokyo)
-Scheduled: no execution slot selected; adopted development order unchanged
+Scheduled: immediately after [Phase 25.2](phase-25.2.md), followed by [Phase 7.2](phase-7.2.md)
 Checklist: [Phase 28.2 acceptance](phase-28.2-checklist.md)
 Decision: [strict comparison migration journal](../journal/2026/11/2026-11-24-strict-scala-comparison-migration.md)
 
@@ -15,7 +15,9 @@ and the deterministic candidate patch, revalidation and rollback path from
 work or make 28.2 a gate for their closure. The current FixCheck analysis and
 scope issue is separate: AnalysisUnavailable means a comparison could not be
 judged, not that it is incorrect or eligible for rewrite. Do not suppress such
-findings or broaden Phase 28.1 to migrate existing source.
+findings or broaden Phase 28.1 to migrate existing source. Retain strict
+comparison migration as deferred work until Phase 28.2. Earlier FixCheck
+outcomes remain recorded as observed; deferral does not mean PASS.
 
 Goldenport Core owns strict collection APIs; the owning consumer resolves the
 actual Core artifact. sm-workflow owns repair selection, provenance,

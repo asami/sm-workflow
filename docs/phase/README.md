@@ -2,20 +2,20 @@
 
 ## Adopted development priority — 2026-11-24
 
-Complete the immediate AI-cost work, then strengthen validation, quality, and everyday development support before expanding the provider pool. Phases 24, 25 and 28 have formal local releases. Phase 28.1 is the current operational step. Phase 25.1 follows it for daily free-allowance reservation and settlement. Phase 25.2 then delivers Codex completion metrics before Phase 7.2.
+Complete the immediate AI-cost work, then strengthen validation, quality, and everyday development support before expanding the provider pool. Phases 24, 25 and 28 have formal local releases. Phase 28.1 is the current operational step. Phase 25.1 follows it for daily free-allowance reservation and settlement. Phase 25.2 delivers Codex completion metrics before Phase 28.2 strict comparison migration.
 
 | Order | Group | Phases |
 | --- | --- | --- |
-| 1–4 | Immediate AI-cost reductions and measurement | [25](phase-25.md) (OpenAI Task API) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) → [25.1](phase-25.1.md) (daily free-allowance reservation and settlement) → [25.2](phase-25.2.md) (Codex completion metrics) |
-| 5–9 | Validation, quality, and stabilization | [7.2](phase-7.2.md) (safe temporary worktree retirement after verified sync) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
-| 10–13 | Everyday development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
-| 14–17 | Usage measurement and AI execution expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared server and multiple CLIs) → [27](phase-27.md) (capability- and cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+| 1–5 | Immediate AI-cost reductions and measurement | [25](phase-25.md) (OpenAI Task API) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes) → [25.1](phase-25.1.md) (daily free-allowance reservation and settlement) → [25.2](phase-25.2.md) (Codex completion metrics) → [28.2](phase-28.2.md) (strict Scala comparison migration) |
+| 6–10 | Validation, quality, and stabilization | [7.2](phase-7.2.md) (safe temporary worktree retirement after verified sync) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
+| 11–14 | Everyday development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
+| 15–18 | Usage measurement and AI execution expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared server and multiple CLIs) → [27](phase-27.md) (capability- and cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
 
 Phase 18 remains in scope; its Flutter W4–W5 still require qualified CNCF Phase 117 delivery. Phase 26 remains the functional prerequisite for Phase 27. Phase 13 starts usage measurement before the expansion and supplies the prerequisite for Phase 20. Phase 21 remains before Phase 15. Phases 10, 19, and 16 remain deferred. Phase 7.1 remains on hold, and [Phase 7.2](phase-7.2.md) starts the stabilization group to prevent temporary worktree accumulation.
 
 This decision supersedes older schedules only. It does not change acceptance, scope, historical evidence, or an active Workflow Session. See the [decision journal](../journal/2026/11/2026-11-24-phase-25-follow-on-development-priority.md).
 
-[Phase 28.2](phase-28.2.md) is a separate, unscheduled follow-up for strict Scala comparison migration and deterministic repair. It is not a Phase 28.1 completion gate and does not change the adopted order above.
+[Phase 28.2](phase-28.2.md) is a separate follow-up for strict Scala comparison migration and deterministic repair, after metrics and before worktree retirement. The migration is deferred until then and is not a Phase 28.1 completion gate; this scheduling decision does not mark a failing FixCheck as passed.
 
 ## Adopted development priority — 2026-11-21
 

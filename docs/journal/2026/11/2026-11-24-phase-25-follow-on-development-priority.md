@@ -63,7 +63,8 @@ implementation and existing worktrees are unchanged.
 
 The adopted order is **[25](../../../phase/phase-25.md) →
 [28.1](../../../phase/phase-28.1.md) → [25.1](../../../phase/phase-25.1.md) →
-[25.2](../../../phase/phase-25.2.md) → [7.2](../../../phase/phase-7.2.md) →
+[25.2](../../../phase/phase-25.2.md) → [28.2](../../../phase/phase-28.2.md) →
+[7.2](../../../phase/phase-7.2.md) →
 [18](../../../phase/phase-18.md)**. This supersedes the immediate-predecessor
 sequence in the previous entry; Phase 7.2 still opens the stabilization group.
 The rest of the roadmap remains in the same order.
@@ -88,3 +89,7 @@ coverage and keep parallel activity from inflating elapsed time. AI usage by
 task role and route-switch counts/reasons are secondary breakdowns using the
 records already available. Compare similar observed runs instead of estimating
 hypothetical token savings. The adopted order and other Phase scopes are unchanged.
+
+The user placed [Phase 28.2](../../../phase/phase-28.2.md) after Phase 25.2 so
+completion metrics can be available before the comparison migration. Defer the
+migration to that slot; earlier lint outcomes are not reclassified.
