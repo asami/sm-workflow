@@ -27,3 +27,8 @@ be observed before and after. Leave the migration as deferred work until
 Phase 28.2 rather than requiring it in Phase 28.1. Preserve unresolved or
 failed FixCheck evidence as recorded; this does not start a Phase or mark a
 check passed.
+
+For work before Phase 28.2, the deferred strict-comparison migration by itself
+should not keep an otherwise closable Phase open. Keep actual FixCheck failures
+and unknown results visible. This does not waive unrelated validation or
+admit an unverified comparison change.
