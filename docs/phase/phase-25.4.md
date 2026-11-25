@@ -121,6 +121,22 @@ calls. Verify free-unavailable fallback, invalid plans, restored allowance
 and unchanged mandatory validation. Treat model effectiveness as a hypothesis
 until observed.
 
+### P254-07 — Entitlement-independent architecture and economic evidence
+
+Treat Task Design / Task Execution separation as independent of billing
+or allowance. Use complimentary capacity to qualify the architecture first.
+Keep the Phase 25.4 default free-only strategic judgement and programmatic
+fallback; exhaustion alone never authorizes paid use. Preserve interfaces
+so Phase 27 can select explicitly budget-authorized paid advanced design
+with lower-cost execution when evidence supports its economic value.
+Compare against direct advanced execution and programmatic design with
+ordinary execution on comparable tasks and mandatory quality gates.
+Measure total incremental cost per successfully accepted task, including
+design, context preparation, execution, retries, validation, failed attempts
+and amortized reusable design artifacts; report latency and quality separately.
+Keep observed charges, allowance consumption, estimated prices and unknowns
+distinct. Record conditions under which separation is beneficial or not.
+
 ## Ownership and boundaries
 
 sm-workflow owns task semantics, context assessment, Workflow and Admission.
