@@ -38,6 +38,19 @@ distinguish measured costs from estimates. Qualify the paid policy with
 fixtures and comparable evidence; live paid tests require explicit approval.
 Do not assume separation is always cheaper or better.
 
+## Scoped instruction generation and surplus investment
+
+Consume [Phase 25.5](phase-25.5.md) template suitability, scoped cache
+and reuse evidence. Select generation routes deterministically by required
+quality, expected reuse, total amortized cost, verified daily API allowance
+and weekly subscription headroom, reset/expiry and forecast demand.
+When both Astra and Sol meet requirements, prefer free Astra when suitable
+and lower-cost Sol for authorized paid generation; account for shared pools
+and opportunity cost. Prefer valid cached instructions; consider bounded
+pre-generation for planned projects/phases with stable context and likely
+reuse using otherwise-expiring capacity. Never generate solely to exhaust
+allowance or infer unknown weekly balances. No implicit paid fallback.
+
 ## Execution and billing model
 
 | Route | Execution boundary | Billing/allowance category |
