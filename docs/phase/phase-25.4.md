@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
-Scheduled: after [Phase 25.3](phase-25.3.md), before Phase 28.2 (proposed)
+Scheduled: after [Phase 25.3](phase-25.3.md), followed by [Phase 25.5](phase-25.5.md)
 Depends on: existing Phase 9 routing, [Phase 25.2](phase-25.2.md) metrics and Phase 25.3 dual allowance
 Checklist: [Phase 25.4 acceptance](phase-25.4-checklist.md)
 
