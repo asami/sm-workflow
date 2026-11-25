@@ -77,6 +77,41 @@ amortized generation cost; distinguish estimates from observations.
 No claim that reuse or Astra always improves quality or cost.
 Record scoped qualification and independent review before closure.
 
+### P255-06 — Diagnostic-driven repair strategy templates
+
+Make recurring compiler and lint diagnostics an initial practical target
+for hierarchical instruction reuse. Match structured compiler diagnostic
+codes and lint rule IDs where available, with tool/language version,
+normalized message patterns and relevant semantic evidence (e.g. expected
+and actual types). Use deterministic matching first; distinguish ambiguous,
+unknown and multiple interacting diagnostics rather than guessing from text.
+Seed templates for type mismatch, unresolved names, missing given/implicit,
+ambiguous overload, non-exhaustive match, strict equality, unused imports,
+deprecated APIs, Scala/CAR lint and applicable smell findings.
+
+Each template specifies applicability, required context, investigation order,
+repair alternatives and priorities, prohibited shortcuts, change scope,
+validation and escalation criteria. For example, type mismatch repair
+preserves type safety and does not introduce unchecked casts merely to
+silence the compiler. Specialize by Project and Phase through strategic
+inference and cache using P255-02; bind exact current diagnostics, candidate
+and relevant source at Task time. Reuse existing Phase 28 deterministic
+fixes first; Terra-class execution is the main AI repair candidate after
+those fixes. Preserve existing scope, repair limits, rollback, validation,
+Admission and Take Over. Unknown or conflicting patterns use existing
+assessment/fallback rather than an unsafe template.
+
+Record pattern ID, template/version, scope, execution model and observed
+first-attempt success, retained repair, retries, tokens, latency and Take Over
+where evidence permits, reusing Phase 25.2 metrics. Compare against ordinary
+repair with equivalent validation; use evidence to target template refinement
+with Sol/Astra under existing allowance/budget policy. Promote sufficiently
+stable strategies to deterministic repair only after review and verification
+at the owning boundary. Qualify representative Scala compiler and lint
+fixtures, including version variation, false matches, multiple diagnostics,
+cache reuse/invalidation and successful revalidation. Do not claim measured
+savings before qualification.
+
 ## Boundaries
 
 sm-workflow owns templates, scope, context dependencies and instruction
