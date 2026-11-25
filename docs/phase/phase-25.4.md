@@ -1,4 +1,4 @@
-# Phase 25.4: Task Classification and Context Assessment
+# Phase 25.4: Strategic Judgement, Task Design and Context Assessment
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
@@ -42,9 +42,8 @@ source or secrets beyond existing authorization and sharing policy.
 ### P254-03 — Capability requirements and classification policy
 
 Derive provider-neutral requirements for reasoning, context, tools, output
-contract and validation. Use deterministic rules first; permit a bounded
-lightweight AI judgment only for genuinely ambiguous classification under
-existing budget policy. Record classification evidence and uncertainty.
+contract and validation. Apply the Free Advanced AI-first / Programmatic Fallback policy in P254-06.
+Mechanically decidable facts and hard constraints remain programmatic. Record classification evidence and uncertainty.
 Routing itself remains deterministic. Separate task taxonomy from the AI
 capability model and allowance identity. Candidate routes include deterministic
 tools, local LLMs, eligible API models and agent CLIs. Routine bounded tasks
@@ -76,6 +75,51 @@ assume stronger models always improve outcomes. Verify deterministic rules,
 unknown classifications, bounded context requests, failure-specific routing,
 resume and ordinary review/repair/judgment paths using fixtures and scoped
 qualification. Record independent review before closure.
+
+### P254-06 — Strategic judgement and task design
+
+Separate Strategic Judgement (strategy and risk), Task Assessment
+(classification and capability requirements), Task Design (review viewpoints
+and execution instructions), and Task Execution (performing the work).
+Prefer verified eligible Sol/Astra-class advanced models in the 1M daily
+allowance for semantic strategic judgement, assessment and design whenever
+free-only admission is available. No failed programmatic classification is
+required first. Do not invoke AI for mechanically decidable facts or merely
+to consume allowance.
+
+Use stateless requests with bounded Strategy Context: goal, current state,
+constraints, evidence, summarized attempt history, available capabilities,
+candidate identity and typed decision contract. sm-workflow owns persistent
+state. Generate typed Task Specifications containing review viewpoints,
+execution instructions, repair strategy, task decomposition, required context,
+expected outputs and validation conditions as applicable. Record provenance
+and uncertainty. Use rules and templates to produce the same typed contract
+when advanced free admission is unavailable or the result is unusable.
+Never automatically pay for strategic judgement. Preserve uncertain-usage
+recovery and reservations; resume advanced judgement when eligible capacity
+returns. If safe programmatic judgement is impossible, use existing Take Over
+or clarification.
+
+Prefer eligible Terra-class models in the 10M daily allowance as the main
+execution capability for ordinary bounded review, repair and code generation
+against the Task Specification. Use deterministic tools for mechanical work,
+other capable models where justified, and agent CLIs for exploration or
+session-dependent work. Advanced models remain execution candidates when
+genuinely needed. These are capability preferences, not a fixed hierarchy.
+
+AI-generated plans are proposals. Programmatic controls enforce authorization,
+sharing, quota, scope, mandatory tests and Admission. Plans cannot weaken
+mandatory checks or grant permissions. Retain validated reusable review
+viewpoints and instruction templates with provenance, applicability conditions
+and versioning; revalidate before reuse. Promote generalized knowledge to
+deterministic rules only after review and verification.
+
+Compare advanced-design plus Terra-execution with programmatic-design plus
+Terra-execution and applicable direct review baselines. Measure end-to-end
+quality, missed findings, retries, latency and total tokens including design
+calls. Verify free-unavailable fallback, invalid plans, restored allowance
+and unchanged mandatory validation. Treat model effectiveness as a hypothesis
+until observed.
 
 ## Ownership and boundaries
 
