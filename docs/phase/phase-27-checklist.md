@@ -26,3 +26,5 @@ Status: planned; no acceptance or implementation claimed.
 - [ ] Demonstrate deterministic preference for suitable otherwise-expiring surplus allowance over scarce capacity, subject to quality and forecast demand.
 - [ ] Enforce no unapproved paid fallback and provider-supported automation/entitlement checks (including Copilot).
 - [ ] Measure expected total cost, retry/validation and actual incremental-spend avoidance without fabricated balances.
+
+- [ ] Phase 25.4 design/execution separation is usable independently of free entitlement; deterministic selection compares total expected cost per accepted task, including design and rework, and never dispatches paid design without explicit budget authorization. Verify free exhaustion and paid-disabled fallback with fixtures.
