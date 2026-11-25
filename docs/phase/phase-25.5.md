@@ -112,6 +112,122 @@ fixtures, including version variation, false matches, multiple diagnostics,
 cache reuse/invalidation and successful revalidation. Do not claim measured
 savings before qualification.
 
+### P255-06 implementation design — initial repair strategy catalog
+
+The following is a proposed catalog, not a claim of implemented rules or
+measured savings. Prefer actual FixCheck/compiler/lint records over synthetic
+fixtures. Phase 28.1's formal local release records 27/27 focused tests and
+557 affected diagnostics in an unresolved FixCheck; do not equate that count
+with independently repairable errors. Obtain and classify the original logs.
+
+Each row defines applicability and required evidence, deterministic repair
+when qualified, bounded Terra instruction, prohibitions, verification and
+escalation. Diagnostic examples are illustrative unless linked to observed
+evidence. All rows inherit the common lifecycle below.
+
+| ID / diagnostic | Applicability and context | Deterministic route / Terra instruction | Prohibitions | Specific verification / escalation |
+| --- | --- | --- | --- | --- |
+| CE-01 type mismatch (E007; Option[A] vs A) | Resolved actual/expected types, expression, enclosing contract, conversions and tests | Qualified typed conversion only; Terra preserves signatures and composes existing effects or handles absence explicitly | Casts, unsafe get, null, widening | Compile and absence/error tests; Sol for contract changes, Astra candidate for domain redesign |
+| CE-02 unresolved name (E006) | Symbol index, imports, package and dependencies | Allowlisted unique Metals import quickfix; Terra distinguishes missing import, typo and rename | Invented API, dummy declarations, unauthorized dependency | Verify resolved symbol; Sol for cross-file rename/dependency issues |
+| CE-03 missing given/implicit (E172) | Required typeclass, companion, imports, existing instances and semantics | Unique qualified import; Terra selects existing semantically appropriate instance | Universal Eq/CanEqual, circular or fabricated instances | Compile and instance semantics; Sol for placement across modules, Astra candidate for equality policy |
+| CE-04 ambiguous overload | Resolved candidates, receiver, arguments and intended signature | Qualified unambiguous selection; Terra uses safe annotation or named argument | Cast-based selection, arbitrary arguments | Verify selected symbol and behavior; Sol if intent spans files, Astra candidate for API design |
+| CE-05 non-exhaustive match (E029) | Sealed hierarchy/enum, missing cases, return type and transition contract | Add only specified behavior; Terra explicitly handles missing cases | Catch-all hiding missing states, placeholders, arbitrary throws | Missing-case tests and exhaustivity; Sol for unspecified transitions, human decision if contract absent |
+| CE-06 missing member (E008) | Receiver type, extension symbols, imports and actual artifact | Qualified extension import; Terra distinguishes API/version/receiver mismatch | Invented methods, unauthorized artifact update | Compile against actual classpath; Sol for API implementation or cross-module changes |
+| EQ-01 strict equality | Both operand types, value/identity/reference/content intent, Eq/CanEqual and project policy | Phase 28.2 qualified rule first; Terra preserves intended comparison using approved API | Universal equality, casts, stringification, disabling strict equality | Equal/unequal and negative type fixtures; Sol for cross-file semantics, Astra candidate for domain equality policy |
+| EQ-02 membership/index lookup | Resolved Vector receiver, method symbol, argument type, Eq semantics and Core API | Phase 28.2 qualified containsEq/indexOfEq migration; Terra only for residual cases with established intent | Text-only replacement, widening, unapproved ID comparison | Empty, hit/miss, duplicate first index, wrong-type rejection; decline unsupported overloads; Sol for missing API |
+| EQ-03 AnalysisUnavailable | Current candidate, build target, classpath, semantic analysis freshness | Refresh qualified analysis; Terra diagnoses missing evidence, then reclassify | Treating unavailable analysis as PASS or proven bad comparison | Verify analysis availability; Sol for build/analysis infrastructure, Astra candidate for architecture |
+| LN-01 unused import | Current semantic evidence and import scope | Qualified Scalafix RemoveUnused or allowed quickfix; Terra only for unresolved implicit/extension effects | Speculative bulk deletion | Compile, lint and symbol resolution; Sol for cross-file effects |
+| LN-02 unused declaration | Visibility, references, initializer effects, reflection/registration | Qualified side-effect-free local removal; Terra distinguishes unused binding from required effect | Public API deletion, dropping effects | Compile, API and behavior tests; Sol for framework registration or public contracts |
+| LN-03 deprecated API | Resolved old/new API, version, migration contract | Qualified versioned Scalafix rule; Terra uses approved replacement | Suppression, unauthorized upgrades | Compile, deprecation check and behavior equivalence; Sol for cross-module migration |
+| LN-04 formatting/hygiene | Active formatter configuration, admitted files | Scalafmt or qualified source cleanup; no AI normally | Unrelated reformatting or policy relaxation | Format check, compile and diff scope; reclassify parse/tool failures |
+| LN-05 Scala/CAR lint and smell | Actual rule ID, evidence, architecture, Usage Contract and quality policy | Qualified dedicated rule; Terra repairs within existing architecture | Suppression, weakening policy, unnecessary redesign | Applicable lint, focused tests and contract checks; Sol for component boundaries, Astra candidate for security/architecture |
+
+LN-05 subtemplates are candidates (not assertions of existing rule IDs):
+unsafe cast/extraction, oversized source, component boundary, unauthorized
+I/O bypass, public API contract and evidence-backed AI smell. Prioritize
+EQ-01–03 and LN-01/04, then CE-01–06 and LN-02/03, then project-specific
+LN-05; revise priorities from observed frequency and risk.
+
+#### Typed strategy contract and execution
+
+Represent each template with ID/version, diagnostic matcher (tool/version,
+code/rule, normalized message, semantic predicates), applicability and
+decline reasons, required/optional context, investigation order, qualified
+deterministic rule references, bounded Terra instruction, prohibited edits,
+allowed scope, validation, escalation, dependency fingerprints and
+qualification evidence. Distinguish Matched, Ambiguous, Unknown,
+InsufficientEvidence and InteractingDiagnostics. Cluster root causes and
+recompile before treating cascading diagnostics as independent tasks.
+
+Common Terra instruction: repair only the admitted scope using current
+diagnostic and semantic evidence; preserve public contracts and behavior;
+follow project-approved APIs and policy; do not suppress diagnostics or
+invent APIs; return NeedsEscalation with missing evidence if safe repair
+cannot be established. Mandatory policy is enforced outside generated text.
+Use Phase 28/28.1/28.2 deterministic routes first, with existing allowlists
+(Metals quickfix only in normal repair), revision checks, rollback and
+Admission. Validate originating diagnostic, compile, applicable lint,
+focused tests and patch scope. No AI call after successful deterministic
+repair. Preserve repair limits and Take Over; do not repeat unchanged
+failed inputs. Refresh missing context, invalidate defective instructions,
+or select Sol for multi-file work and Sol/Astra for strategic design;
+request human judgement when specification or authorization is missing.
+
+#### Hierarchical specialization and cache
+
+Global templates contain reusable repair knowledge. Project Instructions
+specialize architecture, library APIs, equality/identity and quality
+policies. Phase Instructions specialize goals, allowed changes and
+verification. Task bindings use current source, exact diagnostic, resolved
+types/symbols and candidate revision, preferably programmatically.
+Cache strategies, not old patches. Key by authorized project/workspace,
+scope, template/version, parent instruction identity/version and relevant
+architecture, policy, Scala/tool, API and Phase-plan fingerprints.
+Ordinary source edits invalidate task bindings only unless a higher-scope
+dependency changes. Stale analysis/revision invalidates task bindings;
+changed parent/template/policy/API invalidates affected descendants;
+revoke defective instructions and descendants. Track generated, validated,
+qualified and invalidated states, provenance, generation route/model,
+reuse and failure evidence; use atomic publication and restart-safe
+concurrency. Initial model suitability is a hypothesis: Program for
+routine rules, Terra for bounded execution, Sol for ordinary strategic
+specialization, Sol/Astra for domain/security strategy. Apply P255-03/04
+allowance-aware selection, free-only defaults and explicit paid authorization.
+
+#### Phase 28.2 boundary and comparative qualification
+
+Goldenport Core owns typed comparison APIs; Phase 28.2 owns qualified
+comparison analysis and deterministic migration, including safe decline
+and verification. Phase 25.5 owns classification, strategy selection,
+specialization and cache; do not duplicate rewrite engines. Phase 29 owns
+lint policy expansion and Phase 27 generalized cross-route optimization.
+Capture actual diagnostic, candidate/tool version, resolved types/symbols,
+rule, eligibility/decline reason, patch and verification from 28.2 as
+qualification evidence.
+
+Compare A ordinary AI repair, B Phase 28.1, C B plus 28.2, D C plus
+25.5 templates without scoped cache, E D with cache. Use identical
+candidate snapshots, dependency/tool versions, validation and Admission;
+repeat stochastic trials and report median and dispersion. Compare model
+routes separately. Include real 28.1/28.2 logs, real project compiler and
+lint failures, interacting diagnostics, stale cache/analysis and negative
+fixtures. Record calls, input/output tokens, generation/adaptation/lookup,
+validation, retries, first-attempt and retained repair, Admission,
+regression, scope violations, Take Over, latency, actual paid cost and
+allowance consumption per accepted repair. Include cold/warm cache and
+invalidation costs; distinguish estimates from observations.
+
+For equal repair cost, illustrative break-even is n(S-B)>G, where S is
+uncached per-task strategy cost, B cached per-task binding/use cost, G
+initial generation cost, n reuse count. Measure differing repair costs
+separately; no measured savings are claimed. Qualify version variation,
+false matches, scope isolation, concurrent publication/resume, invalidation,
+free exhaustion/unknown balances, paid authorization and independent
+review before closure. Promote AI strategies to deterministic rules only
+at the owning boundary after semantic-preservation evidence, negative
+tests and review. This is an Executable Knowledge feedback loop, not
+generalized knowledge extraction.
+
 ## Boundaries
 
 sm-workflow owns templates, scope, context dependencies and instruction
