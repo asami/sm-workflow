@@ -260,6 +260,13 @@ provenance or workspace grants. A normal host binding change must retain its
 Git-family declarations, capabilities and workspace initialization source inventory
 coherently; use the existing configuration owner rather than a per-Session recipe.
 
+For a separate clone, use distinct workspace identities for the contribution,
+canonical main and source fetch. If native canonical-main observation resolves
+to the contribution despite verified roots, check whether it reused the
+default workspace identity scoped to the contribution. Map an explicit
+canonical-main workspace to the same admitted main checkout and refresh the
+existing configuration wait.
+
 `ConfigurationRequired` is setup in that same Session. Supplement the missing
 normal configuration, including an invocation-time directory override when
 appropriate, and use `refreshRepositoryDirectoryConfiguration` with the exact
@@ -358,6 +365,16 @@ See the [runtime orchestration contract](../../docs/spec/repository-sync-runtime
 
 ## Continue retained validation or review
 
+If pending-merge validation preconditions fail after conflict materialization,
+use the owning child Session's candidate and the observed index and worktree
+delta. For a changed Git submodule reference, distinguish an unavailable
+referenced commit from a clean submodule checkout at its previous commit. Any
+separately authorized checkout refresh must match the exact staged reference
+and preserve the parent index. Then follow the child Session's continuation.
+If the aggregate reports `Indeterminate`, retain that result and report the
+child's observed state separately. Continue the aggregate through a supported
+recovery operation.
+
 For a known completed merge check failure, use ordinary
 `advanceRepositorySync --sessionId <childSessionId>` on that child. Re-reading
 the aggregate can return its existing same-revision Wait. The child Advance
@@ -365,6 +382,15 @@ reuses the recorded results and can issue the normal repair Request. Follow
 its actual `submitOperation` and issued context, then continue the original
 aggregate. If it returns Wait or a refusal, report the actual condition and
 retained reference. Keep the failed receipt and checks that already succeeded.
+
+When a formally released Phase retained a failed or deferred check that appears
+again during synchronization, report the original Phase disposition and the
+new candidate's actual check result separately. Local release approval applies
+to its original candidate. If the assigned repair would reopen work explicitly
+deferred to a later Phase, check the user's current direction. If it does not
+cover that work, retain the issued repair and surface the scope decision.
+Use the recovery or acceptance choices the installed runtime offers for the
+synchronization candidate.
 
 For a continuation that needs an explicit recovery choice, call
 `describeRepositorySyncValidationContinuation --sessionId` on the existing

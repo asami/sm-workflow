@@ -715,8 +715,8 @@ For the supported finite paired completion, pass `--action complete`,
 `--executable <absolute installed sm-workflow>` and the explicit
 runtime-root/task/request/submission/fresh-output paths. Request one-shot
 escalation for the complete invocation, including the selected executable and
-arguments. This is the existing host-owned pair, not a command
-subagent or a substitute Workflow. The helper launches only the selected
+arguments. The parent owns the paired call and returns the runtime's result.
+The helper launches only the selected
 installed executable with `<fixed Operation>`, selecting `<runtime-root>` as the process cwd; it never
 constructs a development classpath or selects an artifact. It retains/displays
 actual accepted Submit before reopening the original family/Session routing for
@@ -786,9 +786,29 @@ records the invocation, and admits at most one owned replacement. It owns
 application, candidate capture, revalidation and rollback. Continue semantic
 repair only from an issued WorkOrder. Preserve observed usage and the disposition
 of declined or rejected proposals. A missing or unbound result remains uncertain.
-Metals/LSP integration and automatic formatter or Scalafix repair are separate
-capabilities. Their availability depends on the selected installed runtime and
-its attributable retained evidence.
+
+In the Phase 28.1 route, ordinary repair also consumes eligible retained
+Scalafix diagnostics and may request an allowlisted Metals `quickfix` through
+the configured host. Use the returned outcome and current candidate. Report
+missing or ineligible tooling as observed and keep an unresolved process or
+write with its existing continuation. Metals refactoring and `source.*`
+actions belong outside this compiler repair route.
+
+#### GoalPhase Scala candidate cleanup
+
+Ordinary Step implementation and repair use the same runtime-owned cleanup
+during candidate inspection. On selected changed handwritten Scala files, it
+applies admitted Scalafix rewrites, normalizes source history where enabled,
+then formats with Scalafmt before final validation. A project history style of
+`none` skips normalization. The runtime owns tool selection and scoped edits.
+For semantic import organization, it reuses compiler metadata for the exact
+candidate or refreshes the selected Compile or TestCompile when needed.
+
+Follow the returned candidate and check results. Independent review and commit
+preparation use the retained history conformance result for that candidate.
+Keep the original diagnostic and the tool or rollback outcome distinct from
+final validation. The approved Phase 28.1 local release and its focused
+qualification leave production-project qualification separate.
 
 #### Bounded API review and provider usage
 
@@ -956,33 +976,10 @@ their observed cause.
 <a id="validation-cadence-admission-full-and-heavy"></a>
 ## Validation cadence with standard annotations
 
-ADMISSION is the only custom classification label. FULL and focused describe run
-scope, not test memberships. Use standard ScalaTest Slow and DoNotDiscover rather
-than custom HEAVY/ON_DEMAND labels. SMOKE, FOCUSED, FULL, HEAVY and ON_DEMAND active
-purpose values are retired by the coordinated producer/consumer migration.
-Do not add aliases or automatically map Slow into a second HEAVY classification.
-
-| Selection | Operation |
-| --- | --- |
-| ADMISSION | Short basic acceptance from its declared members within ordinary exclusions |
-| FULL | Normal discovered regression tests, excluding Slow and special external-environment work |
-| Slow | Explicit standard Slow-tag selection, including selected nighttime runs |
-| Explicit-only suite | DoNotDiscover plus exact suite selection and its real prerequisites |
-| focused | Actual affected suite/case/feature/tag selection, without a FOCUSED label |
-
-Use class `@org.scalatest.tags.Slow` or per-case `taggedAs` with the standard Slow
-tag. DoNotDiscover remains selectable by an explicit suite request; it is not a
-disabled test. Selecting Slow alone does not automatically discover those suites.
-A broad query must not re-enroll them. Selecting an unrestricted named suite may
-run all its cases; report actual selection. Keep external-service requirements
-separate from duration and exclude their suites before setup. SQLite and small
-test-owned same-JVM loopback fixtures remain eligible for FULL.
-
-ADMISSION targets at most one minute of aggregate test-body time, excluding
-preparation/cleanup. It is not a fixed timeout. Preserve feature, expectedDuration,
-execution requirements and actual result scope. A focused request may explicitly
-include Slow/explicit-only cases as needed; do not repeat an entire suite solely
-because an affected case belongs to it. Empty selection is not successful coverage.
+Follow the [ai-directive test policy](../../RULE.md#scala-test-classification-and-default-execution)
+and the [sm-workflow selection contract](label-driven-test-selection.md).
+Bind a focused check to the affected suites or cases and retain the selected
+CNCF metadata with the actual workflow result.
 
 Runtime owns selection, preparation, execution and evidence. Apply new selections
 through supported planning/adoption; preserve active Sessions, captured checks,

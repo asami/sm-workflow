@@ -48,6 +48,10 @@ This contract adds no periodic observation or speculative Git preflight loop.
 
 ## Validation and semantic judgment
 
+The planned [Phase 25.2 merge selection](../phase/phase-25.2.md#repositorysync-merge-validation)
+will specialize ordinary merge validation with the shared CNCF test selector.
+The following describes the existing impact-based route.
+
 Assess changes from both parents and any actual conflict-resolution edits.
 Program impact includes source, executable specifications, build/dependency
 definitions, generators, executable content and runtime configuration. A path
@@ -62,8 +66,8 @@ of the whole Git revision, add content hashes, or rerun tests merely to obtain a
 new receipt. Evidence absence is not a reason to test a push-only/fast-forward
 route; uncertainty about a genuinely program-affecting merge is assessed at that
 boundary. Select focused tests for bounded uncovered behavior and FULL only
-where the admitted impact requires it. FULL excludes HEAVY; do not expand either
-classification or add external-service tests here.
+where the admitted impact requires it. Apply the existing
+[sm-workflow selection contract](label-driven-test-selection.md) at that boundary.
 
 Deterministic acceptance ends the assessment without an AI gate. Delegate only
 unresolved semantic questions, using the existing triage/review/FIX route.

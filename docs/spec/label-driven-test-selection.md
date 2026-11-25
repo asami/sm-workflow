@@ -1,52 +1,25 @@
-# Test selection with ADMISSION and standard annotations
+# Test selection in sm-workflow
 
 Date: 2026-10-31 (Asia/Tokyo)
-Status: approved target; coordinated producer/consumer migration pending.
-Prior LTEST delivery remains accepted within its original scope. The target below
-supersedes its multi-purpose authoring guidance; it does not reopen that delivery.
+Status: sm-workflow supplement to the shared test policy. Prior LTEST delivery
+remains accepted within its original scope.
 Plan: [TA-S1–4 and TA-A01–06](../notes/label-driven-test-migration-plan.md#standard-annotation-follow-up--2026-10-31).
 Handoff: [approved migration and preservation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
 
-## Classification and run scope
+Classification and default execution follow the
+[ai-directive test policy](../../RULE.md#scala-test-classification-and-default-execution).
+sm-workflow uses CNCF's compiled test inventory and framework selection. The
+[normal typed SBT route](normal-typed-sbt-validation.md) binds those results to
+workflow checks. Label-based invocation will be specified separately.
 
-ADMISSION is the only custom classification label. Retire active SMOKE, FOCUSED,
-FULL, HEAVY and ON_DEMAND purpose declarations and query values. Do not introduce
-aliases, duplicate labels or a Slow-to-HEAVY normalization layer. FULL and focused
-remain descriptions of run scope, not test memberships. Assess former SMOKE
-coverage individually before assigning ADMISSION; do not bulk relabel it.
+## Selection and workflow evidence
 
-Keep canonical CNCF feature, expectedDuration, execution requirements, logical
-operation identities and provenance. Existing stored evidence retains its original
-vocabulary and scope; it is not an active selector or acceptance of this migration.
-
-## Standard annotations and explicit selection
-
-Use ScalaTest `@org.scalatest.tags.Slow` or per-case `taggedAs` only for long-running
-work. Use `@org.scalatest.DoNotDiscover` for suites requiring explicit execution,
-including special-environment and low-frequency acceptance. Combine them when both
-apply. An external database or Docker dependency alone is not a duration label.
-These suites remain active and maintained when exercised, rather than disabled.
-
-Normal test/FULL and ordinary ADMISSION exclude Slow and automatic discovery of
-DoNotDiscover suites before lifecycle setup. Selecting Slow alone does not include
-DoNotDiscover suites. Name those suites explicitly through the supported generic
-SBT path, optionally with actual case/tag filters. Broad patterns and feature-only
-queries must not re-enroll them. No class-name Set, persistent enrollment or
-per-suite build edit is required. Named unrestricted suites may run all their cases.
-Focused validation can explicitly select affected Slow or explicit-only tests.
-Report the real selection; an empty run is not successful requested coverage.
-
-SQLite, in-memory providers and small same-JVM test-owned loopback fixtures remain
-ordinary. Keep actual external prerequisites separate and retain required live
-opt-ins; annotations neither prepare resources nor authorize effects.
-
-## ADMISSION operating target
-
-ADMISSION targets at most one minute of aggregate selected test-body time,
-excluding compile, resolution, discovery, startup, fixture preparation/cleanup and
-result retention. This is not a per-case allowance, fixed timeout, assertion or
-automatic cancellation rule. Preserve a successful over-target result and assess
-selection/cost using its actual coverage. Preserve existing duration estimation.
+For `FULL`, `TestOnly` and `ADMISSION`, keep the exact selected operations and
+their CNCF feature, duration, execution requirements, identity and provenance.
+For focused validation, use the affected suites or cases and retain the actual
+selection in the Session. Report empty and unexecuted selections explicitly.
+Measure the `ADMISSION` operating target using test-body time and retain the
+actual coverage, duration and outcome in its result.
 
 ## Execution and preservation
 
@@ -81,8 +54,8 @@ reuse applicable evidence without claiming earlier tests prove this new contract
 ## Mode requirements alongside standard annotations — 2026-11-02
 
 Follow [per-test mode selection](development-mode-validation.md#per-test-declarations-build-binding-and-workflow-ownership).
-CNCF metadata declares required modes independently of ADMISSION, Slow and
-DoNotDiscover. Select eligible tests first, expand required variants and only
+CNCF metadata declares required modes independently of test classification and
+framework tags. Select eligible tests first, expand required variants and only
 then prepare resources. Matching a mode never overrides an explicit-only or
 Slow exclusion. Shared build.sbt integration binds actual target mode;
 sm-workflow invokes and collects test/parameter/mode outcomes without re-parsing

@@ -109,11 +109,11 @@ blanket product FULL. Determine actual consumed build/runtime inputs rather than
 assuming that any docs path is harmless. Reuse applicable retained evidence under
 the existing contract; represent reuse honestly, never as newly executed PASS.
 
-Consume the qualified focused-selection/estimate route where available: FOCUSED
-selects required cases across classifications without removing HEAVY labels.
-Ordinary FULL excludes HEAVY. Explicitly necessary HEAVY/scripted checks retain
-that classification and their execution requirements; do not introduce them solely
-because a batch or merge exists. Runtime owns selected SBT execution, deadlines,
+Consume the qualified focused-selection/estimate route where available and keep
+the source classifications and execution requirements. Use the existing
+[sm-workflow selection contract](label-driven-test-selection.md) for ordinary FULL.
+Include additional checks when the admitted repository impact requires them.
+Runtime owns selected SBT execution, deadlines,
 retained diagnostics, conditional review and correction. Tests passing alone do
 not waive an already-required semantic review. Do not add a universal AI review.
 

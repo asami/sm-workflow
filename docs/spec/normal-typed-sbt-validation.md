@@ -160,8 +160,9 @@ uses the stable `run-sbt-serial.sh` entry, while sbt owns required native locks.
 Independent top-level invocations can run concurrently without a global lock.
 The label adapter applies the same preparation to ordinary `testOnly` and its
 `runtimeTestOnly` alias when selected operations require runtime artifacts.
-Ordinary `test` selects FULL and excludes HEAVY/external-service work. Compilation
-alone performs no runtime preparation. See [label selection](label-driven-test-selection.md).
+Ordinary `test` selects FULL through the
+[sm-workflow selection contract](label-driven-test-selection.md).
+Compilation alone performs no runtime preparation.
 Existing shared-fixture fork=false and parallelExecution=false settings remain.
 
 `TypedSbtHostPlanFixture` constructs public host JSON and the selected build

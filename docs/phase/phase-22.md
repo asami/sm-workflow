@@ -126,6 +126,11 @@ condition is not itself the objective. Historical adoption remains evidence abou
 its original subject; a reconstructed runtime needs current evidence without
 pretending that an old target-specific answer was a new Human answer.
 
+P22-05 consumes the connected routine Step ADMISSION qualification planned in
+[Phase 25.2 P252-05](phase-25.2.md#p252-05--short-step-validation-through-cncf-typed-sbt)
+for the corresponding Phase 8 requirement. Reuse the result at its observed
+scope and keep the remaining Phase 8 rows and historical results attributable.
+
 ## Preserved implementation and qualification boundary
 
 The starting material is the released Phase 8 work, including its canonical

@@ -157,10 +157,12 @@ Follow the [precommit Step review contract](../../docs/spec/goal-phase-precommit
 
 ## Runtime-owned repair and stop decisions
 
-For the supported compiler diagnostic, ordinary Advance owns
-[deterministic correction, revalidation and rollback](../../docs/spec/native-host-execution.md#goalphase-compiler-repair).
-Follow the returned state. After a recorded rollback, use the issued current
-candidate for repair and the earlier checked candidate's result for diagnosis.
+Ordinary Advance owns
+[deterministic compiler repair](../../docs/spec/native-host-execution.md#goalphase-compiler-repair)
+and [Scala candidate cleanup](../../docs/spec/native-host-execution.md#goalphase-scala-candidate-cleanup)
+for implementation and repair. Follow the returned WorkOrder or continuation.
+After rollback, edit the issued current candidate and use the earlier check
+result for diagnosis.
 
 For command preparation or delegated delivery that is confirmed unexecuted,
 follow the bundled [unstarted execution contract](../../docs/spec/native-host-execution.md#unstarted-execution-continuation).

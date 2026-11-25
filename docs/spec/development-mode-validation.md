@@ -10,10 +10,10 @@ Routine sm-workflow development validation targets the application's **dev**
 profile (canonical CNCF operation mode `develop`). Running tests does not imply
 switching the target application to `test`. The workflow host's own operation
 mode, the child application's profile, SBT `Test` configuration and validation
-classification/run scope are separate dimensions. Follow the
-[standard-annotation contract](label-driven-test-selection.md): ADMISSION is the
-custom classification, Slow/DoNotDiscover retain their framework meanings, and
-full/focused describe run scope. Mode declarations do not revive retired labels.
+classification/run scope are separate dimensions. Apply the
+[ai-directive test policy](../../RULE.md#scala-test-classification-and-default-execution)
+when selecting a run. The [sm-workflow selection contract](label-driven-test-selection.md)
+binds that selection to the workflow independently of the application mode.
 
 Use [shared runtime-mode defaults](https://github.com/asami/goldenport-cncf/blob/main/docs/spec/runtime-mode-security-defaults.md)
 and the project's ordinary supported validation binding. Do not invent per-suite

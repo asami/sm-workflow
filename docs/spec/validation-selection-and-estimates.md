@@ -15,12 +15,11 @@ test is evidence that the old engineering validation or real consumer completed.
 
 ## Selection and classification
 
-ADMISSION, ordinary and HEAVY describe executable specifications. An ordinary
-declaration has no classification label and belongs to the normal FULL selection.
-FULL excludes HEAVY and external-service requirements. FOCUSED is a selection for
-a particular change, with explicit conditions and a reason. It may include
-ordinary, ADMISSION, HEAVY and existing scripted cases. Preserve their original
-classifications. No authored FOCUSED membership or second suite registry is needed.
+Apply the [ai-directive test policy](../../RULE.md#scala-test-classification-and-default-execution)
+and the [sm-workflow selection contract](label-driven-test-selection.md).
+Bind a focused request to the particular change with explicit conditions and
+a reason. Preserve the source classifications and execution requirements in its
+estimate and result.
 
 Use the existing CNCF discovery inventory, normalized metadata, provenance and
 operation binding. Missing, ambiguous or unsupported selected leaves must not
