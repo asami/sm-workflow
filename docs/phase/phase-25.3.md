@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
-Scheduled: after Phase 25.2, before Phase 28.2 (proposed)
+Scheduled: after [Phase 18](phase-18.md), followed by [Phase 25.4](phase-25.4.md)
 Depends on: [Phase 25.1](phase-25.1.md) reservation and settlement
 Checklist: [Phase 25.3 acceptance](phase-25.3-checklist.md)
 
