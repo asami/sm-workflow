@@ -28,3 +28,5 @@ Status: planned; no acceptance or implementation claimed.
 - [ ] Measure expected total cost, retry/validation and actual incremental-spend avoidance without fabricated balances.
 
 - [ ] Phase 25.4 design/execution separation is usable independently of free entitlement; deterministic selection compares total expected cost per accepted task, including design and rework, and never dispatches paid design without explicit budget authorization. Verify free exhaustion and paid-disabled fallback with fixtures.
+
+- [ ] Consume Phase 25.5 template suitability and scoped reuse evidence; verify deterministic generation route selection across daily/weekly/paid routes, shared pools, unknown headroom, expiry, forecast demand and authorized budget, including bounded useful surplus pre-generation.
