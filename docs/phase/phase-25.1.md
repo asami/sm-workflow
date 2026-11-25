@@ -2,7 +2,7 @@
 
 Status: planned
 Planned: 2026-11-24 (Asia/Tokyo)
-Scheduled: immediately after [Phase 28.1](phase-28.1.md), followed by [Phase 7.2](phase-7.2.md)
+Scheduled: immediately after [Phase 28.1](phase-28.1.md), followed by [Phase 25.2](phase-25.2.md)
 Depends on: [Phase 25](phase-25.md) OpenAI Task API and allowance ledger
 Checklist: [Phase 25.1 acceptance](phase-25.1-checklist.md)
 

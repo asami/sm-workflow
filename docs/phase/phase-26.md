@@ -6,6 +6,10 @@ Owner: sm-workflow development
 Checklist: [Phase 26 acceptance](phase-26-checklist.md)
 Related: [server architecture](../notes/sm-workflow-server-application.md), [Phase 6](phase-6.md), [Phase 9](phase-9.md), [Phase 22](phase-22.md), [Phase 24](phase-24.md), [Phase 25](phase-25.md)
 
+## Current scheduling — 2026-11-24
+
+Schedule Phase 26 after Phase 13 and before Phase 27, following the validation and development-support groups. Phase 25's applicable delivered Task API contract and the CLI Continuation boundary remain unchanged. See the [current roadmap](README.md#adopted-development-priority--2026-11-24). Earlier scheduling notes below are historical.
+
 ## Goal
 
 Enable one developer to use Codex CLI and Claude Code CLI interchangeably against **one authoritative sm-workflow Server** through the same sm-workflow CLI, while preserving existing Workflow state, Continuation, review and Admission semantics. The first deliverable is practical dual-client operation, **not** an autonomous worker fleet, generalized scheduler, provider benchmark, or dashboard.
@@ -55,4 +59,12 @@ A developer can start the existing sm-workflow Server, connect **both Codex CLI 
 
 ## Scheduling
 
-Follow [Phase 13](phase-13.md) in the [current development priority](README.md#adopted-development-priority--2026-11-22). Deliver the smallest practical dual-CLI interoperability slice using existing server/CLI foundations to support [Phase 27](phase-27.md). No Phase/Session is started by this plan.
+Follow [Phase 13](phase-13.md) in the [current development priority](README.md#adopted-development-priority--2026-11-24). Deliver the smallest practical dual-CLI interoperability slice using existing server/CLI foundations to support [Phase 27](phase-27.md). No Phase/Session is started by this plan.
+
+## Historical scheduling decision — 2026-11-22
+
+Adopted execution order places Phase 26 **after Phase 23 and before Phase 27**, following Phases 24, 28 and 18. This delays common Server/multi-CLI architecture work until strategic convergence is strengthened. Keep Phase 26's existing functional scope and acceptance unchanged. Phase 25 is deferred; inspect concrete provider/Task API prerequisites and address only required gaps through normal owners. No Session starts from this planning change.
+
+## Historical prerequisite update — 2026-11-22
+
+Schedule Phase 26 after **Phase 25** (and Phase 23), before Phase 27. Consume Phase 25's accepted generic Task API/provider contract where applicable; preserve CLI-agent Continuation semantics rather than treating CLI as stateless API inference. Do not assume Phase 25 completion without evidence. This supersedes older scheduling-only notes; scope and acceptance unchanged.

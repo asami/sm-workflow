@@ -2,10 +2,14 @@
 
 Status: planned
 Planned: 2026-11-22 (Asia/Tokyo)
-Scheduled: after Phase 23
+Scheduled: after Phase 22 and before Phase 17 (after Phase 23)
 Depends on: Phase 23; consumes applicable Phase 28 deterministic auto-fix integration
 Checklist: [Phase 29 acceptance](phase-29-checklist.md)
 Strategy: [Scala lint quality strategy](../journal/2026/11/2026-11-22-scala-lint-quality-strategy.md)
+
+## Current scheduling — 2026-11-24
+
+Schedule Phase 29 after Phase 22 (and after Phase 23) and before Phase 17. The lint scope and acceptance are unchanged. See the [current roadmap](README.md#adopted-development-priority--2026-11-24). Earlier scheduling notes below are historical.
 
 ## Goal
 Strengthen Scala static quality analysis and Bad Smell detection without multiplying brittle prohibitions, unnecessary AI work or defensive code. Resolve warnings by a justified code fix or a source-local annotation that the standalone linter can verify.

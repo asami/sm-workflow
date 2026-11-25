@@ -19,7 +19,9 @@ Preserve accepted Phase 7, the separate Phase 22 operational residual and all
 existing Sessions and histories. This decision starts no live-consumer operation
 and changes no adopted delivery slot or priority below.
 
-## Adopted development priority — 2026-11-22
+<a id="adopted-development-priority--2026-11-22"></a>
+
+## Adopted development priority — 2026-11-24
 
 The 2026-11-24 scheduling decision keeps the immediate AI-cost reductions
 first, then brings forward validation, workflow stabilization, and everyday
@@ -29,7 +31,7 @@ has a user-approved formal local release with comparison work carried to Phase 2
 
 | Order | Group | Phases |
 | --- | --- | --- |
-| 1–5 | Immediate AI-cost reductions and Scala comparison follow-up | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes, locally released) → [25.1](phase-25.1.md) (OpenAI daily allowance sizing and settlement) → [25.2](phase-25.2.md) (completion metrics and short Step validation through CNCF) → 28.2 |
+| 1–5 | Immediate AI-cost reductions and Scala comparison follow-up | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes, locally released) → [25.1](phase-25.1.md) (OpenAI daily allowance sizing and settlement) → [25.2](phase-25.2.md) (completion metrics and short Step validation through CNCF) → [28.2](phase-28.2.md) (strict Scala comparison migration) |
 | 6–10 | Worktree retirement, validation, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
 | 11–14 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
 | 15–18 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
@@ -54,6 +56,29 @@ This decision supersedes older priority sequences **for scheduling only**.
 It changes no historical status, scope, evidence, acceptance, or active
 Session. See the [decision rationale](../journal/2026/11/2026-11-24-phase-25-follow-on-development-priority.md).
 
+[Phase 28.2](phase-28.2.md) is a separate follow-up for strict Scala comparison migration and deterministic repair, after metrics and before worktree retirement. The migration is deferred until then and is not a Phase 28.1 completion gate; this scheduling decision does not mark a failing FixCheck as passed.
+
+## Adopted development priority — 2026-11-21
+
+> See the [2026-11-24 adopted priority](README.md#adopted-development-priority--2026-11-24); this older schedule is retained for history.
+
+The user selected this **execution order** after the currently running Phases 7 and 9:
+
+1. **Phase 24** — practical OpenAI API-credit use.
+2. **Phase 28** — deterministic compiler/lint auto-fix.
+3. **Phase 18** — tool-neutral validation and Flutter integration.
+4. **Phase 23** — strategic Phase convergence.
+5. **Phase 29** — Scala lint quality and Bad Smell analysis.
+6. **Phase 25** — generic textus-ai Task API and provider expansion.
+7. **Phase 26** — common Server and multi-CLI interoperability.
+8. **Phase 27** — AI Capability Pool and surplus-allowance cost optimization.
+9. **Phase 22** — runtime stabilization and difficult continuations.
+10. **Phase 17** — Task and Standalone Fix extensions.
+11. **Phase 21** — recursive repository catch-up.
+12. **Phase 15** — development workspace operations.
+13. **Phase 14** — development investigation.
+
+**Deferred:** Phases 10, 19, 13, 20 and 16. Phase 29 follows Phase 23 and precedes Phase 25 for Scala lint strengthening. Phase 25 is deliberately scheduled before Phase 26 to provide the reusable task/provider contract for common Server and CLI integration; Phase 27 follows both. Phases 7 and 9 remain in execution as last reported. Scheduling only: no Phase/Session starts, no existing evidence or acceptance is changed. Preserve normal ownership and concrete prerequisites.
 
 Previous consumer development priority — 2026-11-19 (sm-workflow-dev開発):
 **stabilization -> remaining [Phase 7](phase-7.md) ->
@@ -709,7 +734,7 @@ in Phase 6, using the corrected runtime contract.
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | FORMAL local release closed 2026-11-19; additional validation/review NOT RUN — USER-APPROVED; residuals in Phase 22; next 8.1 |
 | [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Scheduled after Phase 23; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
 | [24: Context Packaging and practical API-credit use](phase-24.md) | Deterministic bounded context, existing textus-ai/OpenAI connection, ordinary acceptance, bounded agent handoff and no-paid-overage setup | [Formal local release](phase-24.md#formal-local-release--2026-11-22) on 2026-11-22; operational qualification follows the release; [checklist](phase-24-checklist.md) |
-| [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, OpenAI preference for eligible work and selected additional-provider integration | Immediately after 28, followed by 28.1; [checklist](phase-25-checklist.md) |
+| [25: textus-ai Task API and provider expansion](phase-25.md) | Reusable task contract, capability/quota-aware provider selection and selected additional-provider integration | Immediately after 28, followed by 28.1; [checklist](phase-25-checklist.md) |
 | [25.1: OpenAI daily allowance reservation and settlement](phase-25.1.md) | Request-sized reservations for code review and bounded bug fixes, followed by settlement that returns unused tokens | After 28.1 and before 25.2; [checklist](phase-25.1-checklist.md) |
 | [25.2: Workflow completion metrics and short Step validation](phase-25.2.md) | Report observed AI/tool usage and reduce routine Step test time through CNCF typed ADMISSION | After 25.1 and before 28.2; [checklist](phase-25.2-checklist.md) |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |

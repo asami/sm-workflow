@@ -12,7 +12,8 @@ not need an AI call.
 Next, strengthen the workflow before expanding the provider pool. Phase 7.2
 starts this group because retiring explicitly temporary dependency worktrees
 after verified remote synchronization reduces disk pressure without blocking
-local Phase closure. Phase 18 then supplies tool-neutral validation for Phase 23; Flutter integration keeps its
+local Phase closure. Phase 18 then supplies tool-neutral validation for Phase 23;
+Flutter integration keeps its
 existing CNCF dependency. Phase 23 separates current blockers from later
 improvements to avoid repeated repair and review. Phase 22 stabilizes recovery
 and continuations. Phase 29 then strengthens Scala lint findings and reduces
@@ -30,24 +31,73 @@ eligibility, credit limits and fallback policy intact.
 
 ## What this changes
 
-The November 22 roadmap put tool-neutral validation immediately after Phase 25
-and deferred the measurement and provider expansion work. The November 23
+An earlier roadmap on GitHub put Phase 18 immediately after Phase 28. A
+November 22 local revision then put Phase 25 ahead of Phase 18 and deferred
+the measurement and provider expansion work. The November 23
 cost-first revision added Phase 28.1 after Phase 25 and moved measurement and
 provider expansion ahead of Phase 18. This decision keeps the first two Phases
 from that revision, but moves validation, stabilization, and development support
-ahead of broader provider expansion. See the [current roadmap](../../../phase/README.md#adopted-development-priority--2026-11-22) for the ordered plan.
+ahead of broader provider expansion. See the [current roadmap](../../../phase/README.md#adopted-development-priority--2026-11-24) for the ordered plan.
+
+The discussion briefly considered splitting Phase 25. We kept it intact once
+T3 was clarified as normal-route qualification and safe failure handling, not
+an expansion of the provider pool. We also considered omitting Flutter from
+the cost-first path; the adopted sequence retains it in the validation group
+rather than making it an immediate cost-reduction prerequisite.
 
 This is a scheduling decision, not an acceptance or Session change. Preserve
 Phase 25's T1–T3 plan, the local releases of Phases 24 and 28, the Phase 7.1
-hold, and Phase 7.2 ownership and protections. Phases 10, 19, and 16 remain
-deferred.
+hold, and the scope of the Phase 7.2 worktree-retirement plan. Phases 10, 19, and 16
+remain deferred.
 
-## Daily allowance work moved forward — 2026-11-24
+## Worktree-retirement priority — 2026-11-24 (Asia/Tokyo)
 
-The user placed [Phase 25.1](../../../phase/phase-25.1.md) immediately after
-Phase 28.1 and before Phase 7.2. The fixed reservation for each short review or
-repair made most of the daily allowance unusable in normal operation. Phase 25.1
-applies task-sized limits and settles confirmed usage to return unused tokens.
-It also checks whether a verified free-only admission mechanism can remove the
-need for local reservations. This work moves from Phase 27, which consumes the
-result for routing. Other scheduled phases keep their relative order.
+The user placed [Phase 7.2](../../../phase/phase-7.2.md) at the start of the
+second group: Phase 28.1 → Phase 7.2 → Phase 18. Retiring eligible temporary
+worktrees prevents recurring disk pressure and does not need to wait for Flutter
+or lint work. First prioritize the narrow RepositorySync outcome: after verified
+remote synchronization, remove only the explicitly bound, clean, inactive
+worktree. The same path covers a later manual RepositorySync after a failed
+automatic sync. Keep failed or uncertain syncs and unsafe worktrees intact;
+local Phase closure remains independent. This moves the schedule only;
+implementation and existing worktrees are unchanged.
+
+## Daily allowance and Codex completion metrics — 2026-11-24 (Asia/Tokyo)
+
+The adopted order is **[25](../../../phase/phase-25.md) →
+[28.1](../../../phase/phase-28.1.md) → [25.1](../../../phase/phase-25.1.md) →
+[25.2](../../../phase/phase-25.2.md) → [28.2](../../../phase/phase-28.2.md) →
+[7.2](../../../phase/phase-7.2.md) →
+[18](../../../phase/phase-18.md)**. This supersedes the immediate-predecessor
+sequence in the previous entry; Phase 7.2 still opens the stabilization group.
+The rest of the roadmap remains in the same order.
+
+Phase 25.1 retains the separate OpenAI daily free-allowance reservation and
+settlement scope. The user put Phase 25.2 immediately after it: ordinary
+sm-workflow completion posts Markdown tables directly in the initiating Codex
+chat, covering actual AI calls by engine, configured route, thinking mode and
+level, and retained deterministic repairs by tool (Scalafix, Metals, other).
+When the provider or host reports actual usage, record token counts alongside
+AI invocation counts and show usage coverage; missing values are unknown, not
+zero. Configured route does not establish billing. This records scope and order only;
+it starts no execution and changes no existing acceptance or Session.
+
+The fixed reservation for each short review or repair made most of the daily
+allowance unusable in normal operation. Phase 25.1 checks whether a verified
+free-only admission mechanism can remove the need for local reservations.
+This work moves from Phase 27, which consumes the result for routing.
+
+### Additional Phase 25.2 metrics
+
+The initial completion view adds three operational signals: the share of
+observed automatic-repair episodes that resolve without AI repair, repeat passes
+by compile/test/lint/review stage, and wall-clock time alongside cumulative
+AI/build-test/human-approval durations. Preserve denominators and incomplete
+coverage and keep parallel activity from inflating elapsed time. AI usage by
+task role and route-switch counts/reasons are secondary breakdowns using the
+records already available. Compare similar observed runs instead of estimating
+hypothetical token savings. The adopted order and other Phase scopes are unchanged.
+
+The user placed [Phase 28.2](../../../phase/phase-28.2.md) after Phase 25.2 so
+completion metrics can be available before the comparison migration. Defer the
+migration to that slot; earlier lint outcomes are not reclassified.

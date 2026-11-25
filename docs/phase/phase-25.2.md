@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-24 (Asia/Tokyo)
-Scheduled: immediately after [Phase 25.1](phase-25.1.md), followed by [Phase 28.2](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-28.2.md)
+Scheduled: immediately after [Phase 25.1](phase-25.1.md), followed by [Phase 28.2](phase-28.2.md)
 Depends on: released [Phase 25](phase-25.md) Task API and existing execution ledger.
 Reuse available Phase 25.1 route attribution and Phase 28.1 repair evidence; do not alter their acceptance criteria.
 Checklist: [Phase 25.2 acceptance](phase-25.2-checklist.md)

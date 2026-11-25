@@ -42,8 +42,8 @@ to AI repair.
 Reuse Phase 28's deterministic patch and validation path, including the
 released compiler correction. The original release, Session, review
 dispositions, and evidence remain historical records. The
-[adopted development priority](README.md#adopted-development-priority--2026-11-22)
-places Phase 28.1 after completion of the Phase 25 work in progress.
+[adopted development priority](README.md#adopted-development-priority--2026-11-24)
+places Phase 28.1 after completion of Phase 25.
 
 ## P281-01 — Connect Metals to ordinary repair
 

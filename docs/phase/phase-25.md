@@ -8,6 +8,10 @@ Checklist: [Phase 25 delivery ledger](phase-25-checklist.md)
 Design input: [textus-ai Task API integration proposal](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/2026-11-18-textus-ai-task-api-integration.md)
 Decision: [allocation record](../journal/2026/11/2026-11-18-api-credit-routing-development-order.md)
 
+## Scheduling decision — 2026-11-24
+
+Complete the current Phase 25 plan, including T3, before Phase 28.1. This is a scheduling decision, not a split or change to Phase 25 acceptance. See the [current roadmap](README.md#adopted-development-priority--2026-11-24). Earlier scheduling notes below are historical.
+
 ## Goal and responsibility
 
 Extend the working Phase 24 route through a reusable textus-ai task boundary and
@@ -112,7 +116,7 @@ release and formal local closure remain pending.
 
 Further qualification from routine use, including wider workload coverage and
 observations from ongoing use, follows the release. Perform that work in
-parallel with development of the next scheduled phase, [Phase 18](phase-18.md).
+parallel with development of [Phase 18](phase-18.md).
 Compare total tokens per admitted task across selected models, including
 retries and rework, as part of that observation.
 [Phase 25.1](phase-25.1.md) owns the subsequent daily allowance sizing and
@@ -135,3 +139,8 @@ validation and independent integrated review. The production allowance
 connection and the two live OpenAI checks are part of this boundary. Further
 operational verification follows the release. Unsupported providers and
 unknown quotas remain explicit and cannot authorize paid fallback.
+Phase 25 does not delay Phase 24 adoption. This plan starts no Goal, Session, or retry.
+
+## Historical scheduling update — 2026-11-22
+
+The schedule then placed Phase 25 after Phase 23 and before Phase 26. The generic textus-ai Task API/provider boundary precedes common Server and multi-CLI expansion. The [current roadmap](README.md#adopted-development-priority--2026-11-24) records the later order. The T1–T3 and P25 acceptance conditions remain as recorded.

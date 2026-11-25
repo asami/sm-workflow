@@ -18,3 +18,11 @@ Status: planned; no acceptance or implementation claimed.
 - [ ] P27-08 Preserve authoritative Workflow, workspace ownership, Continuation and Admission on handoff.
 - [ ] P27-09 Capture actual per-task outcome, time, usage/cost evidence and unknowns; avoid fabricated monetary equivalents.
 - [ ] P27-10 Perform scoped connected validation and independent review before closing.
+
+## Surplus AI capability allocation (2026-11-22)
+
+- [ ] Verify capability-pool scheduling across eligible routes without fixed provider hierarchy.
+- [ ] Distinguish shared quota pools, observable remaining allowances, reset/expiry and unknowns.
+- [ ] Demonstrate deterministic preference for suitable otherwise-expiring surplus allowance over scarce capacity, subject to quality and forecast demand.
+- [ ] Enforce no unapproved paid fallback and provider-supported automation/entitlement checks (including Copilot).
+- [ ] Measure expected total cost, retry/validation and actual incremental-spend avoidance without fabricated balances.
