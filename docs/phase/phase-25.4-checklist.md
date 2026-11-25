@@ -8,4 +8,6 @@
 - [ ] P254-06: Stateless Strategy Context and typed Task Specification support review viewpoints and execution instructions; eligible advanced free models preferred for semantic design, Terra for ordinary execution.
 - [ ] P254-06: Programmatic fallback, invalid results, restored allowance, no implicit paid execution and unchanged hard constraints verified.
 - [ ] P254-06: Reusable design artifacts retain provenance and applicability; end-to-end comparison includes design cost, quality, retries and latency.
+- [ ] P254-07: Design/execution contracts independent of entitlement; free-only default and explicit paid authorization boundary preserved.
+- [ ] P254-07: Comparable evidence includes total cost per accepted task, quality, latency, failed attempts and reusable design amortization; observed and estimated costs distinguished.
 - [ ] Ordinary installed routes and resume qualified; scoped validation and independent review recorded before closure.
