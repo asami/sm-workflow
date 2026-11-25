@@ -32,9 +32,11 @@ has a user-approved formal local release with comparison work carried to Phase 2
 | Order | Group | Phases |
 | --- | --- | --- |
 | 1–5 | Immediate AI-cost reductions and Scala comparison follow-up | [25](phase-25.md) (OpenAI Task API, locally released) → [28.1](phase-28.1.md) (Metals and deterministic Scala fixes, locally released) → [25.1](phase-25.1.md) (OpenAI daily allowance sizing and settlement) → [25.2](phase-25.2.md) (completion metrics and short Step validation through CNCF) → [28.2](phase-28.2.md) (strict Scala comparison migration) |
-| 6–10 | Worktree retirement, validation, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
-| 11–14 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
-| 15–18 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+| 6–13 | Worktree retirement, validation, AI task design, convergence, and stabilization | [7.2](phase-7.2.md) (temporary dependency worktree retirement) → [18](phase-18.md) (tool-neutral validation and Flutter) → [25.3](phase-25.3.md) (dual daily allowances) → [25.4](phase-25.4.md) (strategic judgement and task design) → [25.5](phase-25.5.md) (hierarchical instruction caching) → [23](phase-23.md) (strategic convergence) → [22](phase-22.md) (runtime stabilization) → [29](phase-29.md) (Scala lint quality) |
+| 14–17 | Development support | [17](phase-17.md) (Task and Standalone Fix) → [21](phase-21.md) (recursive repository catch-up) → [15](phase-15.md) (workspace operations) → [14](phase-14.md) (investigation) |
+| 18–21 | AI measurement and provider expansion | [13](phase-13.md) (usage baseline) → [26](phase-26.md) (shared-server, two-CLI baseline) → [27](phase-27.md) (capability/cost-aware routing) → [20](phase-20.md) (Phase-total usage) |
+
+Scheduling update — 2026-11-25: Phases 25.3, 25.4 and 25.5 follow Phase 18 and precede Phase 23, superseding their earlier proposed placement before Phase 28.2. Other adopted priorities remain unchanged.
 
 **Deferred:** Phases 10 (CBD Review), 19 (Docker clean installation), and 16
 (experimentation). Phase 7.1 remains on hold. Phase 7.2 starts the second
