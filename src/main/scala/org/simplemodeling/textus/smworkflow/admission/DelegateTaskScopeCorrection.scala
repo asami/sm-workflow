@@ -10,6 +10,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitPath, GitSelectionId, GitSelectionParameters}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as _, *}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -44,11 +45,24 @@ private[smworkflow] object DelegateTaskScopeCorrection extends ScopeCorrectionNa
     case _ => true
   }))
   given Decoder[Target] = deriveDecoder
-  final case class Checkpoint(target: Target, reference: ContextReference)
+  final case class Extension(rationale: String, dispatchState: String, authority: ContextReference)
+  final case class Checkpoint(target: Target, reference: ContextReference, extension: Option[Extension] = None)
+  given Encoder[Checkpoint] = {
+    import io.circe.generic.auto.*
+    io.circe.generic.semiauto.deriveEncoder[Checkpoint].mapJson(_.mapObject(fields =>
+      if (fields("extension").contains(Json.Null)) fields.remove("extension") else fields))
+  }
+  given Decoder[Checkpoint] = {
+    import io.circe.generic.auto.*
+    io.circe.generic.semiauto.deriveDecoder[Checkpoint]
+  }
+  val extendOperation = "extendDelegateTaskOwnedPaths"
 
   protected def declaredOperation(correct: Boolean): spec.OperationDefinition = if (correct)
     SmWorkflowComponent.DelegateTaskServiceService.CorrectDelegateTaskScopeOperation
     else SmWorkflowComponent.DelegateTaskServiceService.DescribeDelegateTaskScopeCorrectionOperation
+  override protected def extensionOperation: Option[spec.OperationDefinition] =
+    Some(SmWorkflowComponent.DelegateTaskServiceService.ExtendDelegateTaskOwnedPathsOperation)
 }
 
 private[smworkflow] object ScopeCorrectionNativeOwner {
@@ -88,10 +102,11 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
   N: BoundedWorkNativeRun, val operation: StateMachineOperationIdentity, val inputType: String,
   val resumeCause: String, checkpointType: String, allowConditionTiming: Boolean,
   preserveOriginalSources: Boolean, acceptsInput: S.Input => Boolean) {
-  import DelegateTaskScopeCorrection.{Target, Checkpoint}
+  import DelegateTaskScopeCorrection.{Target, Checkpoint, Extension}
   import DelegateTaskScopeCorrection.given
   import io.circe.generic.auto.*
   protected def declaredOperation(correct: Boolean): spec.OperationDefinition
+  protected def extensionOperation: Option[spec.OperationDefinition] = None
   protected def descriptionInputC(incoming: Request): Consequence[V.DelegateTaskScopeCorrectionDescriptionInput] =
     NativeWorkflowOperationInput.valueC[V.DelegateTaskScopeCorrectionDescriptionInput](incoming, "input")
   protected def response(target: Target, outcome: String, message: String, paths: Vector[String]): OperationResponse =
@@ -154,11 +169,12 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     entityrevision: org.simplemodeling.model.datatype.EntityRevision)
   private def _observe_c(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding,
     session: String, old: String, additional: Vector[String], submission: Option[Vector[String]],
-    supplemental: Boolean, core: ActionCall.Core): Consequence[Observation] = for {
+    supplemental: Boolean, core: ActionCall.Core, withinAuthority: Boolean = false): Consequence[Observation] = for {
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
     pending <- adapter.inspectC(ContinuationIdentity(old), InstanceIdentity(session))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Exact pending Task issue is absent or already claimed")))
-    _ <- if ((!preserveOriginalSources && !supplemental) || (pending.continuation.status == ContinuationRuntimePersistence.Status.Available &&
+    _ <- if ((!preserveOriginalSources && !supplemental && !withinAuthority) ||
+        (pending.continuation.status == ContinuationRuntimePersistence.Status.Available &&
         pending.continuation.claimId.isEmpty)) Consequence.unit
       else N.invalid("Exact pending Task issue is not available and unclaimed")
     _ <- if (pending.current.definition == definition && pending.current.lifecycle == Lifecycle.Active)
@@ -194,6 +210,53 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
   } yield Observation(Target(core.component.get.core.instanceId.canonicalKey, session, payload.state.participant,
     pending.current.revision.value, old, frontier, issued, payload, pending.entityRevision.value.toString, additional, submission, inventory),
     pending.current, pending.entityRevision)
+
+  private def _extension_authority_c(storage: WorkflowComponentStorage, observed: Observation,
+    core: ActionCall.Core): Consequence[ContextReference] = {
+    val target = observed.target
+    val current = observed.current
+    val start = initialRevision.next.next
+    for {
+      _ <- if (current.history.take(2).map(entry => entry.revision -> entry.causation.value) ==
+          Vector(initialRevision.next -> "standalone-started", start -> s"standalone-state:${start.value}"))
+        Consequence.unit else N.invalid("Exact destination Start history is absent")
+      original <- N.loadPayloadC(storage, target.sessionId, start.value, core)
+      input = target.business.state.input
+      accepted = original.state.input
+      contract <- accepted.delegation.filter(c => DelegateTask.valid(c) && c.role == "destination" &&
+        c.permittedOperations.contains("implement")).map(Consequence.success)
+        .getOrElse(N.invalid("Original destination implementation authority is absent"))
+      _ <- if (original.state.participant == target.participant && original.root == target.business.root &&
+          original.branch == target.business.branch &&
+          input.copy(ownedPaths = accepted.ownedPaths, sourceReferences = accepted.sourceReferences,
+            submissionConditions = accepted.submissionConditions) == accepted)
+        Consequence.unit else N.invalid("Scope extension crosses the original destination request or source")
+      additions = target.additionalOwnedPaths
+      overlaps = (a: String, b: String) => S.owned(a, Vector(b)) || S.owned(b, Vector(a))
+      _ <- if (additions.forall(path => !input.ownedPaths.exists(overlaps(path, _)) &&
+          !contract.exclusions.filter(GoalPhasePurposeRepair.path).exists(overlaps(path, _)) &&
+          !additions.exists(other => other != path && overlaps(path, other))))
+        Consequence.unit else N.invalid("Scope extension must select exact new paths outside existing and excluded inventories")
+      root <- RepositorySyncManagedGitObservation.rootC(core)
+      source <- RepositorySyncManagedGitObservation.observeC(core)
+      dirty = source.dirty ++ original.unrelated.getOrElse(Vector.empty)
+      _ <- if (root == original.root && source.branch == original.branch && source.head == target.business.baseHead &&
+          !dirty.exists(entry => (entry.path +: entry.renamedFrom.toVector).exists(path => additions.exists(overlaps(path, _)))))
+        Consequence.unit else N.invalid("Scope extension crosses the retained source or would absorb existing changes")
+      tree <- GitObjectId.parseC(source.tree)
+      identity <- GitSelectionId.parseC("delegate-task-owned-paths-extension")
+      paths <- additions.foldLeft(Consequence.success(Vector.empty[GitPath])) { (previous, name) =>
+        for {
+          items <- previous
+          path <- GitPath.parseC(name)
+        } yield items :+ path
+      }
+      // The typed decoder accepts regular entries and absent paths. It rejects
+      // directories, symlinks, gitlinks and observations outside this selection.
+      _ <- WorkflowManagedProcessExecution.executePurposeC(core, GitOperation.TreeEntries(tree, identity),
+        GitSelectionParameters(identity, paths)).flatMap(_.valueC)
+    } yield contract.authorizationReferences.head
+  }
 
   private def _parse_c(text: String): Consequence[Json] =
     io.circe.parser.parse(text).fold(e => N.invalid(e.message), Consequence.success)
@@ -312,13 +375,15 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
     state = original.state.copy(input = input,
       evidenceReferences = if (!preserveOriginalSources && saved.target.submissionConditions.nonEmpty)
         (original.state.evidenceReferences :+ saved.reference).distinct else original.state.evidenceReferences)
-    supplemental = saved.target.managedInventory.map(inventory =>
-      (original.supplementalOwnedPaths.getOrElse(Vector.empty) ++ inventory.additionalPaths).distinct)
+    exactPaths = saved.target.managedInventory.map(_.additionalPaths)
+      .orElse(saved.extension.map(_ => saved.target.additionalOwnedPaths))
+    supplemental = exactPaths.map(paths =>
+      (original.supplementalOwnedPaths.getOrElse(Vector.empty) ++ paths).distinct)
       .orElse(original.supplementalOwnedPaths)
     unrelated = original.unrelated.map(_.filterNot { entry =>
       val endpoints = entry.path +: entry.renamedFrom.toVector
       endpoints.forall { path =>
-        if (saved.target.managedInventory.nonEmpty) saved.target.additionalOwnedPaths.contains(path)
+        if (exactPaths.nonEmpty) saved.target.additionalOwnedPaths.contains(path)
         else S.owned(path, saved.target.additionalOwnedPaths)
       }
     })
@@ -328,7 +393,57 @@ private[smworkflow] abstract class ScopeCorrectionNativeOwner(
 
   def operations(h: Host, definition: DefinitionBinding,
     selections: ProfileStartAdmission.CallScopedSelectionPort): Vector[spec.OperationDefinition] =
-    Vector(new Operation(false, h, definition, selections), new Operation(true, h, definition, selections))
+    Vector(new Operation(false, h, definition, selections), new Operation(true, h, definition, selections)) ++
+      extensionOperation.map(new ExtensionOperation(_, h, definition))
+
+  private final class ExtensionOperation(declared: spec.OperationDefinition, h: Host,
+    definition: DefinitionBinding) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(declared)
+    def createOperationRequest(incoming: Request): Consequence[OperationRequest] = Consequence.success(new CommandAction {
+      val request = incoming
+      override def commandExecutionMode = CommandExecutionMode.Sync
+      def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+        val core = c
+        def execute(): Consequence[OperationResponse] = for {
+          input <- NativeWorkflowOperationInput.valueC[V.DelegateTaskOwnedPathsExtensionInput](incoming, "input")
+          rationale = Option(input.rationale).fold("")(_.trim)
+          _ <- if (rationale.nonEmpty && input.dispatchState == "not-dispatched") Consequence.unit
+            else N.invalid("Scope extension requires its same-purpose rationale and confirmed non-dispatch")
+          context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(input.sessionId))
+          selected = core.copy(executionContext = context)
+          storage <- N.storageC(h, definition, selected)
+          instances <- storage.bindInstancesC()(using context)
+          session = InstanceIdentity(input.sessionId)
+          old = ContinuationIdentity(input.oldContinuationId)
+          paths = input.additionalOwnedPaths.toVector
+          current <- instances.loadC(session)(using context)
+            .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Scope extension Session is absent")))
+          _ <- WorkflowForceClosure.requireOpenC(current)
+          adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
+          retained <- adapter.loadRetainedC(old, session)(using context)
+          output <- retained match {
+            case Some(saved) if saved.receipt.payload.target.additionalOwnedPaths == paths &&
+                saved.receipt.payload.extension.exists(ext => ext.rationale == rationale && ext.dispatchState == input.dispatchState) =>
+              val target = saved.receipt.payload.target
+              GoalPhaseParticipantAdmission.admitC(target.participant, context)
+                .flatMap(_ => _output_c(target, "already-corrected"))
+            case Some(_) => N.invalid("Scope extension differs from the retained correction")
+            case None => for {
+              observed <- _observe_c(h, storage, definition, input.sessionId, input.oldContinuationId, paths,
+                None, false, selected, withinAuthority = true)
+              authority <- _extension_authority_c(storage, observed, selected)
+              reference = DelegateTaskDeliveryProjection.receiptReference(observed.target, observed.current.revision.next.value.toString)
+              extension = Extension(rationale, input.dispatchState, authority)
+              _ <- adapter.executeC(old, observed.current.revision, observed.entityrevision, observed.current,
+                N.history(observed.current, resumeCause + input.oldContinuationId),
+                TypedValue(checkpointCodec.typeIdentity, Checkpoint(observed.target, reference, Some(extension))))(using context)
+              result <- _output_c(observed.target, "corrected-awaiting-advance")
+            } yield result
+          }
+        } yield output
+      }
+    })
+  }
 
   private final class Operation(correct: Boolean, h: Host, definition: DefinitionBinding,
     selections: ProfileStartAdmission.CallScopedSelectionPort) extends spec.OperationDefinition {

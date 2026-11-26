@@ -94,6 +94,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation",
       "describeDelegateTaskRequestReconstruction", "reconstructDelegateTaskRequest",
       "describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
+      "extendDelegateTaskOwnedPaths",
       "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation",
       "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation",
       "describeDelegateTaskValidationRecovery", "recoverDelegateTaskValidation",

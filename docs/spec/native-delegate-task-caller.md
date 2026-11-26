@@ -100,8 +100,8 @@ The selected submission IDs must be a nonempty, unique, order-preserving proper
 subset of the original conditions. The actual responsible Human must choose
 those exact IDs. Do not infer them from lexical condition text or from permission
 to repair the runtime. With no timing change, an empty submission list instead
-retains the existing plan, and new same-purpose literal additional owned paths
-must be supplied. Added paths retain the configured host and exclusion checks.
+retains the existing plan. Use the original-authority route below for eligible
+literal file additions alone.
 
 Retain the returned `target` string unchanged. Write the complete
 `DelegateTaskScopeCorrectionInput` to an absolute local file URI:
@@ -137,6 +137,31 @@ WorkOrder. Keep its actual current `issuedWorkContext`; the retired issue remain
 historical and cannot be submitted as that successor. Neither correction nor
 description changes files, checks, counters, source base, prior results or
 unknown external effects. Force-closed work cannot be reopened this way.
+
+For file additions covered by the existing authorization, call
+`DelegateTaskService.extendDelegateTaskOwnedPaths --input <json>` from the
+owning destination before dispatching the pending work.
+
+```json
+{
+  "sessionId": "<actual-destination-session>",
+  "oldContinuationId": "<actual-pending-continuation>",
+  "additionalOwnedPaths": ["project/SbtBridge.scala"],
+  "rationale": "Connect the typed SBT selection required by the admitted Task",
+  "dispatchState": "not-dispatched"
+}
+```
+
+The caller qualifies the file additions against the original purpose and
+confirms from its dispatch records that the old assignment has never been
+dispatched. It checks that each addition names an ordinary file or a planned
+file under ordinary directories in the same checkout. The runtime
+authenticates the retained Start, participant, current unclaimed issue, source,
+boundaries and literal file inventory. The extension retains current condition
+timing and original authorization and records the rationale. Call ordinary
+`advanceDelegateTask` on the same Session after `corrected-awaiting-advance`
+or `already-corrected`. A genuine authorization gap or uncertain old execution
+uses its existing decision or recovery route.
 
 If the corrected Implement remains unissued and the same branch has advanced,
 ordinary Advance observes and proves the descendant source before retaining an

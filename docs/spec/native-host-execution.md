@@ -288,6 +288,12 @@ carries no permission to postpone implementing those capabilities.
 
 ## Cross-chat result reply authority
 
+The destination proceeds from its retained successful Start through ordinary
+Advance. A Start acknowledgment is optional progress. If omitted,
+unavailable or denied, keep the local receipt and continue the admitted
+work. The requester collects the actual result through its selected waiting
+or reply mode. Result sharing follows the return authority below.
+
 For either waiting mode, the requester includes the authorized return chat
 identity, the information the user permits sharing, the work covered (including
 any covered follow-up repairs), and a reference to the original user instruction

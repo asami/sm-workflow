@@ -96,6 +96,11 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
         val old = issued.issuedWorkContext.get.continuationId
         before.stage shouldBe "Implement"
         before.selected.map(_.identity) shouldBe Vector("compile", "test-only", "fix-check")
+        def extend(value: V.DelegateTaskOwnedPathsExtensionInput) = call("extendDelegateTaskOwnedPaths",
+          List(Property("input", value, None)))
+        val directory = V.DelegateTaskOwnedPathsExtensionInput(started.sessionId, old, NonEmptyVector.one("project"),
+          "Connect the typed SBT bridge to its project-local selection", "not-dispatched")
+        extend(directory).isSuccess shouldBe false
         val partial = root.resolve("repository/src/test/scala/Partial.scala")
         Files.createDirectories(partial.getParent)
         Files.writeString(partial, "// SPECIFICATION-OWNED partial source\n")
@@ -177,6 +182,30 @@ final class NormalDeferredScopeCorrectionSpec extends AnyWordSpec with GivenWhen
           target.frontier.hcursor.get[Vector[Json]]("history").toOption.get.size) shouldBe
           target.frontier.hcursor.get[Vector[Json]]("history").toOption.get
         advance().issuedWorkContext shouldBe next.issuedWorkContext
+        When("the owning caller identifies another clean exact file needed by the same admitted purpose")
+        val extension = V.DelegateTaskOwnedPathsExtensionInput(started.sessionId, next.issuedWorkContext.get.continuationId,
+          NonEmptyVector.of("project/ScopeNotes.scala", "value.txt"), "Connect the typed SBT bridge to its project-local selection", "not-dispatched")
+        Vector(extension.copy(sessionId = "foreign"), extension.copy(oldContinuationId = old),
+          extension.copy(dispatchState = "unknown"),
+          extension.copy(rationale = " "), extension.copy(additionalOwnedPaths = NonEmptyVector.one("private/secret.scala")),
+          extension.copy(additionalOwnedPaths = NonEmptyVector.one("project")),
+          extension.copy(additionalOwnedPaths = NonEmptyVector.one("project/SbtBridge.scala/child"))).foreach(invalid =>
+          extend(invalid).isSuccess shouldBe false)
+        advance().issuedWorkContext shouldBe next.issuedWorkContext
+        read_value[V.DelegateTaskScopeCorrectionView](take(extend(extension))).outcome shouldBe "corrected-awaiting-advance"
+        read_value[V.DelegateTaskScopeCorrectionView](take(extend(extension))).outcome shouldBe "already-corrected"
+        extend(extension.copy(rationale = "Different rationale")).isSuccess shouldBe false
+        val extended = advance()
+        val extendedState = state(extended)
+        Then("the same Session issues another assignment with the original obligations and no new selection")
+        extended.sessionId shouldBe started.sessionId
+        extended.issuedWorkContext.get.continuationId should not be next.issuedWorkContext.get.continuationId
+        extendedState.input.ownedPaths shouldBe after.input.ownedPaths ++ extension.additionalOwnedPaths.toVector
+        extendedState.input.sourceReferences.drop(after.input.sourceReferences.size) shouldBe Vector(
+          DelegateTaskDeliveryProjection.receiptReference(successorTarget, (successorTarget.frontierRevision + 1).toString))
+        extendedState.copy(input = extendedState.input.copy(ownedPaths = after.input.ownedPaths,
+          sourceReferences = after.input.sourceReferences)) shouldBe after
+        advance().issuedWorkContext shouldBe extended.issuedWorkContext
         Files.readString(partial) shouldBe "// SPECIFICATION-OWNED partial source\n"
         Files.readString(necessary) shouldBe "// SPECIFICATION-OWNED necessary bridge\n"
         Files.exists(root.resolve("sbt-executions.txt")) shouldBe false

@@ -96,6 +96,9 @@ explicit stop. Preserve the request, history, repair counts and checks.
 Progress reporting defaults to OFF. Preserve explicit ON/OFF preferences and
 honor changes in the parent using the
 [mode selection](../../docs/spec/native-host-execution.md#cross-chat-waiting-mode-selection).
+An admitted destination Start is recorded by the runtime. Continue with
+ordinary Advance even when a progress acknowledgment is omitted, unavailable
+or denied. Receipt of a Start notice is optional for the requester's wait.
 Explicit **notification-only** / **結果返信で続行** uses the
 [reply-based return contract](../../docs/spec/native-host-execution.md#cross-chat-notification-only-return)
 when the user chooses to end this turn after dispatch.
@@ -191,8 +194,13 @@ submit it with the original `issuedWorkContext`, actual result and reference to
 Keep every adopted condition ID and its original order. For new requests,
 `submissionConditions` selects which conditions must be true at submission;
 an omitted or empty list defers all to final `DeliveryAcceptance`. Historical
-absent timing remains strict. Correct an eligible pending initial issue only
-through the public description/correction route and actual Human selection.
+absent timing remains strict. For necessary new files within the original
+destination purpose and authority, use `extendDelegateTaskOwnedPaths` with the
+exact unclaimed issue, paths and rationale before dispatch. Continue with
+ordinary Advance. Verify from the caller's dispatch records that this issue
+was never dispatched. Check that each added path is an ordinary file or a
+planned file under ordinary directories in the same checkout. Changes to condition timing use the
+public description/correction route and actual Human selection.
 Read-only DeliveryAcceptance evaluates retained delivery evidence; it executes
 no checks, commit or publication and cannot request repair. See the
 [condition timing contract](../../docs/spec/delegate-task.md#initial-condition-timing-and-pending-legacy-scope-correction).

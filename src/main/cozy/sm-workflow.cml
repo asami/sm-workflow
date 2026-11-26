@@ -16426,6 +16426,34 @@ DelegateTaskScopeCorrectionInput
 
 DelegateTaskScopeCorrectionView
 
+#### extendDelegateTaskOwnedPaths
+
+##### DESCRIPTION
+
+Add exact necessary files to an unclaimed destination implementation or Repair within the original Start authority. The owning caller confirms dispatchState not-dispatched and provides why the files are needed for the retained purpose. The original issue is retained and superseded; ordinary Advance issues the amended work. Authorization, obligations, results and repair counts remain in force.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskOwnedPathsExtensionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskOwnedPathsExtensionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskScopeCorrectionView
+
 #### describeDelegateTaskCandidateContinuation
 
 ##### DESCRIPTION
@@ -17351,6 +17379,22 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | participant | string | 1 |
 | idempotencyKey | string | 1 |
 | reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskOwnedPathsExtensionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| additionalOwnedPaths | string | + |
+| rationale | string | 1 |
+| dispatchState | string | 1 |
 
 # VALUE
 

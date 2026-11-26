@@ -684,6 +684,9 @@ private[smworkflow] object StandardWorkflowRuntime {
       _ <- DelegateTaskScopeCorrection.selectionInputC(input)
       target <- DelegateTaskScopeCorrection.targetC(input.target)
     } yield target.additionalOwnedPaths
+    else if (request.operation == DelegateTaskScopeCorrection.extendOperation)
+      NativeWorkflowOperationInput.valueC[org.simplemodeling.textus.smworkflow.value.DelegateTaskOwnedPathsExtensionInput](request, "input")
+        .map(_.additionalOwnedPaths.toVector)
     else Consequence.success(Vector.empty[String])
 
   /** Read the normally admitted typed host plan's repository data, not a

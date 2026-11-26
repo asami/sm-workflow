@@ -424,6 +424,16 @@ literal owned paths for the same purpose, subject to the retained host ownership
 and delegation exclusions. It replaces no original ownership, purpose, operation
 or authority.
 
+For path-only additions within the existing authorization, the owning caller
+uses `extendDelegateTaskOwnedPaths` before dispatch of an unclaimed Implement
+or Repair. This records the same-purpose rationale and original delegation
+authority with the same native supersession. The runtime checks the accepted
+Start, current participant, source, explicit exclusions and any retained parent
+inventory. It admits exact additions that do not capture existing unrelated
+changes. A separate ordinary Advance issues the amended work. Original timing,
+conditions, operations, history and counts carry forward. Existing Human scope
+correction remains available for an actual judgment about authority or timing.
+
 After that correction retires an Implement issue, ordinary Advance can rebind
 the still-unissued implementation to the observed current source. It requires
 the same root and branch, valid adopted ownership and a current HEAD descended
