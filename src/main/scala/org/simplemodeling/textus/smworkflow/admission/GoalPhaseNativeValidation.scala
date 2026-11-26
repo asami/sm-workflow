@@ -32,15 +32,18 @@ import GoalPhaseCanonicalCheckConsumption as Q
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
   final case class Check(identity: String, ordinal: Int, kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     metadata: Option[N.Profile] = None, hostIdentity: Option[String] = None,
     operation: Option[D.OperationReference] = None,
-    dependency: Option[String] = None, carLint: Boolean = false) {
+    dependency: Option[String] = None, carLint: Boolean = false, testScope: Option[String] = None) {
     def wireKind: String = if (carLint) "car-lint" else kind.wire
+    def effectiveTestScope: org.goldenport.cncf.processexecution.SbtTestScope = if (testScope.contains("admission")) org.goldenport.cncf.processexecution.SbtTestScope.Admission else org.goldenport.cncf.processexecution.SbtTestScope.Full
+    def scopeValid: Boolean = testScope != null && metadata != null && operation != null && testScope.forall(s => kind == WorkflowSbtValidation.Kind.Test &&
+      !carLint && metadata.isEmpty && operation.isEmpty && Set("full", "admission")(s))
     def carLintShape: Boolean = !carLint || (kind == WorkflowSbtValidation.Kind.Test && metadata.isEmpty &&
       hostIdentity.isEmpty && operation.isEmpty && dependency.isEmpty)
   }
@@ -53,7 +56,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       val metadata = value.metadata.fold(kind)(m => kind.mapObject(_.add("metadata", m.asJson)))
       val host = value.hostIdentity.fold(metadata)(h => metadata.mapObject(_.add("hostIdentity", h.asJson)))
       val operation = value.operation.fold(host)(o => host.mapObject(_.add("operation", o.asJson)))
-      value.dependency.fold(operation)(d => operation.mapObject(_.add("dependency", d.asJson)))
+      val dependency = value.dependency.fold(operation)(d => operation.mapObject(_.add("dependency", d.asJson)))
+      value.testScope.fold(dependency)(s => dependency.mapObject(_.add("testScope", s.asJson)))
     })
     given Decoder[Check] = Decoder.instance(cursor => for {
       identity <- cursor.get[String]("identity")
@@ -64,14 +68,17 @@ private[smworkflow] object GoalPhaseNativeValidation {
       host <- N.optional[String](cursor, "hostIdentity")
       operation <- N.optional[D.OperationReference](cursor, "operation")
       dependency <- N.optional[String](cursor, "dependency")
-    } yield Check(identity, ordinal, kind, metadata, host, operation, dependency, carLint))
+      scope <- N.optional[String](cursor, "testScope")
+      result = Check(identity, ordinal, kind, metadata, host, operation, dependency, carLint, scope)
+      _ <- Either.cond(result.scopeValid, (), io.circe.DecodingFailure("Invalid Test scope", cursor.history))
+    } yield result)
   }
   final case class Policy(identity: String, revision: Int, checks: Vector[Check]) {
     def validateC: Consequence[Unit] =
       if (id(identity) && revision > 0 && checks != null && checks.nonEmpty &&
           checks.forall(c => c != null && id(c.identity) && c.kind != null && c.ordinal > 0 &&
             c.metadata != null && c.hostIdentity != null && c.operation != null && c.dependency != null && c.dependency.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty &&
-            c.carLintShape && c.metadata.forall(p => c.kind == WorkflowSbtValidation.Kind.TestOnly && N.profileValid(p))) &&
+            c.carLintShape && c.scopeValid && c.metadata.forall(p => c.kind == WorkflowSbtValidation.Kind.TestOnly && N.profileValid(p))) &&
           checks.map(_.identity).distinct.size == checks.size && checks.map(_.ordinal).distinct.size == checks.size)
         if (N.buildReferencesValid(checks)) Consequence.unit else F.invalid("native metadata build references are crossed")
       else F.invalid("native validation host bindings are incomplete")
@@ -181,6 +188,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       policy.checks.find(_.identity == identity).fold[Consequence[Vector[Check]]](
         F.invalid("required plan check has no fixed host program: " + identity))(c => Consequence.success(values :+ c))
     }}
+    _ <- if (step.isEmpty && selected.exists(_.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Admission))
+      F.invalid("Phase closure cannot use Admission in place of Full") else Consequence.unit
     _ <- if (step.flatMap(id => plan.steps.find(_.identity == id)).flatMap(_.actionPolicy).exists(_.kind == "code") &&
         !(selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
           selected.exists(_.kind == WorkflowSbtValidation.Kind.TestOnly)))
@@ -715,7 +724,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
             E.discoveryBuildAttemptC(store.core, "sm-workflow-repository-validation-" + selected.ordinal, expected)
           else if (selected.operation.isEmpty) _workspace_c(selected, store.initial)
             .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace,
-              lintBase = Some(if (store.whole) store.controller.base.head else store.base.head), expectedWorkspaceRoot = expected))
+              lintBase = Some(if (store.whole) store.controller.base.head else store.base.head), expectedWorkspaceRoot = expected,
+              testScope = selected.effectiveTestScope))
           else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _, expected))
         },
         payload => store.evidenceC(payload).map(_ => ()))
@@ -870,7 +880,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _attempt_target_c(check: Check, workspace: Option[String], target: SbtTarget,
     operation: SbtOperation): Consequence[Unit] =
-    if (target != null && operation != null && workspace.forall(w => target.workspaceId.value == w) &&
+    if (target != null && operation != null && check.scopeValid && target.testScope == check.effectiveTestScope &&
+        workspace.forall(w => target.workspaceId.value == w) &&
         (operation match {
           case SbtOperation.Compile => check.kind == WorkflowSbtValidation.Kind.Compile
           case SbtOperation.TestCompile => check.kind == WorkflowSbtValidation.Kind.TestCompile
@@ -1524,7 +1535,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
             (last.termination, last.exitCode, facts.outcome) match {
               case ("exited", Some(exit), WorkflowSbtValidation.Outcome.Failed) => exit != 0
               case ("indeterminate" | "cancelled" | "timed-out" | "termination-unconfirmed" | "output-limit-exceeded" | "launch-failed" | "artifact-limit-exceeded", None, WorkflowSbtValidation.Outcome.Incomplete) => true
-              case ("exited", Some(0), WorkflowSbtValidation.Outcome.Unverified) => facts.kind == WorkflowSbtValidation.Kind.TestOnly
+              case ("exited", Some(0), WorkflowSbtValidation.Outcome.Unverified) => facts.kind == WorkflowSbtValidation.Kind.TestOnly ||
+                (facts.kind == WorkflowSbtValidation.Kind.Test && facts.testScope.contains("admission"))
               case _ => false
             }
         }
@@ -1636,7 +1648,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _valid_payload(payload: Payload): Boolean = payload != null && GoalPhaseQualification.payloadValid(payload) && _text(payload.sourceRevision) &&
     _text(payload.step) && payload.candidate != null &&
     Vector(payload.candidate.head, payload.candidate.tree).forall(value => value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
-    payload.selected != null && payload.selected.nonEmpty &&
+    payload.selected != null && payload.selected.nonEmpty && payload.selected.forall(c => c != null && c.scopeValid) &&
     N.validateRuntimeC(payload.selected, payload.metadata, _authenticated_checks(payload)).isSuccess &&
     payload.receipts != null && payload.stopped != null &&
     N.validateBuildReceiptsC(payload.selected, payload.metadata, payload.receipts).isSuccess &&
@@ -1674,9 +1686,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
         V.storedProductOutputValid(receipt) &&
         receipt.termination != "not-started" &&
         (if (check.carLint) receipt.carLint.nonEmpty
-        else receipt.carLint.isEmpty && receipt.sbt.forall(facts => facts != null && facts.valid && facts.kind == check.kind &&
+        else receipt.carLint.isEmpty && check.scopeValid && _scope_receipt_valid(receipt, check) && receipt.sbt.forall(facts => facts != null && facts.valid && facts.kind == check.kind &&
+          facts.effectiveTestScope == check.effectiveTestScope &&
           facts.outcome != WorkflowSbtValidation.Outcome.NotExecuted) &&
-        (receipt.sbt.nonEmpty || check.kind == WorkflowSbtValidation.Kind.Test))
+        (receipt.sbt.nonEmpty || (check.kind == WorkflowSbtValidation.Kind.Test && check.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)))
     } && payload.stopped != null && {
       val indices = payload.stopped.map(receipt =>
         if (receipt == null) -1 else payload.selected.indexWhere(_.identity == receipt.identity))
@@ -1685,7 +1698,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
         indices.sliding(2).forall(pair => pair.size < 2 || pair.head <= pair.last) &&
         payload.stopped.zip(indices).forall { (receipt, index) => _not_executed(receipt) &&
           (if (payload.selected(index).carLint) receipt.carLint.nonEmpty
-           else receipt.sbt.exists(_.kind == payload.selected(index).kind)) }
+           else _scope_receipt_valid(receipt, payload.selected(index)) && receipt.sbt.exists(f => f.kind == payload.selected(index).kind &&
+             f.effectiveTestScope == payload.selected(index).effectiveTestScope)) }
     } && payload.admissionFailures != null && payload.uncertainties != null && payload.newAttempts != null && {
       def ordered(keys: Vector[(String, Int)]): Boolean = {
         val indices = keys.map((identity, attempt) => (payload.selected.indexWhere(_.identity == identity), attempt))
@@ -1712,11 +1726,27 @@ private[smworkflow] object GoalPhaseNativeValidation {
     !value.exists(c => c == '\u0000' || c == '\r' || c == '\n')
   private def _stored_text(value: String): Boolean = value != null && !value.contains('\u0000') &&
     java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
+  private def _scope_receipt_valid(receipt: V.Receipt, check: Check): Boolean =
+    if (check.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)
+      receipt.sbt.forall(_.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)
+    else receipt.sbt.exists { facts =>
+      facts.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Admission && receipt.processObservation.exists { process =>
+        val report = org.goldenport.cncf.processexecution.SbtAdmissionTestReport.assess(process)
+        val rows = report.selected.map((suite, test) => WorkflowSbtValidation.AdmissionCase(suite, test))
+        val retained = facts.admissionCases.getOrElse(Vector.empty)
+        rows == retained && (facts.outcome match {
+          case WorkflowSbtValidation.Outcome.Succeeded => report.disposition.isEmpty
+          case WorkflowSbtValidation.Outcome.Unverified => report.disposition.exists(r => facts.reason.contains(r.toString))
+          case _ => true
+        })
+      }
+    }
   private[admission] def successful(receipts: Vector[V.Receipt], selected: Vector[Check]): Boolean =
     receipts != null && selected != null && receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
         check != null && receipt != null && receipt.identity == check.identity && receipt.carLint != null &&
         (if (check.carLint) receipt.carLint.exists(_.passed) && V.storedProductOutputValid(receipt)
-         else V.productSuccessful(receipt, check.kind)))
+         else check.scopeValid && _scope_receipt_valid(receipt, check) && receipt.sbt.fold(check.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)(
+           _.effectiveTestScope == check.effectiveTestScope) && V.productSuccessful(receipt, check.kind)))
   private def covers(owner: String, path: String): Boolean = path == owner || path.startsWith(owner + "/")
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

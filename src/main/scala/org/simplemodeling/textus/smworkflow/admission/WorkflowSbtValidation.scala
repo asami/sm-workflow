@@ -11,7 +11,7 @@ import org.goldenport.cncf.processexecution.*
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -112,18 +112,29 @@ private[smworkflow] object WorkflowSbtValidation {
   def formalTestFailure(reason: Option[String]): Boolean = reason.exists(Set(
     "FailedTests", "ZeroTests", "SuiteMismatch", "ScenarioMismatch", "InventoryMismatch"))
 
+  final case class AdmissionCase(suite: String, test: String)
+  object AdmissionCase {
+    given Encoder[AdmissionCase] = deriveEncoder
+    given Decoder[AdmissionCase] = deriveDecoder
+  }
   final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
     estimate: Option[SbtValidationEstimate] = None,
     mode: Option[Mode] = None, batch: Option[Vector[SbtValidationMode.CaseResult]] = None,
     private val estimateFieldPresent: Boolean = false,
-    lintInput: Option[SbtLintInput] = None) {
+    lintInput: Option[SbtLintInput] = None, testScope: Option[String] = None,
+    admissionCases: Option[Vector[AdmissionCase]] = None) {
+    def effectiveTestScope: SbtTestScope = if (testScope.contains("admission")) SbtTestScope.Admission else SbtTestScope.Full
     override def equals(other: Any): Boolean = other match {
       case that: Facts => kind == that.kind && outcome == that.outcome && selection == that.selection &&
-        reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch && lintInput == that.lintInput
+        reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch && lintInput == that.lintInput &&
+        testScope == that.testScope && admissionCases == that.admissionCases
       case _ => false
     }
-    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch, lintInput).hashCode
+    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch, lintInput, testScope, admissionCases).hashCode
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
+      testScope != null && testScope.forall(s => kind == Kind.Test && s == "admission") &&
+      admissionCases != null && admissionCases.forall(rows => effectiveTestScope == SbtTestScope.Admission && rows.nonEmpty &&
+        rows.distinct == rows && rows.forall(row => row != null && row.suite != null && row.suite.nonEmpty && row.test != null && row.test.nonEmpty)) &&
       lintInput != null && lintInput.forall(input => kind == Kind.FixCheck && lintValid(input)) &&
       estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
       batch != null && batch.forall(values => kind == Kind.TestOnly && values.nonEmpty && values.size <= 64 &&
@@ -134,12 +145,15 @@ private[smworkflow] object WorkflowSbtValidation {
             Set("fixture", "live")(observed.provider) && value.selected.requiredProvider.forall(_ == observed.provider)))) &&
         (outcome != Outcome.Succeeded || values.forall(_.status == "passed"))) && mode != null && mode.forall(value => value != null && value.valid &&
         (outcome != Outcome.Succeeded || value.verified)) && (outcome match {
+        case Outcome.Succeeded if effectiveTestScope == SbtTestScope.Admission =>
+          selection.isEmpty && admissionCases.nonEmpty && reason.isEmpty
         case Outcome.Succeeded if kind == Kind.TestOnly =>
           ((selection.exists(x => x != null && x.valid) && batch.isEmpty) || (selection.isEmpty && batch.nonEmpty)) && reason.isEmpty
         case Outcome.Failed => selection.isEmpty &&
           (reason.isEmpty || (kind == Kind.TestOnly && formalTestFailure(reason)))
         case Outcome.Unverified => selection.isEmpty &&
           ((kind == Kind.TestOnly && reason.exists(x => SbtTestSelectionFailure.values.exists(_.toString == x))) ||
+            (effectiveTestScope == SbtTestScope.Admission && reason.exists(x => SbtTestSelectionFailure.values.exists(_.toString == x))) ||
             (kind == Kind.TestCompile && reason.contains("DiscoveryUnavailable") && mode.isEmpty && batch.isEmpty))
         case _ => selection.isEmpty && reason.isEmpty
       })
@@ -154,7 +168,9 @@ private[smworkflow] object WorkflowSbtValidation {
         legacy.mapObject(_.add("estimate", value.estimate.asJson)) else legacy
       val mode = value.mode.fold(estimated)(mode => estimated.mapObject(_.add("mode", mode.asJson)))
       val batch = value.batch.fold(mode)(batch => mode.mapObject(_.add("batch", batch.asJson)))
-      value.lintInput.fold(batch)(input => batch.mapObject(_.add("lintInput", input.asJson)))
+      val lint = value.lintInput.fold(batch)(input => batch.mapObject(_.add("lintInput", input.asJson)))
+      val scope = value.testScope.fold(lint)(s => lint.mapObject(_.add("testScope", s.asJson)))
+      value.admissionCases.fold(scope)(rows => scope.mapObject(_.add("admissionCases", rows.asJson)))
     }
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
@@ -165,8 +181,10 @@ private[smworkflow] object WorkflowSbtValidation {
       mode <- GoalPhaseNativeMetadata.optional[Mode](cursor, "mode")
       batch <- GoalPhaseNativeMetadata.optional[Vector[SbtValidationMode.CaseResult]](cursor, "batch")
       lint <- GoalPhaseNativeMetadata.optional[SbtLintInput](cursor, "lintInput")
+      scope <- GoalPhaseNativeMetadata.optional[String](cursor, "testScope")
+      cases <- GoalPhaseNativeMetadata.optional[Vector[AdmissionCase]](cursor, "admissionCases")
       value = Facts(kind, outcome, selection, reason, estimate, mode, batch,
-        cursor.keys.exists(_.exists(_ == "estimate")), lint)
+        cursor.keys.exists(_.exists(_ == "estimate")), lint, scope, cases)
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
@@ -178,7 +196,8 @@ private[smworkflow] object WorkflowSbtValidation {
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.target != null && result.target.validationMode != null &&
         result.validationMode != null && result.processResult != null && result.lintInput != null &&
-        result.target.lintInput != null && result.lintInput == result.target.lintInput &&
+        result.target.lintInput != null && result.lintInput == result.target.lintInput && result.target.testScope != null &&
+        (result.target.testScope == SbtTestScope.Full || kind == Kind.Test) &&
         result.lintInput.forall(input => kind == Kind.FixCheck && lintValid(input)) &&
         result.processResult.termination != null && result.testSelection != null &&
         ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
@@ -209,7 +228,11 @@ private[smworkflow] object WorkflowSbtValidation {
       case Some(SbtValidationMode.Result.Unverified(reason)) => Mode(requested, None, None, Some(reason))
       case None => Mode(requested, None, None, Some("child observation unavailable"))
     } }
-    retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch, lintInput = result.lintInput)
+    report = result.admissionTestReport
+    rows = report.toVector.flatMap(_.selected).map((suite, test) => AdmissionCase(suite, test))
+    retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch, lintInput = result.lintInput,
+      testScope = Option.when(result.target.testScope == SbtTestScope.Admission)("admission"),
+      admissionCases = Option.when(rows.nonEmpty)(rows))
     _ <- retained.validateC
   } yield retained
 }
