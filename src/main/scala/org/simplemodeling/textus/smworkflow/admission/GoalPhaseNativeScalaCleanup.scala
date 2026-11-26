@@ -21,7 +21,7 @@ import WorkflowScalaToolProcess as Tool
 
 /** Ordered formatter effects in the candidate inspection that owns the selected sources.
   * @since   Nov. 24, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeScalaCleanup {
@@ -87,6 +87,44 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
     }
   } yield changes
 
+  /** Typed writes grouped by the actual tool invocation in one inspection. A
+    * result is only a write observation; the consumer must separately establish
+    * successful validation and retention in the accepted candidate. */
+  final case class AppliedTool(identity: String, tool: String, step: String,
+    sourceRevision: String, index: String, changes: Vector[ByteChange], references: Vector[String])
+
+  def appliedToolsC(session: F.Session, core: ActionCall.Core, original: InstanceRecord,
+    candidate: InstanceRecord, step: String): Consequence[Vector[AppliedTool]] = for {
+    _ <- if (DeterministicRepair.retainedPrefix(original, candidate) &&
+        DeterministicRepair.retainedPrefix(candidate, session.current)) Consequence.unit
+      else F.invalid("Scala cleanup metric crosses native candidate ancestry")
+    tools <- session.storage.bindMechanicalC(F.advanceOperation, _codec)
+    writes <- candidate.history.drop(original.history.size).foldLeft(Consequence.success(Vector.empty[(String, String, ByteChange, String)])) {
+      (prior, entry) => prior.flatMap { values => entry.causation.value match {
+        case _tool_result(prefix) => for {
+          pair <- _result_pair_c(tools, session, core, original, entry, prefix + "-intent", prefix + "-result")
+          (intent, result) = pair
+          _ <- if (result.copy(outcome = None) == intent && intent.outcome.isEmpty &&
+              result.stage == "apply" && prefix.startsWith("scala-cleanup:" + result.tool + ":") && result.step == step &&
+              result.sourceRevision == original.revision.value.toString)
+            Consequence.unit else F.invalid("Scala cleanup metric write crosses its intent or candidate")
+          change = result.outputHash.map(ByteChange(result.path, result.inputHash, _)).filter(_.valid)
+          _ <- if (!result.outcome.contains("updated") || change.nonEmpty) Consequence.unit
+            else F.invalid("Scala cleanup metric write has no changed-byte proof")
+        } yield values ++ (if (result.outcome.contains("updated")) change.toVector.map(c =>
+          (result.tool, result.index, c, original.identity.value + ":ordered-candidate:" + original.revision.value + ":" + prefix + "-result"))
+          else Vector.empty)
+        case _ => Consequence.success(values)
+      }}
+    }
+    _ <- if (writes.map(_._2).distinct.size <= 1) Consequence.unit
+      else F.invalid("Scala cleanup metrics cross different pinned indexes")
+  } yield writes.map(_._1).distinct.map { tool =>
+    val rows = writes.filter(_._1 == tool)
+    AppliedTool(original.identity.value + ":scala-cleanup:" + original.revision.value + ":" + tool,
+      tool, step, original.revision.value.toString, rows.head._2, rows.map(_._3), rows.map(_._4))
+  }
+
   private def _result_pair_c[A](adapter: WorkflowManagedMechanicalTransition[A], session: F.Session,
     core: ActionCall.Core, original: InstanceRecord, entry: HistoryEntry, intentKey: String,
     resultKey: String): Consequence[(A, A)] = {
@@ -138,10 +176,10 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
 
   private def _digest(value: String): Boolean = value.matches("[0-9a-f]{64}")
 
-  private def _hash_bytes(value: Array[Byte]): String =
+  private[admission] def hashBytes(value: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(value).map(byte => f"${byte & 0xff}%02x").mkString
 
-  def hashText(value: String): String = _hash_bytes(value.getBytes(UTF_8))
+  def hashText(value: String): String = hashBytes(value.getBytes(UTF_8))
 
   private def _handwritten(path: String): Boolean =
     GoalPhasePurposeRepair.path(path) && path.endsWith(".scala") &&
@@ -320,7 +358,7 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
         bytes => Consequence.success(batch.record -> bytes))
       prepared <- files.foldLeft(Consequence.success(batch.copy(record = material._1))) { (prior, file) => prior.flatMap { active =>
         material._2.get(file.path.value).fold(Consequence.success(active)) { bytes =>
-          val metadatahash = _hash_bytes(bytes.toArray)
+          val metadatahash = hashBytes(bytes.toArray)
           val settings = Selection("scalafix-imports", _lint_path, config.configuration,
             input => Tool.semanticScalafixC(core, input, config.scalaVersion, bytes).flatMap { preview =>
               if (preview.metadataHash.contains(metadatahash)) Consequence.success(preview)
@@ -348,7 +386,7 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
       } yield entries ++ artifact.bytes.filter(_.nonEmpty).map(file.path.value -> _) }
 
     private def _digests(metadata: Map[String, Vector[Byte]]): Map[String, String] =
-      metadata.map((path, bytes) => path -> _hash_bytes(bytes.toArray))
+      metadata.map((path, bytes) => path -> hashBytes(bytes.toArray))
 
     private def _reuse_c(scope: String, check: String, fingerprint: String,
       files: Vector[SemanticFile]): Consequence[Option[Map[String, String]]] =
@@ -430,7 +468,7 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
         _ <- if (input.bytes.nonEmpty || selected.worktree == 'D' || selected.index == 'D') Consequence.unit
           else F.invalid("A selected semantic compiler input is missing")
       } yield accumulated :+ Json.arr(selected.path.asJson, selected.index.toString.asJson, selected.worktree.toString.asJson,
-        selected.renamedFrom.asJson, input.bytes.map(bytes => _hash_bytes(bytes.toArray)).asJson) }
+        selected.renamedFrom.asJson, input.bytes.map(bytes => hashBytes(bytes.toArray)).asJson) }
     } yield hashText(Json.arr(declaration.target.root.toString.asJson, observed.branch.asJson, observed.head.asJson,
       selectedIndex.asJson, files.asJson).noSpaces)
   }

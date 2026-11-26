@@ -37,6 +37,81 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
     M.UsageObservation(id, 1, _session, id, destination, "parent", Some("spec-model"), _at, _at,
       Some(input), Some(output), Some(25), Some(10), "self-only")
 
+  "Deterministic application projection" should {
+    "count one retained application per actual identity and preserve incomplete coverage" in {
+      def fact(id: String, tool: Option[String], changed: Option[Boolean] = Some(true),
+        checked: Option[Boolean] = Some(true), retained: Option[Boolean] = Some(true),
+        rollback: Option[Boolean] = Some(false)) = M.RepairApplication(id, tool, "native-receipt",
+          changed, checked, retained, rollback, Some("candidate"), Some("validation"), Vector("receipt:" + id))
+      val good = fact("a", Some("metals"))
+      val rows = Vector(good, good, fact("b", Some("scalafix")), fact("c", Some("scalafmt")),
+        fact("d", Some("built-in")), fact("rollback", Some("metals"), rollback = Some(true)),
+        fact("unknown", Some("metals"), checked = None), fact("preview", Some("scalafix"), changed = Some(false)))
+      val result = M.repairs(rows, Set("scalafix", "scalafmt", "built-in"))
+      result.tools.map(x => x.tool -> x.count).toMap shouldBe Map("scalafix" -> Some(1),
+        "metals" -> Some(1), "scalafmt" -> Some(1), "built-in" -> Some(1))
+      result.tools.find(_.tool == "metals").map(_.coverage) shouldBe Some("partial")
+      result.observations.count(_.identity == "a") shouldBe 1
+      M.repairs(Vector.empty, Set("metals")).tools.find(_.tool == "metals").flatMap(_.count) shouldBe Some(0)
+      M.repairs(Vector.empty, Set.empty).tools.find(_.tool == "metals").flatMap(_.count) shouldBe None
+      M.repairs(Vector(good, good.copy(tool = Some("scalafix"))), Set.empty).coverage shouldBe "unavailable"
+    }
+  }
+
+  "Retained byte attribution" should {
+    "only count independently proven final writes after reversals or intermediate states" in {
+      import GoalPhaseNativeScalaCleanup.ByteChange
+      val project = GoalPhaseNativeWorkContinuation.retainedRepairApplications _
+      def change(path: String, before: String, after: String) = ByteChange(path, before, after)
+      val a = "a" * 64
+      val b = "b" * 64
+      val c = "c" * 64
+      val reverseThenChange = Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", b, a)),
+        Vector(change("One.scala", a, c)))
+      project(reverseThenChange, Map("One.scala" -> c)) shouldBe Set(2)
+      project(reverseThenChange.take(2), Map("One.scala" -> a)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", b, c))), Map("One.scala" -> c)) shouldBe Set(1)
+      project(Vector(Vector(change("One.scala", a, b))), Map("One.scala" -> b)) shouldBe Set(0)
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("Two.scala", a, c))),
+        Map("One.scala" -> b, "Two.scala" -> c)) shouldBe Set(0, 1)
+      project(Vector(Vector(change("One.scala", a, b), change("Two.scala", a, c))),
+        Map("One.scala" -> b, "Two.scala" -> c)) shouldBe Set(0)
+      project(reverseThenChange, Map("One.scala" -> b)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", c, b))), Map("One.scala" -> b)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b), change("Two.scala", a, c))), Map("One.scala" -> b)) shouldBe Set.empty
+
+      val proven = project(reverseThenChange, Map("One.scala" -> c))
+      val rows = reverseThenChange.indices.map { index =>
+        val retained = Option.when(proven.contains(index))(true)
+        M.RepairApplication("app-" + index, Some(Vector("metals", "scalafix", "scalafmt")(index)),
+          "native-receipt", Some(true), Some(true), retained, retained.map(_ => false),
+          Some("tree"), Some("check"), Vector("receipt-" + index))
+      }.toVector
+      val counts = M.repairs(rows, Set.empty).tools.map(x => x.tool -> x.count).toMap
+      counts("scalafmt") shouldBe Some(1)
+      counts("metals") should not be Some(1)
+      counts("scalafix") should not be Some(1)
+    }
+  }
+
+  "Deterministic application provenance" should {
+    "group several source writes into one tool application and exclude cancelled or failed effects" in {
+      val first = M.RepairApplication("inspection:scalafix", Some("scalafix"), "scalafix-imports",
+        Some(true), Some(true), Some(true), Some(false), Some("tree"), Some("check"),
+        Vector("intent-result:file-a", "intent-result:file-b", "accepted-commit"))
+      val cancelled = first.copy(identity = "cancelled", retained = Some(false))
+      val failed = first.copy(identity = "failed", revalidated = Some(false))
+      val rollback = first.copy(identity = "rolled-back", rolledBack = Some(true))
+      val rejected = first.copy(identity = "rejected", changed = Some(false))
+      val result = M.repairs(Vector(first, first, cancelled, failed, rollback, rejected), Set("scalafix"))
+      result.tools.find(_.tool == "scalafix").map(_.count) shouldBe Some(Some(1))
+      result.observations.find(_.identity == first.identity).map(_.sources.size) shouldBe Some(3)
+      val unknown = first.copy(identity = "unknown-tool", tool = None)
+      M.repairs(Vector(first, unknown), Set("scalafix")).tools.find(_.tool == "scalafix")
+        .map(_.coverage) shouldBe Some("partial")
+    }
+  }
+
   "Phase source endpoint metrics" should {
     "count physical blank/comment/unterminated lines directly from immutable selected bytes" in {
       M.physicalLines(Vector.empty) shouldBe 0L

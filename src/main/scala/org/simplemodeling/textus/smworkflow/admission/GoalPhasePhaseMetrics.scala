@@ -64,11 +64,57 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   given Encoder[Calls] = deriveEncoder
   given Decoder[Calls] = deriveDecoder
 
+  /** An application is identified by its native effect, never by file or rule.
+    * Each positive condition requires its own retained evidence. Unknown is not
+    * a negative observation and cannot establish either a repair or a zero. */
+  final case class RepairApplication(identity: String, tool: Option[String], origin: String,
+    changed: Option[Boolean], revalidated: Option[Boolean], retained: Option[Boolean],
+    rolledBack: Option[Boolean], candidate: Option[String], validation: Option[String],
+    sources: Vector[String])
+  final case class RepairTool(tool: String, count: Option[Int], coverage: String, reason: String)
+  final case class Repairs(tools: Vector[RepairTool], observations: Vector[RepairApplication],
+    coverage: String, reason: String)
+  given Encoder[RepairApplication] = deriveEncoder
+  given Decoder[RepairApplication] = deriveDecoder
+  given Encoder[RepairTool] = deriveEncoder
+  given Decoder[RepairTool] = deriveDecoder
+  given Encoder[Repairs] = deriveEncoder
+  given Decoder[Repairs] = deriveDecoder
+
+  /** completeTools is explicit evidence of complete route observation, not the
+    * set of tools seen. Conflicts and unknown origins remain partial. */
+  def repairs(raw: Vector[RepairApplication], completeTools: Set[String]): Repairs = {
+    val tools = Vector("scalafix", "metals", "scalafmt", "built-in")
+    val rows = raw.filter(x => x.identity.nonEmpty && x.origin.nonEmpty && x.sources.nonEmpty)
+    val grouped = rows.groupBy(_.identity)
+    val unique = grouped.values.filter(_.distinct.size == 1).map(_.head).toVector
+    val conflict = grouped.values.exists(_.distinct.size != 1)
+    val unassigned = unique.exists(x => x.tool.forall(t => !tools.contains(t))) || conflict || rows.size != raw.size
+    def eligible(x: RepairApplication): Boolean = x.changed.contains(true) && x.revalidated.contains(true) &&
+      x.retained.contains(true) && x.rolledBack.contains(false) && x.candidate.nonEmpty && x.validation.nonEmpty
+    def uncertain(x: RepairApplication): Boolean = !x.changed.contains(false) && !x.revalidated.contains(false) &&
+      !x.retained.contains(false) && !x.rolledBack.contains(true) && !eligible(x)
+    val results = tools.map { tool =>
+      val selected = unique.filter(_.tool.contains(tool))
+      val count = selected.count(eligible)
+      val partial = unassigned || selected.exists(uncertain) || !completeTools(tool)
+      val available = count > 0 || (!partial && completeTools(tool))
+      RepairTool(tool, Option.when(available)(count), if (!available) "unavailable" else if (partial) "partial" else "complete",
+        if (partial) "Only proven applications are counted; other route or retention evidence is incomplete"
+        else "Complete retained route evidence, including observed zero")
+    }
+    val coverage = if (results.forall(_.coverage == "complete")) "complete"
+      else if (results.exists(_.count.nonEmpty)) "partial" else "unavailable"
+    Repairs(results, rows.distinct.sortBy(x => (x.identity, x.origin)), coverage,
+      "Applications require changed bytes, successful normal revalidation and retained candidate evidence; unknown and rollback are excluded")
+  }
+
   final case class Summary(schemaVersion: String, phaseSession: String, start: Option[Endpoint], end: Endpoint,
     netSourceLines: Option[Long], netReason: String, usage: Vector[Usage], profile: Option[GoalPhaseOperatingProfiles.Selection],
     issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
     comparison: Vector[GoalPhaseWorkComparison.Summary] = Vector.empty,
-    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None, calls: Option[Calls] = None)
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None, calls: Option[Calls] = None,
+    deterministicRepairs: Option[Repairs] = None)
 
   given Encoder[ResourceTreeQueryLimits] = deriveEncoder
   given Decoder[ResourceTreeQueryLimits] = deriveDecoder
@@ -83,7 +129,8 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   given Encoder[Summary] = deriveEncoder[Summary].mapJson(_.mapObject { fields =>
     val withoutEmpty = if (fields("comparison").exists(_.asArray.exists(_.isEmpty))) fields.remove("comparison") else fields
     val withoutRetained = if (withoutEmpty("retainedObservations").exists(_.isNull)) withoutEmpty.remove("retainedObservations") else withoutEmpty
-    if (withoutRetained("calls").exists(_.isNull)) withoutRetained.remove("calls") else withoutRetained
+    val withoutCalls = if (withoutRetained("calls").exists(_.isNull)) withoutRetained.remove("calls") else withoutRetained
+    if (withoutCalls("deterministicRepairs").exists(_.isNull)) withoutCalls.remove("deterministicRepairs") else withoutCalls
   })
   private val _summary_decoder: Decoder[Summary] = deriveDecoder
   given Decoder[Summary] = Decoder.instance { cursor =>
@@ -174,8 +221,15 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty): Summary = {
     val started = session.started.receipt.payload.value
     val selected = started.sourceMetrics.map(_.scope).getOrElse(scope(d))
+    // This passive projection uses the same retained Session. An unavailable
+    // observation cannot change normal completion or become an inferred zero.
+    val deterministic = try {
+      GoalPhaseNativeWorkContinuation.bindC(d, session.current.definition)
+        .flatMap(_.deterministicRepairMetricsC(session, core)).toOption
+    } catch { case NonFatal(_) => None }
     summarize(session.current.identity.value, started.sourceMetrics, capture(core, selected, source), Vector.empty, started.operatingProfile)
-      .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations)
+      .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations,
+        deterministicRepairs = Some(deterministic.getOrElse(repairs(Vector.empty, Set.empty))))
   }
 
   /** Passive usage aggregation over already acquired attributable observations.
