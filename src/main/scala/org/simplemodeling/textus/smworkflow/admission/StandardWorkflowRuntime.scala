@@ -309,10 +309,12 @@ private[smworkflow] object StandardWorkflowRuntime {
       else shared.validation.repositoryC(target.root, call)
     documentInputs = initialized.documents
     programInputs = initialized.program
+    explicitProgramInputs <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.Policy])
+      else RepositorySyncProgramImpact.resolveC(parameters)
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
     ordinaryValidation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
-      initialized.projectProvidesFixCheck)
+      initialized.projectProvidesFixCheck, ordinaryMergeSources = explicitProgramInputs.isEmpty)
       else repositoryValidation
     validation = ordinaryValidation.copy(dependencyInputs = RepositorySyncConsumedInputs.subject(call))
     programEvidence <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.EvidencePort]) else for {
@@ -783,8 +785,10 @@ private[smworkflow] object StandardWorkflowRuntime {
 
   private[admission] def normalRepositoryValidation(programInputs: Option[RepositorySyncProgramImpact.Policy],
     declarationReadFailure: Option[WorkflowProjectDeclaration.ReadFailure] = None,
-    projectProvidesFixCheck: Boolean = false): RepositorySyncNativeMergeValidation.Policy = {
-    val validation = programInputs.fold(documentValidation.copy(setupRequired =
+    projectProvidesFixCheck: Boolean = false,
+    ordinaryMergeSources: Boolean = false): RepositorySyncNativeMergeValidation.Policy = {
+    val mergeinputs = programInputs.map(policy => policy.copy(ordinaryMergeSources = ordinaryMergeSources || policy.ordinaryMergeSources))
+    val validation = mergeinputs.fold(documentValidation.copy(setupRequired =
       declarationReadFailure.map(failure => s"ValidationSetupRequired: ${failure.diagnostic}")))(p => documentValidation.copy(
       identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
       assessment = documentValidation.assessment.map(_.copy(lintReason = p.reason))))

@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * Original receipts keep their own native provenance; they are never rerun or
   * written as executions in the fresh candidate namespace.
   * @since   Nov.  3, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 26, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncRequiredLintContinuation {
@@ -186,14 +186,15 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       o.resultReference.identity == _identity(t.sessionId, t.namespace, "validation-result-" + i, t.phase) &&
       (Vector("index-local", "index-remote") ++ t.retainedSelection.selected.map(_.identity)).lift(i).contains(o.identity) &&
       o.termination == "exited" && o.exitCode != null && o.exitCode.nonEmpty && o.sbt != null &&
-      (i < 2 || (o.exitCode.contains(0) && o.sbt.fold(t.retainedSelection.selected(i - 2).kind == WorkflowSbtValidation.Kind.Test)(
+      (i < 2 || (o.exitCode.contains(0) && o.sbt.fold(t.retainedSelection.selected(i - 2).kind == WorkflowSbtValidation.Kind.Test &&
+        t.retainedSelection.selected(i - 2).testScope.isEmpty)(
         f => f != null && f.valid && f.kind == t.retainedSelection.selected(i - 2).kind &&
-          f.outcome == WorkflowSbtValidation.Outcome.Succeeded))) } &&
+          f.effectiveTestScope == t.retainedSelection.selected(i - 2).effectiveTestScope && f.outcome == WorkflowSbtValidation.Outcome.Succeeded))) } &&
     t.validationPolicy != null && t.validationPolicy.validateC.isSuccess && t.validationPolicy.mode == "required" &&
     t.expandedChecks != null && t.expandedChecks.forall(_ != null) && t.expandedChecks.size == t.retainedSelection.selected.size + 1 &&
     t.expandedChecks.dropRight(1) == t.retainedSelection.selected &&
     t.expandedChecks.last.kind == WorkflowSbtValidation.Kind.FixCheck &&
-    t.expandedChecks.forall(t.validationPolicy.checks.contains) &&
+    t.expandedChecks.forall(check => RepositorySyncProgramImpact.registeredCheck(check, t.validationPolicy.checks)) &&
     C.Policy("required-lint-selection", 1, "required", t.validationPolicy.reason, t.expandedChecks).validateC.isSuccess &&
     t.expandedImpact != null && t.expandedImpact.forall(i => i != null && i.checks == t.expandedChecks) &&
     _observed(t.actual) && t.actual == t.candidateAfter && _oid(t.indexTree) && t.indexTree == t.candidateTree &&
@@ -295,7 +296,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       else N.invalid("required-lint current declared consumption inputs differ from retained validation")
     impact <- inputs.filterNot(_.documentOnly) match {
       case Some(actual) => validation.impact.map(p => RepositorySyncProgramImpact.validateC(p)
-        .map(_ => Some(RepositorySyncProgramImpact.select(p, actual))))
+        .flatMap(_ => RepositorySyncProgramImpact.selectMergeC(store, candidate.pending, p, actual)).map(Some(_)))
         .getOrElse(N.invalid("required-lint program inputs have no actual current impact selection"))
       case None => Consequence.success(None)
     }

@@ -13,7 +13,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterDecoder, ComponentParameterKey}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, ProcessExecutionResult, ProcessExecutionTermination,
-  SbtValidationDiscovery as SD, SbtValidationMode as SM, SbtExecutionAttempt}
+  SbtValidationDiscovery as SD, SbtValidationMode as SM, SbtExecutionAttempt, GitTreeChange, SbtTestScope}
 import GoalPhaseNativeMetadata.given
 import WorkflowSbtValidation.given
 import RepositorySyncNativeProgressStore as N
@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -209,7 +209,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
   final case class Prior(session: String, validation: String, closure: String)
   final case class Policy(coverage: Vector[Coverage], fullChecks: Vector[V.Check], fullPaths: Vector[String],
     reason: String, priorEvidence: Vector[Prior],
-    postReviewValidation: Option[RepositorySyncPostReviewValidation.Binding] = None) {
+    postReviewValidation: Option[RepositorySyncPostReviewValidation.Binding] = None,
+    ordinaryMergeSources: Boolean = false) {
     def checks: Vector[V.Check] = (coverage.map(_.check) ++ fullChecks).distinct
   }
   final case class Reuse(check: String, validation: String, closure: String, review: Option[String])
@@ -223,11 +224,13 @@ private[smworkflow] object RepositorySyncProgramImpact {
   given Decoder[Prior] = deriveDecoder
   given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
     case ("postReviewValidation", value) => !value.isNull
+    case ("ordinaryMergeSources", value) => value.asBoolean.contains(true)
     case _ => true
   }))
   private val _policy_decoder: Decoder[Policy] = deriveDecoder
   given Decoder[Policy] = Decoder.instance(cursor => for {
-    policy <- _policy_decoder(cursor)
+    policy <- _policy_decoder.tryDecode(if (cursor.downField("ordinaryMergeSources").focus.isEmpty)
+      cursor.value.mapObject(_.add("ordinaryMergeSources", Json.False)).hcursor else cursor)
     binding <- GoalPhaseNativeMetadata.optional[RepositorySyncPostReviewValidation.Binding](cursor, "postReviewValidation")
   } yield policy.copy(postReviewValidation = binding))
   given Encoder[Reuse] = deriveEncoder
@@ -238,10 +241,14 @@ private[smworkflow] object RepositorySyncProgramImpact {
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional(
     "sm-workflow.repository-sync.program-inputs", ComponentParameterDecoder {
       case ConfigurationValue.StringValue(raw) => io.circe.parser.parse(raw).fold(
-        _ => N.invalid("program impact configuration is not JSON"), decodeC)
-      case value: ConfigurationValue.ObjectValue => decodeC(json(value))
+        _ => N.invalid("program impact configuration is not JSON"), _configured_policy_c)
+      case value: ConfigurationValue.ObjectValue => _configured_policy_c(json(value))
       case _ => N.invalid("program impact configuration requires an object")
     })
+  private def _configured_policy_c(value: Json): Consequence[Policy] = decodeC(value).flatMap(policy =>
+    if (!policy.ordinaryMergeSources) Consequence.success(policy)
+    else N.invalid("ordinaryMergeSources is retained runtime inference, not a declared program-input override"))
+
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
   /** Select only already declared typed programs on this repository's exact
     * ordinary workspace. Resolving data installs neither programs nor grants.
@@ -296,7 +303,14 @@ private[smworkflow] object RepositorySyncProgramImpact {
           program.hcursor.get[String]("operation").contains("fix-check"))
         val checks = Vector(full) ++ Option.when(providesFixCheck && lint.size == 1)(V.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck,
           workspace = Some(workspace))).toVector
-        val policy = Policy(Vector.empty, checks, Vector.empty,
+        val testbindings = programs.filter(program => program.hcursor.get[String]("target").contains(workspace) &&
+          program.hcursor.get[String]("operation").contains("test"))
+        val admission = Option.when(testbindings.size == 1)(V.Check("ordinary-project-source", 3, WorkflowSbtValidation.Kind.Test,
+          workspace = Some(workspace)))
+        val coverage = (admission.toVector ++ checks.filter(_.kind == WorkflowSbtValidation.Kind.FixCheck)).map(check =>
+          Coverage(check, Vector("src"), Vector("src"),
+            "Registered source validation; final merge evidence selects the exact typed Test scope"))
+        val policy = Policy(coverage, checks, Vector.empty,
           "FULL: ordinary managed TestCompile products/classpath select all applicable non-Slow discovered tests and required modes", Vector.empty)
         validateC(policy).map(_ => Some(policy))
       }
@@ -439,14 +453,173 @@ private[smworkflow] object RepositorySyncProgramImpact {
       reason = ordinary.reason + "; remote compile/test and shared-consumer coverage")
   }
 
-  def selectForStore(store: N.Store, p: Policy, inputs: RepositorySyncDocumentInputs.Assessment): Selection =
-    if (store.declaration.hop.exists(_.cursor.phase == "remote")) selectRemote(p, inputs) else select(p, inputs)
+  /** Both native merge stages use the retained base, parents and final index.
+    * No textual diff size, commit kind or conflict flag establishes equivalence. */
+  def selectMergeC(store: N.Store, pending: N.Stage, p: Policy,
+    inputs: RepositorySyncDocumentInputs.Assessment): Consequence[Selection] = {
+    def _delta_(left: String, right: String): Consequence[Vector[GitTreeChange]] = for {
+      before <- GitObjectId.parseC(left)
+      after <- GitObjectId.parseC(right)
+      changes <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
+    } yield changes
+    pending.payload.before.mergeBase match {
+      case None => Consequence.success(_full_selection(p, "retained merge base is unavailable"))
+      case Some(base) => for {
+        left <- _delta_(base, pending.payload.before.head)
+        right <- pending.payload.mergeHead.map(_delta_(base, _)).getOrElse(N.invalid("merge selection has no retained second parent"))
+        candidate <- pending.payload.indexTree.map(_delta_(base, _)).getOrElse(N.invalid("merge selection has no retained candidate tree"))
+        selected <- mergeSelectionC(p, inputs, left, right, candidate, blob =>
+          WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.BlobContent(blob))
+            .map(_.valueC.toOption.flatMap(_.text)))
+      } yield selected
+    }
+  }
+
+  private def _full_selection(p: Policy, reason: String): Selection =
+    Selection("FULL", "FULL: " + reason + "; " + p.reason,
+      p.fullChecks.map(check => check.copy(testScope = None)), Vector.empty)
+
+  /** Only the runtime's inferred default distinguishes ordinary source from its
+    * catch-all FULL scope. Explicit broad declarations remain authoritative. */
+  private def _merge_policy(p: Policy): Policy = if (!p.ordinaryMergeSources) p
+    else p.copy(fullPaths = p.fullPaths.filterNot(path => path == "src" || path.startsWith("src/")))
+
+  private def _source_path(path: String): Boolean = path.startsWith("src/") &&
+    (path.endsWith(".scala") || path.endsWith(".java"))
+
+  /** Pure typed Git evidence boundary, shared by local-main and remote merges.
+    * A candidate equal to either complete parent file carries that file through.
+    * A different candidate needs ordinary-comment equivalence to a parent;
+    * composed/edited logic, non-source consumption and uncertainty require FULL. */
+  private[admission] def mergeSelectionC(p: Policy, inputs: RepositorySyncDocumentInputs.Assessment,
+    baseToLeft: Vector[GitTreeChange], baseToRight: Vector[GitTreeChange], baseToCandidate: Vector[GitTreeChange],
+    readBlob: GitObjectId => Consequence[Option[String]]): Consequence[Selection] = {
+    val scopepolicy = _merge_policy(p)
+    val ordinary = select(scopepolicy, inputs)
+    val affected = (inputs.consumedPaths ++ inputs.unknownPaths).distinct.sorted
+    val uncertain = inputs.unknownPaths.nonEmpty || inputs.binaryPaths.nonEmpty || inputs.submoduleChanges
+    val broader = affected.exists(covers(scopepolicy.fullPaths, _))
+    val nonsource = affected.filterNot(_source_path)
+    val deltas = Vector(baseToLeft, baseToRight, baseToCandidate)
+    val paths = (affected ++ inputs.changedPaths.filter(_source_path)).distinct
+    if (inputs.documentOnly && paths.isEmpty) Consequence.success(Selection("DOCUMENT", inputs.reason, Vector.empty, Vector.empty))
+    else if (uncertain || broader || nonsource.nonEmpty || ordinary.depth == "FULL")
+      Consequence.success(_full_selection(p, "broader, consumed non-source or uncertain input coverage; " + ordinary.reason))
+    else paths.foldLeft(Consequence.success(true)) { (prior, path) => prior.flatMap {
+      case false => Consequence.success(false)
+      case true =>
+        val changes = deltas.map(_.filter(_.path.value == path))
+        val all = changes.flatten
+        val bases = all.map(change => change.oldMode -> change.oldBlob).distinct
+        val regular = all.nonEmpty && changes.forall(_.size <= 1) && bases.size == 1 && all.forall(change =>
+          Set("000000", "100644", "100755")(change.oldMode) && Set("000000", "100644", "100755")(change.newMode))
+        if (!regular || !_source_path(path)) Consequence.success(false)
+        else {
+          val nodes = changes.map(_.headOption.map(change => change.newMode -> change.newBlob).getOrElse(bases.head))
+          val candidate = nodes(2)
+          if (nodes.take(2).contains(candidate)) Consequence.success(true)
+          else if (!path.endsWith(".scala") || candidate._2.isEmpty) Consequence.success(false)
+          else for {
+            text <- readBlob(candidate._2.get)
+            equivalent <- nodes.take(2).foldLeft(Consequence.success(false)) { (prior, parent) => prior.flatMap {
+              case true => Consequence.success(true)
+              case false if parent._1 != candidate._1 || parent._2.isEmpty => Consequence.success(false)
+              case false => readBlob(parent._2.get).map(other => text.exists(value => other.exists(ordinaryScalaCommentsEquivalent(value, _))))
+            } }
+          } yield equivalent
+        }
+    } }.map { equivalent =>
+      val checks = (ordinary.checks ++ p.fullChecks.filter(_.kind == WorkflowSbtValidation.Kind.FixCheck)).distinct
+      val tests = checks.filter(_.kind == WorkflowSbtValidation.Kind.Test)
+      val typed = tests.nonEmpty && tests.forall(check =>
+        check.metadata.isEmpty && check.invocation.isEmpty && !check.ordinaryDiscovery)
+      if (!equivalent || !typed) _full_selection(p, "integrated/edited logic or unsupported source/typed Test coverage")
+      else Selection("ADMISSION", "ADMISSION: final source files carry through one parent or differ only in proven ordinary comments; " + ordinary.reason,
+        checks.map(check => if (check.kind == WorkflowSbtValidation.Kind.Test)
+          check.copy(testScope = Some("admission")) else check), Vector.empty)
+    }
+  }
+
+  /** A deliberately conservative Scala lexical equivalence. Code, indentation,
+    * newlines, strings and backtick identifiers remain exact. Unsupported XML,
+    * interpolators, Unicode escapes, character/symbol literals, doc comments
+    * and build/tool directives cannot establish ordinary-comment equivalence. */
+  private[admission] def ordinaryScalaCommentsEquivalent(left: String, right: String): Boolean =
+    _ordinary_scala(left).exists(value => _ordinary_scala(right).contains(value))
+
+  private def _ordinary_scala(source: String): Option[String] = {
+    if (source == null || source.contains("\\u") || source.contains('\r')) return None
+    val result = new StringBuilder
+    val pendingWhitespace = new StringBuilder
+    var index = 0
+    while (index < source.length) {
+      val char = source.charAt(index)
+      if (source.startsWith("//", index) || source.startsWith("/*", index)) {
+        val line = source.startsWith("//", index)
+        if (source.startsWith("/**", index)) return None
+        val start = index
+        index += 2
+        var depth = if (line) 0 else 1
+        while (index < source.length && (if (line) source.charAt(index) != '\n' else depth > 0)) {
+          if (!line && source.startsWith("/*", index)) { depth += 1; index += 2 }
+          else if (!line && source.startsWith("*/", index)) { depth -= 1; index += 2 }
+          else { if (source.charAt(index) == '\n') { pendingWhitespace.clear(); result.append('\n') }; index += 1 }
+        }
+        if (depth != 0) return None
+        val comment = source.substring(start + 2, index).toLowerCase(java.util.Locale.ROOT).trim
+        if (comment.exists(char => "@$:#<>!".contains(char)) ||
+          Vector("scalafix", "scalafmt", "using ", "require ", "$ivy").exists(comment.contains)) return None
+        if (!line) pendingWhitespace.append(' ')
+      } else if (char == '"' || char == '`') {
+        result.append(pendingWhitespace); pendingWhitespace.clear()
+        if (char == '"' && index > 0 && Character.isJavaIdentifierPart(source.charAt(index - 1))) return None
+        val triple = source.startsWith("\"\"\"", index)
+        val delimiter = if (triple) "\"\"\"" else char.toString
+        val start = index
+        index += delimiter.length
+        var closed = false
+        while (index < source.length && !closed) {
+          if (source.startsWith(delimiter, index)) { index += delimiter.length; closed = true }
+          else if (!triple && char == '"' && source.charAt(index) == '\\') index += 2
+          else index += 1
+        }
+        if (!closed) return None
+        result.append(source.substring(start, index))
+      } else if (char == '\'' || char == '<') return None
+      else if (char == ' ' || char == '\t') { pendingWhitespace.append(char); index += 1 }
+      else if (char == '\n') { pendingWhitespace.clear(); result.append(char); index += 1 }
+      else { result.append(pendingWhitespace); pendingWhitespace.clear(); result.append(char); index += 1 }
+    }
+    // Only buffered whitespace outside literals and at end of line is discarded.
+    Some(result.toString)
+  }
+
+  /** Reclassification keeps the actual issued candidate requirement. It may
+    * retain a stronger FULL selection, but cannot promote Admission observations
+    * to cover newly consumed non-source, unknown or broad inputs. */
+  def selectRetained(p: Policy, inputs: RepositorySyncDocumentInputs.Assessment,
+    selected: Vector[V.Check]): Selection = {
+    val ordinary = select(_merge_policy(p), inputs)
+    if (selected.exists(_.effectiveTestScope == SbtTestScope.Admission)) {
+      val affected = (inputs.consumedPaths ++ inputs.unknownPaths).distinct
+      if (ordinary.depth == "FULL" || inputs.unknownPaths.nonEmpty || inputs.binaryPaths.nonEmpty ||
+          inputs.submoduleChanges || affected.exists(path => !_source_path(path)))
+        _full_selection(p, "reclassified inputs exceed the retained Admission scope")
+      else ordinary.copy(depth = "ADMISSION", checks =
+        (ordinary.checks ++ p.fullChecks.filter(_.kind == WorkflowSbtValidation.Kind.FixCheck)).distinct.map(check =>
+        selected.find(original => original.copy(testScope = None) == check).getOrElse(check)))
+    } else if (selected == p.fullChecks) ordinary.copy(depth = "FULL", checks = p.fullChecks)
+    else ordinary
+  }
+
+  def registeredCheck(check: V.Check, checks: Vector[V.Check]): Boolean =
+    belongs(check, checks) || (check.scopeValid && check.testScope.nonEmpty && belongs(check.copy(testScope = None), checks))
 
   /** Native local-hop reuse preserves the original product observations. Current
     * structural checks and semantic review still belong to the remote candidate.
     */
   def reuseLocalC(store: N.Store, pending: N.Stage, policy: V.Policy,
-    p: Policy, retained: Vector[Reuse]): Consequence[Option[(Selection, Map[String, V.Receipt])]] =
+    p: Policy, current: Selection, retained: Vector[Reuse]): Consequence[Option[(Selection, Map[String, V.Receipt])]] =
     RepositorySyncLocalMain.checkedLocalC(store, pending, policy).flatMap {
       case None => Consequence.success(None)
       case Some(prior) =>
@@ -454,16 +627,16 @@ private[smworkflow] object RepositorySyncProgramImpact {
         val plan = for {
           inputs <- state.inputs
           impact <- state.impact
-          current = selectRemote(p, inputs)
           if impact.checks == current.checks && state.selected == current.checks && current.checks.nonEmpty &&
-            state.selected.forall(check => belongs(check, p.checks)) &&
+            state.selected.forall(check => belongs(check.copy(testScope = None), p.checks)) &&
             ((state.selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
               state.selected.exists(check => check.kind == WorkflowSbtValidation.Kind.Test ||
                 check.kind == WorkflowSbtValidation.Kind.TestOnly)) ||
+              state.selected.exists(check => check.kind == WorkflowSbtValidation.Kind.Test && check.effectiveTestScope == SbtTestScope.Admission) ||
               state.selected.exists(check => check.ordinaryDiscovery && state.receipts.exists(receipt =>
                 receipt.identity == check.identity && receipt.group.exists(_.successful)))) &&
             state.receipts.drop(2).zip(state.selected).forall((receipt, check) =>
-              receipt.externalCapture.isEmpty && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))
+              receipt.externalCapture.isEmpty && receipt.identity == check.identity && V.productSuccessful(receipt, check))
         } yield impact
         plan match {
           case None => Consequence.success(None)
@@ -489,7 +662,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
   def prepareC(store: N.Store, pending: N.Stage, inputs: RepositorySyncDocumentInputs.Assessment,
     p: Policy): Consequence[(Selection, Map[String, V.Receipt])] = for {
     _ <- validateC(p)
-    selection = selectForStore(store, p, inputs)
+    selection <- selectMergeC(store, pending, p, inputs)
     _ <- if (selection.checks.nonEmpty) Consequence.unit else N.invalid("changed program inputs have no selected coverage")
     result <- reuseForTreeC(store, pending.payload.indexTree.get, p, selection)
     _ <- V.preconditionsC(store, pending)
@@ -513,8 +686,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
       delta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(oldTree, newTree)).flatMap(_.valueC)
       reusable = selection.checks.filterNot(c => current._2.contains(c.identity)).filter { check =>
         reusableProductCheck(check, Reuse(check.identity, evidence.validation, evidence.closure, evidence.review), retained) &&
-          p.coverage.find(_.check == check).exists(coverage => !delta.exists(c => covers(coverage.inputPaths, c.path.value))) &&
-          evidence.checks.contains(check) && evidence.receipts.exists(r => r.identity == check.identity && V.productSuccessful(r, check.kind))
+          p.coverage.find(coverage => coverage.check == check || coverage.check == check.copy(testScope = None)).exists(coverage => !delta.exists(c => covers(coverage.inputPaths, c.path.value))) &&
+          evidence.checks.contains(check) && evidence.receipts.exists(r => r.identity == check.identity && V.productSuccessful(r, check))
       }
       receipts = reusable.map(c => c.identity -> evidence.receipts.find(_.identity == c.identity).get).toMap
       refs = reusable.map(c => Reuse(c.identity, evidence.validation, evidence.closure, evidence.review))
@@ -564,7 +737,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
         Consequence.unit else N.invalid("prior evidence is not applicable successful validation with actual accepted Step closure")
     } yield Evidence(v.candidate.tree, source.validation, source.closure,
       v.selected.filter(c => c.metadata.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty && c.dependency.isEmpty)
-        .map(c => V.Check(c.identity, c.ordinal, c.kind)), v.receipts, c.input.reviewEvidence)
+        .map(c => V.Check(c.identity, c.ordinal, c.kind, testScope = c.testScope)), v.receipts, c.input.reviewEvidence)
   }
 
   /** Validation reuse alone never establishes review. The exact complete tree

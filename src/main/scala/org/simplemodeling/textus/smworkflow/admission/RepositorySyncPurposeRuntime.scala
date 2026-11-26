@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -248,7 +248,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         chosen <- if (document) Consequence.success(RepositorySyncProgramImpact.Selection("DOCUMENT", assessment.reason, Vector.empty, Vector.empty) -> Map.empty[String, C.Receipt])
           else policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reuseForTreeC(store, candidate.tree, p,
             RepositorySyncProgramImpact.select(p, assessment))).getOrElse(N.invalid("purpose program impact has no declared coverage; no FULL or acceptance is inferred"))
-        _ <- if (chosen._1.checks.forall(check => selected.checks.exists(actual => actual.identity == check.identity && actual.kind == check.kind)) &&
+        _ <- if (chosen._1.checks.forall(check => selected.checks.exists(actual => actual.identity == check.identity && actual.kind == check.kind &&
+          actual.effectiveTestScope == check.effectiveTestScope)) &&
           selected.actionPolicy.kind == (if (document) "documentation" else "code")) Consequence.unit
           else N.invalid("purpose candidate checks or assessment kind differ from the fixed slot contract")
         intent <- _save_("structural-intent", "PurposeChecking", source, progress.copy(selection = Some(chosen._1)))
@@ -317,7 +318,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     def _save_(key: String, stage: String, from: N.Stage, value: P.Progress, evidencerequirement: Option[String] = None) =
       store.saveC(prefix + "-" + key, "purpose-progress", from.record,
         from.payload.copy(stage = stage, purposes = Some(value), purposeTestEvidenceRequirement = evidencerequirement))
-    if (progress.receipts.drop(1).zip(selected).exists((receipt, check) => !C.productSuccessful(receipt, check.kind)))
+    if (progress.receipts.drop(1).zip(selected).exists((receipt, check) => !C.productSuccessful(receipt, check)))
       return Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
         "The retained actual failed or unknown purpose check requires its owning FIX disposition; no replay or success is inferred", "purpose-check-failed"))
     if (done < selected.size) {
@@ -346,7 +347,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           case Some(value) => Consequence.success(value)
           case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind,
             Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace)),
-            lintBase = progress.candidate.map(_.parent), lintCandidateWorkspace = Some(slot.workspace)).flatMap {
+            lintBase = progress.candidate.map(_.parent), lintCandidateWorkspace = Some(slot.workspace),
+            testScope = check.effectiveTestScope).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)
             case _ => N.uncertain("purpose check admission/execution is unavailable or unknown; no PASS, review acceptance or replay")
           }
@@ -354,7 +356,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         checked <- _save_("check-" + done + "-result",
           if (receipt.termination == "exited" && receipt.exitCode.exists(_ != 0)) "PurposeRepairRequired" else "PurposeMaterialized", intent,
           progress.copy(receipts = progress.receipts :+ receipt))
-        output <- if (!C.productSuccessful(receipt, check.kind)) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(
+        output <- if (!C.productSuccessful(receipt, check)) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(
           store.identity, "Actual purpose product check failed or is unknown; existing FIX/semantic handling remains required and no commit is admitted", "purpose-check-failed"))
           else _checks_c(store, checked, slot, reused, policy, authority, review, finish)
       } yield output
@@ -362,7 +364,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       _ <- RepositorySyncPurposeTestOnlyContinuation.authenticateC(store, source)
       _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
       _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
-      _ <- if (selected.zip(progress.receipts.drop(1)).forall((check, receipt) => C.productSuccessful(receipt, check.kind))) Consequence.unit
+      _ <- if (selected.zip(progress.receipts.drop(1)).forall((check, receipt) => C.productSuccessful(receipt, check))) Consequence.unit
         else N.invalid("retained failed/unknown purpose check cannot become success")
       // A foreign-tree group needs the current native input-equivalence owner,
       // including its exact retained reuse reference; a retained map alone is not authority.
@@ -376,7 +378,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       assessment <- GoalPhaseStepAssessment.assessPurposeC(slot.actionPolicy,
         GoalPhaseOrderedProgression.Snapshot(progress.candidate.get.parent, progress.candidate.get.tree),
         store.reference(prefix + "-assessment").identity, progress.receipts.head,
-        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind)), progress.receipts.drop(1),
+        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind, testScope = check.testScope)), progress.receipts.drop(1),
         ordinaryFull = progress.sessionWorkspace.nonEmpty && progress.selection.exists(_.depth == "FULL"))
       priorReview <- if (assessment.branch == "admit") Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference])
         else policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reusableReviewC(store, progress.candidate.get.tree, p))
@@ -552,7 +554,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
               case None => (p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
               (review && p.receipts.size == selection.checks.size + 1 && p.receipts.head.termination == "exited" &&
                 p.receipts.head.exitCode.contains(0) && selection.checks.zip(p.receipts.drop(1)).forall((check, receipt) =>
-                  C.productSuccessful(receipt, check.kind)))
+                  C.productSuccessful(receipt, check)))
             })) && p.commits != null && p.effects != null &&
           p.reusable != null && p.hostContinuation != null && RepositorySyncPurposeOwnership.validProgress(p)
       }

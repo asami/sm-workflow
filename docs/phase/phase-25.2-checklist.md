@@ -41,5 +41,10 @@ Plan: [Phase 25.2](phase-25.2.md)
   Verify that a bounded failure can be corrected with FOCUSED and that
   acceptance still satisfies the candidate's selected scope. Preserve
   structural checks and conditional review.
+  Implementation coverage now includes shared base/parent/index selection,
+  typed Test scope and report binding, retained continuation/reuse checks, and
+  conservative Scala comment equivalence. Added regression cases are source
+  artifacts; they do not establish passed validation or installed two-stage
+  qualification. The installed fixture requirement above remains open.
 - [ ] Record review and release evidence. Distinguish live observations from
   fixtures and unavailable tool routes.

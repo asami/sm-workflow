@@ -1,8 +1,9 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.Consequence
-import org.goldenport.cncf.processexecution.{ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination}
+import org.goldenport.cncf.processexecution.{ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination, GitObjectId, GitPath, GitTreeChange, SbtTarget, SbtTestScope, SbtOperation, SbtExecutionResult}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
@@ -18,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
   *  version Oct. 24, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -33,6 +34,262 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
     state.selected.map(_.identity), state.receipts)
   private def nested(value: Json) = value.hcursor.downField("payload").focus.get
   private def replace(value: Json, body: Json) = value.mapObject(_.add("payload", body))
+
+  private val _merge_policy = {
+    val compile = V.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+    val test = V.Check("source-test", 2)
+    val full = V.Check("full-test", 3)
+    RepositorySyncProgramImpact.Policy(Vector(compile, test).map(check => RepositorySyncProgramImpact.Coverage(
+      check, Vector("src"), Vector("src"), "Declared source coverage")), Vector(full), Vector("build.sbt"),
+      "Full validates broader integrated logic", Vector.empty)
+  }
+  private def _source_change(path: String, before: String, after: String): GitTreeChange =
+    GitTreeChange("100644", "100644", Some(take(GitObjectId.parseC(before * 40))),
+      Some(take(GitObjectId.parseC(after * 40))), "M", take(GitPath.parseC(path)))
+  private def _source_inputs(paths: Vector[String]) = RepositorySyncDocumentInputs.Assessment(paths, paths,
+    Vector.empty, Vector.empty, "Known source inputs")
+
+  "Shared native merge scope" should {
+    "select Admission for separate files carried from either parent in either merge stage" in {
+      Given("complete base-to-parent and base-to-candidate source changes with declared coverage")
+      val first = _source_change("src/First.scala", "1", "2")
+      val second = _source_change("src/Second.scala", "3", "4")
+      val inputs = _source_inputs(Vector(first.path.value, second.path.value))
+      When("the same native selector consumes local/remote parents in either order")
+      val selections = Vector((Vector(first), Vector(second)), (Vector(second), Vector(first))).map { (left, right) =>
+        take(RepositorySyncProgramImpact.mergeSelectionC(_merge_policy, inputs, left, right, Vector(first, second),
+          _ => fail("Exact complete file carry-through needs no comment claim")))
+      }
+      Then("every selected Test carries Admission while Compile and lint retain their duties")
+      selections.foreach { selected =>
+        selected.depth shouldBe "ADMISSION"
+        selected.checks.map(_.effectiveTestScope) shouldBe Vector(SbtTestScope.Full, SbtTestScope.Admission)
+        selected.checks.map(_.identity) shouldBe Vector("compile", "source-test")
+        take(V.productTargetC(selected.checks.last)).testScope shouldBe SbtTestScope.Admission
+      }
+    }
+
+    "require Full for clean within-file logic composition and edited resolution logic" in {
+      Given("two parents change different methods in one source file without a textual conflict")
+      val left = _source_change("src/Input.scala", "1", "2")
+      val right = _source_change("src/Input.scala", "1", "3")
+      val candidate = _source_change("src/Input.scala", "1", "4")
+      val texts = Map("2" * 40 -> "object Input { val a = 2; val b = 1 }\n",
+        "3" * 40 -> "object Input { val a = 1; val b = 3 }\n",
+        "4" * 40 -> "object Input { val a = 2; val b = 3 }\n")
+      When("the final index contains both contributions or a new edited expression")
+      val selected = Vector(texts, texts.updated("4" * 40, "object Input { val a = 4; val b = 3 }\n")).map { blobs =>
+        take(RepositorySyncProgramImpact.mergeSelectionC(_merge_policy, _source_inputs(Vector(left.path.value)),
+          Vector(left), Vector(right), Vector(candidate), id => Consequence.success(blobs.get(id.value))))
+      }
+      Then("Git's clean merge and conflict status cannot reduce the required Full scope")
+      selected.foreach { value =>
+        value.depth shouldBe "FULL"
+        value.checks shouldBe _merge_policy.fullChecks
+        value.checks.forall(_.effectiveTestScope == SbtTestScope.Full) shouldBe true
+      }
+    }
+
+    "accept comment text resolution while preserving Scala strings, layout and directive semantics" in {
+      Given("a comment-only conflict with code and indentation preserved")
+      val left = _source_change("src/Input.scala", "1", "2")
+      val right = _source_change("src/Input.scala", "1", "3")
+      val candidate = _source_change("src/Input.scala", "1", "4")
+      val text = "object Input:\n  val text = \"https://host/*literal*/\" // local comment\n  val a = 1\n"
+      val resolved = text.replace("local comment", "combined comment")
+      val blobs = Map("2" * 40 -> text, "3" * 40 -> text.replace("local comment", "remote comment"), "4" * 40 -> resolved)
+      When("typed blobs establish ordinary-comment equivalence with a parent")
+      val selected = take(RepositorySyncProgramImpact.mergeSelectionC(_merge_policy, _source_inputs(Vector(left.path.value)),
+        Vector(left), Vector(right), Vector(candidate), id => Consequence.success(blobs.get(id.value))))
+      Then("Admission is selected without erasing literal comment markers or indentation")
+      selected.depth shouldBe "ADMISSION"
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(text, resolved) shouldBe true
+      Vector(text.replace("  val a", "val a"), text.replace("val a = 1", "val a = 2"),
+        text.replace("host/*literal*/", "other/*literal*/"), text + "//> using dep example\n",
+        text.replace("// local comment", "// scalafix:off"), text.replace("val a = 1", "val a = s\"value\""))
+        .foreach(other => RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(text, other) shouldBe false)
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = 1 // added\n", "val x = 1\n") shouldBe true
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = 1 /* added */\n", "val x = 1\n") shouldBe true
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = a/* separator */b\n", "val x = ab\n") shouldBe false
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = a/* one */b\n", "val x = ab\n") shouldBe false
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = 1 /* one /* nested */ */\n",
+        "val x = 1 /* other /* nested */ */\n") shouldBe true
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent("val x = \"\"\"// one\"\"\"\n",
+        "val x = \"\"\"// two\"\"\"\n") shouldBe false
+    }
+
+    "require Full when a multiline literal changes along with a comment" in {
+      val left = _source_change("src/Input.scala", "1", "2")
+      val right = _source_change("src/Input.scala", "1", "3")
+      val candidate = _source_change("src/Input.scala", "1", "4")
+      val original = "object Input {\n  val x = \"\"\"first  \nsecond\"\"\" // local\n}\n"
+      val other = original.replace("// local", "// remote")
+      val changed = original.replace("first  \n", "first \n").replace("// local", "// resolved")
+      val blobs = Map("2" * 40 -> original, "3" * 40 -> other, "4" * 40 -> changed)
+      val selected = take(RepositorySyncProgramImpact.mergeSelectionC(_merge_policy, _source_inputs(Vector(left.path.value)),
+        Vector(left), Vector(right), Vector(candidate), id => Consequence.success(blobs.get(id.value))))
+      selected.depth shouldBe "FULL"
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(original, other) shouldBe true
+      RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(original, changed) shouldBe false
+    }
+
+    "resume only the exact legacy focused selection for the original candidate" in {
+      val inputs = _source_inputs(Vector("src/Input.scala"))
+      val legacy = RepositorySyncProgramImpact.select(_merge_policy, inputs)
+      val host = V.Policy("original-policy", 1, "required", "Original selected rationale",
+        _merge_policy.checks, impact = Some(_merge_policy))
+      val issued = V.State(host.mode, legacy.reason, legacy.checks, "3", Vector.empty,
+        Some(inputs), Some(legacy))
+      V.retainedLegacySelection(issued, host, inputs, "3", false) shouldBe true
+      val reused = RepositorySyncProgramImpact.Reuse("source-test", "validation", "closure", None)
+      V.retainedLegacySelection(issued.copy(impact = Some(legacy.copy(reused = Vector(reused)))),
+        host, inputs, "3", false) shouldBe true
+      val shared = V.Check("shared-test", 4)
+      val hopPolicy = _merge_policy.copy(coverage = _merge_policy.coverage :+
+        RepositorySyncProgramImpact.Coverage(shared, Vector("src/Other.scala"), Vector("src/Input.scala"), "Shared consumer"))
+      val hopHost = host.copy(checks = hopPolicy.checks, impact = Some(hopPolicy))
+      val local = RepositorySyncProgramImpact.select(hopPolicy, inputs)
+      val localIntent = issued.copy(selected = local.checks, impact = Some(local))
+      V.retainedLegacySelection(localIntent, hopHost, inputs, "3", false) shouldBe true
+      V.retainedLegacySelection(localIntent, hopHost, inputs, "3", true) shouldBe false
+      V.retainedLegacySelection(issued, host, inputs, "4", false) shouldBe false
+      V.retainedLegacySelection(issued.copy(selected = _merge_policy.fullChecks), host, inputs, "3", false) shouldBe false
+      val admission = legacy.checks.map(check => if (check.kind == WorkflowSbtValidation.Kind.Test)
+        check.copy(testScope = Some("admission")) else check)
+      V.retainedLegacySelection(issued.copy(selected = admission), host, inputs, "3", false) shouldBe false
+      V.retainedLegacySelection(issued.copy(impact = Some(legacy.copy(checks = _merge_policy.fullChecks))),
+        host, inputs, "3", false) shouldBe false
+    }
+
+    "retain an issued legacy Full selection and its receipts when source carry-through now selects Admission" in {
+      val first = _source_change("src/First.scala", "1", "2")
+      val second = _source_change("src/Second.scala", "3", "4")
+      val inputs = _source_inputs(Vector(first.path.value, second.path.value))
+      val oldPolicy = _merge_policy.copy(fullPaths = Vector("src"),
+        fullChecks = Vector(_merge_policy.coverage.last.check, _merge_policy.fullChecks.head),
+        ordinaryMergeSources = true)
+      val host = V.Policy("original-policy", 1, "required", "Original selected rationale",
+        oldPolicy.checks, impact = Some(oldPolicy))
+      val old = RepositorySyncProgramImpact.select(oldPolicy, inputs)
+      val current = take(RepositorySyncProgramImpact.mergeSelectionC(oldPolicy, inputs, Vector(first), Vector(second),
+        Vector(first, second), _ => fail("Exact file carry-through needs no blob")))
+      old.depth shouldBe "FULL"
+      current.depth shouldBe "ADMISSION"
+      val fullReceipts = Vector("index-local", "index-remote") ++ old.checks.map(_.identity)
+      val issued = V.State(host.mode, old.reason, old.checks, "3",
+        fullReceipts.map(id => V.Receipt(id, "exited", Some(0), "", "")), Some(inputs), Some(old))
+      V.retainedLegacySelection(issued, host, inputs, "3", false) shouldBe true
+      V.successful(issued.receipts, selected = issued.selected) shouldBe true
+      V.retainedLegacySelection(issued, host, inputs, "4", false) shouldBe false
+      V.retainedLegacySelection(issued.copy(selected = issued.selected.reverse), host, inputs, "3", false) shouldBe false
+      V.retainedLegacySelection(issued.copy(selected = current.checks), host, inputs, "3", false) shouldBe false
+      V.retainedLegacySelection(issued.copy(impact = Some(old.copy(checks = current.checks))),
+        host, inputs, "3", false) shouldBe false
+      V.retainedLegacySelection(issued, host, _source_inputs(Vector("src/Other.scala")), "3", false) shouldBe false
+      V.successful(issued.receipts, selected = current.checks) shouldBe false
+    }
+
+    "preserve arbitrary ordinary line-comment text without weakening code or string identity" in {
+      Given("ordinary alphanumeric comment contents on an unchanged Scala code line")
+      val property = org.scalacheck.Prop.forAll(org.scalacheck.Gen.alphaNumStr) { comment =>
+        val original = "object Input { val text = \"//literal\" } // old\n"
+        val candidate = "object Input { val text = \"//literal\" } // " + comment + "\n"
+        RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(original, candidate) &&
+          !RepositorySyncProgramImpact.ordinaryScalaCommentsEquivalent(original, candidate.replace("//literal", "//changed"))
+      }
+      When("the lexical equivalence property is checked across generated comment contents")
+      val checked = org.scalacheck.Test.check(org.scalacheck.Test.Parameters.default.withMinSuccessfulTests(50), property)
+      Then("only ordinary comment text is ignored")
+      checked.passed shouldBe true
+    }
+
+    "keep documents structural and select the strongest scope for consumed or uncertain input" in {
+      Given("a declared non-consumed document and source carry-through")
+      val change = _source_change("src/Input.scala", "1", "2")
+      val docs = RepositorySyncDocumentInputs.Assessment(Vector("docs/guide.md"), Vector.empty, Vector.empty, Vector.empty, "Non-consumed document")
+      When("the same selector sees document-only, build-consumed document, broad, missing or unknown inputs")
+      def _select_(inputs: RepositorySyncDocumentInputs.Assessment, policy: RepositorySyncProgramImpact.Policy = _merge_policy) =
+        take(RepositorySyncProgramImpact.mergeSelectionC(policy, inputs, Vector(change), Vector.empty, Vector(change),
+          _ => Consequence.success(None)))
+      val source = _source_inputs(Vector(change.path.value))
+      val consumed = source.copy(changedPaths = source.changedPaths :+ "docs/schema.md", consumedPaths = source.consumedPaths :+ "docs/schema.md")
+      Then("only non-consumed documentation has no product check; every stronger requirement wins")
+      _select_(docs).checks shouldBe empty
+      _select_(docs).depth shouldBe "DOCUMENT"
+      Vector(_select_(consumed), _select_(source.copy(unknownPaths = Vector("unknown/input"))),
+        _select_(source.copy(binaryPaths = source.changedPaths)), _select_(source, _merge_policy.copy(fullPaths = Vector("src"))))
+        .foreach(value => value.depth shouldBe "FULL")
+      val combined = _source_change("src/Input.scala", "1", "3")
+      take(RepositorySyncProgramImpact.mergeSelectionC(_merge_policy, source, Vector(change), Vector.empty, Vector(combined),
+        _ => Consequence.success(None))).depth shouldBe "FULL"
+    }
+  }
+
+  "Inferred standard source coverage" should {
+    "specialize ordinary source merges while preserving explicit Full and nonmerge selection" in {
+      Given("the standard inferred catch-all Full policy and an explicit broad policy with identical paths")
+      val source = _source_change("src/Input.scala", "1", "2")
+      val inputs = _source_inputs(Vector(source.path.value))
+      val explicit = _merge_policy.copy(fullPaths = Vector("src"))
+      val inferred = explicit.copy(ordinaryMergeSources = true)
+      When("the candidate carries its complete source file through one parent")
+      def _selected_(policy: RepositorySyncProgramImpact.Policy) = take(RepositorySyncProgramImpact.mergeSelectionC(policy,
+        inputs, Vector(source), Vector.empty, Vector(source), _ => fail("No comment observation is needed")))
+      Then("only inferred merge defaults can narrow source scope; explicit and nonmerge Full remain Full")
+      _selected_(inferred).depth shouldBe "ADMISSION"
+      _selected_(explicit).depth shouldBe "FULL"
+      RepositorySyncProgramImpact.select(inferred, inputs).depth shouldBe "FULL"
+      inferred.asJson.as[RepositorySyncProgramImpact.Policy] shouldBe Right(inferred)
+      _merge_policy.asJson.hcursor.downField("ordinaryMergeSources").focus shouldBe None
+      _merge_policy.asJson.as[RepositorySyncProgramImpact.Policy] shouldBe Right(_merge_policy)
+    }
+  }
+
+  "Repository Test scope receipts" should {
+    "decode historical Full and reject Admission on unrelated TestOnly duties" in {
+      Given("a legacy Test check and a newly selected typed Admission check")
+      val old = Json.obj("identity" -> "source-test".asJson, "ordinal" -> 2.asJson)
+      val admission = V.Check("source-test", 2, testScope = Some("admission"))
+      When("selected checks are persisted and the actual typed target is resolved")
+      old.as[V.Check].map(_.effectiveTestScope) shouldBe Right(SbtTestScope.Full)
+      admission.asJson.as[V.Check] shouldBe Right(admission)
+      take(V.productTargetC(admission)).testScope shouldBe SbtTestScope.Admission
+      Then("scope is never silently transferred to TestOnly or satisfied by an old Full receipt")
+      admission.copy(kind = WorkflowSbtValidation.Kind.TestOnly).asJson.as[V.Check].isLeft shouldBe true
+      V.productSuccessful(V.Receipt("source-test", "exited", Some(0), "", ""), admission) shouldBe false
+      V.applies(state.copy(selected = Vector(admission)), policy.copy(checks = Vector(admission.copy(testScope = None)))) shouldBe false
+    }
+
+    "bind exact report cases and reject cross-scope acceptance or reuse" in {
+      Given("retained typed Admission facts with an actual-shaped finite ScalaTest report")
+      def _token_(value: String) = java.util.Base64.getUrlEncoder.withoutPadding().encodeToString(value.getBytes("UTF-8"))
+      val suite = "example.SelectedSpec"
+      val test = "selected case"
+      val row = _token_(suite) + ":" + _token_(test)
+      val text = Vector("CNCF-ADMISSION-V1 selected " + row, "CNCF-ADMISSION-V1 succeeded " + row,
+        "[info] Total number of tests run: 1", "[info] Suites: completed 1, aborted 0",
+        "[info] Tests: succeeded 1, failed 0, canceled 0, ignored 0, pending 0", "[info] All tests passed.",
+        "CNCF-ADMISSION-V1 completed").mkString("\n")
+      def _capture_(value: String) = { val bytes = value.getBytes("UTF-8").toVector; ProcessExecutionCapture(bytes, bytes.size.toLong, false) }
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), _capture_(text), _capture_(""), Vector.empty, 7L, "typed-test")
+      val check = V.Check("source-test", 2, testScope = Some("admission"))
+      val actual = SbtExecutionResult(take(V.productTargetC(check)), SbtOperation.Test, process)
+      When("the normal typed result is retained and assessed against current selected checks")
+      val receipt = take(V.sbtReceiptC(check.identity, check.kind, actual))
+      Then("scope and exact selected cases survive, and neither Full nor mismatched cases can pass")
+      V.productSuccessful(receipt, check) shouldBe true
+      V.productSuccessful(receipt, check.copy(testScope = None)) shouldBe false
+      V.productSuccessful(receipt.copy(sbt = receipt.sbt.map(_.copy(admissionCases = Some(Vector(
+        WorkflowSbtValidation.AdmissionCase(suite, "another case")))))), check) shouldBe false
+      val prepared = N.Payload("ValidationChecking", "/selected/repository", before,
+        validation = Some(V.State("required", "Selected Admission", Vector(check), "3", receipts.take(2))))
+      V.productAttemptPayloadC(prepared, check, org.goldenport.cncf.processexecution.SbtExecutionAttempt.Observed(
+        actual.copy(target = actual.target.copy(testScope = SbtTestScope.Full)))).isSuccess shouldBe false
+      receipt.asJson.as[V.Receipt].map(value => V.productSuccessful(value, check)) shouldBe Right(true)
+      V.successful(receipts.take(2) :+ receipt, selected = Vector(check)) shouldBe true
+      V.successful(receipts.take(2) :+ receipt, selected = Vector(check.copy(testScope = None))) shouldBe false
+    }
+  }
 
   "Complete semantic content" should {
     "retain large program coverage and FULL selection reasons through the actual typed policy and selection codecs" in {

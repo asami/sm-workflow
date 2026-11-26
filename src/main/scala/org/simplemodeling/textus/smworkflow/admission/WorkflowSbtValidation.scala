@@ -193,6 +193,20 @@ private[smworkflow] object WorkflowSbtValidation {
   def checkKind(cursor: HCursor): Decoder.Result[Kind] =
     if (cursor.keys.exists(_.exists(_ == "kind"))) cursor.get[Kind]("kind") else Right(Kind.Test)
 
+  /** Reassess the retained native Admission report using the same CNCF reader
+    * as initial selection. Historical omitted scope continues to mean Full. */
+  def scopeReceiptValid(facts: Option[Facts], process: Option[ProcessExecutionResult], expected: SbtTestScope): Boolean =
+    if (expected == SbtTestScope.Full) facts.forall(_.effectiveTestScope == SbtTestScope.Full)
+    else expected == SbtTestScope.Admission && facts.exists { value => value.effectiveTestScope == SbtTestScope.Admission && process.exists { observed =>
+      val report = SbtAdmissionTestReport.assess(observed)
+      val rows = report.selected.map((suite, test) => AdmissionCase(suite, test))
+      rows == value.admissionCases.getOrElse(Vector.empty) && (value.outcome match {
+        case Outcome.Succeeded => report.disposition.isEmpty
+        case Outcome.Unverified => report.disposition.exists(reason => value.reason.contains(reason.toString))
+        case _ => true
+      })
+    } }
+
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.target != null && result.target.validationMode != null &&
         result.validationMode != null && result.processResult != null && result.lintInput != null &&
@@ -234,5 +248,7 @@ private[smworkflow] object WorkflowSbtValidation {
       testScope = Option.when(result.target.testScope == SbtTestScope.Admission)("admission"),
       admissionCases = Option.when(rows.nonEmpty)(rows))
     _ <- retained.validateC
+    _ <- if (scopeReceiptValid(Some(retained), Some(result.processResult), result.target.testScope)) Consequence.unit
+      else Consequence.stateConflict("SBT Admission report differs from its retained selection or outcome")
   } yield retained
 }
