@@ -12,3 +12,7 @@
   on fresh and resumed runs and is reported as actually applied, unavailable,
   or declined. Mandatory validation, Admission, and budget remain unchanged.
 - [ ] Scoped validation and independent review recorded before closure.
+
+- [ ] CNCF Phase 114 and Textus AI Phase 9 compatible releases integrated; no temporary duplicate evaluator.
+- [ ] Predicate/Selection applicability, candidate selection, decline, invalid output and deterministic fallback verified; mandatory Admission unchanged.
+- [ ] Corpus/Experiment comparison records accuracy, tokens, latency and cost per accepted repair; Phase 114.1 is not a closure dependency.
