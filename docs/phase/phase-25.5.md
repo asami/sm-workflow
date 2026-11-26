@@ -235,3 +235,9 @@ lifecycle. textus-ai owns provider capabilities, eligibility and accounting.
 Phase 27 consumes suitability and reuse evidence for deterministic cost-aware
 routing. Generalized knowledge extraction and pattern-language composition
 are future work. Planning does not start a Session.
+
+## Cross-project delivery — typed Domain Rules (2026-11-26)
+
+Phase 25.5 is the parent delivery window for CNCF Phase 114 and the Textus AI structured-evaluation work. Preserve existing phase ordering. First define repair-template applicability (Predicate) and candidate strategy selection (Selection) usage contracts and fixtures. Then deliver CNCF Phase 114 typed evaluation SPI, followed by Textus AI adapter with OpenAI Structured Outputs, then integrate the released mechanisms in sm-workflow. Do not build a temporary duplicate evaluator. CNCF Phase 114.1 (full hybrid Evidence integration) is explicitly outside this closure dependency.
+
+Prefer deterministic matching and candidate narrowing, then bounded AI Predicate/Selection with explicit decline and output validation. Value is a CNCF contract but not required for the initial repair pilot. Use free eligible routes first under existing allowance and authorization policies; preserve deterministic bootstrap routing and avoid recursive provider selection. Keep mandatory validation and Admission outside AI judgments. Use Corpus/Experiment to compare prompt complexity, accuracy, false decisions, declines, tokens, latency and cost per accepted repair; no savings claim before measurement. Qualify provider substitution and deterministic replay. Coordinate dependency releases and sync before integration; retain existing Phase 25.5 acceptance requirements.
