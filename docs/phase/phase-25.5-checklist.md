@@ -8,4 +8,7 @@
 - [ ] P255-06: Diagnostic pattern matching uses stable codes/rule IDs and version-aware normalized evidence; unknown, ambiguous and interacting diagnostics handled safely.
 - [ ] P255-06: Representative compiler/lint strategy templates specialize and cache at Project/Phase scope, bind current Task evidence, preserve deterministic-first repair and mandatory validation.
 - [ ] P255-06: Pattern/template-version metrics and comparable repair evidence support refinement; false matches, invalidation, retries and Take Over verified.
+- [ ] Confirm that optional template/cache behavior follows the bound profile
+  on fresh and resumed runs and is reported as actually applied, unavailable,
+  or declined. Mandatory validation, Admission, and budget remain unchanged.
 - [ ] Scoped validation and independent review recorded before closure.

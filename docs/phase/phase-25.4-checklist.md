@@ -10,4 +10,9 @@
 - [ ] P254-06: Reusable design artifacts retain provenance and applicability; end-to-end comparison includes design cost, quality, retries and latency.
 - [ ] P254-07: Design/execution contracts independent of entitlement; free-only default and explicit paid authorization boundary preserved.
 - [ ] P254-07: Comparable evidence includes total cost per accepted task, quality, latency, failed attempts and reusable design amortization; observed and estimated costs distinguished.
+- [ ] P254-08: Human selects the versioned profile before dispatch; ordinary
+  behavior is preserved when unspecified. Child Steps and resume retain the
+  binding; no AI or allowance change can switch the profile. Verify effective
+  mechanisms and unchanged mandatory checks, capability, Admission, retry
+  and spending constraints across profiles.
 - [ ] Ordinary installed routes and resume qualified; scoped validation and independent review recorded before closure.

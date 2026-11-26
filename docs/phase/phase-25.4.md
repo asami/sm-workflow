@@ -144,6 +144,29 @@ and amortized reusable design artifacts; report latency and quality separately.
 Keep observed charges, allowance consumption, estimated prices and unknowns
 distinct. Record conditions under which separation is beneficial or not.
 
+### P254-08 — Human-selected optimization profile
+
+Before a Project execution starts, accept an explicit Human selection of a
+versioned optimization profile through the Project/Session start configuration.
+Offer three named profiles (working names: Baseline, Standard, Aggressive).
+Baseline uses the ordinary path without the new optional optimizations;
+Standard enables qualified reuse and bounded optimizations; Aggressive may
+add eligible proactive preparation within the same limits. Keep the mapping
+explicit and versioned, and do not claim an optimization is enabled before
+its implementation is available. Omitted selection preserves existing behavior
+and is recorded as unspecified, not as measured Baseline.
+
+Resolve the selection before dispatch and record the profile ID/version and
+effective optional mechanisms with the execution identity. Inherit that
+selection in child Steps and on resume; never let AI, quota changes or retries
+silently change it. A different level requires a new Human-selected execution.
+The same required checks, Admission, capability requirements (including any
+mandatory Astra class), authorization and retry/spend ceilings apply to all
+profiles. The profile is independent of model reasoning level and grants no
+permission to spend. Use [Phase 25.2](phase-25.2.md) metrics for ordinary-run
+comparison; [Phase 25.5](phase-25.5.md) consumes the profile for optional
+template and cache behavior.
+
 ## Ownership and boundaries
 
 sm-workflow owns task semantics, context assessment, Workflow and Admission.

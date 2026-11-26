@@ -66,6 +66,20 @@ Phase 27 owns generalized cross-route scheduling and paid optimization;
 Phase 25.5 preserves free-only defaults and programmatic fallback, with
 explicit budget authorization required for any paid generation.
 
+### Human-selected optimization in template execution
+
+Consume the immutable, versioned [Phase 25.4 profile](phase-25.4.md#p254-08--human-selected-optimization-profile).
+Respect it when choosing optional template specialization, scoped cache reuse
+and eligible proactive preparation. For example, Baseline disables the new
+optional template/cache paths, Standard permits qualified reuse, and Aggressive
+may add bounded preparation only when existing eligibility and authorization
+allow it. Report effective behavior (including miss, decline or unavailable
+mechanism) with the existing [Phase 25.2](phase-25.2.md) observations.
+Do not change deterministic repair, mandatory validation, Admission, capability,
+retry or cost limits. Preserve controlled cache and provider qualification
+fixtures; routine profile comparison uses normal development logs rather
+than requiring repeated application generation.
+
 ### P255-05 — Qualification and economics
 
 Verify template binding, scope isolation, invalidation, concurrent cache

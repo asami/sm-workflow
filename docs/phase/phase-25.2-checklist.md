@@ -41,5 +41,12 @@ Plan: [Phase 25.2](phase-25.2.md)
   Verify that a bounded failure can be corrected with FOCUSED and that
   acceptance still satisfies the candidate's selected scope. Preserve
   structural checks and conditional review.
+- [ ] Deferred follow-up (not a Phase 25.2 closure criterion): show profile/version and
+  compare logical Step token ratios by task role and difficulty, with retry
+  deduplication, confirmed zero, partial usage and unknown attribution.
+  Verify calls per completed task, zero-call tasks, and separate failed-task
+  and observed allowance reporting without added executions or a release
+  dependency on Phase 25.4.
+
 - [ ] Record review and release evidence. Distinguish live observations from
   fixtures and unavailable tool routes.
