@@ -194,10 +194,34 @@ object NativeCallerPhaseMetrics {
       .flatMap(json => GoalPhaseNativeMetadata.normalizePublicJson(json).toOption)
       .flatMap(_.as[M.Summary].toOption))
     summary.filter(_.phaseSession == phaseSession).map { original =>
+      val callerUsage = observations(phaseSession, retained)
+      val dispatchUsage = dispatchObservations(phaseSession, dispatch)
+      // A harness interval covers the whole harness session. It is a per-launch
+      // boundary only when exactly one actual executor was retained.
+      val boundedHarness = observations(phaseSession, retained.filter(r => r.session != null &&
+        r.session.attempts.size == 1 && r.session.attempts.head.outcome.executor.nonEmpty))
+      val nativeSpans = original.operationalTime.toVector.flatMap(_.spans)
+      val nativeIds = nativeSpans.filter(_.category == "ai").map(_.identity).toSet
+      val harnessIds = boundedHarness.map(_.execution).toSet
+      val dispatchIds = dispatchUsage.map(_.execution).toSet
+      val sets = Vector(nativeIds, harnessIds, dispatchIds).filter(_.nonEmpty)
+      // Different labels across independent sources do not prove different
+      // executions. Preserve the already bound native observations in that case.
+      val ambiguous = sets.size > 1 && sets.distinct.size > 1
+      val additions = if (ambiguous) Vector(M.ObservedSpan("caller-unreconciled", "ai", None, None,
+        None, "caller:execution-attribution")) else (boundedHarness ++ dispatchUsage).map { u =>
+        M.ObservedSpan(u.execution, "ai", Some(u.intervalStart), Some(u.intervalEnd), Some(u.role), u.identity)
+      }.filterNot(s => nativeSpans.exists(n => n.category == s.category && n.identity == s.identity &&
+        n.start == s.start && n.end == s.end && n.role == s.role))
+      val unbounded = Option.when(retained.exists(r => r.session != null && r.session.attempts.size > 1))(
+        M.ObservedSpan("caller-multiple-attempts", "ai", None, None, None, "caller:session-boundaries"))
+      val time = M.operationalTime(original.start.map(_.observedAt), Some(original.end.observedAt), nativeSpans ++ additions ++ unbounded)
       val observed = M.summarize(phaseSession, original.start, original.end,
-        original.usage.flatMap(_.observations) ++ observations(phaseSession, retained) ++ dispatchObservations(phaseSession, dispatch), original.profile)
+        original.usage.flatMap(_.observations) ++ callerUsage ++ dispatchUsage, original.profile)
         .copy(issuedProfiles = original.issuedProfiles, comparison = original.comparison, retainedObservations = original.retainedObservations,
-          calls = if (callFacts.nonEmpty) Some(M.calls(original.calls.toVector.flatMap(_.observations) ++ callFacts.filter(_.phaseSession.contains(phaseSession)))) else original.calls)
+          calls = if (callFacts.nonEmpty) Some(M.calls(original.calls.toVector.flatMap(_.observations) ++ callFacts.filter(_.phaseSession.contains(phaseSession)))) else original.calls,
+          deterministicRepairs = original.deterministicRepairs, operationalTime = Some(time),
+          operations = original.operations)
       completion.copy(metrics = Some(M.record(observed)))
     }.getOrElse(completion)
   }

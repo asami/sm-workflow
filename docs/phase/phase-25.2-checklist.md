@@ -23,6 +23,11 @@ Plan: [Phase 25.2](phase-25.2.md)
   to AI, unresolved or missing dispositions, resumed/replayed events, parallel
   spans, and unknown duration. Show AI role and route-switch reasons where
   retained evidence is available, without requiring a new instrumentation path.
+  The completion snapshot projects authenticated validation and review cycles,
+  repair transactions bound to their original failure, measured process
+  durations, and matching approval events when retained. Read-only projection
+  failures and incomplete historical or caller evidence leave coverage partial
+  or unavailable. Final packaged qualification remains open.
 - [ ] P252-05: Qualify CNCF's typed `sbt_test` and `sbt_test_attempt` with
   `Admission` and `Full`. Verify the existing single-argument forms retain
   FULL behavior. Through installed sm-workflow, accept an ordinary Step with

@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import scala.util.control.NonFatal
+import GoalPhaseWorkComparison as C
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.resource.{ResourceTreeEntry, ResourceTreeQueryLimits, ResourceTreeSelection}
@@ -81,6 +82,46 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   given Encoder[Repairs] = deriveEncoder
   given Decoder[Repairs] = deriveDecoder
 
+  /** Boundaries are retained observations, not estimates of process time. */
+  final case class ObservedSpan(identity: String, category: String, start: Option[String], end: Option[String],
+    role: Option[String], source: String, processMillis: Option[Long] = None)
+  final case class SpanTotal(category: String, millis: Option[Long], completeSpans: Int,
+    incompleteSpans: Int, conflictingIdentities: Vector[String], coverage: String)
+  final case class OperationalTime(elapsedMillis: Option[Long], elapsedReason: String,
+    spans: Vector[ObservedSpan], totals: Vector[SpanTotal])
+  given Encoder[ObservedSpan] = deriveEncoder
+  given Decoder[ObservedSpan] = deriveDecoder
+  given Encoder[SpanTotal] = deriveEncoder
+  given Decoder[SpanTotal] = deriveDecoder
+  given Encoder[OperationalTime] = deriveEncoder
+  given Decoder[OperationalTime] = deriveDecoder
+
+  private def spanMillis(start: Option[String], end: Option[String]): Option[Long] = for {
+    a <- start.flatMap(s => scala.util.Try(java.time.Instant.parse(s)).toOption)
+    b <- end.flatMap(s => scala.util.Try(java.time.Instant.parse(s)).toOption)
+    millis <- Option.when(!b.isBefore(a))(scala.util.Try(java.time.Duration.between(a, b).toMillis).toOption).flatten
+  } yield millis
+
+  def operationalTime(start: Option[String], end: Option[String], raw: Vector[ObservedSpan]): OperationalTime = {
+    val valid = raw.filter(s => s.identity.nonEmpty && s.source.nonEmpty &&
+      Set("ai", "build-test", "human-wait")(s.category))
+    val grouped = valid.groupBy(s => (s.category, s.identity))
+    val conflicts = grouped.collect { case (key, rows) if rows.distinct.size != 1 => key }.toSet
+    val unique = grouped.toVector.filterNot(x => conflicts(x._1)).map(_._2.head).sortBy(s => (s.category, s.identity))
+    val totals = Vector("ai", "build-test", "human-wait").map { category =>
+      val selected = unique.filter(_.category == category)
+      val values = selected.flatMap(s => spanMillis(s.start, s.end).orElse(
+        Option.when(s.category == "build-test")(s.processMillis.filter(_ >= 0)).flatten))
+      val conflicting = conflicts.collect { case (`category`, id) => id }.toVector.sorted
+      val total = scala.util.Try(values.foldLeft(0L)(Math.addExact)).toOption.filter(_ => values.nonEmpty)
+      SpanTotal(category, total, values.size, selected.size - values.size, conflicting,
+        if (total.isEmpty) "unavailable" else "partial")
+    }
+    val elapsed = spanMillis(start, end)
+    OperationalTime(elapsed, if (elapsed.nonEmpty) "Original retained endpoint boundaries" else "Original endpoint boundary unavailable or incompatible",
+      valid.distinct.sortBy(s => (s.category, s.identity, s.source)), totals)
+  }
+
   /** completeTools is explicit evidence of complete route observation, not the
     * set of tools seen. Conflicts and unknown origins remain partial. */
   def repairs(raw: Vector[RepairApplication], completeTools: Set[String]): Repairs = {
@@ -114,7 +155,8 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
     comparison: Vector[GoalPhaseWorkComparison.Summary] = Vector.empty,
     retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None, calls: Option[Calls] = None,
-    deterministicRepairs: Option[Repairs] = None)
+    deterministicRepairs: Option[Repairs] = None, operationalTime: Option[OperationalTime] = None,
+    operations: Option[C.Operational] = None)
 
   given Encoder[ResourceTreeQueryLimits] = deriveEncoder
   given Decoder[ResourceTreeQueryLimits] = deriveDecoder
@@ -130,7 +172,9 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val withoutEmpty = if (fields("comparison").exists(_.asArray.exists(_.isEmpty))) fields.remove("comparison") else fields
     val withoutRetained = if (withoutEmpty("retainedObservations").exists(_.isNull)) withoutEmpty.remove("retainedObservations") else withoutEmpty
     val withoutCalls = if (withoutRetained("calls").exists(_.isNull)) withoutRetained.remove("calls") else withoutRetained
-    if (withoutCalls("deterministicRepairs").exists(_.isNull)) withoutCalls.remove("deterministicRepairs") else withoutCalls
+    val withoutRepairs = if (withoutCalls("deterministicRepairs").exists(_.isNull)) withoutCalls.remove("deterministicRepairs") else withoutCalls
+    val withoutTime = if (withoutRepairs("operationalTime").exists(_.isNull)) withoutRepairs.remove("operationalTime") else withoutRepairs
+    if (withoutTime("operations").exists(_.isNull)) withoutTime.remove("operations") else withoutTime
   })
   private val _summary_decoder: Decoder[Summary] = deriveDecoder
   given Decoder[Summary] = Decoder.instance { cursor =>
@@ -223,13 +267,16 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val selected = started.sourceMetrics.map(_.scope).getOrElse(scope(d))
     // This passive projection uses the same retained Session. An unavailable
     // observation cannot change normal completion or become an inferred zero.
-    val deterministic = try {
+    val observed = try {
       GoalPhaseNativeWorkContinuation.bindC(d, session.current.definition)
-        .flatMap(_.deterministicRepairMetricsC(session, core)).toOption
+        .flatMap(_.completionOperationalEvidenceC(session, core)).toOption
     } catch { case NonFatal(_) => None }
-    summarize(session.current.identity.value, started.sourceMetrics, capture(core, selected, source), Vector.empty, started.operatingProfile)
+    val (deterministic, operations) = observed.getOrElse(repairs(Vector.empty, Set.empty) -> C.NativeOperations())
+    val end = capture(core, selected, source)
+    summarize(session.current.identity.value, started.sourceMetrics, end, Vector.empty, started.operatingProfile)
       .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations,
-        deterministicRepairs = Some(deterministic.getOrElse(repairs(Vector.empty, Set.empty))))
+        operationalTime = Some(operationalTime(started.sourceMetrics.map(_.observedAt), Some(end.observedAt), operations.spans)),
+        deterministicRepairs = Some(deterministic), operations = Some(C.operational(operations, deterministic)))
   }
 
   /** Passive usage aggregation over already acquired attributable observations.
@@ -397,7 +444,14 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val observations = summary.usage.flatMap(_.observations) ++ bound.toVector.flatMap(_.attempts.flatMap(_.usage))
     val totals = aggregate(summary.phaseSession, observations, summary.netSourceLines, summary.netReason)
     val sources = bound.toVector.flatMap(r => Vector(r.sourceReference) ++ r.attempts.map(_.sourceReference) ++ r.closures.map(_.sourceReference)).distinct
-    summary.copy(usage = totals, comparison = work.map(_.workClass).distinct.sorted.map { cls =>
+    val spans = bound.toVector.flatMap(_.attempts).map { a =>
+      ObservedSpan(a.executionIdentity, "ai", a.startedAt, a.endedAt, a.usage.map(_.role).distinct match {
+        case Vector(role) => Some(role)
+        case _ => None
+      }, a.sourceReference)
+    }
+    summary.copy(usage = totals, operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
+      summary.operationalTime.toVector.flatMap(_.spans) ++ spans)), comparison = work.map(_.workClass).distinct.sorted.map { cls =>
       val projected = GoalPhaseWorkComparison.project(summary.phaseSession,
         GoalPhaseWorkComparison.Cohort(plan.identity + ":" + cls, "Step", cls, summary.start.map(_.observedAt),
           summary.end.observedAt, summary.end.sourceTree), work, observations)

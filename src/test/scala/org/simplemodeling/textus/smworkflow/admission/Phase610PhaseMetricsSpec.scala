@@ -37,6 +37,96 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
     M.UsageObservation(id, 1, _session, id, destination, "parent", Some("spec-model"), _at, _at,
       Some(input), Some(output), Some(25), Some(10), "self-only")
 
+  "Operational time" should {
+    "retain overlapping execution durations and expose incomplete and conflicting observations" in {
+      val second = "2026-10-29T00:00:01Z"
+      val span = M.ObservedSpan("a", "ai", Some(_at), Some(second), Some("review"), "receipt")
+      val parallel = span.copy(identity = "b")
+      val missing = span.copy(identity = "c", end = None)
+      val conflict = span.copy(identity = "d")
+      val result = M.operationalTime(Some(_at), Some(second), Vector(span, span, parallel, missing,
+        conflict, conflict.copy(end = Some(_at))))
+      result.elapsedMillis shouldBe Some(1000L)
+      val ai = result.totals.find(_.category == "ai").get
+      ai.millis shouldBe Some(2000L)
+      ai.incompleteSpans shouldBe 1
+      ai.conflictingIdentities shouldBe Vector("d")
+      ai.coverage shouldBe "partial"
+      result.totals.find(_.category == "human-wait").get.millis shouldBe None
+      M.operationalTime(None, Some(second), Vector.empty).elapsedMillis shouldBe None
+    }
+
+    "sum measured native build durations separately from approval intervals and wall time" in {
+      val end = "2026-10-29T00:00:01Z"
+      val build = M.ObservedSpan("compile-result", "build-test", None, None, Some("compile"), "native", Some(0L))
+      val test = build.copy(identity = "test-result", role = Some("test"), processMillis = Some(1500L))
+      val wait = M.ObservedSpan("human-7", "human-wait", Some(_at), Some(end), Some("judgment"), "native")
+      val unobserved = wait.copy(identity = "human-8", end = None)
+      val totals = M.operationalTime(Some(_at), Some(end), Vector(build, build, test, wait, unobserved))
+      totals.elapsedMillis shouldBe Some(1000L)
+      totals.totals.find(_.category == "build-test").get.millis shouldBe Some(1500L)
+      totals.totals.find(_.category == "human-wait").get.millis shouldBe Some(1000L)
+      totals.totals.find(_.category == "human-wait").get.incompleteSpans shouldBe 1
+    }
+  }
+
+  "Operational repair and rework projection" should {
+    "group retained deterministic edits per episode and distinguish fallback, unresolved and absent proof" in {
+      import GoalPhaseWorkComparison as C
+      val facts = C.NativeOperations()
+        .stage("compile-initial", "one", "candidate-1", "compile")
+        .stage("test-initial", "one", "candidate-1", "test")
+        .failure("failed-test", "one", "validation", "test")
+        .attempted("one", "apply-1", Some("effect-1"))
+        .failure("repeat-test-failure", "one", "validation", "test")
+        .attempted("one", "apply-2", Some("effect-2"))
+        .stage("compile-repeat", "one", "candidate-2", "compile")
+        .stage("test-repeat-1", "one", "candidate-2", "test")
+        .stage("test-repeat-2", "one", "candidate-2", "test")
+        .succeeded("one", "validation", Set("compile"), "wrong-check")
+        .succeeded("one", "validation", Set("test"), "verified")
+        .stage("review-initial", "one", "review-1", "review")
+        .failure("failed-review", "one", "review", "ReviewStep")
+        .attempted("one", "apply-3", Some("effect-3"))
+        .ai("one", Some(true))
+        .stage("review-repeat", "one", "review-2", "review")
+        .succeeded("one", "review", Set("ReviewStep"), "accepted")
+        .failure("still-open", "two", "validation", "test")
+        .attempted("two", "apply-4", None)
+        .failure("diagnostics-only", "three", "validation", "test")
+        .failure("unknown-ai", "four", "validation", "test")
+        .attempted("four", "apply-5", Some("effect-5"))
+        .ai("four", None)
+        .succeeded("four", "validation", Set("test"), "verified-2")
+      val repairs = M.repairs(Vector("effect-1", "effect-2", "effect-3", "effect-5").map(id =>
+        M.RepairApplication(id, Some("metals"), "fixture", Some(true), Some(true), Some(true),
+          Some(false), Some("accepted-tree"), Some("validation"), Vector("receipt:" + id))), Set.empty)
+      val route = C.RouteSwitch("switch-1", "RepairStep", "ordinary", "difficult", Some("retained failure trend"))
+      val aggregate = C.operational(facts.copy(episodes = facts.episodes ++ facts.episodes,
+        runs = facts.runs ++ facts.runs, routes = Vector(route, route)), repairs)
+      aggregate.resolvedWithoutAi shouldBe 1
+      aggregate.attemptedWithKnownDisposition shouldBe 3
+      aggregate.unresolvedAttempted shouldBe 1
+      aggregate.unobservable shouldBe 2
+      aggregate.episodes.size shouldBe 5
+      aggregate.episodes.find(_.identity == "failed-test").flatMap(_.resolution) shouldBe Some("verified")
+      aggregate.rework.map(r => r.stage -> r.cycles).toMap shouldBe Map("compile" -> Some(1),
+        "test" -> Some(1), "lint" -> None, "review" -> Some(1))
+      aggregate.routeSwitches shouldBe Vector(route)
+      C.operational(C.NativeOperations(), repairs).coverage shouldBe "unavailable"
+    }
+
+    "retain the repair association for review after validation resolves the failure" in {
+      import GoalPhaseWorkComparison as C
+      val facts = C.NativeOperations().stage("review-1", "step", "first", "review")
+        .failure("failure", "step", "validation", "compile")
+        .attempted("step", "apply", Some("effect"))
+        .succeeded("step", "validation", Set("compile"), "passed")
+        .stage("review-2", "step", "second", "review")
+      facts.runs.last.rework shouldBe true
+    }
+  }
+
   "Deterministic application projection" should {
     "count one retained application per actual identity and preserve incomplete coverage" in {
       def fact(id: String, tool: Option[String], changed: Option[Boolean] = Some(true),
@@ -562,6 +652,18 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
         val summary = io.circe.parser.parse(take(metric.toJsonStringC)).toOption.get
         summary.hcursor.downField("start").get[String]("status").toOption shouldBe Some("available")
         summary.hcursor.downField("end").get[String]("status").toOption shouldBe Some("available")
+        val decoded = GoalPhaseNativeMetadata.normalizePublicJson(summary).toOption.get.as[M.Summary].toOption.get
+        decoded.operationalTime.flatMap(_.elapsedMillis) should not be empty
+        decoded.operations.toVector.flatMap(_.rework).find(_.stage == "review").flatMap(_.cycles) shouldBe Some(0)
+        val repairs = M.repairs(Vector(M.RepairApplication("fixture-effect", Some("metals"), "fixture",
+          Some(true), Some(true), Some(true), Some(false), Some("tree"), Some("check"), Vector("receipt"))), Set.empty)
+        val completion = closed.completion.get.copy(metrics = Some(M.record(decoded.copy(deterministicRepairs = Some(repairs)))))
+        val projected = Caller.project(session, completion, Vector.empty)
+        val projectedJson = io.circe.parser.parse(take(projected.metrics.get.toJsonStringC)).toOption.get
+        val reparsed = GoalPhaseNativeMetadata.normalizePublicJson(projectedJson).toOption.get.as[M.Summary].toOption.get
+        reparsed.deterministicRepairs shouldBe Some(repairs)
+        reparsed.operations shouldBe decoded.operations
+        reparsed.operationalTime shouldBe decoded.operationalTime
         closed.message should include("Source physical lines")
         terminal = Some(closed)
         Complete.phaseExecutions(root) shouldBe checks
