@@ -53,3 +53,10 @@ Plan: [Phase 25.2](phase-25.2.md)
   qualification. The installed fixture requirement above remains open.
 - [ ] Record review and release evidence. Distinguish live observations from
   fixtures and unavailable tool routes.
+
+
+P252-03 implementation: trusted retained attempt call facts are optional and bind to
+the actual Session and issued work as well as their execution and source identities.
+The normal terminal progress presentation projects the native completion metrics;
+missing facts remain unknown. Packaged and installed qualification remains a separate
+acceptance activity.

@@ -785,9 +785,144 @@ def display_response(response, context, presentation="summary"):
     display_observation(summary)
 
 
+def phase_completion_markdown(response, context):
+    """Render only the owning Phase terminal response from its typed metrics."""
+    operation = context.get("operation", "")
+    if (not isinstance(response, dict) or not isinstance(operation, str)
+            or not operation.endswith("GoalPhaseService.advanceGoalPhase")
+            or response.get("kind") != "Terminal" or response.get("outcome") != "completed"
+            or native_field(response, "sessionId") != context.get("outerSessionId")
+            or context.get("targetSessionId") != context.get("outerSessionId")):
+        return ""
+    # Read only fields used for presentation. Unrelated observations may be
+    # large; they are neither normalized nor inspected here.
+    def field(value, name):
+        if not isinstance(value, dict):
+            return None
+        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+        if name != snake and name in value and snake in value and value[name] != value[snake]:
+            raise ValueError("ambiguous metric field")
+        return value.get(name, value.get(snake))
+
+    if "completion" in response:
+        completion = response["completion"]
+    else:
+        completion = field(field(response, "controlSummary"), "completion")
+    metrics = field(completion, "metrics")
+    if not isinstance(metrics, dict) or field(metrics, "phaseSession") != context.get("outerSessionId"):
+        return ""
+
+    def rows(value):
+        return value[:33] if isinstance(value, list) else []
+
+    def cell(value):
+        if value is None:
+            return "unknown"
+        if isinstance(value, bool):
+            return str(value).lower()
+        if not isinstance(value, (str, int, float)):
+            return "unknown"
+        value = str(value)[:160]
+        return (" ".join(value.split()).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("\\", "\\\\").replace("|", "\\|")
+                .replace("`", "\\`").replace("*", "\\*").replace("_", "\\_")
+                .replace("[", "\\[").replace("]", "\\]"))
+
+    def table(title, headers, rows):
+        if not rows:
+            return None
+        heading = ("**" + title + "**\n| " + " | ".join(headers) + " |\n| " +
+                   " | ".join(["---"] * len(headers)) + " |")
+        rendered = ["| " + " | ".join(cell(v) for v in row) + " |" for row in rows[:32]]
+        return {"title": title, "heading": heading, "rows": rendered,
+                "more": len(rows) > 32, "shown": 0}
+
+    def token(group, name):
+        value = field(group, name)
+        if not isinstance(value, dict):
+            return "unknown"
+        parts = [field(value, k) for k in ("value", "observed", "executions")]
+        return "{} ({}/{})".format(*(str(v) if type(v) is int and v >= 0 else "unknown" for v in parts))
+
+    def call_row(group):
+        return [field(group, name) for name in ("engine", "provider", "route", "mode", "level", "executions",
+                "retries", "unknownRetries", "fallbacks", "unknownFallbacks")] + [
+                    token(group, name) for name in ("input", "output", "total")]
+
+    sections = []
+    calls = field(metrics, "calls")
+    headers = ["Engine", "Provider", "Route", "Mode", "Level", "Calls", "Retries", "Retry unknown",
+               "Fallbacks", "Fallback unknown", "Input", "Output", "Total"]
+    if isinstance(calls, dict):
+        groups = rows(field(calls, "groups"))
+        sections.append(table("AI calls and tokens (observed/executions)", headers,
+                              [call_row(g) for g in groups if isinstance(g, dict)]))
+        session = field(calls, "session")
+        sections.append(table("AI session totals (observed/executions)", headers,
+                              [call_row(session if isinstance(session, dict) else {})]))
+        sections.append(table("Call coverage", ["Unknown executions", "Not run"],
+                              [[field(calls, "unknownExecutions"), field(calls, "notRun")]]))
+    else:
+        sections.append(table("Call coverage", ["Unknown executions", "Not run"], [[None, None]]))
+    repairs = field(metrics, "deterministicRepairs")
+    if isinstance(repairs, dict):
+        sections.append(table("Retained edits", ["Tool", "Count", "Coverage"],
+            [[field(t, "tool"), field(t, "count"), field(t, "coverage")]
+             for t in rows(field(repairs, "tools")) if isinstance(t, dict)]))
+    operations = field(metrics, "operations")
+    if isinstance(operations, dict):
+        coverage = field(operations, "coverage")
+        names = ("resolvedWithoutAi", "attemptedWithKnownDisposition", "unresolvedAttempted", "unobservable")
+        counts = [None if coverage == "unavailable" else field(operations, name) for name in names]
+        sections.append(table("Resolution episodes", ["Resolved without AI", "Known disposition", "Unresolved", "Unobservable", "Coverage"],
+                              [counts + [coverage]]))
+        sections.append(table("Rework", ["Stage", "Cycles", "Coverage"],
+            [[field(r, "stage"), field(r, "cycles"), field(r, "coverage")]
+             for r in rows(field(operations, "rework")) if isinstance(r, dict)]))
+        sections.append(table("Route switches", ["Role", "From", "To", "Reason"],
+            [[field(r, "role"), field(r, "from"), field(r, "to"), field(r, "reason")]
+             for r in rows(field(operations, "routeSwitches")) if isinstance(r, dict)]))
+    timing = field(metrics, "operationalTime")
+    if isinstance(timing, dict):
+        time_rows = [["elapsed", field(timing, "elapsedMillis"), field(timing, "elapsedReason")]] + [
+            [field(t, "category"), field(t, "millis"), field(t, "coverage")]
+            for t in rows(field(timing, "totals")) if isinstance(t, dict)]
+        sections.append(table("Time (ms; stages cumulative)", ["Measure", "Milliseconds", "Coverage"], time_rows))
+    sections = [section for section in sections if section]
+
+    def render():
+        blocks = []
+        for section in sections:
+            lines = [section["heading"]] + section["rows"][:section["shown"]]
+            if section["shown"] < len(section["rows"]) or section["more"]:
+                lines.append("Additional rows omitted; see raw response.")
+            blocks.append("\n".join(lines))
+        return "\n\n".join(blocks)
+
+    # Reserve complete rows for the small totals and coverage tables before
+    # filling the remaining budget with variable-length detail tables.
+    for section in sections:
+        section["shown"] = 1
+        if len(render()) > 16000:
+            section["shown"] = 0
+    detail_order = sorted(sections, key=lambda section: section["title"] ==
+                          "AI calls and tokens (observed/executions)")
+    for section in detail_order:
+        while section["shown"] < len(section["rows"]):
+            section["shown"] += 1
+            if len(render()) > 16000:
+                section["shown"] -= 1
+                break
+    return render()
+
+
 def response_progress(response, context):
     """Expose actual work, Step, repair counts and checks without interpretation."""
-    progress("response", context, observation=observation_projection(response))
+    try:
+        markdown = phase_completion_markdown(response, context)
+    except Exception:
+        markdown = ""  # Presentation must not change native workflow progress.
+    progress("response", context, observation=observation_projection(response), completionMarkdown=markdown)
 
 
 def native_call(command, runtime_root, output_fd, context):
@@ -1136,6 +1271,8 @@ def command_activity_record(event, context=None, observation=None):
         if control is not None:
             line = "制御：" + control + "; " + line
         record["presentation"]["commentary"] = "**" + heading + "**\n" + line
+        if event == "response" and observation.get("completionMarkdown"):
+            record["presentation"]["commentary"] += "\n\n" + observation["completionMarkdown"]
     except Exception:
         # Presentation failure never changes a business result or execution.
         record["presentation"]["commentary"] = "**⚙️ 🟡 │ sm-workflow 実行状態不明**\npresentation=unknown"

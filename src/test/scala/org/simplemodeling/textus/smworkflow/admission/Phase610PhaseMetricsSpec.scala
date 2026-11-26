@@ -625,6 +625,36 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
       result.conflictingInvocations shouldBe empty
     }
 
+    "bind retained call facts to the actual work and preserve v1 absence" in {
+      import io.circe.syntax.*
+      import GoalPhaseRetainedObservations as R
+      val plan = GoalPhaseOrderedProgression.Plan("metrics", "1", "6.10", "sm-workflow",
+        Vector(GoalPhaseOrderedProgression.Step("one", "fixture", Vector("src"), Vector.empty, Vector("compile"))), Vector("test"))
+      val continuation = _session + ":ordered-implementation:1"
+      val invocation = continuation + ":agent"
+      val fact = M.CallFact(invocation, 1, "receipt", "confirmed", Some("codex"), Some("route"),
+        Some("implementation"), None, Some(false), Some(false), Some(0L), None, None, None, None, None,
+        phaseSession = Some(_session), continuation = Some("dispatch:" + continuation), unresolvedDispatch = Some(false))
+      val attempt = R.Attempt(continuation, Some("one"), "ImplementStep", invocation, "completed",
+        None, None, "receipt", Vector.empty, Some(fact))
+      val retained = R.Retained(R.schema, _session, "host", Vector(attempt), Vector.empty, Vector.empty)
+      val native = Vector(GoalPhaseWorkComparison.NativeWork(Some("one"), "ImplementStep", None, Some(continuation)))
+      R.bindC(retained, _session, plan, Vector.empty, native).isSuccess shouldBe true
+      val summary = M.summarize(_session, None, _endpoint(20), Vector.empty, None).copy(retainedObservations = Some(retained))
+      val projected = M.withComparison(summary, plan, Vector.empty, native)
+      projected.calls.get.session.executions shouldBe 1
+      projected.calls.get.session.input.value shouldBe Some(0L)
+      projected.calls.get.session.output.value shouldBe None
+      M.withComparison(projected, plan, Vector.empty, native).calls shouldBe projected.calls
+      R.bindC(retained, _session, plan, Vector.empty, native.map(_.copy(kind = "ReviewStep"))).isSuccess shouldBe false
+      R.valid(retained.copy(attempts = Vector(attempt.copy(call = Some(fact.copy(source = "other")))))) shouldBe false
+      R.valid(retained.copy(attempts = Vector(attempt.copy(call = Some(fact.copy(phaseSession = Some("other"))))))) shouldBe false
+      val legacy = retained.copy(attempts = Vector(attempt.copy(call = None)))
+      val wire = legacy.asJson
+      wire.hcursor.downField("attempts").downN(0).downField("call").focus shouldBe None
+      R.decodeC(wire).toOption shouldBe Some(legacy)
+    }
+
     "preserve legacy absent Start metrics through the actual native Start codec" in {
       val plan = GoalPhaseOrderedProgression.Plan("metrics-legacy", "1", "6.10", "sm-workflow",
         Vector(GoalPhaseOrderedProgression.Step("one", "Owned fixture", Vector("src"), Vector.empty, Vector("compile"))), Vector("test"))

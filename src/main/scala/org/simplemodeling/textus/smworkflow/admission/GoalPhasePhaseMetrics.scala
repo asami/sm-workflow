@@ -450,7 +450,9 @@ private[smworkflow] object GoalPhasePhaseMetrics {
         case _ => None
       }, a.sourceReference)
     }
-    summary.copy(usage = totals, operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
+    val retainedCalls = bound.toVector.flatMap(_.attempts.flatMap(_.call))
+    val combinedCalls = summary.calls.toVector.flatMap(_.observations) ++ retainedCalls
+    summary.copy(usage = totals, calls = if (combinedCalls.nonEmpty) Some(calls(combinedCalls)) else summary.calls, operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
       summary.operationalTime.toVector.flatMap(_.spans) ++ spans)), comparison = work.map(_.workClass).distinct.sorted.map { cls =>
       val projected = GoalPhaseWorkComparison.project(summary.phaseSession,
         GoalPhaseWorkComparison.Cohort(plan.identity + ":" + cls, "Step", cls, summary.start.map(_.observedAt),
