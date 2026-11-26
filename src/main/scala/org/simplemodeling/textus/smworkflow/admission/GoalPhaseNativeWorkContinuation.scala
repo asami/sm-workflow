@@ -1648,17 +1648,75 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def describeValidationRecoveryC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult] = for {
-      located <- _validation_recovery_source_c(identity, core)
-      (source, cursor, frontier) = located
-      target <- _validation_recovery_target_c(source, cursor, frontier, core)
-    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(identity,
-      "decision-required", GoalPhaseValidationRecovery.messageFor(target), core.component.get.core.instanceId.canonicalKey,
-      GoalPhaseValidationRecovery.targetRecord(target), GoalPhaseValidationRecovery.choicesFor(target), GoalPhaseValidationRecovery.recoveryOperation)
+      pair <- _validation_recovery_location_c(identity, core)
+      (source, located) = pair
+      result <- located match {
+        case Frontier(cursor) if cursor.controller.stage == O.Stage.PhaseValidation && cursor.validation.isEmpty =>
+          _fix_check_deferral_target_c(source, cursor, core).map(target =>
+            org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(identity,
+              "decision-required", GoalPhaseFixCheckDeferral.message, target.componentInstance,
+              GoalPhaseFixCheckDeferral.targetRecord(target), Vector(GoalPhaseFixCheckDeferral.choice),
+              GoalPhaseValidationRecovery.recoveryOperation))
+        case _ => for {
+          selected <- _validation_recovery_source_c(source, located)
+          (_, cursor, frontier) = selected
+          target <- _validation_recovery_target_c(source, cursor, frontier, core)
+        } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(identity,
+          "decision-required", GoalPhaseValidationRecovery.messageFor(target), core.component.get.core.instanceId.canonicalKey,
+          GoalPhaseValidationRecovery.targetRecord(target), GoalPhaseValidationRecovery.choicesFor(target), GoalPhaseValidationRecovery.recoveryOperation)
+      }
+    } yield result
+
+    private def _fix_check_deferral_target_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
+        Consequence[GoalPhaseFixCheckDeferral.Target] = for {
+      _ <- if (cursor.from == source.current && cursor.validation.isEmpty &&
+          GoalPhaseQualification.configured(d, cursor.controller).isEmpty) Consequence.unit
+        else F.invalid("FixCheck deferral requires the latest unissued ordinary PhaseValidation")
+      candidate <- cursor.candidate.map(Consequence.success).getOrElse(F.invalid("FixCheck deferral has no retained candidate"))
+      target <- GoalPhaseFixCheckDeferral.targetC(source, cursor.from, cursor.controller, candidate, core)
+      _ <- GoalPhaseFixCheckDeferral.availableC(d, cursor.controller)
+    } yield target
 
     def recoverValidationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult] =
+      if (input.choice == GoalPhaseFixCheckDeferral.choice) _defer_phase_fix_check_c(input, core)
+      else _recover_validation_attempt_c(input, core)
+
+    private def _defer_phase_fix_check_c(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult] = for {
+      supplied <- GoalPhaseFixCheckDeferral.targetC(input.target)
+      pair <- _validation_recovery_location_c(input.sessionId, core)
+      (source, located) = pair
+      cursor <- located match {
+        case Frontier(value) => Consequence.success(value)
+        case _ => F.invalid("FixCheck deferral cannot replace an issued validation or a stopped effect")
+      }
+      actual <- _fix_check_deferral_target_c(source, cursor, core)
+      _ <- if (supplied == actual && input.sessionId == actual.sessionId) Consequence.unit
+        else F.invalid("FixCheck deferral crosses its exact current target")
+      ref = ContextReference(input.reference.identity, input.reference.revision)
+      _ <- GoalPhaseValidationRecovery.admitFixCheckDeferralC(d, core, actual, input, ref)
+      active <- F.sessionC(input.sessionId, d, definition, core)
+      _ <- _append_phase_fix_check_deferral_c(active, cursor, core,
+        GoalPhaseFixCheckDeferral.Direction(actual, ref, input.rationale))
+    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult(input.sessionId, true,
+      "phase-fix-check-deferred", GoalPhaseFixCheckDeferral.message)
+
+    private def _append_phase_fix_check_deferral_c(source: F.Session, cursor: Cursor,
+      core: ActionCall.Core, direction: GoalPhaseFixCheckDeferral.Direction): Consequence[Unit] = for {
+      _ <- if (source.current == cursor.from) Consequence.unit else F.invalid("FixCheck deferral frontier changed")
+      candidate <- cursor.candidate.map(Consequence.success).getOrElse(F.invalid("FixCheck deferral has no retained candidate"))
+      deferred <- cursor.controller.deferPhaseFixCheckC(direction.reference)
+      _ <- GoalPhaseNativeValidation.preconditionsC(source, d, core, candidate, deferred,
+        Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings), Some(cursor.dependencyChain))
+      _ <- GoalPhaseFixCheckDeferral.appendC(source, d, cursor.from, core, direction)
+    } yield ()
+
+    private def _recover_validation_attempt_c(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult] = for {
       supplied <- GoalPhaseValidationRecovery.targetC(input.target)
-      located <- _validation_recovery_source_c(input.sessionId, core)
+      pair <- _validation_recovery_location_c(input.sessionId, core)
+      located <- _validation_recovery_source_c(pair._1, pair._2)
       (source, cursor, frontier) = located
       actual <- _validation_recovery_target_c(source, cursor, frontier, core)
       _ <- if (supplied == actual) Consequence.unit else F.invalid("Human new-attempt input crosses its exact current recovery target")
@@ -1969,11 +2027,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       selected <- _prerequisite_recovery_source(source, cursor)
     } yield selected
 
-    private def _validation_recovery_source_c(identity: String, core: ActionCall.Core):
-      Consequence[(F.Session, Cursor, InstanceRecord)] = for {
+    private def _validation_recovery_location_c(identity: String, core: ActionCall.Core):
+      Consequence[(F.Session, Located)] = for {
       source <- F.retainedSessionC(identity, d, definition, core)
       initial <- _initial_cursor_c(source)
       located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+    } yield source -> located
+
+    private def _validation_recovery_source_c(source: F.Session, located: Located):
+      Consequence[(F.Session, Cursor, InstanceRecord)] = for {
       cursor <- located match {
         case Paused(value, _, false) if Set(O.Stage.Validation, O.Stage.PhaseValidation)(value.controller.stage) &&
             value.validation.nonEmpty && value.candidate.nonEmpty => Consequence.success(value)
@@ -2713,6 +2775,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             soughtwork, soughthuman, soughtrecording, core, historyonly)
         } yield result
       } yield result
+      case O.Stage.PhaseValidation if entry.causation.value.startsWith(GoalPhaseFixCheckDeferral.causationPrefix) => for {
+        candidate <- cursor.candidate.map(Consequence.success).getOrElse(F.invalid("Retained FixCheck deferral has no candidate"))
+        saved <- GoalPhaseFixCheckDeferral.retainedC(source, cursor.from, cursor.controller, candidate, core,
+          _completed_release_dependency(cursor))
+        next <- _walk_c(source, cursor.copy(from = saved._1, controller = saved._2),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield next
       case O.Stage.PhaseValidation if entry.causation.value.startsWith(R.causationPrefix) => for {
         selected <- _release_dependency_source_c(source, cursor)
         retained <- R.retainedC(selected, core)
@@ -3711,6 +3780,20 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           dependencySourceScope = scope, primaryRepair = _active_primary_repair(cursor), repairWindow = cursor.repairWindow))
           }
           .flatMap(_after_native_c(source, cursor, _, core))
+      case O.Stage.PhaseValidation if !d.phaseFixCheck && cursor.validation.isEmpty &&
+          cursor.controller.phaseFixCheckDeferral.isEmpty &&
+          cursor.controller.plan.phaseChecks.contains("fix-check") && cursor.candidate.exists(value =>
+            value.record == cursor.from || _completed_release_dependency(cursor).contains(cursor.from)) &&
+          GoalPhaseQualification.configured(d, cursor.controller).isEmpty &&
+          (d.phaseDependencyValidation.isEmpty || cursor.dependencyChain.activePhaseCapture.nonEmpty ||
+            cursor.dependencyChain.historicalPhase.nonEmpty) => for {
+        target <- GoalPhaseFixCheckDeferral.targetC(source, cursor.from, cursor.controller, cursor.candidate.get, core,
+          configured = true, completedReleaseDependency = _completed_release_dependency(cursor))
+        _ <- GoalPhaseFixCheckDeferral.remainingChecksC(d, cursor.controller)
+        _ <- _append_phase_fix_check_deferral_c(source, cursor, core, GoalPhaseFixCheckDeferral.configuredDirection(target))
+        fallback <- _wait_cursor_c(cursor, "Whole-Phase FixCheck was deferred by the Phase host setting.")
+        result <- _after_native_c(source, cursor, fallback, core)
+      } yield result
       case O.Stage.Validation | O.Stage.PhaseValidation =>
         if (GoalPhaseQualification.configured(d, cursor.controller).nonEmpty &&
             !cursor.from.causation.value.startsWith("ordered-qualification-selected:") && cursor.validation.isEmpty)
@@ -3856,6 +3939,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Closed => _wait_cursor_c(cursor, "Actual native Phase closure is retained.")
     }}
 
+    private def _completed_release_dependency(cursor: Cursor): Option[InstanceRecord] =
+      cursor.releaseDependency.filter(_.complete).map(_.saved.record)
+
     private def _release_dependency_source_c(source: F.Session, cursor: Cursor): Consequence[R.Source] = for {
       binding <- d.phaseDependencyValidation.map(Consequence.success)
         .getOrElse(F.invalid("retained Release dependency history requires its unchanged explicit phase binding"))
@@ -3945,7 +4031,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.controller.repairControl.isEmpty || d.phaseValidationPolicy.isEmpty)
         Consequence.success(None)
       else for {
-        checks <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan, None)
+        checks <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan, None,
+          phaseFixCheckDeferred = cursor.controller.phaseFixCheckDeferral.nonEmpty)
         selected <- J.selectC(cursor.from, cursor.controller, cursor.candidate, cursor.validation, checks)
       } yield selected
 
@@ -3985,10 +4072,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         checkfailure <- _check_failure_context_c(cursor, semantic.key.kind.toString)
         publicationfailure <- _publication_failure_context_c(cursor, semantic.key.kind.toString)
         input = _request(source, cursor, semantic, context, checkfailure, publicationfailure)
+        phasefixcheckdeferred = cursor.controller.phaseFixCheckDeferral.nonEmpty ||
+          _initial_phase_provenance(cursor).exists(admission => admission.phaseFixCheckDeferred &&
+            checkfailure.exists(_.validation.sourceRevision == admission.payload.validationSourceRevision))
         draft <- _prepare_assigned_c(source, input, cursor.from, cursor.controller,
           if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
           cursor.dependencyApprovals, cursor.dependencyAdmission, cursor.dependencyChain, cursor.dependencySourceDirection,
-          cursor.consumptionDirection, cursor.stepReviewRequest.map(_.reason), _source_history_failure_provenance(cursor))
+          cursor.consumptionDirection, cursor.stepReviewRequest.map(_.reason), _source_history_failure_provenance(cursor),
+          phasefixcheckdeferred)
         plan <- _issue_assigned_c(draft.copy(validation = cursor.validation), _provider_failures(cursor, input.kind), core)
         wire <- _work_output_c(plan, core)
       } yield NativeWorkflowOperationOutput.withFindingRecording(wire.copy(validation =
@@ -4244,14 +4335,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       dependencysourcedirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
       consumptiondirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
       stepreviewreason: Option[String] = None,
-      sourcehistoryfailedrepair: Option[T.Observed] = None): Consequence[Prepared] = for {
+      sourcehistoryfailedrepair: Option[T.Observed] = None,
+      phasefixcheckdeferred: Boolean = false): Consequence[Prepared] = for {
       _ <- GoalPhaseRepairProgress.validateOptionC(input.repairProgress)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(input.selectedPlan)
       required <- S.requiredC(input.kind)
       independent = _is_review(input)
       requirement <- _requirement_c(input, required, independent)
       documents <- GoalPhaseDocumentSource.instructionsC(input.documents, input.stepIdentity)
-      sources <- GoalPhaseNativeValidation.sourceInstructionsC(d, input.selectedPlan, input.stepIdentity)
+      sources <- GoalPhaseNativeValidation.sourceInstructionsC(d, input.selectedPlan, input.stepIdentity, phasefixcheckdeferred)
       sourcescope <- (if (consumptiondirection.nonEmpty) dependencysourcedirection.map(direction =>
         GoalPhaseDependencySourceRevision.scopeC(direction, dependencyapprovals, d, consumptiondirection))
         .getOrElse(Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.ScopeSuccessor]))

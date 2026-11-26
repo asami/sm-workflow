@@ -30,6 +30,12 @@ reserve an additional window. One admission reserves one ordinary batch; reads,
 repeated Advance and retained reconstruction reuse the same durable work and
 count. A coarse failed check supplies no complete comparable finding catalog.
 
+If whole-Phase FixCheck was deferred before validation, first-failure admission
+uses the effective checks for that candidate. For example, a retained Compile
+success followed by a terminated FULL failure can enter ordinary Release repair.
+The original Plan and deferral remain in history. Admission requires the actual
+failed check and does not create a FixCheck result.
+
 Historical `failed` validation outcomes still reconstruct their original
 Decision. A separate pure native receipt, under
 `sm-workflow.initial-phase-check-repair.v1`, appends the guarded

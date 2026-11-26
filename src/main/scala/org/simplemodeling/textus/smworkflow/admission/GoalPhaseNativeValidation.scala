@@ -168,12 +168,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   /** Same host-policy selection for fresh Validation and issued semantic context. */
   private[admission] def selectedChecksC(d: F.Declaration, plan: O.Plan,
-    step: Option[String]): Consequence[Vector[Check]] = for {
+    step: Option[String], phaseFixCheckDeferred: Boolean = false): Consequence[Vector[Check]] = for {
     policy <- (if (step.isEmpty) d.phaseValidationPolicy else d.validationPolicy)
       .fold[Consequence[Policy]](F.invalid("selected host validation policy is absent"))(Consequence.success)
     _ <- policy.validateC
     identities <- step match {
-      case None => Consequence.success(plan.phaseChecks)
+      case None => Consequence.success(if (phaseFixCheckDeferred) plan.phaseChecks.filterNot(_ == "fix-check") else plan.phaseChecks)
       case Some(identity) => plan.steps.find(_.identity == identity).map(s => Consequence.success(s.checks))
         .getOrElse(F.invalid("selected validation Step is absent from the actual Plan"))
     }
@@ -205,11 +205,11 @@ private[smworkflow] object GoalPhaseNativeValidation {
   }
 
   private[admission] def sourceInstructionsC(d: F.Declaration, plan: O.Plan,
-    step: Option[String]): Consequence[String] = {
+    step: Option[String], phaseFixCheckDeferred: Boolean = false): Consequence[String] = {
     val policy = if (step.isEmpty) d.phaseValidationPolicy else d.validationPolicy
     if (!policy.exists(_.checks.exists(_.metadata.exists(_.source.nonEmpty)))) Consequence.success("")
     else for {
-      selected <- selectedChecksC(d, plan, step)
+      selected <- selectedChecksC(d, plan, step, phaseFixCheckDeferred)
       owned = step.fold(plan.phaseOwnedPaths)(identity => plan.steps.find(_.identity == identity).get.ownedPaths)
       instructions <- L.instructionsC(selected, step.getOrElse("phase:" + plan.phase), owned, d.candidatePaths)
     } yield instructions
@@ -474,7 +474,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     _ <- documentpolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
-    required <- selectedChecksC(d, controller.plan, step)
+    required <- selectedChecksC(d, controller.plan, step, controller.phaseFixCheckDeferral.nonEmpty)
     qualification <- GoalPhaseQualification.forValidationC(session, d, core, candidate, controller, from.getOrElse(candidate.record), historyonly)
     primary <- qualification.fold(Consequence.success(required))(q => GoalPhaseQualification.combinedC(required, q.target.supplemental, q.target.executionOrder))
     consumptionbase <- admittedSourceConsumptionC(candidate.payload.dependencySourceCapture, dependencychain)
@@ -685,7 +685,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     }
 
   private def _require_phase_lint_c(store: Store, initial: Saved): Consequence[Unit] = {
-    val needsCheck = store.whole && initial.payload.receipts.isEmpty &&
+    val needsCheck = store.whole && store.controller.phaseFixCheckDeferral.isEmpty && initial.payload.receipts.isEmpty &&
       GoalPhaseNativeCandidate.workPaths(store.candidate.payload).exists(_.endsWith(".scala")) &&
       !store.requested.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)
     if (!needsCheck) Consequence.unit
@@ -931,7 +931,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val plan = controller.plan
     val base = candidate.payload.continuation.map(_.parent).getOrElse(controller.candidateBase)
     val whole = controller.cursor == plan.steps.size
-    val checks = if (whole) plan.phaseChecks else plan.steps(controller.cursor).checks
+    val checks = if (whole) controller.phaseValidationChecks else plan.steps(controller.cursor).checks
     val ownedPaths = if (whole) plan.phaseOwnedPaths else plan.steps(controller.cursor).ownedPaths
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val validationStage = if (whole) "PhaseValidation" else "Validation"
@@ -1575,7 +1575,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           else controller.plan.steps(controller.cursor).identity))
       F.invalid("native check outcome has no matching selected Validation frontier")
     else {
-      val required = if (controller.cursor == controller.plan.steps.size) controller.plan.phaseChecks
+      val required = if (controller.cursor == controller.plan.steps.size) controller.phaseValidationChecks
         else controller.plan.steps(controller.cursor).checks
       val declared = N.declaredIdentities(GoalPhaseQualification.originalPrimary(payload))
       val full = declared == required

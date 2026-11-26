@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseValidationRecovery, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseFixCheckDeferral, GoalPhaseValidationRecovery, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive encoding of supplied HumanNewAttempt direction. The trusted host
@@ -26,14 +26,23 @@ object NativeValidationRecoveryPreparation {
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) &&
         exact(participant) && exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Validation recovery preparation requires the actual description, declared Human answer, matching worker, reference, issuer and time")
-    target <- GoalPhaseValidationRecovery.targetC(description.target)
-    _ <- if (description.choices == GoalPhaseValidationRecovery.choicesFor(target) &&
-        description.choices.contains(answer.choice)) Consequence.unit
-      else Consequence.stateConflict("Validation recovery preparation choices differ from the actual decoded target")
-    _ <- if (description.sessionId == target.sessionId) Consequence.unit
-      else Consequence.stateConflict("Validation recovery preparation crosses the described session")
-    binding <- GoalPhaseValidationRecovery.bindingC(description.componentInstance, target, answer.choice, answer.rationale,
-      participant, ContextReference(reference.identity, reference.revision))
+    ref = ContextReference(reference.identity, reference.revision)
+    binding <- if (answer.choice == GoalPhaseFixCheckDeferral.choice) for {
+      target <- GoalPhaseFixCheckDeferral.targetC(description.target)
+      _ <- if (description.sessionId == target.sessionId && description.choices == Vector(GoalPhaseFixCheckDeferral.choice))
+        Consequence.unit else Consequence.stateConflict("FixCheck deferral preparation crosses the described Session or choice")
+      selected <- GoalPhaseFixCheckDeferral.bindingC(description.componentInstance, target, answer.choice, answer.rationale,
+        participant, ref)
+    } yield selected else for {
+      target <- GoalPhaseValidationRecovery.targetC(description.target)
+      _ <- if (description.choices == GoalPhaseValidationRecovery.choicesFor(target) &&
+          description.choices.contains(answer.choice)) Consequence.unit
+        else Consequence.stateConflict("Validation recovery preparation choices differ from the actual decoded target")
+      _ <- if (description.sessionId == target.sessionId) Consequence.unit
+        else Consequence.stateConflict("Validation recovery preparation crosses the described session")
+      selected <- GoalPhaseValidationRecovery.bindingC(description.componentInstance, target, answer.choice, answer.rationale,
+        participant, ref)
+    } yield selected
     purpose = NativeExternalEvidence.Purpose.ValidationRecovery
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
     encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, purpose.identity,

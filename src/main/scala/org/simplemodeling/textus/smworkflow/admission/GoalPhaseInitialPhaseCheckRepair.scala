@@ -106,7 +106,7 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
             validationsource.causation.value == GoalPhaseQualification.cause(predecessor),
             "qualified failure has no matching original native selection prefix")
         } yield () }
-        _ <- _coverage_c(controller.plan, requiredchecks, actualvalidation.payload)
+        _ <- _coverage_c(controller.phaseValidationChecks, requiredchecks, actualvalidation.payload)
         directive = _directive(actualvalidation.payload)
         _ <- controller.continueInitialPhaseCheckRepairC(_checks_reference(actualvalidation), directive)
       } yield Some(new Source(from, controller, actualcandidate, actualvalidation, directive))
@@ -140,7 +140,8 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
-  private[admission] final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State) {
+  private[admission] final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State,
+    phaseFixCheckDeferred: Boolean = false) {
     def reference: ContextReference = ContextReference(record.identity.value + _namespace + payload.sourceRevision, "1")
   }
 
@@ -186,7 +187,7 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
           "retained admission changes its actual full native source or result prefix")
         _ <- successorC(source.from, prefix)
         state <- admittedStateC(source, value.receipt.payload.value)
-      } yield Some(Saved(prefix, value.receipt.payload.value, state))
+      } yield Some(Saved(prefix, value.receipt.payload.value, state, source.controller.phaseFixCheckDeferral.nonEmpty))
     }
   } yield saved
 
@@ -207,7 +208,7 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
           ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
         _ <- successorC(source.from, actual.receipt.next)
         _ <- _check(actual.receipt.payload.value == value, "fresh admission changes its exact generated payload")
-      } yield Saved(actual.receipt.next, value, state)
+      } yield Saved(actual.receipt.next, value, state, source.controller.phaseFixCheckDeferral.nonEmpty)
     }
   } yield saved
 
@@ -230,34 +231,34 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
         WorkflowSbtCapture.text(process.stdout).textStatus == "complete" &&
         WorkflowSbtCapture.text(process.stderr).textStatus == "complete"))
 
-  private def _coverage_c(plan: O.Plan, required: Vector[V.Check], value: V.Payload): Consequence[Unit] = {
+  private def _coverage_c(checks: Vector[String], required: Vector[V.Check], value: V.Payload): Consequence[Unit] = {
     // Source is constructed only from the continuation owner's authenticated
     // native Cursor above. This projection does not install or authorize Q;
     // it keeps that saved proof separate from the unchanged original policy.
     if (value.qualification.nonEmpty) return for {
       _ <- _check(_roundtrip_validation(value) && GoalPhaseQualification.payloadValid(value) &&
-        value.qualification.exists(_.target.required == required) && required.map(_.identity) == plan.phaseChecks,
+        value.qualification.exists(_.target.required == required) && required.map(_.identity) == checks,
         "qualified failure crosses the actual original required Check vector")
       selected <- GoalPhaseQualification.combinedC(required, value.qualification.get.target.supplemental)
       original = GoalPhaseQualification.originalPrimary(value)
       declared = GoalPhaseNativeMetadata.declaredIdentities(original)
-      full = declared == plan.phaseChecks
+      full = declared == checks
       ordinary = selected.takeWhile(_.metadata.isEmpty)
       beforeDiscovery = selected.exists(_.metadata.nonEmpty) && value.metadata.isEmpty &&
         value.selected == ordinary && terminalFailureValid(value)
       _ <- if (beforeDiscovery) GoalPhaseNativeMetadata.validateRetainedC(ordinary, value.selected, value.metadata)
         else GoalPhaseNativeMetadata.validateRetainedC(selected, value.selected, value.metadata)
-      _ <- _check(full || (declared.nonEmpty && declared == plan.phaseChecks.take(declared.size) &&
+      _ <- _check(full || (declared.nonEmpty && declared == checks.take(declared.size) &&
         original == required.take(original.size)),
         "qualified failure changes the original Phase prefix")
     } yield ()
     val declared = GoalPhaseNativeMetadata.declaredIdentities(value.selected)
-    val full = declared == plan.phaseChecks
-    val prefix = declared.nonEmpty && declared == plan.phaseChecks.take(declared.size) &&
+    val full = declared == checks
+    val prefix = declared.nonEmpty && declared == checks.take(declared.size) &&
       value.selected.forall(check => check.metadata.isEmpty && check.hostIdentity.isEmpty && check.operation.isEmpty) &&
       required.take(value.selected.size) == value.selected
     if (full) GoalPhaseNativeMetadata.validateRetainedC(required, value.selected, value.metadata)
-    else _check(prefix && required.map(_.identity) == plan.phaseChecks,
+    else _check(prefix && required.map(_.identity) == checks,
       "failed checks do not cover the selected Phase checks or their ordinary fail-fast prefix")
   }
 

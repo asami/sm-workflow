@@ -452,7 +452,10 @@ private[smworkflow] object GoalPhaseNativeWork {
             reference.identity.startsWith(request.instanceIdentity + ":ordered-initial-phase-check-repair:")) &&
           value.validation.step == "phase:" + request.selectedPlan.phase && {
             val selected = GoalPhaseNativeMetadata.declaredIdentities(GoalPhaseQualification.originalPrimary(value.validation))
-            selected.nonEmpty && selected == request.selectedPlan.phaseChecks.take(selected.size)
+            val planned = request.selectedPlan.phaseChecks
+            // Native continuation authenticates the admission and any saved deferral.
+            selected.nonEmpty && (planned.startsWith(selected) ||
+              planned.filterNot(_ == "fix-check").startsWith(selected))
           })) ||
       (validreview && request.stepIdentity != null && request.stepIdentity.isEmpty && request.selectedPlan != null &&
         _bounded_text(request.selectedPlan.phase) && request.checkFailure.exists(value =>

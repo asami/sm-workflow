@@ -672,3 +672,34 @@ eventually return pending ReviewStep and save the sole actual result. A later
 Advance preserves that result and the accepted implementation, Plan, base,
 candidate, history and zero repair counts. Neither example supplies independent
 review, closure, production Human provenance or Workflow acceptance.
+
+### R11 — Defer a missing whole-Phase FixCheck before validation
+
+Set the Boolean host parameter `sm-workflow.goal-phase.fix-check` in the Phase
+host's `.textus/config.json`. Its default is `true`, which preserves the saved
+Phase check selection. With `false`, ordinary Advance at the original unissued
+whole-Phase candidate records the host setting as the source of the deferral
+and runs the other checks. This also works when the host still declares a
+FixCheck binding. Once recorded, the same candidate continues with its saved
+selection across launches. A normal Release repair discards the old
+candidate-specific selection. Its replacement candidate selects checks using
+the current host setting before any check intent. With `false` it records a
+fresh configuration deferral and runs the remaining checks for the new
+candidate. This setting leaves Step checks and the `project.yaml` lint
+profile under their existing owners.
+
+When a saved Plan selects `fix-check` and the hosting Phase policy has no fixed
+binding for it, `describeGoalPhaseValidationRecovery --sessionId` can return a
+`DeferPhaseFixCheck` target. The target binds the original unissued PhaseValidation
+candidate, current Session revision, Plan, base, accepted Steps and repair
+progress. Every remaining check must resolve, including Compile and FULL Test.
+
+Use the existing GoalPhase `validation-recovery` evidence preparation and trusted
+Human evidence admission. Submit the exact described target and the actual
+Human answer/reference to `recoverGoalPhaseValidation`. It appends one
+candidate-specific deferral and returns `phase-fix-check-deferred`. The next
+ordinary `advanceGoalPhase` executes the remaining selection in its original
+order and issues independent Phase review. The original Plan still lists
+FixCheck, and the review explicitly discloses its deferral. FixCheck has no
+receipt or success result. A stale candidate, a different participant, an
+already issued check or an unreconciled execution stays outside this path.

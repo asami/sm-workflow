@@ -59,8 +59,10 @@ final class GoalPhaseInitialPhaseCheckRepairSpec extends AnyWordSpec with Matche
     def selectC = A.selectC(from, controller, Some(candidate), Some(validation), _checks)
   }
   private def _fixture(limit: Int = 10, policy: Option[String] = Some(R.version), prefix: Boolean = false,
-    adoptBeforeFailure: Boolean = false): Fixture = {
-    val beforepolicy = _phase(_plan.copy(repairLimit = limit), if (adoptBeforeFailure) None else policy)
+    adoptBeforeFailure: Boolean = false, fixCheckDeferred: Boolean = false): Fixture = {
+    val plan = _plan.copy(repairLimit = limit, phaseChecks =
+      if (fixCheckDeferred) _plan.phaseChecks.patch(1, Vector("fix-check"), 0) else _plan.phaseChecks)
+    val beforepolicy = _phase(plan, if (adoptBeforeFailure) None else policy)
     val phase = if (adoptBeforeFailure) take(beforepolicy.adoptRepairPolicyC("AdoptRuntimePolicy", "fixture-eligible-policy-direction"))
       else beforepolicy
     val inspection = _append(_initial, "PhaseInspection", "fixture-closed-Step")
@@ -70,13 +72,17 @@ final class GoalPhaseInitialPhaseCheckRepairSpec extends AnyWordSpec with Matche
       phase.candidate, _paths, Some("Actual-shaped complete original Phase diff")))
     val selected = if (prefix) _checks.take(1) else _checks
     val receipts = selected.zipWithIndex.map((check, index) => _receipt(check, index < selected.size - 1))
-    val validationsource = if (adoptBeforeFailure) _append(candidaterecord, "PhaseValidation", "ordered-repair-policy-adoption:fixture")
+    val validationphase = if (fixCheckDeferred)
+      take(phase.deferPhaseFixCheckC(GoalPhaseFixCheckDeferral.configuredReference)) else phase
+    val validationsource = if (fixCheckDeferred)
+      _append(candidaterecord, "PhaseValidation", GoalPhaseFixCheckDeferral.causationPrefix + candidaterecord.revision.value)
+      else if (adoptBeforeFailure) _append(candidaterecord, "PhaseValidation", "ordered-repair-policy-adoption:fixture")
       else candidaterecord
     val validationrecord = _append(validationsource, "Decision", "ordered-validation:validation")
     val validation = V.Saved(validationrecord, V.Payload(validationsource.revision.value.toString,
       candidate.payload.step, phase.candidate.get, selected, receipts, Some("failed")))
     val reference = validationrecord.identity.value + ":ordered-validation:" + validation.payload.sourceRevision + ":validation"
-    val failed = take(V.observedStateC(phase, validation.payload, reference))
+    val failed = take(V.observedStateC(validationphase, validation.payload, reference))
     Fixture(validationrecord, failed, candidate, validation)
   }
   /** Specification-shaped native prefixes only; no stored Q selection, process
@@ -185,6 +191,30 @@ final class GoalPhaseInitialPhaseCheckRepairSpec extends AnyWordSpec with Matche
   }
 
   "First whole-Phase check repair admission" should {
+    "admit the retained FULL failure after a configured whole-Phase FixCheck deferral" in {
+      val fixture = _fixture(fixCheckDeferred = true)
+      val source = _source(fixture)
+      val state = take(A.admittedStateC(source, A.payload(source)))
+      state.stage shouldBe O.Stage.Repair
+      state.repairs shouldBe 1
+      state.ordinaryRepairs shouldBe 1
+      state.plan.phaseChecks shouldBe Vector("phase-compile", "fix-check", "phase-test")
+      state.completed shouldBe fixture.controller.completed
+      source.validation.payload.selected shouldBe _checks
+      source.validation.payload.receipts.map(_.exitCode) shouldBe Vector(Some(0), Some(1))
+      val record = _append(fixture.from, "Repair", A.causation)
+      val saved = A.Saved(record, A.payload(source), state)
+      val failure = take(W.checkFailureContextC(_paths, fixture.candidate.payload.diff.get,
+        source.validation.payload, Some(saved.reference)))
+      val request = W.Request(record.identity.value, record.revision.value.toString, "RepairStep", None,
+        state.generation, "Repair the actual FULL failure", state.plan, state.base, state.completed,
+        None, None, state.next.asInstanceOf[O.Semantic].repairDirective, checkFailure = Some(failure))
+      take(W.admitSemanticResultC(request, W.Result("completed", "Specification correction", Vector.empty)))
+      val crossed = _checks.updated(1, _checks(1).copy(ordinal = 3))
+      A.selectC(fixture.from, fixture.controller, Some(fixture.candidate), Some(fixture.validation), crossed)
+        .isSuccess shouldBe false
+    }
+
     "reserve one ordinary Release batch after retaining the historical failed Decision exactly" in {
       Given("RRC-PHASE-FIRST-FAILURE-01: all selected Steps are closed and the first actual-shaped whole-Phase check failed")
       val fixture = _fixture()

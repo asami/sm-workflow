@@ -169,13 +169,26 @@ private[smworkflow] object GoalPhaseValidationRecovery {
     supplied <- Option(value).toRight("Validation recovery binding is absent")
     component <- supplied.hcursor.get[String]("componentInstance").left.map(_.message)
     targetwire <- supplied.hcursor.downField("validationRecovery").get[Json]("target").left.map(_.message)
-    target <- decodeTarget(targetwire)
     answer = supplied.hcursor.downField("validationRecovery").downField("answer")
     choice <- answer.get[String]("choice").left.map(_.message)
     rationale <- answer.get[String]("rationale").left.map(_.message)
     participant <- answer.get[String]("participant").left.map(_.message)
     identity <- answer.downField("reference").get[String]("identity").left.map(_.message)
     revision <- answer.downField("reference").get[String]("revision").left.map(_.message)
+    selected <- if (choice == GoalPhaseFixCheckDeferral.choice) for {
+      target <- GoalPhaseFixCheckDeferral.decodeTarget(targetwire)
+      binding <- GoalPhaseFixCheckDeferral.bindingC(component, target, choice, rationale, participant,
+        ContextReference(identity, revision)) match {
+          case Consequence.Success(binding) => Right(binding)
+          case Consequence.Failure(reason) => Left(reason.displayMessage)
+        }
+      _ <- Either.cond(binding == supplied, (), "FixCheck deferral binding fields differ")
+    } yield binding else _select_attempt_binding(supplied, targetwire, component, choice, rationale, participant, identity, revision)
+  } yield selected
+
+  private def _select_attempt_binding(supplied: Json, targetwire: Json, component: String, choice: String,
+    rationale: String, participant: String, identity: String, revision: String): Either[String, Json] = for {
+    target <- decodeTarget(targetwire)
     _ <- Either.cond(exact(component) && choicesFor(target).contains(choice) && text(rationale) &&
       Vector(participant, identity, revision).forall(exact) &&
       target.knownFailedPhase.forall(_.participant == participant) &&
@@ -186,6 +199,17 @@ private[smworkflow] object GoalPhaseValidationRecovery {
       "reference" -> Json.obj("identity" -> Json.fromString(identity), "revision" -> Json.fromString(revision)))))
     _ <- Either.cond(target.terminatedTimeoutPhase.isEmpty || selected == supplied, (), "Timeout recovery binding fields differ")
   } yield selected
+
+  def admitFixCheckDeferralC(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core,
+    target: GoalPhaseFixCheckDeferral.Target, input: V.GoalPhaseValidationRecoveryInput,
+    reference: ContextReference): Consequence[Unit] = for {
+    installation <- d.validationRecovery.map(Consequence.success).getOrElse(
+      Consequence.securityPermissionDenied("Validation recovery has no installed independent Human evidence provider"))
+    _ <- installation.validateC
+    binding <- GoalPhaseFixCheckDeferral.bindingC(core.component.get.core.instanceId.canonicalKey,
+      target, input.choice, input.rationale, target.participant, reference)
+    _ <- installation.evidence.admitC(core, reference, binding)
+  } yield ()
 
   def admitC(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core, target: RecoveryTarget,
     input: V.GoalPhaseValidationRecoveryInput, participant: String): Consequence[Unit] = for {
@@ -212,6 +236,8 @@ private[smworkflow] object GoalPhaseValidationRecovery {
         if (input == null || !exact(input.sessionId) || input.reference == null ||
             !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
           _invalid("input requires a declared Human direction and actual reference")
+        else if (input.choice == GoalPhaseFixCheckDeferral.choice)
+          GoalPhaseFixCheckDeferral.targetC(input.target).map(_ => Action(request, input.sessionId, Some(input), port))
         else targetC(input.target).flatMap { target =>
           if (!choicesFor(target).contains(input.choice)) _invalid("input choice is undeclared for the actual decoded target")
           else Consequence.success(Action(request, input.sessionId, Some(input), port))

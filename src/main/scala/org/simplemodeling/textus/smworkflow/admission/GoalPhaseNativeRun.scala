@@ -84,7 +84,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None,
     private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
     private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None,
-    plannedStepCommits: Boolean = true)
+    plannedStepCommits: Boolean = true,
+    phaseFixCheck: Boolean = true)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {

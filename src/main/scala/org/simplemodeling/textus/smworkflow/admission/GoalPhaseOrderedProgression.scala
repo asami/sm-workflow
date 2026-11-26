@@ -247,7 +247,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val policyRepairPending: Boolean = false,
     val repairObservations: Vector[R.Observation] = Vector.empty,
     val stepReviewRequired: Boolean = false,
-    private val _reconstruction_repair_scope: Option[String] = None) {
+    private val _reconstruction_repair_scope: Option[String] = None,
+    val phaseFixCheckDeferral: Option[ContextReference] = None) {
     private[admission] def requireCommittedWorkReviewC: Consequence[State] =
       if (stage == Stage.Validation && cursor < plan.steps.size && candidate.nonEmpty &&
           checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty && stepAdmission.isEmpty)
@@ -427,7 +428,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
         candidateParent, stepAdmission, releaseCommit, Some(context),
         pendingRepair.nonEmpty && repairs < context.effectiveLimit && context.stop.isEmpty,
-        repairObservations, stepReviewRequired, _reconstruction_repair_scope)
+        repairObservations, stepReviewRequired, _reconstruction_repair_scope, phaseFixCheckDeferral)
       resumed <- if (stage == Stage.Decision && pendingRepair.isEmpty && decisionSource.contains(Stage.Repair))
         adopted.acceptC(DecisionResumptionAdmitted(evidence)) else Consequence.success(adopted)
     } yield resumed
@@ -448,7 +449,18 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       .orElse(completed.lastOption.map(s => Snapshot(s.commit.identity, s.commit.tree))).getOrElse(base)
     def releaseRepairActive: Boolean = phaseWide && repairs > 0 && repairDirective.nonEmpty
     def candidateBase: Snapshot = candidateParent.getOrElse(tipSnapshot)
-    private def checks = if (phaseWide) plan.phaseChecks else step.checks
+    private[admission] def phaseValidationChecks: Vector[String] =
+      if (phaseFixCheckDeferral.nonEmpty) plan.phaseChecks.filterNot(_ == "fix-check") else plan.phaseChecks
+    private def checks = if (phaseWide) phaseValidationChecks else step.checks
+
+    private[admission] def deferPhaseFixCheckC(reference: ContextReference): Consequence[State] =
+      if (stage == Stage.PhaseValidation && phaseWide && completed.size == cursor && candidate.nonEmpty &&
+          (!releaseRepairActive || reference == GoalPhaseFixCheckDeferral.configuredReference) &&
+          plan.phaseChecks.contains("fix-check") && phaseFixCheckDeferral.isEmpty &&
+          checksReceipt.isEmpty && reviewEvidence.isEmpty && pendingRepair.isEmpty && closureIntent.isEmpty &&
+          reference != null && text(reference.identity) && text(reference.revision))
+        success(stage, newfixcheckdeferral = Some(reference))
+      else invalid("FixCheck deferral requires its unstarted whole-Phase candidate")
     private def key(kind: WorkKind) = WorkKey(plan.identity, plan.revision, plan.phase, plan.repository,
       if (phaseWide) None else Some(step.identity), kind, generation)
     private def semantic(kind: WorkKind, purpose: String) = Semantic(key(kind), purpose,
@@ -632,7 +644,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       candidate, checksReceipt, None, closureIntent, None, repositoryReceipt, repairDirective, None,
       documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
       candidateParent, stepAdmission, releaseCommit, repairControl, policyRepairPending, repairObservations, stepReviewRequired,
-      _reconstruction_repair_scope)
+      _reconstruction_repair_scope, phaseFixCheckDeferral)
 
     /** Continue the already reserved phase repair with an exact inventory append.
       * No additional repair batch is consumed and no past acceptance is changed.
@@ -786,7 +798,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else candidateParent, stepAdmission = if (clear) None else stepAdmission,
           releaseCommit = releaseCommit, repairControl = repairControl, policyRepairPending = policyRepairPending,
           repairObservations = repairObservations, stepReviewRequired = stepReviewRequired,
-          _reconstruction_repair_scope = _reconstruction_repair_scope))
+          _reconstruction_repair_scope = _reconstruction_repair_scope,
+          phaseFixCheckDeferral = if (!clear && proposed.phaseChecks == plan.phaseChecks) phaseFixCheckDeferral else None))
       }
     }
 
@@ -804,8 +817,16 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case Stage.Validation | Stage.PhaseValidation => Validate(candidate.get, checks, phaseWide)
       case Stage.Triage => semantic(WorkKind.TriageStep, step.purpose)
       case Stage.Review => semantic(WorkKind.ReviewStep, step.purpose)
-      case Stage.PhaseReview => semantic(WorkKind.ReviewPhase, if (releaseRepairActive)
-        "Review the unresolved Release findings, repair delta and affected meaning; retain the prior integrated Phase review"
+      case Stage.PhaseReview => semantic(WorkKind.ReviewPhase, if (releaseRepairActive) {
+        val purpose = "Review the unresolved Release findings, repair delta and affected meaning; retain the prior integrated Phase review"
+        if (phaseFixCheckDeferral.contains(GoalPhaseFixCheckDeferral.configuredReference))
+          purpose + ". The Phase host setting deferred whole-Phase FixCheck before validation."
+        else purpose
+      }
+        else if (phaseFixCheckDeferral.contains(GoalPhaseFixCheckDeferral.configuredReference))
+          "Review the whole selected Phase. The Phase host setting deferred whole-Phase FixCheck before validation."
+        else if (phaseFixCheckDeferral.nonEmpty)
+          "Review the whole selected Phase. An admitted Human direction deferred whole-Phase FixCheck for this candidate."
         else "Review the whole selected Phase")
       case Stage.Closing | Stage.PhaseClosing => closureIntent match {
         case None => BeginClosure(candidate.get, phaseWide)
@@ -1000,7 +1021,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent,
           stepAdmission = stepAdmission, releaseCommit = releaseCommit, repairControl = repairControl,
           repairObservations = repairObservations, stepReviewRequired = stepReviewRequired,
-          _reconstruction_repair_scope = _reconstruction_repair_scope))
+          _reconstruction_repair_scope = _reconstruction_repair_scope,
+          phaseFixCheckDeferral = phaseFixCheckDeferral))
       case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -1056,6 +1078,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newpolicypending: Boolean = policyRepairPending,
       newobservations: Vector[R.Observation] = repairObservations,
       newstepreviewrequired: Boolean = stepReviewRequired,
+      newfixcheckdeferral: Option[ContextReference] = phaseFixCheckDeferral,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -1067,7 +1090,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       candidateParent = if (clear) None else newcandidateparent,
       stepAdmission = if (clear) None else newadmission, releaseCommit = newreleasecommit,
       repairControl = newcontrol, policyRepairPending = newpolicypending, repairObservations = newobservations,
-      stepReviewRequired = newstepreviewrequired, _reconstruction_repair_scope = _reconstruction_repair_scope))
+      stepReviewRequired = newstepreviewrequired, _reconstruction_repair_scope = _reconstruction_repair_scope,
+      phaseFixCheckDeferral = if (clear) None else newfixcheckdeferral))
   }
 
   def startC(plan: Plan, initial: Snapshot, repairPolicy: Option[String] = None): Consequence[State] = for {
