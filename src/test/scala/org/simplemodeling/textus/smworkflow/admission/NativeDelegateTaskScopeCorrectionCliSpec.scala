@@ -156,7 +156,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       val humanreference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-semantic-Human", "1")
       val direction = V.DelegateTaskSemanticContinuationInput(started.sessionId, semanticdescription.target,
         "ContinueAfterDependencyResolution", "SPECIFICATION-OWNED direction", "participant", humanreference,
-        Vector(V.WorkflowArtifactReference("SPECIFICATION-OWNED-upstream", "1")))
+        Vector(V.WorkflowArtifactReference("SPECIFICATION-OWNED-upstream", "1")), None)
       Given("the same guard with actual-shaped retained data and independently varied blockers")
       val retaineddirection = DelegateTaskSemanticContinuation.Direction(parser.parse(direction.target).toOption.get,
         direction.choice, direction.rationale, direction.participant,

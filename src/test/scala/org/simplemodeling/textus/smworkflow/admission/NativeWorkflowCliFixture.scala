@@ -433,6 +433,14 @@ private[admission] object NativeWorkflowCliFixture {
       _run(Vector(executable.toString) ++ launcher ++ Vector(s"$_component.$service.$operation") ++ descriptor ++
         parameters ++ (if (jsonOutput) Vector("--json") else Vector.empty), installations, wait)
     }
+    def callInstalledCar(executable: Path, car: Path, runtime: String,
+      service: String, operation: String, parameters: Vector[String]): Result = {
+      require(executable.isAbsolute && Files.isExecutable(executable) && car.isAbsolute && Files.isRegularFile(car),
+        "Select the exact installed CNCF launcher and CAR for this isolated invocation")
+      _run(Vector(executable.toString, "--runtime", runtime, car.toString, "command", "--force-exit",
+        "--no-default-components", s"$_component.$service.$operation", s"--textus.assembly.descriptor=${_assembly}") ++
+        parameters :+ "--json")
+    }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_operation_argv("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
     def readJournalEntry(input: V.JournalReadInput): Result =

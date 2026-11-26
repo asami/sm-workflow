@@ -281,6 +281,27 @@ DeliveryAcceptance uses the implementation capability class for read-only
 post-delivery judgment after actual checks, required independent review, commit
 and selected publication. It is separate from independent Review and owns no
 delivery effects.
+
+A materialized `DeliveryAcceptance` decision-needed result supports supplemental
+qualification on the same destination Session. The existing
+`describeDelegateTaskSemanticContinuation` returns a compact target for the
+actual completed judgment and its unresolved condition IDs. To resume, use
+`resumeDelegateTaskSemanticContinuation` with `ReevaluateDelivery`, the exact
+target, and `deliveryQualification` matching its commit, tree and the conditions
+being reevaluated. Use `upstream` to reference the producer's actual reports. The
+independently admitted Human direction binds those references to the recorded
+judgment and publication. The evidence issuer verifies the semantics and material
+origin of an external report.
+
+Use the existing `prepareEvidence` kind `semantic-continuation` for the complete
+direction and the usual independently authorized import. Ordinary Advance
+issues a new read-only judgment with the actual prior result and supplemental
+admissions. A different worker evaluates the complete initial conditions.
+Reusing a judgment or upstream evidence reference cannot create another
+admission. Commit, publication, validation, review and repair control remain
+attached throughout. An actually accepted new judgment reaches ReturnReady
+through normal Submit and Advance.
+
 Pending work keeps its stored route after configuration changes. Actual Submit
 checks the original public issued context, captured candidate chain, native
 ownership/state and actual worker; Review also requires independently admitted

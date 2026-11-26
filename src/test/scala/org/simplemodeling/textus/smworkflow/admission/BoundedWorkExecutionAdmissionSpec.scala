@@ -236,6 +236,11 @@ final class BoundedWorkExecutionAdmissionSpec extends AnyWordSpec with GivenWhen
       _take(GoalTaskNativeRun.executionRequirementC(admitted, "Review")).reviewRequired shouldBe true
       _take(DelegateTaskNativeRun.executionRequirementC(admitted, "DeliveryAcceptance")) shouldBe
         _take(DelegateTaskNativeRun.executionRequirementC(absent, "DeliveryAcceptance"))
+      val reevaluation = _take(DelegateTaskNativeRun.executionRequirementC(admitted, "DeliveryAcceptance",
+        deliveryReevaluation = true))
+      reevaluation.reviewRequired shouldBe true
+      reevaluation.reasoningClass shouldBe _take(DelegateTaskNativeRun.executionRequirementC(admitted, "Review")).reasoningClass
+      reevaluation.capabilities shouldBe _take(DelegateTaskNativeRun.executionRequirementC(admitted, "DeliveryAcceptance")).capabilities
       absent.workClassification shouldBe None
       absent.asJson.hcursor.downField("workClassification").focus shouldBe None
       admitted.asJson.as[S.Input] shouldBe Right(admitted)

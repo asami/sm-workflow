@@ -209,6 +209,16 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
             Consequence.unit else N.invalid("Result crosses the retained Task request")
           _ <- if (payload.supplementalOwnedPaths.isEmpty || !payload.state.semanticReference.contains(submitted.resultReference))
             Consequence.unit else N.invalid("A retained semantic result cannot complete the new WorkOrder")
+          _ <- if (work.deliveryReevaluation.forall { review =>
+            val admitted = review.admissions
+            work.kind == "DeliveryAcceptance" && payload.deliveryContinuations.contains(admitted) &&
+              submitted.evidence.workerIdentity.exists(worker =>
+                !payload.implementationWorkers.getOrElse(Vector.empty).contains(worker) &&
+                !payload.implementationWorker.contains(worker) && !admitted.exists(_.target.originalWorkerIdentity == worker)) &&
+              !payload.state.evidenceReferences.contains(submitted.resultReference) &&
+              !admitted.exists(a => a.target.resultReference == submitted.resultReference ||
+                a.reference == submitted.resultReference || a.upstream.contains(submitted.resultReference))
+          }) Consequence.unit else N.invalid("Delivery reevaluation requires a fresh result and an independent judgment worker")
           hydratedWork = work.copy(state = payload.state)
           _ <- S.admitResultC(hydratedWork, submitted.result.value)
           _ <- if (submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit

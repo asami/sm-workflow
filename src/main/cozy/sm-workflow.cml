@@ -16202,7 +16202,7 @@ DelegateTaskRequestReconstructionDescriptionResult
 
 ##### DESCRIPTION
 
-Describe the exact materialized destination Implement or Repair semantic Human stop selected by its actual native result reference, including later stops after earlier admitted directions, without advancing it. Supply exactly one inline input or inputResource using the normal finite Resource policy.
+Describe the exact materialized destination Implement, Repair or DeliveryAcceptance semantic Human stop from native issued work and completion. DeliveryAcceptance describes retained source and unresolved conditions without advancing it. Supply exactly one inline input or inputResource using the normal finite Resource policy.
 
 ##### TYPE
 
@@ -16231,7 +16231,7 @@ DelegateTaskSemanticContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Admit independently verified covering Human direction and actual upstream references for the exact current Implement or Repair semantic target, after shared reconstruction of actual source facts. Historical exact direction collection is idempotent. Admission only appends a native checkpoint; a separate ordinary Advance issues the authenticated successor kind. Supply exactly one inline input or inputResource using the normal finite Resource policy.
+Admit independently verified covering Human direction and actual upstream references for the exact current semantic target. DeliveryAcceptance accepts ReevaluateDelivery with source-bound supplemental qualification, retaining all effects and conditions for a fresh read-only judgment. Historical exact direction collection is idempotent. Admission only appends a native checkpoint; a separate ordinary Advance issues the authenticated successor kind. Supply exactly one inline input or inputResource using the normal finite Resource policy.
 
 ##### TYPE
 
@@ -17625,6 +17625,19 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | participant | string | 1 |
 | reference | WorkflowArtifactReference | 1 |
 | upstream | WorkflowArtifactReference | * |
+| deliveryQualification | DelegateTaskDeliveryQualification | ? |
+
+## DelegateTaskDeliveryQualification
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceCommit | string | 1 |
+| sourceTree | string | 1 |
+| conditionIds | string | + |
+| artifactCoordinates | string | * |
+| artifactSha256 | string | ? |
 
 ## DelegateTaskReviewContinuationDescriptionInput
 

@@ -65,9 +65,11 @@ private[smworkflow] object StandaloneFixExecution {
     */
   final case class ReviewReevaluation(originalWork: V.WorkflowRetainedWorkReference,
     originalResult: Result, clarification: DelegateTaskReviewContinuation.Direction)
+  final case class DeliveryReevaluation(admissions: Vector[DelegateTaskDeliveryContinuation.Admission], originalResult: Result)
   final case class Work(session: String, sourceRevision: String, kind: String, state: State,
     operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None,
-    reviewReevaluation: Option[ReviewReevaluation] = None)
+    reviewReevaluation: Option[ReviewReevaluation] = None,
+    deliveryReevaluation: Option[DeliveryReevaluation] = None)
 
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
@@ -79,6 +81,8 @@ private[smworkflow] object StandaloneFixExecution {
   given Decoder[Commit] = deriveDecoder
   given Encoder[CommitReconciliation] = deriveEncoder
   given Decoder[CommitReconciliation] = deriveDecoder
+  given Encoder[DeliveryReevaluation] = deriveEncoder
+  given Decoder[DeliveryReevaluation] = deriveDecoder
   given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(_.filter {
     case ("task" | "reviewOrigin" | "delegation" | "submissionConditions" | "workClassification", value) => !value.isNull
     case _ => true
@@ -102,7 +106,7 @@ private[smworkflow] object StandaloneFixExecution {
   given Encoder[ReviewReevaluation] = deriveEncoder
   given Decoder[ReviewReevaluation] = deriveDecoder
   given Encoder[Work] = deriveEncoder[Work].mapJson(_.mapObject(_.filter {
-    case ("operatingProfile" | "reviewReevaluation", value) => !value.isNull
+    case ("operatingProfile" | "reviewReevaluation" | "deliveryReevaluation", value) => !value.isNull
     case _ => true
   }))
   private val _work_decoder: Decoder[Work] = deriveDecoder

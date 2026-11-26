@@ -204,7 +204,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
     Then("noninitial history alone does not exclude the semantic boundary")
     eligible shouldBe true
     val reference = V.WorkflowArtifactReference("SPEC-human-direction", "1")
-    val direction = V.DelegateTaskSemanticContinuationInput(session, described.target, "ContinueAfterDependencyResolution", "SPEC-owned explicit direction", "participant", reference, Vector(V.WorkflowArtifactReference("SPEC-upstream", "1")))
+    val direction = V.DelegateTaskSemanticContinuationInput(session, described.target, "ContinueAfterDependencyResolution", "SPEC-owned explicit direction", "participant", reference, Vector(V.WorkflowArtifactReference("SPEC-upstream", "1")), None)
     _with_runtime_(root, "TaskSemantic", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def _call_(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = "DelegateTaskService", operation = name, properties = properties), actor)
@@ -858,7 +858,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
           "SPEC end of independently admitted explanation."
         val direction = V.DelegateTaskSemanticContinuationInput(retainedsession, described.target,
           "ContinueAfterDependencyResolution", rationale, "participant",
-          V.WorkflowArtifactReference("SPEC-repeated-human-direction", "1"), Vector(V.WorkflowArtifactReference("SPEC-later-upstream", "1")))
+          V.WorkflowArtifactReference("SPEC-repeated-human-direction", "1"), Vector(V.WorkflowArtifactReference("SPEC-later-upstream", "1")), None)
         _encoded_(direction).getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
         _provision_(described, direction, direction.reference, "semantic-continuation")
         Given("authorized source movement within the same owned file after the retained failed qualification")
@@ -1113,7 +1113,7 @@ class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec with org
       target.business.state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
       val answer = V.DelegateTaskSemanticContinuationInput(session, description.target, "ContinueAfterDependencyResolution",
         "SPEC actual upstream dependency supplied", "participant", V.WorkflowArtifactReference("SPEC-semantic-human", "1"),
-        Vector(V.WorkflowArtifactReference("SPEC-upstream", "1")))
+        Vector(V.WorkflowArtifactReference("SPEC-upstream", "1")), None)
       val deferred = answer.copy(choice = "Defer", reference = V.WorkflowArtifactReference("SPEC-semantic-defer", "1"))
       When("independent evidence first selects Defer for the existing semantic operation")
       _provision_("semantic-defer", "semantic-continuation", description, deferred, deferred.reference)

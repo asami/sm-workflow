@@ -251,7 +251,14 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
     owner <- value.hcursor.get[String]("componentInstance").left.map(_.message)
     entry = value.hcursor.downField("delegateTaskSemanticContinuation")
     raw <- entry.get[Json]("target").left.map(_.message)
+    selected <- if (DelegateTaskDeliveryContinuation.recognizes(raw))
+      DelegateTaskDeliveryContinuation.selectBinding(value)
+    else _select_implementation_binding(value, owner, raw)
+  } yield selected
+
+  private def _select_implementation_binding(value: Json, owner: String, raw: Json): Either[String, Json] = for {
     target <- targetC(raw.noSpaces).toOption.toRight("Invalid semantic continuation target")
+    entry = value.hcursor.downField("delegateTaskSemanticContinuation")
     answer = entry.downField("answer")
     choice <- answer.get[String]("choice").left.map(_.message)
     rationale <- answer.get[String]("rationale").left.map(_.message)
@@ -341,6 +348,28 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
           payload <- N.loadPayloadC(storage, session, sourcerevision, selected)
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
           owner = selected.component.get.core.instanceId.canonicalKey
+          deliveryTarget <- input match {
+            case Left(answer) => DelegateTaskDeliveryContinuation.fromText(answer.target) match {
+              case Some(raw) => DelegateTaskDeliveryContinuation.targetC(raw).map(Some(_))
+              case None if answer.deliveryQualification.isEmpty => Consequence.success(None)
+              case None => N.invalid("Supplemental qualification requires a DeliveryAcceptance target")
+            }
+            case Right(_) => DelegateTaskDeliveryContinuation.observeC(storage, current, payload, owner, selected)
+          }
+          result <- deliveryTarget match {
+            case Some(target) => input match {
+              case Right(_) => Consequence.success(DelegateTaskDeliveryContinuation.output(target, "decision-required",
+                "Independently admit supplemental evidence for the unresolved delivery conditions"))
+              case Left(answer) => _resume_delivery_c(host, storage, current, payload, owner, selected, evidence, target, answer)
+            }
+            case None => _resume_implementation_c(input, session, storage, current, payload, owner, selected)
+          }
+        } yield result
+
+        private def _resume_implementation_c(
+          input: Either[V.DelegateTaskSemanticContinuationInput, V.DelegateTaskSemanticContinuationDescriptionInput],
+          session: String, storage: WorkflowComponentStorage, current: InstanceRecord, payload: Payload,
+          owner: String, selected: ActionCall.Core): Consequence[OperationResponse] = for {
           requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
           retained <- _ancestry(payload, owner, session, current.revision.value).fold(N.invalid(_), Consequence.success)
           _ <- _ancestry_proof_c(storage, current, payload, retained, selected)
@@ -417,4 +446,40 @@ private[smworkflow] object DelegateTaskSemanticContinuation {
   private def _output(target: Target, outcome: String, message: String): OperationResponse =
     NativeWorkflowOperationOutput.response(V.DelegateTaskSemanticContinuationDescriptionResult(target.sessionId,
       target.componentInstance, outcome, message, target.asJson.noSpaces, choices, resumeOperation))
+
+  private def _resume_delivery_c(host: Host, storage: WorkflowComponentStorage, current: InstanceRecord, payload: Payload,
+    owner: String, core: ActionCall.Core, evidence: EvidencePort, target: DelegateTaskDeliveryContinuation.Target,
+    answer: V.DelegateTaskSemanticContinuationInput): Consequence[OperationResponse] = {
+    import DelegateTaskDeliveryContinuation as D
+    for {
+      _ <- if (target.componentInstance == owner && target.sessionId == current.identity.value &&
+        target.participant == payload.state.participant) Consequence.unit else N.invalid("Crossed delivery continuation owner")
+      input <- D.inputC(target, answer)
+      (admission, binding) = input
+      prior = payload.deliveryContinuations.getOrElse(Vector.empty)
+      response <- if (prior.contains(admission)) Consequence.success(D.output(target, "already-resumed",
+        "Original supplemental admission is retained"))
+      else for {
+        observed <- D.observeC(storage, current, payload, owner, core)
+        _ <- if (observed.contains(target) && !prior.exists(p => p.target == target ||
+          p.reference == admission.reference || p.upstream.exists(admission.upstream.contains)) &&
+          !admission.upstream.exists(reference => payload.state.evidenceReferences.contains(reference) ||
+            payload.state.input.sourceReferences.contains(reference)))
+          Consequence.unit else N.invalid("Delivery continuation target is stale or the supplemental evidence was already retained")
+        _ <- evidence.admitC(core, admission.reference, binding)
+        response <- if (admission.choice == "Defer") Consequence.success(D.output(target, "deferred", "Human deferred; state unchanged"))
+          else for {
+            _ <- if (host.root == payload.root && host.branch == payload.branch &&
+              host.repository == payload.state.input.repositoryIdentity) Consequence.unit
+              else N.invalid("Delivery continuation crosses the original source boundary")
+            _ <- N._delivery_fresh_c(payload, core)
+            references = Vector(target.resultReference, admission.reference) ++ admission.upstream
+            next = payload.copy(state = payload.state.copy(stage = "DeliveryAcceptance",
+              evidenceReferences = (payload.state.evidenceReferences ++ references).distinct),
+              deliveryContinuations = Some(prior :+ admission))
+            _ <- N.saveC(host, storage, current, next, core)
+          } yield D.output(target, "resumed-awaiting-advance", "Ordinary Advance issues a fresh read-only DeliveryAcceptance")
+      } yield response
+    } yield response
+  }
 }

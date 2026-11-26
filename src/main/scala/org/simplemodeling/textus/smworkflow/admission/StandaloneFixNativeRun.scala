@@ -58,7 +58,8 @@ private[smworkflow] object BoundedWorkRuntime {
     requestReconstruction: Option[DelegateTaskRequestReconstruction.Checkpoint] = None,
     dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None,
     queueActivated: Option[String] = None,
-    supplementalOwnedPaths: Option[Vector[String]] = None)
+    supplementalOwnedPaths: Option[Vector[String]] = None,
+    deliveryContinuations: Option[Vector[DelegateTaskDeliveryContinuation.Admission]] = None)
   private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
   private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
   private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
@@ -70,7 +71,7 @@ private[smworkflow] object BoundedWorkRuntime {
         "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" |
         "delegateSemanticContinuation" | "delegateReviewContinuation" | "validationContinuation" | "validationRecovery" |
         "validationCaptureReservation" | "managedDependency" | "requestReconstruction" | "dependencyDelivery" |
-        "queueActivated" | "supplementalOwnedPaths", value) => !value.isNull
+        "queueActivated" | "supplementalOwnedPaths" | "deliveryContinuations", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -280,12 +281,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     }
   }
 
-  private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = for {
-    classification <- _classification_c(input, stage)
+  private[admission] def executionRequirementC(input: S.Input, stage: String,
+    deliveryReevaluation: Boolean = false): Consequence[ExecutionRequirement] = for {
+    classification <- _classification_c(input, if (deliveryReevaluation) "Review" else stage)
     required <- _required_c(stage)
     requirement <- classification.requirementC(
       ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
-        ReasoningLevel.Standard, stage == "Review"))
+        ReasoningLevel.Standard, stage == "Review" || deliveryReevaluation))
   } yield requirement
 
   /** Executing Starts must support repair/implementation and possible independent review.
@@ -355,8 +357,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- S.inputC(input.state.input)
     context <- _operating_context_c(h)
     _ <- _execution_ready_c(context)
-    classification <- _classification_c(input.state.input, input.kind)
-    selected <- GoalPhaseOperatingProfiles.captureFreshC(context, input.kind, Some(classification), order.requirement, None, input.kind == "Review")
+    classification <- _classification_c(input.state.input, if (input.deliveryReevaluation.nonEmpty) "Review" else input.kind)
+    selected <- GoalPhaseOperatingProfiles.captureFreshC(context, input.kind, Some(classification), order.requirement, None,
+      input.kind == "Review" || input.deliveryReevaluation.nonEmpty)
   } yield work.copy(current = order.copy(requirement = selected._1,
     request = order.request.copy(input = order.request.input.map(i => i.copy(value = input.copy(operatingProfile = Some(selected._2)))))))
 
@@ -366,9 +369,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     work <- order.request.input.map(i => Consequence.success(i.value)).getOrElse(invalid("Assigned Task input is absent"))
     _ <- if (work.operatingProfile != null && work.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid)) Consequence.unit
       else invalid("Assigned Task operating capture is invalid")
+    independent = work.kind == "Review" || work.deliveryReevaluation.nonEmpty
     _ <- work.operatingProfile.fold(Consequence.unit) { capture => for {
-      original <- executionRequirementC(work.state.input, work.kind)
-      classification <- _classification_c(work.state.input, work.kind)
+      original <- executionRequirementC(work.state.input, work.kind, work.deliveryReevaluation.nonEmpty)
+      classification <- _classification_c(work.state.input, if (work.deliveryReevaluation.nonEmpty) "Review" else work.kind)
       _ <- if (order.requirement != null && order.requirement.copy(disposition = None) == original &&
           capture.reasoningClass == original.reasoningClass.map(_.value) && order.requirement.disposition.nonEmpty)
         Consequence.unit else invalid("Assigned Task capture crosses its original execution intent")
@@ -376,13 +380,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- if (evidence != null && evidence.workerIdentity.exists(worker => worker != null && worker.nonEmpty &&
             evidence.execution.exists(_.executorContextIdentity == worker))) Consequence.unit
           else invalid("Logical Task worker identity must match its actual executor context identity")
-        expected <- GoalPhaseDispatchPolicy.captureC(work.kind, Some(classification), original, work.kind == "Review",
+        expected <- GoalPhaseDispatchPolicy.captureC(work.kind, Some(classification), original, independent,
           GoalPhaseDispatchPolicy.Policy(dispatch.revision, dispatch.edges))
         disposition = order.requirement.disposition.get
         _ <- if (dispatch == expected && capture.mappingIdentity.contains("caller-standard") &&
             capture.mappingRevision.contains(dispatch.revision) && capture.configured.isEmpty && capture.selected.isEmpty && capture.fallback.isEmpty &&
             disposition.placement.value == dispatch.placement &&
-            disposition.independence == (if (original.reviewRequired || work.kind == "Review") ExecutionIndependence.Required else ExecutionIndependence.Optional))
+            disposition.independence == (if (original.reviewRequired || independent) ExecutionIndependence.Required else ExecutionIndependence.Optional))
           Consequence.unit else invalid("Assigned Task dispatch capture differs from its issued requirement")
       } yield () }
       _ <- GoalPhaseOperatingProfiles.admitExecutionC(Some(capture), evidence)
@@ -1464,8 +1468,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     } yield Some(S.ReviewReevaluation(WorkflowRetainedWork.publicReference(reference),
       original.result, payload.delegateReviewContinuation.get))
       else Consequence.success(None)
+    deliveryReevaluation <- if (payload.state.stage == "DeliveryAcceptance")
+      DelegateTaskDeliveryContinuation.workC(store, payload, core) else Consequence.success(None)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state,
-      reviewReevaluation = reevaluation)
+      reviewReevaluation = reevaluation, deliveryReevaluation = deliveryReevaluation)
     semanticreferences = payload.delegateSemanticContinuation.toVector.filter { direction =>
       val reference = direction.target.hcursor.downField("original").downField("resultReference")
       payload.state.semanticReference.exists(actual => reference.get[String]("identity").contains(actual.identity) &&
@@ -1485,7 +1491,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         ContextSnapshotReference(bundle.snapshot.workflowRevision), CompletionReference(required.metadata.completionContract.identity),
         EvidenceReference(required.metadata.evidenceContract.identity), from.correlation)))
     handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, from)
-    requirement <- executionRequirementC(payload.state.input, work.kind)
+    requirement <- executionRequirementC(payload.state.input, work.kind, work.deliveryReevaluation.nonEmpty)
     interaction = WorkflowInteraction[S.Work, Nothing](handle, WorkflowContinuation.WorkOrder(
       ContinuationRequest(continuation.runId, continuation.continuationId, continuation.expectedRevision, required.identity,
         required.operation, Some(TypedValue(inputCodec.typeIdentity, work)), required.resultType, bundle,

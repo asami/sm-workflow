@@ -106,22 +106,35 @@ object NativeReviewPreparation {
     execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
     occurredAt: Instant): Consequence[Prepared] = {
     import org.simplemodeling.textus.smworkflow.admission.DelegateTaskSemanticContinuation as R
+    import org.simplemodeling.textus.smworkflow.admission.DelegateTaskDeliveryContinuation as D
     import org.goldenport.cncf.workflow.ContextReference
     for {
       _ <- if (description != null && answer != null && reference != null && execution != null &&
-        description.outcome == "decision-required" && description.choices == R.choices &&
+        description.outcome == "decision-required" &&
         description.resumeOperation == R.resumeOperation && answer.reference == reference &&
         execution.workerIdentity.contains(participant) && participant == answer.participant &&
         org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
         Consequence.unit else Consequence.stateConflict("Semantic continuation preparation requires its exact description and Human evidence")
-      target <- R.targetC(description.target)
-      supplied <- R.targetC(answer.target)
-      _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
-        description.componentInstance == target.componentInstance) Consequence.unit
-        else Consequence.stateConflict("Semantic continuation preparation crosses its target")
-      direction = R.Direction(target.asJson, answer.choice, answer.rationale, participant,
-        ContextReference(reference.identity, reference.revision), answer.upstream.map(r => ContextReference(r.identity, r.revision)))
-      binding <- R.bindingC(target.componentInstance, target, direction)
+      binding <- D.fromText(description.target) match {
+        case Some(raw) => for {
+          target <- D.targetC(raw)
+          _ <- if (description.choices == D.choices && description.sessionId == target.sessionId &&
+            description.componentInstance == target.componentInstance) Consequence.unit
+            else Consequence.stateConflict("Delivery continuation preparation crosses its target")
+          admitted <- D.inputC(target, answer)
+        } yield admitted._2
+        case None => for {
+          target <- R.targetC(description.target)
+          supplied <- R.targetC(answer.target)
+          _ <- if (description.choices == R.choices && answer.deliveryQualification.isEmpty && target == supplied &&
+            description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+            description.componentInstance == target.componentInstance) Consequence.unit
+            else Consequence.stateConflict("Semantic continuation preparation crosses its target")
+          direction = R.Direction(target.asJson, answer.choice, answer.rationale, participant,
+            ContextReference(reference.identity, reference.revision), answer.upstream.map(r => ContextReference(r.identity, r.revision)))
+          selected <- R.bindingC(target.componentInstance, target, direction)
+        } yield selected
+      }
       purpose = NativeExternalEvidence.Purpose.DelegateTaskSemanticContinuation
       identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
       encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,

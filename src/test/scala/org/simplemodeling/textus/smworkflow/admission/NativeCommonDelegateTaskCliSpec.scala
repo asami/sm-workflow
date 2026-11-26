@@ -287,7 +287,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
 
   private def _fresh(): F.Scenario = NativeCommonDelegateTaskFixture.fresh(commonDelegateComponentFile)
 
-  protected def qualifyCommonDelegate(outcome: String): Unit = {
+  protected def qualifyCommonDelegate(outcome: String, successor: Option[Path] = None): Unit = {
       Given("one tiny isolated normal host with no runtime.definition and SPECIFICATION-OWNED request authority")
       val scenario = _fresh()
       val root = scenario.root
@@ -297,7 +297,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       val request = V.DelegateTaskInput(scenario.host.goal.input.repositoryIdentity, "installed-common-request",
         "SPECIFICATION-OWNED author tiny LineWriter behavior and return the genuinely published source",
         NonEmptyVector.one(NativeCommonDelegateTaskFixture.testPath), NonEmptyVector.of("compile", "test-only"), conditions,
-        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-request", "1")), false,
+        NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-original-request", "1")), successor.nonEmpty,
         "code", "off", 10, "direct-instruction", Vector.empty,
         V.DelegateTaskContract("SPECIFICATION-OWNED-requester", "SPECIFICATION-OWNED-destination",
           "SPECIFICATION-OWNED-requester", NativeCommonDelegateTaskFixture.component, "requester", "localized",
@@ -329,6 +329,19 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
         val worker = "SPECIFICATION-OWNED-" + name
         val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some(worker), None,
           Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", worker, "ordinary")))
+        if (_work(view).kind == "Review") {
+          def write(suffix: String, value: RecordPresentable): String = {
+            val path = root.resolve(name + "-" + suffix + ".json")
+            Files.writeString(path, _json(value))
+            path.toUri.toASCIIString
+          }
+          val preparation = V.WorkflowEvidencePreparationInput("DelegateTask", "review",
+            write("request", view), write("result", result), write("reference", reference), write("execution", evidence),
+            "normal-development-host", java.time.Instant.now().minusSeconds(60).toString,
+            "entity:smworkflow.cli.host_evidence", None)
+          scenario.selectPreparedImport(_call(scenario, "NativeWorkflowPreparationService", "prepareEvidence",
+            Vector("--input", _json(preparation))))
+        }
         _call(scenario, "DelegateTaskService", "submitDelegateTaskWorkResult", Vector("--sessionId", view.sessionId,
           "--issuedWorkContext", _json(view.issuedWorkContext.get), "--result", _json(result),
           "--resultReference", _json(reference), "--executionEvidence", _json(evidence)))
@@ -400,7 +413,11 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       scenario.candidateHead shouldBe beforehead
       var current = _advance_(destination.sessionId)
       var remaining = 12
-      while (current.work.isEmpty && remaining > 0 && current.kind != "Return") {
+      while (remaining > 0 && current.kind != "Return" && !current.work.exists(_ => _work(current).kind == "DeliveryAcceptance")) {
+        if (current.work.exists(_ => _work(current).kind == "Review")) {
+          val reviewed = _submit_(current, completed.copy(outcome = "accept"), "independent-delivery-review")
+          withClue(reviewed.invocation.logs) { reviewed.exitCode shouldBe 0 }
+        } else current.work shouldBe empty
         current = _advance_(destination.sessionId)
         remaining -= 1
       }
@@ -416,7 +433,8 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       acceptedwork.state.delivery.get.publication.get.ready shouldBe true
       acceptedwork.state.delivery.get.publication.get.request.source.head shouldBe scenario.candidateHead
       acceptedwork.state.delivery.get.publication.get.request.source.tree shouldBe acceptedwork.state.commit.get.tree
-      acceptedwork.state.reviewReference shouldBe None // Conditional detailed review was not required for this bounded request.
+      acceptedwork.state.reviewReference.map(_.identity) shouldBe
+        successor.map(_ => "SPECIFICATION-OWNED-independent-delivery-review")
       val checks = Files.readString(root.resolve("sbt-executions.txt"))
       val publications = Files.readString(root.resolve("publication-count.txt"))
       publications.linesIterator.toVector shouldBe Vector("published")
@@ -461,6 +479,70 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
         human.ordinaryCount shouldBe acceptedwork.state.ordinaryCount
         human.conditionReport.forall(_.satisfied) shouldBe false
         _state(_advance_(destination.sessionId)) shouldBe human
+        successor.foreach { car =>
+          import DelegateTaskDeliveryContinuation.given
+          val query = V.DelegateTaskSemanticContinuationDescriptionInput(destination.sessionId)
+          def describe() = _call(scenario, "DelegateTaskService", "describeDelegateTaskSemanticContinuation",
+            Vector("--input", _json(query)))
+          describe().exitCode should not be 0
+          val configfile = root.resolve(".textus/config.json")
+          val config = parser.parse(Files.readString(configfile)).toOption.get
+          Files.writeString(configfile, config.mapObject(_.add("textus.component.file", car.toString.asJson)).noSpaces)
+          val described = describe().business[V.DelegateTaskSemanticContinuationDescriptionResult]
+          described.choices shouldBe DelegateTaskDeliveryContinuation.choices
+          val target = take(DelegateTaskDeliveryContinuation.targetC(parser.parse(described.target).toOption.get))
+          target.pendingConditions shouldBe conditions.toVector
+          target.sourceCommit shouldBe human.commit.get.identity
+          val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-delivery-direction", "1")
+          val qualification = V.DelegateTaskDeliveryQualification(target.sourceCommit, target.sourceTree, conditions,
+            Vector.empty, None)
+          val answer = V.DelegateTaskSemanticContinuationInput(destination.sessionId, described.target, "ReevaluateDelivery",
+            "Admit source-bound qualification for the unresolved conditions", "participant", reference,
+            Vector(V.WorkflowArtifactReference("SPECIFICATION-OWNED-supplemental-qualification", "1")),
+            Some(qualification))
+          def resume(value: V.DelegateTaskSemanticContinuationInput) = _call(scenario, "DelegateTaskService",
+            "resumeDelegateTaskSemanticContinuation", Vector("--input", _json(value)))
+          resume(answer).exitCode should not be 0
+          def write(name: String, value: RecordPresentable): String = {
+            val path = root.resolve(name + ".json")
+            Files.writeString(path, _json(value))
+            path.toUri.toASCIIString
+          }
+          val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None,
+            Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "participant", "ordinary")))
+          val preparation = V.WorkflowEvidencePreparationInput("DelegateTask", "semantic-continuation",
+            write("delivery-description", described), write("delivery-direction", answer),
+            write("delivery-direction-reference", reference), write("delivery-direction-execution", execution),
+            "normal-development-host", java.time.Instant.now().minusSeconds(60).toString,
+            "entity:smworkflow.cli.host_evidence", Some("participant"))
+          scenario.selectPreparedImport(_call(scenario, "NativeWorkflowPreparationService", "prepareEvidence",
+            Vector("--input", _json(preparation))))
+          resume(answer.copy(deliveryQualification = Some(qualification.copy(sourceCommit = "b" * 40)))).exitCode should not be 0
+          resume(answer.copy(deliveryQualification = Some(qualification.copy(conditionIds = NonEmptyVector.one("foreign"))))).exitCode should not be 0
+          resume(answer.copy(upstream = answer.upstream ++ answer.upstream)).exitCode should not be 0
+          resume(answer.copy(target = target.copy(frontierRevision = target.frontierRevision + 1).asJson.noSpaces)).exitCode should not be 0
+          resume(answer).business[V.DelegateTaskSemanticContinuationDescriptionResult].outcome shouldBe "resumed-awaiting-advance"
+          val issued = _advance_(destination.sessionId)
+          val work = _work(issued)
+          work.kind shouldBe "DeliveryAcceptance"
+          work.state.conditionReport shouldBe human.conditionReport
+          work.deliveryReevaluation.get.admissions.head.qualification.get.conditionIds shouldBe conditions.toVector
+          work.deliveryReevaluation.get.originalResult.outcome shouldBe "decision-needed"
+          resume(answer).business[V.DelegateTaskSemanticContinuationDescriptionResult].outcome shouldBe "already-resumed"
+          _advance_(destination.sessionId).issuedWorkContext shouldBe issued.issuedWorkContext
+          _submit_(issued, finalresult, "delivery-decision").exitCode should not be 0
+          val judged = _submit_(issued, finalresult, "qualified-delivery-acceptance")
+          withClue(judged.invocation.logs) { judged.exitCode shouldBe 0 }
+          val ready = _state(_advance_(destination.sessionId))
+          ready.stage shouldBe "ReturnReady"
+          ready.receipts shouldBe human.receipts
+          ready.reviewReference shouldBe human.reviewReference
+          ready.commit shouldBe human.commit
+          ready.delivery shouldBe human.delivery
+          ready.repairControl shouldBe human.repairControl
+          ready.automaticCount shouldBe human.automaticCount
+          ready.ordinaryCount shouldBe human.ordinaryCount
+        }
         Files.readString(root.resolve("sbt-executions.txt")) shouldBe checks
         Files.readString(root.resolve("publication-count.txt")) shouldBe publications
         scenario.candidateHead shouldBe acceptedwork.state.commit.get.identity
@@ -514,6 +596,31 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with NativeCommo
       s"defer initial obligations then retain actual focused checks commit publication and $outcome through normal owners" in {
         qualifyCommonDelegate(outcome)
       }
+    }
+  }
+}
+
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskDeliveryContinuationCliSpec extends AnyWordSpec with NativeCommonDelegateTaskQualification {
+  override protected lazy val commonDelegateExecutable: Path =
+    Path.of(sys.env("SM_WORKFLOW_SPEC_INSTALLED_COMMAND")).resolveSibling("cncf")
+  override protected def commonDelegateComponentFile: Option[Path] = Some(Path.of(sys.env("SM_WORKFLOW_SPEC_PRIOR_COMPONENT_FILE")))
+  override protected def commonDelegateCall(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result = {
+    val config = parser.parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
+    val car = Path.of(config.hcursor.get[String]("textus.component.file").toOption.get)
+    val archive = new java.util.zip.ZipFile(car.toFile)
+    val runtime = try {
+      val stream = archive.getInputStream(archive.getEntry("car-runtime-manifest.json"))
+      val content = try new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8) finally stream.close()
+      parser.parse(content).toOption.get.hcursor.downField("runtime").downField("cncf").get[String]("minimum").toOption.get
+    } finally archive.close()
+    scenario.callInstalledCar(commonDelegateExecutable, car, runtime, service, operation, arguments)
+  }
+  "Installed DeliveryAcceptance continuation" should {
+    "re-evaluate an old-runtime decision with new evidence while retaining earlier effects" in {
+      qualifyCommonDelegate("decision-needed", Some(Path.of(sys.env("SM_WORKFLOW_SPEC_COMPONENT_FILE"))))
     }
   }
 }
