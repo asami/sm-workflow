@@ -11,7 +11,7 @@ Checklist: [Phase 23 acceptance](phase-23-checklist.md).
 
 Help a running Goal Phase converge by **strategically disposing of findings**, rather than repeatedly repairing every observed issue in the current Phase. Preserve the adopted Usage Contract and Effective Acceptance Boundary. Propose whether each finding must remain in the current Phase, is nonblocking Hygiene, is a Future Enhancement, or belongs to a separately planned Stabilization Phase. The purpose is not to conceal defects, manufacture PASS or force closure.
 
-Astra is an optional high-capability **strategic assessor** for ambiguous multi-issue disposition. It does not implement fixes, change acceptance criteria, approve its own proposals or control Workflow state. Deterministic evidence and inexpensive classification come first. Use Astra only when its expected benefit warrants the cost.
+Astra is an optional high-capability **strategic assessor** for ambiguous multi-issue disposition. The bounded divergence recovery below is a separate task class that requires Astra if dispatched. It does not implement fixes, change acceptance criteria, approve its own proposals or control Workflow state. Deterministic evidence and inexpensive classification come first. Use Astra only when its expected benefit warrants the cost.
 
 ## Scope and ownership
 
@@ -59,12 +59,45 @@ Japanese through the same path.
 - Bound context bytes/tokens, invocation count, estimated spend and fallback; record provider/model and usage via existing accounting.
 - Strategic assessment may recommend changing direction, Take Over or stopping, but those are proposals governed by existing authorities.
 
+## Bounded divergence recovery (P23-05)
+
+When the existing runtime detects sustained divergence, stop the ordinary
+repair loop first. Do not change its detector, counters, hard limits, or
+terminal failure rule. If the current repair boundary still allows a retry,
+consider one strategic replan for that repair sequence. This is an
+**Astra-required** task class: entitlement and cost choose the route, not the
+model. Routine strategic judgment keeps the Phase 25.4 default.
+
+- Build the bounded Context Package from the adopted goal, permitted scope,
+  acceptance criteria, current diagnostics and diff, relevant source evidence,
+  and the previous attempts and results. Keep the evidence needed to decide;
+  do not silently truncate it to qualify for a route.
+- Prefer a verified eligible free Astra route only if the complete required
+  context fits and quota admission succeeds. Otherwise use Astra on a
+  separately authorized paid route only if the same context fits, admission
+  confirms remaining budget, and applicable controls allow the dispatch.
+  An uncertain dispatch or usage result is not permission to dispatch again.
+  If neither route qualifies, record the reason and stop. Never substitute
+  Sol, Terra, or another model for this assessment.
+- Astra may return one materially different, testable plan within the current
+  scope, with its evidence, proposed action and progress criterion, or decline.
+  Astra neither edits files nor changes workflow authority. If admitted, the
+  existing Terra execution path may attempt the plan once, within the remaining
+  repair budget. The runtime applies the existing deterministic validation and
+  Admission. No admissible plan or no verified progress leaves the existing
+  failure in place with the reason. No repeat Astra dispatch or counter reset
+  is allowed, including after resumption.
+
+See [Phase 25.4](phase-25.4.md#p254-06--strategic-judgement-and-task-design)
+for the general strategy default and [Phase 25.3](phase-25.3.md) for free-quota
+admission. This task class does not authorize paid access or more spending.
+
 ## Delivery slices
 
 | Slice | Work | Connected acceptance |
 | --- | --- | --- |
 | S1 | Deterministic inventory and classification boundary | Current blockers and nonblocking findings remain attributable, and unknown cases are explicit; no extra AI required. |
-| S2 | Bounded Astra strategic proposal | An ambiguous multi-finding fixture produces typed, evidence-linked disposition and dependency assessment, including an explicit refusal/unknown path. |
+| S2 | Bounded Astra strategic proposal | An ambiguous multi-finding fixture produces typed, evidence-linked disposition and dependency assessment, including an explicit refusal/unknown path. A separate divergence fixture verifies the Astra-required recovery route and its stop conditions. |
 | S3 | Existing approval and journal/plan handoff | Adopted proposals are recorded once with origin and destination; declined proposals do not change scope or history. |
 | S4 | Realistic convergence qualification | Demonstrate reduced unnecessary current-Phase work without weakening acceptance, with cost and invocation accounting. |
 

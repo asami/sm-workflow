@@ -100,6 +100,13 @@ recovery and reservations; resume advanced judgement when eligible capacity
 returns. If safe programmatic judgement is impossible, use existing Take Over
 or clarification.
 
+Model requirements are independent of entitlement: [Phase 23 P23-05 divergence
+recovery](phase-23.md#bounded-divergence-recovery-p23-05) is an Astra-required
+task class, not a routine strategic-judgement fallback. That separate
+policy may use separately authorized paid Astra when free Astra cannot
+admit the required context or quota. It does not change this default, allow
+implicit paid overage, or permit substitution with a lower model.
+
 Prefer eligible Terra-class models in the 10M daily allowance as the main
 execution capability for ordinary bounded review, repair and code generation
 against the Task Specification. Use deterministic tools for mechanical work,
