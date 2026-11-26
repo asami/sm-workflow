@@ -1479,6 +1479,12 @@ allowedKinds = ["text"]
     ConnectedFixture.exercise(root, "RouteMachineLocal")
   }
 
+  private[admission] def exerciseAssignedChatCompletionReply(): Unit = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+      "assigned-reply-").toRealPath()
+    ConnectedFixture.exercise(root, "RouteAssignedChat", completionReply = true)
+  }
+
   private[admission] def exerciseManagedDependencyInventory(leavePending: Boolean): Unit = {
     val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
       "managed-inventory-").toRealPath()
@@ -1734,7 +1740,7 @@ allowedKinds = ["text"]
         "participant", semanticreference, Vector(ContextReference(parentwork.identity, parentwork.revision)))
       val semanticinput = V.DelegateTaskSemanticContinuationInput(session, semantic.target, direction.choice,
         direction.rationale, direction.participant, V.WorkflowArtifactReference(semanticreference.identity, semanticreference.revision),
-        Vector(parentwork))
+        Vector(parentwork), None)
       prepare(call => for {
         binding <- DelegateTaskSemanticContinuation.bindingC(semantictarget.componentInstance, semantictarget, direction)
         _ <- call.evidenceC(NativeExternalEvidence.Purpose.DelegateTaskSemanticContinuation,
@@ -2026,7 +2032,7 @@ allowedKinds = ["text"]
     }
 
     def exercise(root: Path, mode: String = "Connected", managedInventory: Option[Boolean] = None,
-      consumerRecovery: Option[Boolean] = None): Unit = {
+      consumerRecovery: Option[Boolean] = None, completionReply: Boolean = false): Unit = {
       val machine = mode == "RouteMachineLocal"
       val offerededge = if (machine) _machine_edge(root) else connectedEdge
       offerededge.machineLocalJar.foreach(jar => Files.createDirectories(Path.of(jar.consumerJar).getParent))
@@ -2445,6 +2451,30 @@ allowedKinds = ["text"]
                 "root" -> root.toString.asJson, "goalSessionId" -> a.sessionId.asJson,
                 "requesterSessionId" -> requester.sessionId.asJson, "destinationSessionId" -> first.sessionId.asJson).spaces2)
             } else {
+              if (completionReply) {
+                When("the assigned chat replies successfully without starting a destination on the requester host")
+                val replyOnly = read_value[V.DelegateTaskView](take(start(
+                  _requester_(_destination_("route-reply-only")), "route-reply-only")))
+                advance(replyOnly.sessionId).kind shouldBe "Dispatch"
+                val reply = V.DelegateTaskObservationInput(replyOnly.sessionId, "completion-received",
+                  V.WorkflowArtifactReference("route-completion-reply", "1"), None, None, None,
+                  "SPECIFICATION-OWNED reply that development and local publication completed", None)
+                def observeReply() = read_value[V.DelegateTaskView](take(invoke(
+                  "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", reply, None)))))
+                observeReply().sessionId shouldBe replyOnly.sessionId
+                val continued = advance(replyOnly.sessionId)
+                Then("the same requester Session returns the original Phase WorkOrder without a consumer check")
+                continued.kind shouldBe "Request"
+                continued.submitSessionId shouldBe Some(a.sessionId)
+                continued.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+                  resumed.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+                def requesterRecord() = take(WorkflowInstanceRecordJsonV1.encodeC(_requester_record_(replyOnly.sessionId)))
+                val retained = requesterRecord()
+                advance(replyOnly.sessionId).issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
+                  continued.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+                requesterRecord() shouldBe retained
+                DelegateTaskRequesterRoutingFixture.state(observeReply()).delivery.get.managedConsumer shouldBe None
+              }
               Then("only the selected assigned chat queues its second destination")
               advance(queued.get.sessionId).kind shouldBe (if (chosen == assigned) "Wait" else "Request")
               When("the destination asks for a scope description outside the approved provider inventory")
@@ -3560,5 +3590,13 @@ allowedKinds = ["text"]
       .add("workspaceGrants", (array("workspaceGrants") ++ workspaces.map { (id, _) => Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
         "workspaceId" -> id.asJson, "access" -> "manage".asJson) }).asJson)
       .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson, "capabilities" -> capabilities.asJson))))
+  }
+}
+
+final class AssignedChatCompletionReplySpec extends AnyWordSpec {
+  "Assigned chat completion" should {
+    "resume the original Phase WorkOrder from the reply alone" in {
+      (new Phase7ManagedDevelopmentSpec).exerciseAssignedChatCompletionReply()
+    }
   }
 }

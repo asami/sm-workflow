@@ -476,7 +476,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           else Consequence.unit
         dependency <- if (requester && input.delegation.exists(_.providerPhase.nonEmpty))
           ManagedDevelopmentBoundedWork.captureC(h, input.copy(delegation = input.delegation.map(_.copy(role = "destination"))), core)
-          else Consequence.success(capture.orElse(requesterroute.filter(_.capture.edge.machineLocalJar.nonEmpty)).map(_.capture))
+          else Consequence.success(capture.orElse(requesterroute.filter(selected =>
+            selected.capture.edge.machineLocalJar.nonEmpty || selected.route.exists(_.mode == DependencyDevelopmentDelivery.assignedChat))).map(_.capture))
         initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
           CorrelationReference(key), CausationReference("standalone-started"), None, None, None, Vector.empty).validateC
         _ <- instances.createC(initial)(using core.executionContext)
@@ -890,7 +891,26 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     val s = payload.state
     s.stage match {
       case "DependencyChangeRequired" => Consequence.success(view(record, s, "DependencyChangeRequired", s.message))
-      case "AwaitResult" if delegation && (payload.managedDependency.exists(_.edge.machineLocalJar.nonEmpty) ||
+      case "ResultReceived" | "Adopted" if delegation && record.lifecycle == Lifecycle.Active &&
+          ManagedDevelopmentBoundedWork.chatCompletionRoute(h, payload) &&
+          (payload.dependencyDelivery.nonEmpty || s.delivery.exists(_.observations.exists(_.event == "completion-received"))) &&
+          !s.delivery.exists(_.observations.exists(_.event == "defer")) => for {
+        continuation <- ManagedDevelopmentBoundedWork.chatContinuationC(h, payload, core)
+        next = s.copy(stage = "Adopted", delivery = s.delivery.map(d =>
+          d.copy(managedContinuation = continuation.map(_._1).orElse(d.managedContinuation))),
+          message = "Development chat completion retained; continue the original requester work")
+        updated = payload.copy(state = next)
+        saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, updated, core)
+        result <- continuation match {
+          case None => Consequence.success(view(saved, next, "Terminal", next.message))
+          case Some((_, actual)) => NativeWorkflowOperationOutput.goalWorkRequestC(actual, core).map(original =>
+            view(saved, next, "Request", next.message).copy(work = original.work.map(_.toRecord()),
+              issuedWorkContext = original.issuedWorkContext, submitOperation = original.submitOperation,
+              submitSessionId = original.submitSessionId, resultType = original.resultType))
+        }
+      } yield result
+      case "AwaitResult" if delegation && !ManagedDevelopmentBoundedWork.chatCompletionRoute(h, payload) &&
+          (payload.managedDependency.exists(_.edge.machineLocalJar.nonEmpty) ||
           h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)) => for {
         next <- ManagedDevelopmentBoundedWork.collectC(h, store, definition, s, core)
         saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, payload.copy(state = next), core)

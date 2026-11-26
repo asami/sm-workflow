@@ -173,6 +173,7 @@ private[smworkflow] object DelegateTaskDeliveryService {
           _ <- if (current.suspension.isEmpty) Consequence.unit else N.invalid("A semantic WorkOrder is still pending")
           payload <- N.loadPayloadC(storage, session, current.revision.value, selected)
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
+          chatCompletion = ManagedDevelopmentBoundedWork.chatCompletionRoute(h, payload)
           hydrate = (producer: StandaloneFixExecution.State) =>
             if (h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) && payload.state.delivery.exists(_.returned.nonEmpty))
               ManagedDevelopmentBoundedWork.receivedC(storage, definition, payload.state, selected).map(_.state)
@@ -192,7 +193,7 @@ private[smworkflow] object DelegateTaskDeliveryService {
             controlled <- if (queueControl) AssignedDevelopmentChatQueue.controlC(h, definition, storage, current, payload.state, observation, selected).map(Some(_))
               else Consequence.success(Option.empty[AssignedDevelopmentChatQueue.State])
             next <- if (queueControl) Consequence.success(payload.state)
-              else DelegateTask.observeC(payload.state, observation, hydrate)
+              else DelegateTask.observeC(payload.state, observation, hydrate, chatCompletion)
             _ <- if (observation.event != "adopt" || next == payload.state) Consequence.unit else for {
               target <- targetC(selected, h, current, payload.state, hydrate)
               admitted <- evidence.loadC(selected, NativeExternalEvidence.Purpose.DelegateAdoption,

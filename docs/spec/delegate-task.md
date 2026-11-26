@@ -323,8 +323,14 @@ execution keeps its concrete route and validation-only FIX stays check-only.
 This logical source connection does not establish private D2 publication,
 installed qualification or actual cross-chat delivery acceptance.
 
+For an assigned development chat, send the request, let the destination complete
+its work and required ordinary local publication, then record its successful
+reply as `completion-received`. Use ordinary Advance on the same requester Session
+to continue. A managed requester receives its original pending Phase WorkOrder.
+Investigate artifact selection or resolution if the continued work fails.
+
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery` records attributable
-`dispatch-observed`, `result-received`, `return-observed`, `adopt` or `defer`
+legacy or explicit artifact-delivery `dispatch-observed`, `result-received`, `return-observed`, `adopt` or `defer`
 observations. Dispatch does not certify acceptance. A received result must match
 the original owners, full input, exact destination Session, accepted conditions,
 actual checks and commit, and required publication target/source. Destination

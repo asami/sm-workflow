@@ -349,13 +349,14 @@ the dependency is delivered. A publication failure preserves completed developme
 and commit; resume only the missing operation through supported recovery.
 Unknown effects require observation/settlement before any retry.
 
-The consumer uses the reported published result, not whichever development build
-happens to be newest. If later scoped publication replaces the same development
-coordinates before adoption, preserve attribution and resolve the actually selected
-artifact through existing runtime publication/selection resources. Do not silently
-attribute a different artifact to the earlier successful delivery. Keep this
-necessary connection inside the runtime rather than adding per-read hash gates
-or AI filesystem checks.
+When the assigned development chat reports successful completion and required
+local publication, use the [requester continuation](native-delegate-task-caller.md#transport-and-adoption).
+Resume the existing consumer work with normal dependency resolution. Diagnose
+publication or artifact selection if that work encounters a failure.
+
+Managed worktree delivery retains the existing scoped publication and selection.
+If a later scoped publication replaces the same development coordinates, resolve
+the actual selection through the runtime's existing publication resources.
 
 Producer validation is reusable evidence about that producer result. The consumer
 owns affected generation/compilation/integration checks and formal acceptance

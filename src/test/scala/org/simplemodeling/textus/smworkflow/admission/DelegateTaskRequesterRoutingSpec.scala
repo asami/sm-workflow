@@ -292,6 +292,20 @@ final class DelegateTaskRequesterRoutingSpec extends AnyWordSpec with GivenWhenT
           observed shouldBe before.get
           ()
         }}
+        When("the requester records the actual completion reply without a producer result or artifact selection")
+        val reply = V.DelegateTaskObservationInput(started.sessionId, "completion-received",
+          V.WorkflowArtifactReference("SPECIFICATION-OWNED-completion-reply", "1"), None, None, None,
+          "SPECIFICATION-OWNED reply that development and local publication completed", None)
+        def complete(value: V.DelegateTaskObservationInput) = _invoke_("DelegateTaskDeliveryService",
+          "observeDelegateTaskDelivery", List(Property("input", value, None)))
+        complete(reply.copy(destinationSessionId = Some("SPECIFICATION-OWNED-crossed-session"))).isSuccess shouldBe false
+        val completed = read_value[V.DelegateTaskView](take(complete(reply)))
+        Then("ordinary continuation finishes the requester without opening a destination store or running a check")
+        completed.kind shouldBe "Terminal"
+        state(completed).delivery.get.observations.map(_.event) shouldBe Vector("dispatch-observed", "completion-received")
+        state(_advance_(started.sessionId)) shouldBe state(completed)
+        state(read_value[V.DelegateTaskView](take(complete(reply)))) shouldBe state(completed)
+        assertNoExecution(state(completed))
         Files.readString(stagedfile) shouldBe "SPECIFICATION-OWNED additional unstaged bytes\n"
         Files.readString(dirtyfile) shouldBe "SPECIFICATION-OWNED untracked bytes\n"
         Files.readAllBytes(repository.resolve(".git/index")).toVector shouldBe indexbytes

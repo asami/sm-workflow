@@ -194,40 +194,31 @@ no actual consumer choice, full delivery or application result.
 
 ## Transport and adoption
 
-Apply [waiting mode selection](native-host-execution.md#cross-chat-waiting-mode-selection).
-For a new default wait, the requester uses `wait_threads` directly in the active
-parent turn and keeps the existing Goal, Session and request identity. Receive
-and adopt the actual correlated result before ordinary continuation. Progress reporting
-defaults OFF. Explicit notification-only mode ends the turn and relies on
-the authorized result reply. Both modes retain the same public DTOs, native
-authority, acceptance conditions and history.
+The assigned development chat completes the work, runs ordinary local
+publication when required and sends a completion reply. Use the
+[waiting mode](native-host-execution.md#cross-chat-waiting-mode-selection)
+selected for the request. On the existing requester Session, record the reply with
+`DelegateTaskDeliveryService.observeDelegateTaskDelivery --input <json>`:
 
-`DelegateTaskDeliveryService.observeDelegateTaskDelivery --input <json>` takes
-`sessionId`, `event`, `sourceReference`, optional `destinationSessionId`, optional
-`result`, optional `artifactSelection`, and `rationale`. Closed events are
-dispatch-observed, result-received, return-observed, adopt and defer. Pass the real
-destination Session on transport observations. Supply the actual returned state
-as result; do not synthesize a successful state from source text or acknowledgment.
+```json
+{
+  "sessionId": "requester-session",
+  "event": "completion-received",
+  "sourceReference": {"identity": "actual-completion-message", "revision": "1"},
+  "rationale": "Development and local publication completed"
+}
+```
 
-The normal requester sequence is:
+Use the actual reply reference and call `DelegateTaskService.advanceDelegateTask`
+for that same requester. A managed requester returns its original pending Phase
+WorkOrder. A standalone requester reaches Terminal. Previously recorded
+`ResultReceived` on an assigned-chat route also continues through ordinary Advance.
+Inspect dependency resolution or publication if the resumed work fails.
 
-| Public operation | Retained outcome |
-| --- | --- |
-| `NativeWorkflowPreparationService.prepareDelegateTaskStart` | Passive complete-input selection import; independently provision it through the existing host |
-| `DelegateTaskService.startDelegateTask` | Canonical requester Session at `DispatchReady` |
-| `DelegateTaskService.advanceDelegateTask` | `Dispatch`, or unchanged `Wait` after observed dispatch |
-| `DelegateTaskDeliveryService.observeDelegateTaskDelivery`, event `dispatch-observed` | `AwaitResult`, with the actual destination Session and source reference |
-| Same observation operation, event `result-received` | `ResultReceived` only after checking the genuine returned destination state |
-| `DelegateTaskDeliveryService.describeDelegateTaskAdoption` | Exact current requester adoption target after receipt |
-| `NativeWorkflowPreparationService.prepareEvidence`, family `DelegateTask`, kind `adoption` | Passive evidence projection for independent host admission |
-| `DelegateTaskDeliveryService.observeDelegateTaskDelivery`, event `adopt` | `Adopted` for the independently admitted unchanged target |
-
-Use the normal installed Operation selector
-`org.simplemodeling.textus.SmWorkflow.<Service>.<operation>` directly, with its
-ordinary named arguments. Dispatch acknowledgement alone cannot pass
-`result-received`, describe adoption or adopt. Returned destination checks,
-accepted conditions, required review, local commit and required publication
-remain mandatory even when the requester has none of those execution bindings.
+The operation also supports the retained `dispatch-observed`, `result-received`,
+`return-observed`, `adopt` and `defer` events. When recording dispatch, use the
+actual destination Session if it is known. Explicit result and artifact adoption
+retains its existing evidence contract.
 
 For adoption first call `describeDelegateTaskAdoption --sessionId` on the requester.
 It returns componentInstance, sessionId, sourceRevision and exact target.

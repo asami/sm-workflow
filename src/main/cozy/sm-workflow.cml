@@ -16973,7 +16973,7 @@ DelegateTaskAdoptionContext
 
 ##### DESCRIPTION
 
-Observe actual dispatch, result receipt or return, and requester adoption of an attributable artifact selection. Supply exactly one of input or inputResource; the latter is an absolute local file URI containing the same complete observation DTO, read through normal finite authorized Resource access. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
+Record the assigned chat's successful completion reply with completion-received so the requester can use ordinary Advance. Supply the actual reply reference. The operation also records dispatch, result receipt, return and explicit artifact delivery adoption. Supply exactly one of input or inputResource; the latter is an absolute local file URI containing the same complete observation DTO, read through normal finite authorized Resource access. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
 
 ##### TYPE
 

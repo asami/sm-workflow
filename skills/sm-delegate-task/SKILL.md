@@ -1,6 +1,6 @@
 ---
 name: sm-delegate-task
-description: Deliver one authorized development request to an available existing chat with native validation, local commit, selected publication and attributable result adoption.
+description: Delegate development to an existing chat and resume the requester when the chat reports completion after validation, local commit and any required local publication.
 ---
 
 Follow the [workflow message language contract](../../docs/spec/native-host-execution.md#workflow-message-language).
@@ -88,9 +88,8 @@ For a new default wait after authorized dispatch, the requester itself uses
 [parent-owned cross-chat waiting](../../docs/spec/native-host-execution.md#parent-owned-cross-chat-waiting).
 Keep the existing Goal active in this turn. Call Codex `wait_threads` directly
 with the destination and latest cursor, and re-enter the same wait after a
-routine timeout. Once the matching result is available, inspect and admit it
-through the existing requester route, then continue the same Goal and Session
-without a separate resume prompt. Surface actual Human decisions and honor an
+routine timeout. When the assigned chat reports successful completion, record
+its reply and Advance the same Session. Surface actual Human decisions and honor an
 explicit stop. Preserve the request, history, repair counts and checks.
 
 Progress reporting defaults to OFF. Preserve explicit ON/OFF preferences and
@@ -106,14 +105,12 @@ when the user chooses to end this turn after dispatch.
 At each send/receive, follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display):
 show **💬 📨 別チャットへ依頼中** at the actual send outcome, separately from
 parent-wait indicators. Name the destination/sender and request, then show this caller's outstanding
-requests from retained context. Follow [receipt ordering](../../docs/spec/native-host-execution.md#result-receipt-inspection-and-runtime-acceptance):
-show actual receipt before artifact inspection, then distinguish content inspection
-from actual native acceptance. Worker completion alone is not runtime acceptance;
-keep it unknown until observed. A Workflow-owned AI request is not a live
+requests from retained context. Show the actual result receipt before continuing
+the requester. A Workflow-owned AI request is not a live
 sm-workflow invocation: use the AI/chat marker with optional `進行管理：sm-workflow`,
 not a gear/running prefix. End the actual call interval on response and keep any
-separately observed concurrent runtime activity distinct. Distinguish result receipt from runtime adoption;
-include the waiting list in any final handoff if the requester turn ends. No status queries
+separately observed concurrent runtime activity distinct. Include the waiting
+list in any final handoff if the requester turn ends. No status queries
 or new display storage are needed.
 
 Use the [delegation contract](../../docs/spec/delegate-task.md),
@@ -131,10 +128,8 @@ or a standalone execution route.
 
 The owning caller invokes the installed CLI directly with first-attempt scoped
 escalation. Use the native host's program-generated activity presentation and
-forward `presentation.commentary` to chat. Confirm the selected public operations
-in the installed runtime; source documentation or skill installation alone does
-not establish their availability. Report a missing operation as a runtime setup
-gap and retain the existing Session instead of substituting another workflow.
+forward `presentation.commentary` to chat. If an ordinary call fails because the
+operation is unavailable, report the error and retain the existing Session.
 
 Before each authorized subagent spawn/resume, announce `subagent依頼：` with
 the request name, task/role, scope, expected result, and selected model ID and
@@ -152,8 +147,8 @@ busy-chat interruption or polling controller is implied.
 
 Carry the selected JAR mode separately from the delivery choice. For an SBT
 consumer, follow the [parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
-for that mode. Report missing setup, actual publication and parent build
-verification separately.
+for that mode when setting up the parent build or diagnosing a failed
+continuation.
 
 For a fresh request, use the intent already established during selection to
 author `workClassification` with separate `implementation`, `repair` and
@@ -222,33 +217,19 @@ Session exclusions.
 Record actual dispatch/result/return using
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery`.
 
-## Requester adoption
+## Requester continuation
 
-1. On the requester deployment, call
-   `DelegateTaskDeliveryService.describeDelegateTaskAdoption` for the existing
-   Session. Keep its exact target and the actual observation, selection,
-   reference and execution evidence.
-2. Call `NativeWorkflowPreparationService.prepareEvidence` with family
-   `DelegateTask` and kind `adoption` on that deployment. Obtain the issuer from
-   the selected CNCF Subsystem's runtime identity. Check the `subsystem` entry
-   in the assembly actually selected for the requester, including the CAR's
-   assembly when using the shipped deployment. The Operation reads the
-   running Subsystem's name and independently resolves
-   `sm-workflow.external-evidence.issuer` from the effective deployment
-   configuration. Use the actual Subsystem name for the input issuer.
-3. If preparation reports an issuer mismatch, report the diagnostic and keep
-   the requester at its current revision. If the input value was wrong, correct
-   it from the actual runtime identity. If the Subsystem and declaration
-   differ, have the deployment owner resolve that discrepancy before preparing
-   evidence again on the same Session.
-4. Have the owning host independently admit and provision the resulting
-   import under `delegate-task-requester-artifact-adoption`. Then call
-   `DelegateTaskDeliveryService.observeDelegateTaskDelivery` with event `adopt`
-   for the same described target. The adoption Operation checks the stored
-   evidence independently. [Requester operation contract](../../docs/spec/native-delegate-task-caller.md#transport-and-adoption)
+Send the request to the assigned development chat. The destination develops on
+its own host, completes its ordinary local publication when required, and sends
+the outcome back. A successful completion reply is sufficient to resume.
 
-A transport acknowledgment, local commit, publication, return, artifact
-attachment and actual consumer activation are separate facts. Report their actual
-references and remaining limitations. Source fixtures never establish a real
-cross-chat delivery or consumer check. Collect retained results after interruption;
-do not re-Start, replay accepted Submit or reset history/counters.
+On the existing requester Session, call
+`DelegateTaskDeliveryService.observeDelegateTaskDelivery` with event
+`completion-received`, the actual reply's `sourceReference`, and a short
+`rationale`. Then call `DelegateTaskService.advanceDelegateTask` and continue the
+work it returns. For an assigned-chat Session that already retained a
+`ResultReceived`, use ordinary Advance directly.
+
+If continued work fails to resolve or use the dependency, diagnose publication
+and dependency resolution from that failure. Keep the same Goal and Session and
+collect previously accepted results on re-entry.

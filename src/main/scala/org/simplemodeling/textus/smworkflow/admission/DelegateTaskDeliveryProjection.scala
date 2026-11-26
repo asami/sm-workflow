@@ -30,7 +30,10 @@ private[smworkflow] object DelegateTaskDeliveryProjection {
   /** Identifies the managed receipt, not a new Human authorization. The native
     * owner verifies its exact target and inventory before this is constructed. */
   private[admission] def receiptReference(checkpoint: Checkpoint, nextRevision: String): ContextReference = {
-    val target = checkpoint.target
+    receiptReference(checkpoint.target, nextRevision)
+  }
+
+  private[admission] def receiptReference(target: DelegateTaskScopeCorrection.Target, nextRevision: String): ContextReference = {
     val identity = Vector(target.sessionId, target.oldContinuationId)
       .map(URLEncoder.encode(_, "UTF-8")).mkString(":")
     ContextReference("sm-workflow-supersession:" + identity, nextRevision)

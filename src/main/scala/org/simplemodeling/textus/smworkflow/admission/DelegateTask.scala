@@ -324,7 +324,8 @@ private[smworkflow] object DelegateTask {
   }
 
   def observeC(state: S.State, observation: Observation,
-    hydrate: S.State => Consequence[S.State] = (s: S.State) => Consequence.success(s)): Consequence[S.State] = for {
+    hydrate: S.State => Consequence[S.State] = (s: S.State) => Consequence.success(s),
+    chatCompletion: Boolean = false): Consequence[S.State] = for {
     c <- state.input.delegation.filter(valid).map(Consequence.success).getOrElse(invalid("observation has no admitted delegation"))
     _ <- if (observation != null && reference(observation.sourceReference) && exact(observation.rationale) &&
       observation.destinationSessionId != null && observation.destinationSessionId.forall(exact) && observation.result != null &&
@@ -336,6 +337,15 @@ private[smworkflow] object DelegateTask {
       case Some(value) if value == observation => Consequence.success(state)
       case Some(_) => invalid("retained transport/adoption observation is immutable")
       case None => observation.event match {
+        case "completion-received" if chatCompletion && c.role == "requester" &&
+            Set("DispatchReady", "AwaitResult", "ResultReceived", "Adopted")(state.stage) &&
+            observation.destinationSessionId.forall(id => d.destinationSessionId.forall(_ == id)) &&
+            observation.result.isEmpty && observation.artifactSelection.isEmpty && observation.commandIdentity.isEmpty &&
+            !d.observations.exists(_.event == "defer") =>
+          Consequence.success(state.copy(stage = "Adopted", delivery = Some(d.copy(
+            destinationSessionId = d.destinationSessionId.orElse(observation.destinationSessionId),
+            observations = d.observations :+ observation)),
+            message = "Development chat reported completion; ordinary continuation is ready"))
         case "dispatch-observed" if c.role == "requester" && state.stage == "DispatchReady" &&
             observation.destinationSessionId.nonEmpty && c.providerPhase.forall(p => observation.destinationSessionId.contains(p.sessionId)) && observation.result.isEmpty && observation.artifactSelection.isEmpty =>
           Consequence.success(state.copy(stage = "AwaitResult", delivery = Some(d.copy(destinationSessionId = observation.destinationSessionId,

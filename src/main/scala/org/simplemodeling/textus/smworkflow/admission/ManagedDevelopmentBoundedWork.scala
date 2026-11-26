@@ -284,6 +284,34 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
     _ <- _admit_requester_c(h, capture, original._1, original._2, core)
   } yield original._2
 
+  /** The completion reply belongs to the selected chat route. Local worktree
+    * and provider Phase delivery keep their own continuation contracts. */
+  def chatCompletionRoute(h: Host, payload: BoundedWorkRuntime.Payload): Boolean =
+    payload.state.input.delegation.exists(contract =>
+      contract.role == "requester" && contract.providerPhase.isEmpty &&
+        payload.dependencyDelivery.fold(payload.managedDependency.isEmpty &&
+          !h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty))(selected =>
+          selected.mode == D.assignedChat && selected.chat.contains(contract.destinationIdentity)))
+
+  def chatContinuationC(h: Host, payload: BoundedWorkRuntime.Payload, core: ActionCall.Core):
+      Consequence[Option[(ManagedCapture, WorkflowInteraction[A.Request, Nothing])]] = for {
+    capture <- payload.managedDependency match {
+      case Some(value) => Consequence.success(Some(value))
+      case None if payload.dependencyDelivery.exists(_.mode == D.assignedChat) => for {
+        selected <- _selected_reference_c(h, payload.state.input.sourceReferences, core).flatMap(
+          _.map(Consequence.success).getOrElse(invalid("Original requester WorkOrder is unavailable")))
+        (storage, reference, issued) = selected
+        work <- NativeWorkflowOperationOutput.workInputC(issued)
+        route <- work.decisionContext.flatMap(_.deliveryRoute).filter(r => payload.dependencyDelivery.contains(r.binding))
+          .map(Consequence.success).getOrElse(invalid("Original requester WorkOrder has a different delivery route"))
+        captured <- captureIssuedC(h, storage, route.edge, reference, issued, core)
+      } yield Some(captured._1)
+      case None => Consequence.success(None)
+    }
+    result <- capture.fold(Consequence.success(Option.empty[(ManagedCapture, WorkflowInteraction[A.Request, Nothing])]))(value =>
+      requesterC(h, value, core).map(original => Some(value -> original)))
+  } yield result
+
   def admitScopeCorrectionC(h: Host, capture: Option[ManagedCapture], additional: Vector[String],
     core: ActionCall.Core): Consequence[Unit] =
     if (additional.isEmpty) Consequence.unit

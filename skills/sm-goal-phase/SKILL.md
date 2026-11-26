@@ -283,11 +283,10 @@ on its existing route without creating a duplicate request.
 
 The [dependency delivery contract](../../docs/spec/native-host-execution.md#independent-dependency-delivery)
 keeps requester integration separate from destination development. The destination's
-runtime owns its validation, local commit and selected publishLocal. Return actual
-source/artifact references, checks and remaining limitations. Source edits or a
-message acknowledgment alone are not completed delivery.
-When the requester adopts a native DelegateTask result, follow
-[Requester adoption](../sm-delegate-task/SKILL.md#requester-adoption).
+runtime owns its validation, local commit and selected publishLocal. The
+assigned chat replies with the outcome. Follow
+[Requester continuation](../sm-delegate-task/SKILL.md#requester-continuation)
+to resume the existing Phase after a successful completion reply.
 
 Keep a single owner of process/result collection. Consumers use the returned
 result rather than polling the same logs or requesting progress-only AI turns.

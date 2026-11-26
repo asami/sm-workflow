@@ -398,8 +398,8 @@ or a human instruction; an explicit human pause remains in force.
 
 The requesting Codex chat performs the wait through the Codex app tool
 `wait_threads`. The requester owns transport collection and the normal
-sm-workflow result receipt and adoption. Keep the existing active Goal and
-current turn while the destination is working. New waits need no Luna
+sm-workflow continuation from the successful reply. Keep the existing active
+Goal and current turn while the destination is working. New waits need no Luna
 subagent or separate monitoring process.
 
 1. Retain the actual authorized send result, destination chat and host IDs,
@@ -418,8 +418,7 @@ subagent or separate monitoring process.
    on commentary alone. If the caller can handle unchanged timeouts in the same
    tool execution, do so and yield control for user input or a meaningful event.
 3. Handle a new user instruction before re-waiting. On destination completion
-   or attention, verify the actual request ID, destination, issued context and
-   result marker or reference. A chat turn ending, an approval request, and a
+   or attention, read the reply in the context of the original request. A chat turn ending, an approval request, and a
    delivered development result are distinct. If an event about this request
    lacks the necessary detail, use one bounded `read_thread` read of the
    relevant turn or collect the authorized reply. Ignore unrelated or already
@@ -428,13 +427,11 @@ subagent or separate monitoring process.
    missing, or the transport is unavailable or repeatedly returns the same
    immediate event, report the concrete gap and retain the request for later
    collection.
-4. Show receipt when the matching result is observed. Use the existing
-   requester receipt and adoption operations exactly once, and proceed through
-   ordinary continuation in the same Goal and Session after acceptance. Leave
-   actual approvals, scope changes or missing evidence at their normal
-   boundary. Reuse accepted receipts for duplicate notifications. A wait
-   timeout, tool failure or chat interruption grants no retry of the
-   development request.
+4. Show the received reply. For a successful assigned-chat development reply,
+   record it and use ordinary Advance on the same Goal and Session through the
+   [requester continuation](native-delegate-task-caller.md#transport-and-adoption).
+   Reuse the saved reply for duplicate notifications. A wait timeout, tool
+   failure or chat interruption grants no retry of the development request.
 
 Use the [cross-chat display contract](#separate-chat-delegation-display) for the
 actual dispatch, wait and receipt. Use the compact snapshot already returned by
@@ -470,7 +467,7 @@ DelegateTask's issued work and runtime-managed checks, repair, local commit,
 selected publishLocal and return; it does not start a sibling goal-task/test-fix
 executor. Their existing public test and completion contracts remain unchanged.
 Use [the finite caller contract](native-delegate-task-caller.md) for actual
-operations and attributable receipt/adoption; transport success is not acceptance.
+operations and continuation from the destination reply.
 
 Continue an already-running legacy request on its existing authorized route.
 Do not wrap or duplicate it in a fresh DelegateTask, re-Start, replay accepted
