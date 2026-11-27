@@ -63,7 +63,6 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
     val suite = "org.simplemodeling.textus.smworkflow.fixture.SourceCarryThroughSpec"
     val build = repository.resolve("build.sbt")
     Files.writeString(build, Files.readString(build).replace(classOf[RepositorySyncNativeValidationApplicabilitySpec].getName, suite))
-    Files.writeString(repository.resolve("project/LabelledTests.scala"), Files.readString(Path.of("project/LabelledTests.scala")))
     val source = repository.resolve("src/test/scala/ProductCheck.scala")
     Files.createDirectories(source.getParent)
     Files.writeString(source, """package org.simplemodeling.textus.smworkflow.fixture
@@ -88,32 +87,7 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
       |  }
       |}
       |""".stripMargin)
-    Files.writeString(build, """
-      |lazy val testAdmission = taskKey[Unit]("Run the shared admission selector on this bound fixture")
-      |testAdmission := Def.taskDyn {
-      |  val loader = (Test / testLoader).value
-      |  val log = streams.value.log
-      |  val selected = LabelledTests.select((Test / fullClasspath).value.files,
-      |    (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
-      |  val rows = selected.flatMap(s => s.definition.selectors.collect {
-      |    case t: sbt.testing.TestSelector => s.definition.name -> t.testName()
-      |  })
-      |  require(rows.nonEmpty && rows.distinct.size == rows.size, "Empty or duplicate admission selection")
-      |  def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
-      |    .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-      |  log.info("CNCF-ADMISSION-V1 selected " + rows.map { case (suite, name) => token(suite) + ":" + token(name) }.mkString(","))
-      |  val frameworks = (Test / loadedTestFrameworks).value
-      |  val config = (Test / test / testExecution).value
-      |  val logger = (Test / test / testResultLogger).value
-      |  val runs = selected.map { suite =>
-      |    val execution = Def.valueStrict(LabelledTests.execute(Seq(suite), frameworks, loader, config, log,
-      |      properties = Seq("-C", "org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter")))
-      |    Def.task { logger.run(log, execution.value, "testAdmission") }
-      |  }
-      |  Def.sequential(runs :+ Def.task { log.info("CNCF-ADMISSION-V1 completed") })
-      |    .andFinally(LabelledTests.closeLoader(loader))
-      |}.value
-      |""".stripMargin, java.nio.file.StandardOpenOption.APPEND)
+    TypedSbtHostPlanFixture.appendAdmissionTask(repository)
   }
 
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {

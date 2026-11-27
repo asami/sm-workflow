@@ -66,6 +66,10 @@ object LabelledTestSelection {
     } else ordinary
     require(ValidationTestPolicy.admitC(query, selected).toOption.isDefined,
       "FULL classification conflict: HEAVY/external-service work must be a separate explicit selection")
+    if (purpose == "ADMISSION" && selected.isEmpty && exact.isEmpty && containing.isEmpty && properties.isEmpty) {
+      require(inventory.completeness != D.Completeness.UNKNOWN, "Admission discovery did not complete")
+      return Array.empty[Array[String]]
+    }
     val executions = ValidationTestPolicy.executionsC(selected, exact.toSet, containing.toVector).toOption
       .getOrElse(throw new IllegalArgumentException("No labelled runnable operation selected; an empty run is not PASS"))
     val operations = executions.flatMap(_.operations)

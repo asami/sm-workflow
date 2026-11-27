@@ -21,8 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- *  version Nov. 19, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -59,8 +58,8 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
             .flatMap(_ => _prepare_input_(setup, input, selection, root)))
           Given("an explicit legacy runtime definition with ordinary storage and an admitted Start selection")
           val config = take(io.circe.parser.parse(Files.readString(root.resolve(".textus/config.json")))
-            .fold(error => Consequence.stateConflict(error.message), json =>
-              json.as[Map[String, String]].fold(error => Consequence.stateConflict(error.message), Consequence.success)))
+            .flatMap(_.mapObject(_.remove(ThreeWorkflowRuntimeParameters.plannedStepCommits.name)).as[Map[String, String]])
+            .fold(error => Consequence.stateConflict(error.getMessage), Consequence.success))
           val id = SmWorkflowComponent.componentId
           val creation = ComponentCreate(owner, ComponentOrigin.Builtin, Vector(ComponentDescriptor(
             name = Some(id.name), componentName = Some(id.name), version = Some("0.1.0-SNAPSHOT"),

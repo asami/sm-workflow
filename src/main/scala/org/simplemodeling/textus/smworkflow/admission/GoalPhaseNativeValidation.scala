@@ -1727,26 +1727,20 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _stored_text(value: String): Boolean = value != null && !value.contains('\u0000') &&
     java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   private def _scope_receipt_valid(receipt: V.Receipt, check: Check): Boolean =
-    if (check.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)
-      receipt.sbt.forall(_.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)
-    else receipt.sbt.exists { facts =>
-      facts.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Admission && receipt.processObservation.exists { process =>
-        val report = org.goldenport.cncf.processexecution.SbtAdmissionTestReport.assess(process)
-        val rows = report.selected.map((suite, test) => WorkflowSbtValidation.AdmissionCase(suite, test))
-        val retained = facts.admissionCases.getOrElse(Vector.empty)
-        rows == retained && (facts.outcome match {
-          case WorkflowSbtValidation.Outcome.Succeeded => report.disposition.isEmpty
-          case WorkflowSbtValidation.Outcome.Unverified => report.disposition.exists(r => facts.reason.contains(r.toString))
-          case _ => true
-        })
-      }
-    }
+    WorkflowSbtValidation.scopeReceiptValid(receipt.sbt, receipt.processObservation, check.effectiveTestScope)
+
   private[admission] def successful(receipts: Vector[V.Receipt], selected: Vector[Check]): Boolean =
-    receipts != null && selected != null && receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
+    receipts != null && selected != null && receipts.size <= selected.size && receipts.zip(selected).zipWithIndex.forall {
+      case ((receipt, check), index) =>
         check != null && receipt != null && receipt.identity == check.identity && receipt.carLint != null &&
-        (if (check.carLint) receipt.carLint.exists(_.passed) && V.storedProductOutputValid(receipt)
-         else check.scopeValid && _scope_receipt_valid(receipt, check) && receipt.sbt.fold(check.effectiveTestScope == org.goldenport.cncf.processexecution.SbtTestScope.Full)(
-           _.effectiveTestScope == check.effectiveTestScope) && V.productSuccessful(receipt, check.kind)))
+          (if (check.carLint) receipt.carLint.exists(_.passed) && V.storedProductOutputValid(receipt)
+           else check.scopeValid && _scope_receipt_valid(receipt, check) &&
+             (V.productSuccessful(receipt, check.kind) ||
+               (V.emptyAdmission(receipt) && receipts.take(index).zip(selected).exists { (prior, compile) =>
+                 compile.kind == WorkflowSbtValidation.Kind.Compile && compile.dependency == check.dependency &&
+                   V.productSuccessful(prior, WorkflowSbtValidation.Kind.Compile)
+               })))
+    }
   private def covers(owner: String, path: String): Boolean = path == owner || path.startsWith(owner + "/")
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

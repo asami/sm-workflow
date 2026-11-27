@@ -569,37 +569,40 @@ lazy val root: Project = project
           (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
         catch {
           case scala.util.control.NonFatal(error) =>
-            val empty = Option(error.getMessage).exists(_.contains("No labelled runnable operation selected"))
-            log.error("CNCF-ADMISSION-V1 " + (if (empty) "empty" else "unavailable"))
+            log.error("CNCF-ADMISSION-V1 unavailable")
             throw error
         }
-        val rows = selected.flatMap(s => s.definition.selectors.collect {
-          case t: sbt.testing.TestSelector => s.definition.name -> t.testName()
-        })
-        require(rows.nonEmpty && rows.distinct.size == rows.size, "Empty or duplicate admission selection")
-        def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
-          .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-        log.info("CNCF-ADMISSION-V1 selected " + rows.map { case (suite, name) => token(suite) + ":" + token(name) }.mkString(","))
-        val frameworks = (Test / loadedTestFrameworks).value
-        val config = (Test / labelledTestExecution / testExecution).value
-        val forkTests = (Test / fork).value
-        val resultLogger = (Test / labelledTestExecution / testResultLogger).value
-        // The producer verifies one genuine ScalaTest summary per selected suite.
-        val runs = selected.map { suite =>
-          val execution = Def.valueStrict(LabelledTests.execute(Seq(suite), frameworks, loader, config, log,
-            properties = Seq("-C", "org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter"), fork = forkTests))
-          Def.task { resultLogger.run(log, execution.value, "Test / testAdmission") }
+        if (selected.isEmpty) {
+          Def.task { log.info("CNCF-ADMISSION-V1 empty") }.andFinally(LabelledTests.closeLoader(loader))
+        } else {
+          val rows = selected.flatMap(s => s.definition.selectors.collect {
+            case t: sbt.testing.TestSelector => s.definition.name -> t.testName()
+          })
+          require(rows.nonEmpty && rows.distinct.size == rows.size, "Empty or duplicate admission selection")
+          def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+            .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+          log.info("CNCF-ADMISSION-V1 selected " + rows.map { case (suite, name) => token(suite) + ":" + token(name) }.mkString(","))
+          val frameworks = (Test / loadedTestFrameworks).value
+          val config = (Test / labelledTestExecution / testExecution).value
+          val forkTests = (Test / fork).value
+          val resultLogger = (Test / labelledTestExecution / testResultLogger).value
+          // The producer verifies one genuine ScalaTest summary per selected suite.
+          val runs = selected.map { suite =>
+            val execution = Def.valueStrict(LabelledTests.execute(Seq(suite), frameworks, loader, config, log,
+              properties = Seq("-C", "org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter"), fork = forkTests))
+            Def.task { resultLogger.run(log, execution.value, "Test / testAdmission") }
+          }
+          val done = Def.task { log.info("CNCF-ADMISSION-V1 completed") }
+          val run = Def.sequential(runs :+ done)
+          val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; prepareScalaToolFixture.value; run
+          } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; run
+          } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; run
+          } else Def.taskDyn { prepareTestArtifacts.value; run }
+          prepared.andFinally(LabelledTests.closeLoader(loader))
         }
-        val done = Def.task { log.info("CNCF-ADMISSION-V1 completed") }
-        val run = Def.sequential(runs :+ done)
-        val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
-          cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; prepareScalaToolFixture.value; run
-        } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
-          cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; run
-        } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
-          cozyPrepareRuntime.value; prepareTestArtifacts.value; run
-        } else Def.taskDyn { prepareTestArtifacts.value; run }
-        prepared.andFinally(LabelledTests.closeLoader(loader))
       } catch {
         case error: Throwable => LabelledTests.closeLoader(loader); throw error
       }

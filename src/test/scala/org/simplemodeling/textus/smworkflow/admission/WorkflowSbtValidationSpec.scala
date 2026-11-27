@@ -91,6 +91,51 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       checks(1).effectiveTestScope shouldBe SbtTestScope.Admission
       take(StandardWorkflowRuntime.standardChecksC(Vector("test"))).head.effectiveTestScope shouldBe SbtTestScope.Full
     }
+    "satisfy empty Admission only after Compile and keep independent focused obligations" in {
+      import GoalPhaseNativeValidation.Check
+      val raw = _result(SbtOperation.Test)
+      val admission = raw.copy(target = raw.target.copy(testScope = SbtTestScope.Admission))
+      def observed(text: String, terminal: ProcessExecutionTermination = ProcessExecutionTermination.Exited(0)) =
+        take(V.sbtReceiptC("test-admission", Kind.Test, admission.copy(processResult =
+          admission.processResult.copy(stdout = _capture(text), termination = terminal))))
+      val empty = observed("[info] CNCF-ADMISSION-V1 empty")
+      val compile = take(V.sbtReceiptC("compile", Kind.Compile, _result(SbtOperation.Compile)))
+      val badCompile = take(V.sbtReceiptC("compile", Kind.Compile,
+        _result(SbtOperation.Compile, ProcessExecutionTermination.Exited(1))))
+      val focused = take(V.sbtReceiptC("focused", Kind.TestOnly, _result(SbtOperation.TestOnly,
+        selection = Some(SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.ZeroTests)))))
+      val compileCheck = Check("compile", 1, Kind.Compile)
+      val admissionCheck = Check("test-admission", 2, Kind.Test, testScope = Some("admission"))
+      val focusedCheck = Check("focused", 3, Kind.TestOnly)
+      val selected = Vector(compileCheck, admissionCheck, focusedCheck)
+
+      empty.sbt.map(_.outcome) shouldBe Some(Outcome.AdmissionEmpty)
+      V.productSuccessful(empty, Kind.Test) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty), selected) shouldBe true
+      GoalPhaseNativeValidation.successful(Vector(empty), Vector(admissionCheck)) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(badCompile, empty), selected) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty, focused), selected) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty),
+        Vector(compileCheck, admissionCheck.copy(testScope = None))) shouldBe false
+      Vector(
+        observed("[error] CNCF-ADMISSION-V1 unavailable"),
+        observed("[error] CNCF-ADMISSION-V1 empty"),
+        observed("no producer observation"),
+        observed("[info] CNCF-ADMISSION-V1 empty\n[info] CNCF-ADMISSION-V1 completed"),
+        observed("[info] CNCF-ADMISSION-V1 empty\n[error] CNCF-ADMISSION-V1 completed"),
+        observed("[error] CNCF-ADMISSION-V1 empty", ProcessExecutionTermination.Exited(1))
+      ).foreach { receipt =>
+        receipt.sbt.map(_.outcome) should not be Some(Outcome.AdmissionEmpty)
+        GoalPhaseNativeValidation.successful(Vector(compile, receipt), selected) shouldBe false
+      }
+      val mergeChecks = Vector(V.Check("compile", 1, Kind.Compile),
+        V.Check("test-admission", 2, Kind.Test, testScope = Some("admission")), V.Check("focused", 3, Kind.TestOnly))
+      val local = V.Receipt("index-local", "exited", Some(0), "", "")
+      val remote = V.Receipt("index-remote", "exited", Some(0), "", "")
+      V.successful(Vector(local, remote, compile, empty), selected = mergeChecks) shouldBe true
+      V.successful(Vector(local, remote, empty), selected = mergeChecks.tail) shouldBe false
+      V.successful(Vector(local, remote, compile, empty, focused), selected = mergeChecks) shouldBe false
+    }
     "retain admitted immutable lint input and reject echoed, missing or crossed provenance" in {
       Given("a selected typed FixCheck result and its actual producer-admitted input")
       val input = SbtLintInput("shared-scala-lint", "1", "{\"rules\":[\"NoOptionGet\"]}")

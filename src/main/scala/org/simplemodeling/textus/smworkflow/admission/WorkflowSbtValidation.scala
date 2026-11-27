@@ -58,6 +58,7 @@ private[smworkflow] object WorkflowSbtValidation {
   }
   enum Outcome(val wire: String) {
     case Succeeded extends Outcome("succeeded")
+    case AdmissionEmpty extends Outcome("admission-empty")
     case NotExecuted extends Outcome("not-executed")
     case Failed extends Outcome("failed")
     case Incomplete extends Outcome("incomplete")
@@ -145,6 +146,9 @@ private[smworkflow] object WorkflowSbtValidation {
             Set("fixture", "live")(observed.provider) && value.selected.requiredProvider.forall(_ == observed.provider)))) &&
         (outcome != Outcome.Succeeded || values.forall(_.status == "passed"))) && mode != null && mode.forall(value => value != null && value.valid &&
         (outcome != Outcome.Succeeded || value.verified)) && (outcome match {
+        case Outcome.AdmissionEmpty =>
+          effectiveTestScope == SbtTestScope.Admission && selection.isEmpty && admissionCases.isEmpty &&
+            reason.isEmpty && mode.isEmpty && batch.isEmpty
         case Outcome.Succeeded if effectiveTestScope == SbtTestScope.Admission =>
           selection.isEmpty && admissionCases.nonEmpty && reason.isEmpty
         case Outcome.Succeeded if kind == Kind.TestOnly =>
@@ -202,10 +206,21 @@ private[smworkflow] object WorkflowSbtValidation {
       val rows = report.selected.map((suite, test) => AdmissionCase(suite, test))
       rows == value.admissionCases.getOrElse(Vector.empty) && (value.outcome match {
         case Outcome.Succeeded => report.disposition.isEmpty
+        case Outcome.AdmissionEmpty => verifiedEmptyAdmission(observed, report)
         case Outcome.Unverified => report.disposition.exists(reason => value.reason.contains(reason.toString))
         case _ => true
       })
     } }
+
+  private def verifiedEmptyAdmission(process: ProcessExecutionResult, report: SbtAdmissionTestReport): Boolean =
+    process.termination == ProcessExecutionTermination.Exited(0) && report.selected.isEmpty &&
+      report.disposition.contains(SbtTestSelectionFailure.ZeroTests) && {
+        val marker = "CNCF-ADMISSION-V1 "
+        val emitted = WorkflowSbtCapture.text(process.stdout).value.linesIterator
+          .filter(_.stripPrefix("[info] ").stripPrefix("[error] ").startsWith(marker))
+          .map(_.stripPrefix("[info] ")).toVector
+        emitted == Vector(marker + "empty") && !WorkflowSbtCapture.text(process.stderr).value.contains(marker)
+      }
 
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.target != null && result.target.validationMode != null &&
@@ -225,7 +240,11 @@ private[smworkflow] object WorkflowSbtValidation {
           case SbtTestSelectionResult.Rejected(reason) => kind == Kind.TestOnly && reason != null
           case _ => false
         }) Consequence.unit else Consequence.stateConflict("SBT result differs from selected typed operation or facts")
+    report = result.admissionTestReport
     facts = result.outcome match {
+      case SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.ZeroTests)
+          if report.exists(verifiedEmptyAdmission(result.processResult, _)) =>
+        Facts(kind, Outcome.AdmissionEmpty, None, None)
       case SbtExecutionOutcome.Succeeded => Facts(kind, Outcome.Succeeded, result.testSelection.collect {
         case SbtTestSelectionResult.Verified(classes, suites, tests) => Selection(classes, suites, tests)
       }, None)
@@ -242,7 +261,6 @@ private[smworkflow] object WorkflowSbtValidation {
       case Some(SbtValidationMode.Result.Unverified(reason)) => Mode(requested, None, None, Some(reason))
       case None => Mode(requested, None, None, Some("child observation unavailable"))
     } }
-    report = result.admissionTestReport
     rows = report.toVector.flatMap(_.selected).map((suite, test) => AdmissionCase(suite, test))
     retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch, lintInput = result.lintInput,
       testScope = Option.when(result.target.testScope == SbtTestScope.Admission)("admission"),

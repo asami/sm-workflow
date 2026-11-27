@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -176,6 +176,37 @@ private[admission] object TypedSbtHostPlanFixture {
       .replace("__PIDS__", literal(root.resolve("sbt-executions.txt").toString))
       .replace("__COMMANDS__", literal(root.resolve("sbt-command-lines.txt").toString))
     Files.writeString(repository.resolve("build.sbt"), build)
+  }
+
+  /** Use the ordinary compiled-test selector and actual ScalaTest success reporter. */
+  def appendAdmissionTask(repository: Path): Unit = {
+    Files.writeString(repository.resolve("project/LabelledTests.scala"), Files.readString(Path.of("project/LabelledTests.scala")))
+    Files.writeString(repository.resolve("build.sbt"), """
+      |lazy val testAdmission = taskKey[Unit]("Run the shared admission selector on this bound fixture")
+      |testAdmission := Def.taskDyn {
+      |  val loader = (Test / testLoader).value
+      |  val log = streams.value.log
+      |  val selected = LabelledTests.select((Test / fullClasspath).value.files,
+      |    (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
+      |  val rows = selected.flatMap(s => s.definition.selectors.collect {
+      |    case t: sbt.testing.TestSelector => s.definition.name -> t.testName()
+      |  })
+      |  require(rows.nonEmpty && rows.distinct.size == rows.size, "Empty or duplicate admission selection")
+      |  def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+      |    .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      |  log.info("CNCF-ADMISSION-V1 selected " + rows.map { case (suite, name) => token(suite) + ":" + token(name) }.mkString(","))
+      |  val frameworks = (Test / loadedTestFrameworks).value
+      |  val config = (Test / test / testExecution).value
+      |  val logger = (Test / test / testResultLogger).value
+      |  val runs = selected.map { suite =>
+      |    val execution = Def.valueStrict(LabelledTests.execute(Seq(suite), frameworks, loader, config, log,
+      |      properties = Seq("-C", "org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter")))
+      |    Def.task { logger.run(log, execution.value, "testAdmission") }
+      |  }
+      |  Def.sequential(runs :+ Def.task { log.info("CNCF-ADMISSION-V1 completed") })
+      |    .andFinally(LabelledTests.closeLoader(loader))
+      |}.value
+      |""".stripMargin, java.nio.file.StandardOpenOption.APPEND)
   }
 
   /** Two finite typed SBT targets share the existing typed Git boundary. */

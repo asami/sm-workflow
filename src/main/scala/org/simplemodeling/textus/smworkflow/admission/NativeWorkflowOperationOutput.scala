@@ -16,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -84,7 +84,11 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     mode <- NativeWorkflowIssuedWorkContext.goalModeC(value.kind)
     issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, mode, GoalPhaseNativeWork.inputCodec)
     reviewContext <- NativeReviewContext.goalC(core, work)
-  } yield V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
+    observed = value.review.toVector.flatMap(_.checks) ++
+      value.triage.toVector.flatMap(_.checks) ++ value.checkFailure.toVector.flatMap(_.validation.receipts)
+    purpose = if (observed.exists(RepositorySyncNativeMergeValidation.emptyAdmission)) value.purpose + " ADMISSION対象0件"
+      else value.purpose
+  } yield V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", purpose,
       Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
       None, None, Some(goalWork(value, reviewContext)), None, None, None, None, None, None, Some(issuedContext), None, None, progress, None, None, None, None, Vector.empty)
 

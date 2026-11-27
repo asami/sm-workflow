@@ -32,8 +32,10 @@ Plan: [Phase 25.2](phase-25.2.md)
   `Admission` and `Full`. Verify the existing single-argument forms retain
   FULL behavior. Through installed sm-workflow, accept an ordinary Step with
   ADMISSION and applicable focused checks, then require FULL for Phase closure.
-  Verify the executed selection, ordinary exclusions, an unavailable or empty
-  selection, and the preservation of bound results on resume. Show test-body
+  Verify the executed selection and ordinary exclusions. Show
+  `ADMISSION対象0件` after complete empty discovery and successful Compile.
+  Verify that an unavailable discovery or a selected test's failure cannot
+  use that result and that bound results survive resume. Show test-body
   and compile/setup times separately where observed. Preserve the existing
   Phase 25.1 Session and issued checks.
 - [ ] P252-05 RepositorySync: On final candidates prepared from local Git

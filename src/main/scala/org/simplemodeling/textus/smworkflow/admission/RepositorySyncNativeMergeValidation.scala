@@ -837,6 +837,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def productSuccessful(receipt: Receipt, check: Check): Boolean =
     receiptMatches(receipt, check) && productSuccessful(receipt, check.kind)
 
+  private[admission] def emptyAdmission(receipt: Receipt): Boolean =
+    _receipt_kind(receipt, WorkflowSbtValidation.Kind.Test) && receipt.termination == "exited" &&
+      receipt.exitCode.contains(0) && storedProductOutputValid(receipt) &&
+      receipt.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.AdmissionEmpty) &&
+      WorkflowSbtValidation.scopeReceiptValid(receipt.sbt, receipt.processObservation, SbtTestScope.Admission)
+
   /** CNCF bounds acquisition; retained historical and typed text preserve complete results. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
     receipt != null && receipt.sbt != null && receipt.processObservation != null && receipt.group != null &&
@@ -878,7 +884,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       receipts.drop(count).zipWithIndex.forall { case (receipt, index) =>
         if (selected.isEmpty) productSuccessful(receipt)
         else selected.lift(index).exists(check => receipt != null && receipt.identity == check.identity &&
-          productSuccessful(receipt, check))
+          (productSuccessful(receipt, check) ||
+            (check.effectiveTestScope == SbtTestScope.Admission && emptyAdmission(receipt) &&
+              receipts.drop(count).take(index).zip(selected).exists { (prior, compile) =>
+                compile.kind == WorkflowSbtValidation.Kind.Compile && productSuccessful(prior, compile)
+              })))
       }
   }
   private def _ordinary_text(text: String): Boolean = text != null && !text.contains('\u0000') &&
