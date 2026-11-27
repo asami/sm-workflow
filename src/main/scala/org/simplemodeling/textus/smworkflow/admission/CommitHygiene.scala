@@ -1,12 +1,14 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  2, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import cats.Eq
 import org.goldenport.Consequence
+import org.goldenport.util.TypeSafeCollections.*
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterDecoder, ComponentParameterKey}
 import org.goldenport.cncf.processexecution.*
@@ -20,6 +22,7 @@ import RepositorySyncManagedGitObservation as G
   * This owner neither admits product work nor changes any repair counter.
   */
 private[smworkflow] object CommitHygiene {
+  private val _path_equality: Eq[String] = Eq.fromUniversalEquals[String]
   val autoFix = "auto-fix"
   val error = "error"
   val declaration: ComponentParameterKey[String] = ComponentParameterKey.optional(
@@ -64,7 +67,7 @@ private[smworkflow] object CommitHygiene {
     Option.when(dirty.exists(d => paths.contains(d.path) && d.worktree != ' '))(
       "Commit hygiene preserves partial staging: the affected CML or docs Markdown worktree differs from its index; typed Git cannot update only its index suffix. No hygiene write or staging was performed.")
 
-  private def _staging_ordinal(staging: Vector[String], path: String): Int = staging.indexOf(path) match {
+  private[admission] def stagingOrdinal(staging: Vector[String], path: String): Int = staging.typeSafe.indexOfEq(path)(using _path_equality) match {
     case -1 => staging.indexWhere(owner => path.startsWith(owner + "/")) + 1
     case index => index + 1
   }
@@ -91,7 +94,7 @@ private[smworkflow] object CommitHygiene {
         else if (alreadyCorrected) Consequence.success(diagnostic("Commit hygiene performed one pass; remaining findings require ordinary handling", "remaining-findings"))
         else if (!check.onlyEofBlankLines || check.eofBlankLinePaths.isEmpty || !check.eofBlankLinePaths.forall(p =>
           supported(p.value) && owned.exists(owner => p.value == owner || p.value.startsWith(owner + "/")) &&
-            _staging_ordinal(staging, p.value) > 0 && _staging_ordinal(staging, p.value) <= 256))
+            stagingOrdinal(staging, p.value) > 0 && stagingOrdinal(staging, p.value) <= 256))
           Consequence.success(diagnostic("Only EOF-only findings on selected registered CML or docs Markdown files support automatic correction"))
         else partialDiagnostic(native.observed.dirty, check.eofBlankLinePaths.toVector.map(_.value)) match {
           case Some(message) => Consequence.success(diagnostic(message))
@@ -106,7 +109,7 @@ private[smworkflow] object CommitHygiene {
               blob <- E.executeGitC(core, GitOperation.BlobContent(change.newBlob.get)).flatMap(_.valueC)
               text <- blob.text.filter(t => t.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes && corrected(t).nonEmpty)
                 .map(Consequence.success).getOrElse(Consequence.stateConflict("CML or docs Markdown EOF correction requires complete UTF-8 LF text; original bytes retained"))
-              correction = Correction(path.value, change.newMode, change.newBlob.get.value, _staging_ordinal(staging, path.value))
+              correction = Correction(path.value, change.newMode, change.newBlob.get.value, stagingOrdinal(staging, path.value))
               _ <- _preflight_c(core, correction)
               file <- WorkspaceFilePath.parseC(path.value)
               workspace <- WorkspaceId.parseC("sm-workflow-repository")
