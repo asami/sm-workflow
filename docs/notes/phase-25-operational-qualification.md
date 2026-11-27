@@ -60,3 +60,39 @@ unknown allowance and unknown costs remain explicit.
 The production allowance connection and the two live cases belong to the feature
 release boundary. Wider routine-use coverage, reconciliation against actual
 billing and margin tuning continue alongside Phase 18 after release.
+
+
+## Phase 25.3 qualification and Phase 25.4 handoff
+
+The installed qualification used the Phase-private Textus AI runtime
+`0.2.3-SNAPSHOT-smdev-10-phase-25-3-44-p253-04-textus-ai-verified-host-authority-01`
+from producer commit `88a49ffb20088dff9d48c612f4255a3a2533a43d`, with the
+packaged sm-workflow and AI components selected together. The offline readiness
+record is `312-p253-04-installed-offline-readiness.json`; producer validation
+and artifact adoption are retained as `270-p253-04-producer-revalidation.json`
+and `304-p253-04-artifact-adopted-with-import.json`.
+
+For the two live cases the operator confirmed no other concurrent use; the
+fresh organization Analytics observation reported zero before dispatch. Each
+request used separately verified daily reservation and a 10% margin, with no
+monthly fallback. These are time-bound controls, not a standing quota assertion.
+`316-p253-04-current-organization-usage-observation.json` and
+`319-p253-04-live-admission-observation.json` retain the observations and
+admission setup. Missing, stale or mismatched authority must continue to refuse
+admission; refresh evidence and bound concurrent use before future dispatch.
+
+The ordinary installed route selected OpenAI `gpt-5.6-terra` in daily group 2.
+The supplied-input review reported 3,683 tokens and its verdict was admitted.
+The compiler repair reported 383 tokens; typed application updated the candidate
+and a real recompile succeeded. The retained provider, Admission and compile
+references are indexed by `323-p253-04-genuine-openai-qualification.json`.
+The 1M group, independent accounting and fail-closed cases were verified offline;
+these observations do not claim both groups were used live. Reported tokens are
+usage observations, not settled billing, and other or uncertain usage must remain
+unknown until independently established.
+
+Phase 25.4 should observe eligible ordinary review and repair work, route and
+fallback reasons, group attribution, unknown usage and actual billing separately,
+and revisit margin and evidence freshness with operational data. These isolated
+qualifications do not establish routine production ingress. Phase 25.3 final
+validation, independent Phase review and formal closure remain pending.

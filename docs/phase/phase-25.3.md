@@ -83,6 +83,15 @@ recompile for the second. A fixture or alternate provider does not fulfill
 either case. If OpenAI cannot be used, retain the blocking reason and leave
 the affected case pending.
 
+P253-04's two live cases are satisfied: the installed daily-only route admitted
+an OpenAI `gpt-5.6-terra` supplied-input review (3,683 reported tokens) and
+applied a bounded compiler repair (383 reported tokens); the repaired candidate
+then compiled successfully. Both used daily group 2. The 1M group, independent
+accounting and refusal scenarios were qualified offline. Provider-reported usage
+is not settled billing. The retained qualification index is
+`323-p253-04-genuine-openai-qualification.json`; Phase validation, independent
+Phase review and closure remain pending.
+
 Use the [Phase 25 qualification](../notes/phase-25-operational-qualification.md)
 observations (3,509 review tokens and 415 repair tokens) as sizing examples,
 not throughput guarantees. At verified 1M/10M limits and 10% margins,

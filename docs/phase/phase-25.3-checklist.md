@@ -8,7 +8,7 @@
 - [ ] P253-02: Retry, reasoning usage, uncertain usage, restart, duplicate settlement and UTC rollover verified.
 - [ ] P253-03: Ordinary review and repair routes can use both groups concurrently; exhaustion does not transfer balances or authorize paid overage.
 - [ ] P253-03: Typed outcomes and group attribution available to completion metrics and cost-aware routing.
-- [ ] P253-04: The ordinary installed route produces one accepted review with
+- [x] P253-04: The ordinary installed route produces one accepted review with
   a real OpenAI response and one admitted compiler repair with a real OpenAI
   response and successful recompile. Keep a case pending if OpenAI is
   unavailable or allowance admission refuses it.
