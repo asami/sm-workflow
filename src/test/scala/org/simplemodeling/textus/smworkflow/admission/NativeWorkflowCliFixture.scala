@@ -5,11 +5,9 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
-import cats.Eq
 import io.circe.Json
 import io.circe.parser.parse
 import org.goldenport.Consequence
-import org.goldenport.util.TypeSafeCollections.*
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
@@ -31,9 +29,6 @@ import GoalPhaseAcceptanceBoundary as A
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
-  private val _path_equality: Eq[String] = Eq.fromUniversalEquals[String]
-  private[admission] def candidatePathSelected(paths: Vector[String], path: String): Boolean =
-    paths.typeSafe.containsEq(path)(using _path_equality)
   private val _primary = Path.of("").toAbsolutePath.normalize
   private val _participant = "participant"
   private val _component = SmWorkflowComponent.componentId.name
@@ -646,7 +641,7 @@ private[admission] object NativeWorkflowCliFixture {
       * Preserve all whitespace when comparing check-only execution with its input.
       */
     def candidateSource(tree: String, path: String): String = {
-      require(tree.matches("[0-9a-f]{40}") && candidatePathSelected(host.goal.candidatePaths, path),
+      require(tree.matches("[0-9a-f]{40}") && TypedCollectionMigrationFixture.candidatePathSelected(host.goal.candidatePaths, path),
         "Observe only a selected source from the actual candidate tree")
       _candidate_git(Vector("show", s"$tree:$path"), retainWhitespace = true)
     }

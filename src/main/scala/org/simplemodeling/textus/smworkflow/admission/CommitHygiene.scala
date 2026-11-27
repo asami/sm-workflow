@@ -106,10 +106,11 @@ private[smworkflow] object CommitHygiene {
               saved <- prior
               change <- changes.find(c => c.path == path && Set("100644", "100755")(c.newMode) && c.newBlob.nonEmpty)
                 .map(Consequence.success).getOrElse(Consequence.stateConflict("EOF finding has no complete regular index blob"))
-              blob <- E.executeGitC(core, GitOperation.BlobContent(change.newBlob.get)).flatMap(_.valueC)
+              blobId <- change.newBlob.map(Consequence.success).getOrElse(Consequence.stateConflict("EOF finding has no complete regular index blob"))
+              blob <- E.executeGitC(core, GitOperation.BlobContent(blobId)).flatMap(_.valueC)
               text <- blob.text.filter(t => t.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes && corrected(t).nonEmpty)
                 .map(Consequence.success).getOrElse(Consequence.stateConflict("CML or docs Markdown EOF correction requires complete UTF-8 LF text; original bytes retained"))
-              correction = Correction(path.value, change.newMode, change.newBlob.get.value, stagingOrdinal(staging, path.value))
+              correction = Correction(path.value, change.newMode, blobId.value, stagingOrdinal(staging, path.value))
               _ <- _preflight_c(core, correction)
               file <- WorkspaceFilePath.parseC(path.value)
               workspace <- WorkspaceId.parseC("sm-workflow-repository")

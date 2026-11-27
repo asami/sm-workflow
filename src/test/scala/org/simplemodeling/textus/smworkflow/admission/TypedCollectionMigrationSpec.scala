@@ -10,6 +10,12 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import scala.compiletime.testing.typeCheckErrors
 
+private[admission] object TypedCollectionMigrationFixture {
+  private val pathEquality: Eq[String] = Eq.fromUniversalEquals[String]
+  def candidatePathSelected(paths: Vector[String], path: String): Boolean =
+    paths.typeSafe.containsEq(path)(using pathEquality)
+}
+
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class TypedCollectionMigrationSpec extends AnyWordSpec with Matchers {
@@ -22,7 +28,7 @@ final class TypedCollectionMigrationSpec extends AnyWordSpec with Matchers {
       for (values <- inputs; query <- queries) {
         values.typeSafe.containsEq(query)(using equality) shouldBe values.contains(query)
         values.typeSafe.indexOfEq(query)(using equality) shouldBe values.indexOf(query)
-        NativeWorkflowCliFixture.candidatePathSelected(values, query) shouldBe values.contains(query)
+        TypedCollectionMigrationFixture.candidatePathSelected(values, query) shouldBe values.contains(query)
       }
     }
 

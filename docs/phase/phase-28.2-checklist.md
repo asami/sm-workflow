@@ -13,7 +13,7 @@ Plan: [Phase 28.2](phase-28.2.md)
   compilation, focused tests, and no AI repair call for the accepted edit.
   Verify refusal when analysis, binding or semantic equivalence is missing and
   rollback on failed revalidation. A warning disappearing alone does not pass.
-- [ ] P282-03: Qualify bounded strictEquality adoption: intended comparisons
+- [x] P282-03: Qualify bounded strictEquality adoption: intended comparisons
   compile and mismatched types fail. Preserve distinct semantics for value,
   identity and array comparisons, and leave unsupported sites unchanged.
 - [ ] Record scope and producer revision/binary identity, observed verification,
@@ -35,7 +35,17 @@ Plan: [Phase 28.2](phase-28.2.md)
   installed cases and attestation. An earlier result had 385 diagnostics,
   including 383 on unchanged lines; the candidate source was narrowed rather
   than bypassing those results. Earlier attempts remain recorded as observed.
-- P282-03 source cases distinguish Cats `Eq` value comparison, typed source ID
-  comparison, byte-element equality and array reference identity. Compilation,
-  installed-route qualification, independent review and Phase acceptance remain
-  pending; the examples are not evidence of their own successful execution.
+- P282-03 was accepted at `456ce4b9056c3051419cd7da755d17ee25a650a8`:
+  Compile and nine focused strict-comparison tests succeeded, and independent
+  Step review accepted the evidence. The cases distinguish Cats `Eq` value
+  comparison, typed source ID comparison, byte-element equality and array
+  reference identity, including rejection of mismatched types.
+
+## Retained whole-Phase checks
+
+- The latest prior candidate's Compile and FULL checks succeeded, with 3,192
+  tests passing. Its FixCheck failed with exit 1 and 56 reports on unchanged
+  lines. The user deferred the whole-Phase FixCheck for this closure; that
+  failure remains recorded and is not a pass. Related comparison and FixCheck
+  follow-up is planned for Phase 7.2. Phase-wide recording and acceptance remain
+  pending.

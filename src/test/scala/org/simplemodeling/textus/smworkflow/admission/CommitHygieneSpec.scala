@@ -61,8 +61,10 @@ final class CommitHygieneSpec extends AnyWordSpec with GivenWhenThen with ThreeW
     val combined = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
     // The combined fixture reconstructs grants from program declarations, so
     // retain this episode's deliberate denials after combining the two plans.
-    val grants = combined.hcursor.downField("grants").focus.flatMap(_.asArray).get.map { grant =>
-      val capabilities = grant.hcursor.downField("capabilities").focus.flatMap(_.asArray).get
+    val grants = combined.hcursor.downField("grants").focus.flatMap(_.asArray)
+      .getOrElse(throw new IllegalStateException("Fixture plan requires a grants array")).map { grant =>
+      val capabilities = grant.hcursor.downField("capabilities").focus.flatMap(_.asArray)
+        .getOrElse(throw new IllegalStateException("Fixture grant requires a capabilities array"))
         .filterNot(value => value.asString.exists(denied))
       grant.mapObject(_.add("capabilities", Json.fromValues(capabilities)))
     }
