@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 21, 2026
- * @version Nov. 23, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -272,6 +272,15 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       unqualified.status shouldBe "UNCERTAIN"
       unqualified.result shouldBe None
       unqualified.providerRecord shouldBe None
+
+      When("the producer declines or refuses its allowance before dispatch")
+      terminal = Some("ai.task.declined")
+      run(bounded).status shouldBe "DECLINED"
+      terminal = Some("ai.cost-budget")
+      val refused = run(bounded)
+      refused.status shouldBe "BLOCKED"
+      refused.message shouldBe "ai.cost-budget"
+      refused.result shouldBe None
 
       When("the producer reports a final failure or an uncertain dispatch")
       metadata = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> "observed-model",

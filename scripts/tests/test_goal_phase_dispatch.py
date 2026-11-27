@@ -123,6 +123,36 @@ class DispatchSpec(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'differs'):
             A.prepare(crossed, self.mapping, self.facts, ROOT, ROOT, supplied_review=package)
 
+    def test_standard_bounded_review_selection_requires_an_exact_ready_package(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'head', 'tree': 'tree'}
+        request['work']['review'] = {'diff': 'diff', 'checks': [{'identity': 'check'}]}
+        package = A.review_package(request, [{'name': 'spec', 'content': 'required'}], True, 'complete')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'package.json'
+            path.write_text(json.dumps(package['packet'], ensure_ascii=False, sort_keys=True,
+                                       separators=(',', ':')), encoding='utf-8')
+            selected = A.prepare(request, self.mapping, self.facts, ROOT, ROOT,
+                                 supplied_review=package, supplied_review_path=str(path))
+            self.assertEqual(selected['status'], 'PREPARED')
+            self.assertEqual(selected['operation'], 'GoalPhaseService.runGoalPhaseApiReview')
+            self.assertTrue(selected['arguments']['input']['boundedTask'])
+            disabled = dict(self.mapping)
+            disabled.pop('suppliedReviewApi')
+            ordinary = A.prepare(request, disabled, self.facts, ROOT, ROOT,
+                                 supplied_review=package, supplied_review_path=str(path))
+            self.assertIn('launch', ordinary)
+            self.assertNotIn('operation', ordinary)
+            unsuitable = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+            self.assertIn('launch', unsuitable)
+            path.write_text('{}', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'canonical'):
+                A.prepare(request, self.mapping, self.facts, ROOT, ROOT,
+                          supplied_review=package, supplied_review_path=str(path))
+
     def test_candidate_file_assembly_is_ordered_bounded_and_keeps_provenance_local(self):
         # Given an issued review and Git's actual candidate object responses.
         request = copy.deepcopy(self.request)

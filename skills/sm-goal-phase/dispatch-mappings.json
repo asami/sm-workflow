@@ -1,5 +1,6 @@
 {
   "revision": "standard-2026-11-01",
+  "suppliedReviewApi": "bounded",
   "assignments": {
     "mechanical": {
       "model": "gpt-6-luna",
