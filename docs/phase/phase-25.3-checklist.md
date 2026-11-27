@@ -1,5 +1,13 @@
 # Phase 25.3 Acceptance Checklist
 
+Whole-Phase release evidence: original candidate `f12b226f` passed Compile
+and FULL (3,195 tests), but FixCheck failed with exit 1 and 1,364 affected
+blocking diagnostics. The 1,181 outside directly changed Git lines and 836
+with unavailable analysis are overlapping subsets. `issue-10` remains open.
+The user directed deferral of whole-Phase FixCheck for the replacement release
+candidate; the failure is not a pass. Replacement validation, independent
+Phase review and the final commit are still pending.
+
 - [ ] Verify ordinary routing with an installed offline fixture. Reproduce and
   fix missing or ineffective OpenAI setup. Verify distinct reasons for
   disabled routing, unavailable binding, unsuitable input and allowance refusal.

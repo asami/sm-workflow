@@ -1,10 +1,21 @@
 # Phase 25.3: Dual OpenAI Daily Allowance Utilization
 
-Status: planned; execution not started
+Status: in progress; Phase review and final commit pending
 Planned: 2026-11-25 (Asia/Tokyo)
 Scheduled: immediately after [Phase 28.2](phase-28.2.md), followed by [Phase 25.4](phase-25.4.md).
 Depends on: [Phase 25.1](phase-25.1.md) reservation and settlement
 Checklist: [Phase 25.3 acceptance](phase-25.3-checklist.md)
+
+## Whole-Phase release validation
+
+The original release candidate `f12b226f` passed Compile and FULL (3,195
+tests). Its FixCheck failed with exit 1 and reported 1,364 affected blocking
+diagnostics. Of these, 1,181 were outside directly changed Git lines and 836
+had unavailable analysis; these subsets overlap. The resulting `issue-10`
+remains open. The user directed that whole-Phase FixCheck be deferred for the
+replacement release candidate so closure can proceed; this does not turn the
+failed check into a pass or resolve its diagnostics. Replacement candidate
+validation, independent Phase review and the final commit remain pending.
 
 ## Goal
 
