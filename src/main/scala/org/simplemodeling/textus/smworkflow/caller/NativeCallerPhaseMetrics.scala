@@ -10,7 +10,7 @@ import M.given
   * acquires usage, invokes a provider, reads a file, advances a Workflow or
   * certifies Phase-wide coverage from a final invocation.
   * @since   Oct. 29, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeCallerPhaseMetrics {
@@ -64,6 +64,68 @@ object NativeCallerPhaseMetrics {
       .orElse(value.hcursor.get[String]("continuation_id").toOption)).filter(_.nonEmpty)
   }
 
+  /** Select only caller-owned, issued-work-bound route decisions. The supplied
+    * source/revision identify the retained public snapshot, not a later guess. */
+  private[smworkflow] def retainedRoute(phaseSession: String, source: String, revision: Long,
+    state: Json): Option[M.RouteFact] = {
+    val decision = state.hcursor.downField("routeSelection")
+    val request = state.hcursor.downField("request")
+    val issued = request.downField("issuedWorkContext").focus.orElse(request.downField("issued_work_context").focus)
+    def text_(value: Json, camel: String, snake: String): Option[String] =
+      value.hcursor.get[String](camel).toOption.orElse(value.hcursor.get[String](snake).toOption)
+    val run = issued.flatMap(text_(_, "runId", "run_id"))
+    val continuation = issued.flatMap(text_(_, "continuationId", "continuation_id"))
+    val work = request.downField("work")
+    val kind = work.get[String]("kind").toOption
+    val step = work.get[String]("stepIdentity").toOption.orElse(work.get[String]("step_identity").toOption)
+    val schema = state.hcursor.get[String]("schema").toOption
+    val status = state.hcursor.get[String]("status").toOption
+    val route = decision.get[String]("route").toOption
+    val disposition = decision.get[String]("disposition").toOption
+    val reason = decision.get[String]("reason").toOption
+    val owner = if (schema.contains("sm-workflow.caller-dispatch.v1")) Some("dispatch")
+      else Option.when(schema.contains("sm-workflow.api-review-attempt.v1"))("api")
+    val candidates = state.hcursor.downField("policy").downField("candidates").focus.flatMap(_.asArray)
+      .getOrElse(Vector.empty).flatMap(_.asString)
+    val attempts = state.hcursor.downField("attempts").focus.flatMap(_.asArray).getOrElse(Vector.empty)
+    val unavailable = attempts.forall(a => a.hcursor.get[String]("status").toOption.contains("UNAVAILABLE") &&
+      a.hcursor.get[Boolean]("executionStarted").toOption.contains(false))
+    val prefix = attempts.flatMap(_.hcursor.get[String]("candidate").toOption)
+    val validPrefix = candidates.nonEmpty && unavailable && prefix == candidates.take(prefix.size) && prefix.size == attempts.size
+    val resolved = state.hcursor.downField("resolved").get[String]("candidate").toOption
+    val dispatchValid = owner.contains("dispatch") && route.contains("codex") && validPrefix && ((disposition.contains("selected") &&
+      status.exists(Set("PREPARED", "STARTED", "RETURNED", "UNCERTAIN", "STOPPED")) &&
+      candidates.lift(attempts.size) == resolved && resolved.nonEmpty && reason.contains("candidate-available")) ||
+      (disposition.contains("excluded") && status.contains("UNAVAILABLE") && attempts.size == candidates.size && reason.contains("all-candidates-unavailable")) ||
+      (disposition.contains("unknown") && status.contains("CAPABILITY_UNKNOWN") && reason.contains("capability-unknown")))
+    val response = state.hcursor.downField("response")
+    val apiBound = state.hcursor.downField("arguments").downField("input").get[Boolean]("boundedTask").toOption.contains(true)
+    val metadata = response.downField("metadata")
+    val attempt = state.hcursor.downField("arguments").downField("input").get[String]("attemptIdentity").toOption
+    val responseBound = response.get[String]("attemptIdentity").toOption.orElse(response.get[String]("attempt_identity").toOption) == attempt &&
+      attempt.nonEmpty && response.get[String]("continuationId").toOption.orElse(response.get[String]("continuation_id").toOption) == continuation &&
+      metadata.get[String]("ai.execution.provider").toOption.orElse(response.get[String]("provider").toOption).contains("openai")
+    val verifiedDaily = responseBound && metadata.get[String]("ai.usage.reservation_basis").toOption.contains("verified-daily-reservation") &&
+      metadata.get[String]("ai.usage.model_group").toOption.exists(Set("openai-daily-group-1", "openai-daily-group-2"))
+    val verifiedPromo = responseBound && metadata.get[String]("ai.usage.reservation_basis").toOption.contains("verified-promotional-credit-reservation")
+    val apiSelected = disposition.contains("selected") && (
+      (route.contains("openai-unspecified") && reason.contains("bounded-review-selected")) ||
+      (route.contains("openai-daily") && reason.contains("verified-daily-reservation") && verifiedDaily) ||
+      (route.contains("openai-promotional-credit") && reason.contains("verified-promotional-reservation") && verifiedPromo))
+    val apiExcluded = route.contains("openai-unspecified") && disposition.contains("excluded") && responseBound &&
+      ((response.get[String]("status").toOption.contains("UNAVAILABLE") && reason.contains("unavailable")) ||
+       (response.get[String]("status").toOption.contains("DECLINED") && reason.contains("declined")) ||
+       (response.get[String]("status").toOption.contains("BLOCKED") && reason.contains("budget-refused")))
+    val apiValid = owner.contains("api") && apiBound && (apiSelected || apiExcluded)
+    for {
+      _ <- Option.when(source.nonEmpty && revision >= 0 && run.contains(phaseSession) && continuation.nonEmpty &&
+        decision.get[String]("schema").toOption.contains("sm-workflow.caller-route-selection.v1") &&
+        decision.get[String]("session").toOption == run && decision.get[String]("continuation").toOption == continuation &&
+        decision.get[String]("kind").toOption == kind && (dispatchValid || apiValid))(())
+      id <- continuation; typ <- owner; role <- kind; selected <- route; result <- disposition; why <- reason
+    } yield M.RouteFact(phaseSession, id, typ, revision, source, role, selected, result, why, step)
+  }
+
   /** Parse a retained dispatch or bounded API observation. The caller supplies
     * the actual retained source and explicitly observed route/mode; selection or
     * reservation metadata is not evidence of a provider or billing route.
@@ -102,7 +164,7 @@ object NativeCallerPhaseMetrics {
       .exists(key => string_(metadata, key).nonEmpty) || metadata.hcursor.get[Boolean]("ai.execution.started").toOption.contains(true)
     val responsestatus = Option.when(!isapi || responsebound)(string_(response, "status")).flatten
     val apiconfirmed = apiinvocation.nonEmpty && responsebound && (responsestatus.contains("COMPLETED") || providerresponse)
-    val apinotrun = apiinvocation.nonEmpty && responsebound && !providerresponse && responsestatus.exists(Set("BLOCKED", "UNAVAILABLE"))
+    val apinotrun = apiinvocation.nonEmpty && responsebound && !providerresponse && responsestatus.exists(Set("BLOCKED", "UNAVAILABLE", "DECLINED"))
     val rejected = cursor.downField("rejection").get[Boolean]("executionStarted").toOption.contains(false)
     val execution = if (isdispatch && launched.nonEmpty || isapi && apiconfirmed) "confirmed"
       else if (isapi && apinotrun || isdispatch && rejected && launched.isEmpty) "not-run" else "unknown"
@@ -132,14 +194,23 @@ object NativeCallerPhaseMetrics {
       token_("input_tokens"), token_("output_tokens"), token_("total_tokens"),
       provenance_("input_tokens"), provenance_("output_tokens"), provenance_("total_tokens"),
       provider = provider, phaseSession = Some(phaseSession), model = model,
-      outcome = responsestatus.orElse(Option.when(!isapi)(cursor.downField("semanticResult").get[String]("outcome").toOption.orElse(status)).flatten),
+      outcome = if (isapi) responsestatus else
+        Option.when(status.contains("RETURNED") && cursor.downField("semanticResult").focus.exists(_.isObject))("COMPLETED"),
       usageContract = string_(metadata, "ai.usage.contract").filter(_ == "input-plus-output")
         .filter(_ => field_(metadata, "ai.usage.input_tokens").nonEmpty && field_(metadata, "ai.usage.output_tokens").nonEmpty),
       continuation = if (isdispatch) continuation.map("dispatch:" + _) else for {
         work <- continuation; id <- attempt
       } yield "api:" + work + ":" + id,
       unresolvedDispatch = if (isdispatch) Option.when(!rejected || launched.nonEmpty)(launched.isEmpty)
-        else Option.when(isapi && attempt.nonEmpty && execution != "not-run")(apiinvocation.isEmpty)))
+        else Option.when(isapi && attempt.nonEmpty && execution != "not-run")(apiinvocation.isEmpty),
+      dispatchKind = Option.when(isdispatch)("codex"),
+      nonstartReason = if (execution != "not-run") None else if (isdispatch) Some("unavailable")
+        else responsestatus.flatMap {
+          case "DECLINED" => Some("declined")
+          case "BLOCKED" => Some("budget-refused")
+          case "UNAVAILABLE" => Some("unavailable")
+          case _ => None
+        }))
   }
 
   /** The dispatch prefix records unavailable candidates separately from the
@@ -154,7 +225,7 @@ object NativeCallerPhaseMetrics {
       }
     }
     val main = retainedCall(phaseSession, source, revision, state, route, mode).toVector
-    if (main.isEmpty) Vector.empty else skipped.map(_.copy(phaseSession = Some(phaseSession))) ++ main
+    if (main.isEmpty) Vector.empty else skipped.map(_.copy(phaseSession = Some(phaseSession), dispatchKind = Some("codex"), nonstartReason = Some("unavailable"))) ++ main
   }
 
   final case class ComparableCohort(identity: String, unit: String, workClass: String,
@@ -188,7 +259,7 @@ object NativeCallerPhaseMetrics {
     */
   def project(phaseSession: String, completion: V.GoalPhaseCompletionResult,
     retained: Vector[RetainedExecution], dispatch: Vector[DispatchExecution] = Vector.empty,
-    callFacts: Vector[M.CallFact] = Vector.empty): V.GoalPhaseCompletionResult = {
+    callFacts: Vector[M.CallFact] = Vector.empty, routeFacts: Vector[M.RouteFact] = Vector.empty): V.GoalPhaseCompletionResult = {
     val summary = completion.metrics.flatMap(record => record.toJsonStringC.toOption
       .flatMap(text => parser.parse(text).toOption)
       .flatMap(json => GoalPhaseNativeMetadata.normalizePublicJson(json).toOption)
@@ -216,12 +287,16 @@ object NativeCallerPhaseMetrics {
       val unbounded = Option.when(retained.exists(r => r.session != null && r.session.attempts.size > 1))(
         M.ObservedSpan("caller-multiple-attempts", "ai", None, None, None, "caller:session-boundaries"))
       val time = M.operationalTime(original.start.map(_.observedAt), Some(original.end.observedAt), nativeSpans ++ additions ++ unbounded)
+      val combinedCalls = if (callFacts.nonEmpty) Some(M.calls(original.calls.toVector.flatMap(_.observations) ++ callFacts.filter(_.phaseSession.contains(phaseSession)))) else original.calls
+      val routes = (original.routeObservations.toVector.flatten ++ routeFacts).filter(_.phaseSession == phaseSession).distinct
       val observed = M.summarize(phaseSession, original.start, original.end,
         original.usage.flatMap(_.observations) ++ callerUsage ++ dispatchUsage, original.profile)
         .copy(issuedProfiles = original.issuedProfiles, comparison = original.comparison, retainedObservations = original.retainedObservations,
-          calls = if (callFacts.nonEmpty) Some(M.calls(original.calls.toVector.flatMap(_.observations) ++ callFacts.filter(_.phaseSession.contains(phaseSession)))) else original.calls,
+          calls = combinedCalls,
           deterministicRepairs = original.deterministicRepairs, operationalTime = Some(time),
-          operations = original.operations)
+          operations = original.operations, selectionCounts = original.selectionCounts.map(rows =>
+            M.withRouteRows(M.withCallRows(rows, combinedCalls), routes)),
+          routeObservations = Option.when(routes.nonEmpty)(routes))
       completion.copy(metrics = Some(M.record(observed)))
     }.getOrElse(completion)
   }

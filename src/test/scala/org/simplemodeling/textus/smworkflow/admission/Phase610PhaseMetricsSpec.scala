@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real managed current-workspace acquisition plus retained-native completion
   * and passive caller-resource fixtures. Numeric fixtures are not live usage.
   * @since   Oct. 29, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,6 +36,186 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
   private def _usage(id: String, destination: String = "codex", input: Long = 100, output: Long = 50) =
     M.UsageObservation(id, 1, _session, id, destination, "parent", Some("spec-model"), _at, _at,
       Some(input), Some(output), Some(25), Some(10), "self-only")
+
+  "Caller route decisions" should {
+    "bind selected and excluded decisions to one issued continuation and deduplicate snapshots" in {
+      val state = io.circe.parser.parse("""{"schema":"sm-workflow.caller-dispatch.v1","status":"PREPARED",
+        "request":{"work":{"kind":"ReviewStep"},"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"review:1"}},
+        "policy":{"candidates":["ordinary","difficult"]},"attempts":[],"resolved":{"candidate":"ordinary"},
+        "routeSelection":{"schema":"sm-workflow.caller-route-selection.v1","session":"metrics-spec-phase","continuation":"review:1",
+        "kind":"ReviewStep","route":"codex","disposition":"selected","reason":"candidate-available"}}""").toOption.get
+      val selected = Caller.retainedRoute(_session, "snapshot", 1L, state).get
+      val rows = M.withRouteRows(Vector.empty, Vector(selected, selected))
+      val review = rows.find(_.identity == "ai:codex:review").get
+      review.total shouldBe Some(1)
+      review.selected shouldBe Some(1)
+      review.excluded shouldBe Some(0)
+      review.coverage shouldBe "partial"
+      Caller.retainedRoute("other", "snapshot", 1L, state) shouldBe None
+      val crossed = state.mapObject(_.add("routeSelection", state.hcursor.downField("routeSelection").focus.get
+        .mapObject(_.add("continuation", Json.fromString("wrong")))))
+      Caller.retainedRoute(_session, "snapshot", 1L, crossed) shouldBe None
+      val contradictory = selected.copy(disposition = "unknown", reason = "capability-unknown", source = "conflict")
+      val unknown = M.withRouteRows(Vector.empty, Vector(selected, contradictory)).find(_.identity == "ai:codex:review").get
+      unknown.selected shouldBe None
+      unknown.unknown shouldBe Some(1)
+    }
+  }
+
+  "Route alternatives and invocation outcomes" should {
+    "retain distinct routes across revisions and reject same-route conflicts" in {
+      val base = M.RouteFact(_session, "review:1", "api", 1, "one", "ReviewStep",
+        "openai-daily", "excluded", "unavailable")
+      val other = base.copy(revision = 2, source = "two", route = "openai-promotional-credit",
+        disposition = "selected", reason = "verified-promotional-reservation")
+      val rows = M.withRouteRows(Vector.empty, Vector(base, base, other))
+      rows.find(_.identity == "ai:openai-daily:review").get.excluded shouldBe Some(1)
+      rows.find(_.identity == "ai:openai-daily:review").get.reason should include ("unavailable=1")
+      rows.find(_.identity == "ai:openai-promotional-credit:review").get.selected shouldBe Some(1)
+      val conflict = base.copy(source = "conflict", disposition = "selected", reason = "other")
+      val ambiguous = M.withRouteRows(Vector.empty, Vector(base, conflict, other))
+      ambiguous.find(_.identity == "ai:openai-daily:review").get.unknown shouldBe Some(1)
+      ambiguous.find(_.identity == "ai:openai-promotional-credit:review").get.selected shouldBe Some(1)
+    }
+
+    "count terminal calls once and preserve missing outcomes and nonstarts" in {
+      val base = M.CallFact("one", 1, "one", "confirmed", None, Some("openai-daily"), None, None,
+        None, None, None, None, None, None, None, None, outcome = Some("COMPLETED"))
+      val failed = base.copy(invocation = "two", outcome = Some("FAILED"))
+      val pending = base.copy(invocation = "three", outcome = None)
+      val skipped = base.copy(invocation = "four", execution = "not-run", outcome = Some("BLOCKED"))
+      val row = M.withCallRows(Vector.empty, Some(M.calls(Vector(base, base, failed, pending, skipped))))
+        .find(_.identity == "ai:openai-daily:invocations").get
+      row.started shouldBe Some(3)
+      row.completed shouldBe Some(1)
+      row.failed shouldBe Some(1)
+      row.skipped shouldBe Some(1)
+      row.unknown shouldBe Some(1)
+      val pendingOnly = M.withCallRows(Vector.empty, Some(M.calls(Vector(pending))))
+        .find(_.identity == "ai:openai-daily:invocations").get
+      pendingOnly.completed shouldBe None
+      pendingOnly.failed shouldBe None
+    }
+
+    "reconcile repeated revisions and leave conflicting terminal outcomes unknown" in {
+      val started = M.CallFact("same", 1, "start", "confirmed", None, Some("openai-daily"), None, None,
+        None, None, None, None, None, None, None, None)
+      val done = started.copy(revision = 2, source = "done", outcome = Some("COMPLETED"))
+      val replayed = M.withCallRows(Vector.empty, Some(M.calls(Vector(started, done, done))))
+        .find(_.identity == "ai:openai-daily:invocations").get
+      replayed.started shouldBe Some(1)
+      replayed.completed shouldBe Some(1)
+      replayed.unknown shouldBe Some(0)
+      val contradiction = done.copy(source = "conflict", outcome = Some("FAILED"))
+      val conflicted = M.withCallRows(Vector.empty, Some(M.calls(Vector(started, done, contradiction))))
+        .find(_.identity == "ai:openai-daily:invocations").get
+      conflicted.completed shouldBe None
+      conflicted.failed shouldBe None
+      conflicted.unknown shouldBe Some(1)
+    }
+
+    "separate a returned repair decision from call failure" in {
+      val state = io.circe.parser.parse("""{"schema":"sm-workflow.caller-dispatch.v1","status":"RETURNED",
+        "request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},
+        "launch":{"task_name":"agent"},"launchReturn":{"agent_id":"agent"},
+        "semanticResult":{"outcome":"repair"}}""").toOption.get
+      Caller.retainedCall(_session, "snapshot", 1, state, None, None).get.outcome shouldBe Some("COMPLETED")
+    }
+  }
+
+  "Retained tool preview counts" should {
+    "separate unchanged previews from accepted edits and leave absent routes unknown" in {
+      val preview = GoalPhaseNativeScalaCleanup.PreviewObservation("preview:one", "scalafix", "unchanged")
+      val rows = M.selectionRows(Vector.empty, Some(M.repairs(Vector.empty, Set.empty)), Vector(preview, preview))
+      val selection = rows.find(_.identity == "repair:scalafix:preview").get
+      selection.selected shouldBe Some(1)
+      selection.completed shouldBe Some(1)
+      selection.total shouldBe None
+      rows.find(_.identity == "repair:scalafix").get.completed shouldBe None
+      rows.find(_.identity == "repair:metals:preview").get.selected shouldBe None
+      val pass = M.RepairZeroPass("pass:one", "scalafix", "step-1", "7", "index",
+        Vector("src/Example.scala"), "candidate", "validation", "commit")
+      val scoped = M.selectionRows(Vector.empty, Some(M.repairs(Vector.empty, Set.empty).copy(zeroPasses = Some(Vector(pass, pass)))))
+      scoped.find(_.identity == "repair:scalafix").get.completed shouldBe None
+      val zero = scoped.find(_.identity == "repair:scalafix:pass:pass:one").get
+      zero.completed shouldBe Some(0)
+      zero.coverage shouldBe "complete"
+      zero.reason should include ("src/Example.scala")
+      val diagnostics = Vector(
+        M.DiagnosticObservation("d1", "metals", Some("no-action"), Some(true), Some(true)),
+        M.DiagnosticObservation("d2", "metals", Some("disabled"), Some(false), None),
+        M.DiagnosticObservation("d3", "metals", None, None, None))
+      val observed = M.selectionRows(Vector.empty, None, Vector.empty, diagnostics)
+        .find(_.identity == "repair:metals:diagnostic").get
+      observed.total shouldBe Some(3)
+      observed.selected shouldBe Some(1)
+      observed.excluded shouldBe Some(1)
+      observed.unknown shouldBe Some(1)
+      observed.reason should include ("no-action=1")
+    }
+  }
+
+  "Native validation selection counts" should {
+    "project retained nonstarts without hiding later terminal or unobserved checks" in {
+      val checks = Vector(
+        GoalPhaseNativeValidation.Check("stopped", 1, WorkflowSbtValidation.Kind.Compile),
+        GoalPhaseNativeValidation.Check("later", 2, WorkflowSbtValidation.Kind.Compile),
+        GoalPhaseNativeValidation.Check("missing", 3, WorkflowSbtValidation.Kind.Compile))
+      import org.goldenport.cncf.processexecution.*
+      val target = SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1")))
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      def receipt(id: String, termination: ProcessExecutionTermination, elapsed: Long) = {
+        val result = SbtExecutionResult(target, SbtOperation.Compile,
+          ProcessExecutionResult(termination, empty, empty, Vector.empty, elapsed, "selected-sbt"), None)
+        take(RepositorySyncNativeMergeValidation.sbtReceiptC(id, WorkflowSbtValidation.Kind.Compile, result))
+      }
+      val stopped = receipt("stopped", ProcessExecutionTermination.NotStarted, 0L)
+      val previous = receipt("later", ProcessExecutionTermination.NotStarted, 0L)
+      val completed = receipt("later", ProcessExecutionTermination.Exited(0), 7L)
+      val payload = GoalPhaseNativeValidation.Payload("1", "S1", _source, checks,
+        Vector(completed), None, stopped = Vector(stopped, previous))
+      val observed = GoalPhaseNativeWorkContinuation.validationObservations(payload, "validation")
+      val byId = observed.map(x => x.identity -> x).toMap
+      byId("validation:stopped").outcome shouldBe "not-executed"
+      byId("validation:stopped").reason shouldBe Some("not-started")
+      byId("validation:stopped").started shouldBe Some(false)
+      byId("validation:later").started shouldBe Some(true)
+      byId("validation:later").outcome shouldBe "succeeded"
+      byId("validation:later").reason shouldBe None
+      byId("validation:missing").outcome shouldBe "unknown"
+      byId("validation:missing").reason shouldBe None
+      val counts = M.validationCounts(observed).find(_.identity == "validation:compile").get
+      counts.skipped shouldBe Some(1)
+      counts.unknown shouldBe Some(1)
+      counts.reason should include ("not-started=1")
+    }
+
+    "deduplicate replay and preserve incomplete case and check evidence" in {
+      Given("one successful Admission, one missing check result and a partial case inventory")
+      val first = M.ValidationObservation("run:admission", "admission", Some(true), "succeeded", None,
+        Some(5), Some(2), Some("partial"))
+      val missing = M.ValidationObservation("run:compile", "compile", None, "unknown", None, None, None, None)
+      When("the retained replay is projected")
+      val rows = M.validationCounts(Vector(first, first, missing))
+      val checks = rows.find(_.identity == "validation:admission").get
+      checks.selected shouldBe Some(1)
+      checks.completed shouldBe Some(1)
+      checks.total shouldBe None
+      val cases = rows.find(_.identity == "validation:admission:cases").get
+      cases.total shouldBe Some(5)
+      cases.selected shouldBe Some(2)
+      cases.excluded shouldBe Some(3)
+      cases.coverage shouldBe "partial"
+      val compile = rows.find(_.identity == "validation:compile").get
+      compile.selected shouldBe Some(1)
+      compile.started shouldBe None
+      compile.completed shouldBe None
+      compile.unknown shouldBe Some(1)
+      rows.find(_.identity == "validation:full").get.selected shouldBe None
+      val conflict = M.validationCounts(Vector(first, first.copy(outcome = "failed")))
+      conflict.find(_.identity == "validation:admission").get.selected shouldBe None
+    }
+  }
 
   "Operational time" should {
     "retain overlapping execution durations and expose incomplete and conflicting observations" in {
@@ -409,12 +589,16 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
       Then("the actual identities and provenance survive and missing values remain unknown")
       facts.map(_.invocation) shouldBe Vector("work-one:actual-one", "work-two:actual-two")
       facts(0).engine shouldBe Some("codex")
+      facts(0).dispatchKind shouldBe Some("codex")
       facts(0).model shouldBe Some("engine-a")
       facts(1).engine shouldBe Some("openai")
       facts(0).input shouldBe Some(0L)
       facts(0).totalSource shouldBe None
       facts(1).route shouldBe None
       facts(1).totalSource shouldBe Some("provider")
+      val rows = M.withCallRows(Vector.empty, Some(M.calls(facts)))
+      rows.find(_.identity == "ai:codex:invocations").get.started shouldBe Some(1)
+      rows.find(_.identity == "ai:openai-daily:invocations").get.started shouldBe None
       M.calls(facts).session.total.value shouldBe Some(9L)
     }
 
@@ -470,18 +654,28 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
         """{"schema":"sm-workflow.api-review-attempt.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"arguments":{"input":{"attemptIdentity":"try"}},"status":"$$status","invocationIdentity":"local-id","response":$$response}""".replace("$$status", status).replace("$$response", response)).toOption.get
       val blocked = state_("BLOCKED", """{"status":"BLOCKED","attemptIdentity":"try","continuationId":"work"}""")
       val unavailable = state_("RETURNED", """{"status":"UNAVAILABLE","attemptIdentity":"try","continuationId":"work"}""")
+      val declined = state_("RETURNED", """{"status":"DECLINED","attemptIdentity":"try","continuationId":"work"}""")
       val uncertain = state_("UNCERTAIN", "null")
       val failed = state_("RETURNED", """{"status":"FAILED","attemptIdentity":"try","continuationId":"work","metadata":{"ai.execution.provider":"openai","providerHttp":{"status":429}}}""")
       val completed = state_("RETURNED", """{"status":"COMPLETED","attemptIdentity":"try","continuationId":"work","metadata":{"ai.execution.provider":"openai","ai.execution.model":"model-x"}}""")
       When("each retained state is parsed")
-      val facts = Vector(blocked, unavailable, uncertain, failed, completed).zipWithIndex.flatMap { case (state, index) =>
+      val facts = Vector(blocked, unavailable, declined, uncertain, failed, completed).zipWithIndex.flatMap { case (state, index) =>
         Caller.retainedCall(_session, "source-" + index, 1, state, Some("daily"), Some("review"))
       }
       Then("only the attributable completed provider call is confirmed")
-      facts.map(_.execution) shouldBe Vector("not-run", "not-run", "unknown", "confirmed", "confirmed")
+      facts.map(_.execution) shouldBe Vector("not-run", "not-run", "not-run", "unknown", "confirmed", "confirmed")
       facts.last.engine shouldBe Some("openai")
       facts.last.model shouldBe Some("model-x")
       facts.head.outcome shouldBe Some("BLOCKED")
+      facts.head.nonstartReason shouldBe Some("budget-refused")
+      facts(2).nonstartReason shouldBe Some("declined")
+      val distinct = facts.zipWithIndex.map { case (fact, index) => fact.copy(invocation = "case-" + index) }
+      val counts = M.withCallRows(Vector.empty, Some(M.calls(distinct)))
+      val daily = counts.find(_.identity == "ai:openai-daily:invocations").get
+      daily.started shouldBe Some(2)
+      daily.skipped shouldBe Some(3)
+      daily.unknown shouldBe Some(1)
+      daily.reason should include ("declined=1")
     }
 
     "keep unstarted fallback candidates separate from a confirmed launch" in {
@@ -640,6 +834,27 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
       val retained = R.Retained(R.schema, _session, "host", Vector(attempt), Vector.empty, Vector.empty)
       val native = Vector(GoalPhaseWorkComparison.NativeWork(Some("one"), "ImplementStep", None, Some(continuation)))
       R.bindC(retained, _session, plan, Vector.empty, native).isSuccess shouldBe true
+      val decision = M.RouteFact(_session, continuation, "dispatch", 1, "receipt", "ImplementStep", "codex",
+        "selected", "candidate-available", Some("one"))
+      val routed = retained.copy(routes = Some(Vector(decision)))
+      R.bindC(routed, _session, plan, Vector.empty, native).isSuccess shouldBe true
+      R.bindC(routed.copy(routes = Some(Vector(decision.copy(stepIdentity = Some("other"))))),
+        _session, plan, Vector.empty, native).isSuccess shouldBe false
+      val counts = M.summarize(_session, None, _endpoint(20), Vector.empty, None).copy(
+        retainedObservations = Some(routed), selectionCounts = Some(M.selectionRows(Vector.empty, None)))
+      M.withComparison(counts, plan, Vector.empty, native).selectionCounts.get
+        .find(_.identity == "ai:codex:implementation").get.selected shouldBe Some(1)
+      val callerNative = native.map(_.copy(callerRouteObservation = Some(decision)))
+      val callerCounts = counts.copy(retainedObservations = None)
+      val callerProjection = M.withComparison(callerCounts, plan, Vector.empty, callerNative ++ callerNative)
+      callerProjection.routeObservations shouldBe Some(Vector(decision))
+      callerProjection.selectionCounts.get.find(_.identity == "ai:codex:implementation").get.selected shouldBe Some(1)
+      val legacyResult = GoalPhaseNativeWork.Result("completed", "fixture", Vector.empty)
+      val routedResult = legacyResult.copy(callerRouteObservation = Some(decision))
+      GoalPhaseNativeWork.resultCodec.decode(GoalPhaseNativeWork.resultCodec.encode(legacyResult)) shouldBe Right(legacyResult)
+      GoalPhaseNativeWork.resultCodec.decode(GoalPhaseNativeWork.resultCodec.encode(routedResult)) shouldBe Right(routedResult)
+      GoalPhaseNativeWork.resultCodec.encode(routedResult).hcursor.get[String]("schemaVersion").toOption shouldBe
+        Some("sm-workflow.goal-phase-native-work-result.v4")
       val summary = M.summarize(_session, None, _endpoint(20), Vector.empty, None).copy(retainedObservations = Some(retained))
       val projected = M.withComparison(summary, plan, Vector.empty, native)
       projected.calls.get.session.executions shouldBe 1

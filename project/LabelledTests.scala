@@ -128,20 +128,39 @@ object LabelledTests {
     }
   }
 
+  final case class Inventory(candidates: Int, selected: Int, coverage: String)
+  final case class SelectionWithInventory(selected: Seq[Selected], inventory: Option[Inventory])
+
   def select(classpath: Seq[File], classes: File, revision: String, purpose: String,
     definitions: Seq[TestDefinition], exact: Seq[String] = Seq.empty, containing: Seq[String] = Seq.empty,
-    properties: Seq[String] = Seq.empty): Seq[Selected] = {
+    properties: Seq[String] = Seq.empty): Seq[Selected] =
+    selectInternal(classpath, classes, revision, purpose, definitions, exact, containing, properties, false).selected
+
+  def selectAdmission(classpath: Seq[File], classes: File, revision: String,
+    definitions: Seq[TestDefinition]): SelectionWithInventory =
+    selectInternal(classpath, classes, revision, "ADMISSION", definitions, Seq.empty, Seq.empty, Seq.empty, true)
+
+  private def selectInternal(classpath: Seq[File], classes: File, revision: String, purpose: String,
+    definitions: Seq[TestDefinition], exact: Seq[String], containing: Seq[String],
+    properties: Seq[String], withInventory: Boolean): SelectionWithInventory = {
     val loader = new URLClassLoader(classpath.map(_.toURI.toURL).toArray, ClassLoader.getPlatformClassLoader)
     try {
       val bridge = loader.loadClass("org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection$")
       val instance = bridge.getField("MODULE$").get(null)
-      val rows = try {
-        try bridge.getMethod("select", classOf[String], classOf[String], classOf[String],
+      val raw = try {
+        try bridge.getMethod(if (withInventory) "selectWithInventory" else "select", classOf[String], classOf[String], classOf[String],
           classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[Array[String]])
           .invoke(instance, classes.getCanonicalPath, revision, purpose, definitions.map(_.name).toArray,
             exact.toArray, containing.toArray, definitions.filter(_.explicitlySpecified).map(_.name).toArray, properties.toArray)
           .asInstanceOf[Array[Array[String]]].toSeq
         catch {
+          case _: NoSuchMethodException if withInventory =>
+            // Old compiled bridge cannot report a same-pass denominator.
+            bridge.getMethod("select", classOf[String], classOf[String], classOf[String],
+              classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[Array[String]])
+              .invoke(instance, classes.getCanonicalPath, revision, purpose, definitions.map(_.name).toArray,
+                exact.toArray, containing.toArray, definitions.filter(_.explicitlySpecified).map(_.name).toArray, properties.toArray)
+              .asInstanceOf[Array[Array[String]]].toSeq
           case _: NoSuchMethodException =>
             require(properties.isEmpty, "Installed test-selection bridge does not support managed ConfigMap arguments")
             bridge.getMethod("select", classOf[String], classOf[String], classOf[String],
@@ -151,14 +170,25 @@ object LabelledTests {
               .asInstanceOf[Array[Array[String]]].toSeq
         }
       } catch { case error: java.lang.reflect.InvocationTargetException => throw error.getCause }
+      val headers = raw.filter(row => row.nonEmpty && row(0) == "SM-WORKFLOW-ADMISSION-INVENTORY-V1")
+      require(headers.size <= 1, "Duplicate Admission inventory observation")
+      val rows = raw.filterNot(row => row.nonEmpty && row(0) == "SM-WORKFLOW-ADMISSION-INVENTORY-V1")
+      val inventory = headers.headOption.map { header =>
+        require(withInventory && header.length == 4 && header(1).matches("[0-9]{1,9}") &&
+          header(2).matches("[0-9]{1,9}") && Set("complete", "partial")(header(3)), "Invalid Admission inventory")
+        val result = Inventory(header(1).toInt, header(2).toInt, header(3))
+        require(result.selected == rows.size && result.selected <= result.candidates, "Admission inventory differs from selection")
+        result
+      }
       val selected = rows.groupBy(_(0))
-      definitions.flatMap { definition => selected.get(definition.name).map { operations =>
+      val result = definitions.flatMap { definition => selected.get(definition.name).map { operations =>
         Selected(new TestDefinition(definition.name, definition.fingerprint,
           definition.explicitlySpecified,
           operations.map(row => new TestSelector(row(1))).toArray),
           operations.filter(_(2) == "true").map(_(1)).toSet,
           operations.filter(row => row.length > 3 && row(3) == "true").map(_(1)).toSet)
       }}
+      SelectionWithInventory(result, inventory)
     } finally loader.close()
   }
 }

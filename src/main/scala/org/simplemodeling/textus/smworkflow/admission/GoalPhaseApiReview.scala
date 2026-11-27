@@ -479,7 +479,7 @@ private[smworkflow] object GoalPhaseApiReview {
 
   /** Call only after any required attempt intent has been retained by the caller. */
   def boundedRecord(runner: AiRunner, task: BoundedRecordTask,
-    onDeclined: Conclusion => Unit = _ => ())(using ExecutionContext): BoundedRecordResult = {
+    onDeclined: Conclusion => Unit = _ => (), onBlocked: Conclusion => Unit = _ => ())(using ExecutionContext): BoundedRecordResult = {
     val binding = task.binding
     _record_c(runner, task.prompt, task.schema, Some("openai"), binding + ("ai.task.kind" -> task.kind)) match {
       case Consequence.Failure(conclusion) if _illegal_operation(conclusion).contains("ai.task.declined") =>
@@ -487,8 +487,11 @@ private[smworkflow] object GoalPhaseApiReview {
         BoundedRecordResult.Declined
       case Consequence.Failure(conclusion) if _illegal_operation(conclusion).contains("ai.task.failed") =>
         BoundedRecordResult.Failed(conclusion)
-      case Consequence.Failure(conclusion) => blockedReason(conclusion)
-        .fold(BoundedRecordResult.Uncertain(conclusion))(BoundedRecordResult.Blocked(_))
+      case Consequence.Failure(conclusion) => blockedReason(conclusion).fold[BoundedRecordResult](
+        BoundedRecordResult.Uncertain(conclusion)) { reason =>
+        onBlocked(conclusion)
+        BoundedRecordResult.Blocked(reason)
+      }
       case Consequence.Success(response) =>
         val model = response.model.filter(_safe_provider_fact)
         val provider = response.metadata.get("ai.execution.provider").filter(_safe_provider_fact)
@@ -540,10 +543,13 @@ private[smworkflow] object GoalPhaseApiReview {
       case Some(value) if bounded =>
         val task = BoundedRecordTask("independent-review", input.attemptIdentity, continuation, input.workResource, prompt, selectedSchema)
         var declined = Option.empty[Conclusion]
-        boundedRecord(value, task, conclusion => declined = Some(conclusion)) match {
+        var blocked = Option.empty[Conclusion]
+        boundedRecord(value, task, conclusion => declined = Some(conclusion), conclusion => blocked = Some(conclusion)) match {
           case BoundedRecordResult.Completed(response) => providerResult(input.attemptIdentity, continuation,
             response.record, response.model, response.metadata, task.binding, requireAcceptance)
-          case BoundedRecordResult.Blocked(reason) => _result_("BLOCKED", reason)
+          case BoundedRecordResult.Blocked(reason) => V.GoalPhaseApiReviewResult("BLOCKED", input.attemptIdentity,
+            continuation, None, None, None, blocked.flatMap(boundedFailureEvidence).map(GoalPhaseNativeMetadata.record),
+            reason, None)
           case BoundedRecordResult.Declined => V.GoalPhaseApiReviewResult("DECLINED", input.attemptIdentity,
             continuation, None, None, None, declined.flatMap(boundedFailureEvidence).map(GoalPhaseNativeMetadata.record),
             "Bounded record producer declined before dispatch", None)

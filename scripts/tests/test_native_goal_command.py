@@ -121,6 +121,41 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             self.assertEqual(0, CALLER.main(arguments))
         self.assertIn("No completion metrics were retained", output.getvalue())
 
+    def test_completion_renders_retained_selection_rows_without_recounting(self):
+        context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
+                   "outerSessionId": "s", "targetSessionId": "s"}
+        row = {"identity": "validation:admission:cases", "unit": "case", "total": 5,
+               "selected": 2, "excluded": 3, "started": None, "completed": None,
+               "failed": None, "skipped": None, "unknown": None, "coverage": "partial",
+               "reason": "same-pass subtotal"}
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "completion": {"metrics": {"phase_session": "s", "selection_counts": [row]}}}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("Selection and outcomes", markdown)
+        self.assertIn("| validation:admission:cases | case | 5 | 2 | 3 |", markdown)
+        self.assertIn("same-pass subtotal", markdown)
+
+    def test_completion_renders_all_selection_rows_with_zero_and_unknown(self):
+        session = "phase-fixture"
+        counts = [{"identity": "route-{}".format(i), "unit": "logical-work",
+                   "total": 0 if i % 2 == 0 else None, "selected": 0,
+                   "excluded": None, "started": None, "completed": None,
+                   "failed": None, "skipped": None, "unknown": 0,
+                   "coverage": "partial", "reason": "fixture"}
+                  for i in range(48)]
+        counts[-1]["identity"] = "ai:openai-daily:review"
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": session,
+                    "control_summary": {"completion": {"metrics": {
+                        "phase_session": session, "selection_counts": counts}}}}
+        context = {"operation": "GoalPhaseService.advanceGoalPhase", "outerSessionId": session, "targetSessionId": session}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        for row in counts:
+            self.assertIn("| " + row["identity"] + " |", markdown)
+        self.assertIn("| ai:openai-daily:review |", markdown)
+        self.assertIn("| 0 |", markdown)
+        self.assertIn("| unknown |", markdown)
+        self.assertEqual("", CALLER.phase_completion_markdown(response, dict(context, targetSessionId="other")))
+
     def test_large_completion_omits_only_complete_rows_and_keeps_later_tables(self):
         context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
                    "outerSessionId": "s", "targetSessionId": "s"}
@@ -2063,6 +2098,20 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.submission.write_text(json.dumps({'result': envelope, 'resultReference': reference}))
         with self.assertRaises(CALLER.CallerError):
             CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', issued_request=issued, work_resource='sm-workflow-work:actual')
+
+    def test_phase_submission_forwards_optional_caller_observation_separately(self):
+        issued = {'kind': 'Request', 'resultType': 'GoalPhaseWorkResult',
+                  'issuedWorkContext': {'resultType': 'GoalPhaseWorkResult', 'continuationId': 'fixture', 'expectedRevision': '1'}}
+        result = {'outcome': 'completed', 'summary': 'fixture', 'findings': []}
+        observation = {'schemaVersion': 'sm-workflow.caller-route-observation.v1', 'source': 'caller', 'revision': 1, 'state': {}}
+        self.submission.write_text(json.dumps({'result': result, 'resultReference': {'identity': 'r', 'revision': '1'},
+                                               'callerRouteObservation': observation}))
+        pairs = CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', resource_result=True, issued_request=issued)
+        self.assertEqual(json.loads(pairs[pairs.index('--callerRouteObservation') + 1]), observation)
+        self.assertNotIn('callerRouteObservation', json.loads(pairs[pairs.index('--result') + 1]))
+        issued['resultType'] = 'GoalTaskWorkResult'
+        with self.assertRaises(CALLER.CallerError):
+            CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', resource_result=True, issued_request=issued)
 
     def test_resource_result_transport_does_not_extend_other_semantic_actions(self):
         """RS-COMPLETE-RESULT-TRANSPORT: only conflict and repair Submit select optional Resource mode."""

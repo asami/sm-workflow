@@ -9337,6 +9337,7 @@ GoalPhaseWorkResult
 | sessionId | string | 1 |
 | result | GoalPhaseWorkResult | ? |
 | resultResource | string | ? |
+| callerRouteObservation | org.goldenport.record.Record | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |

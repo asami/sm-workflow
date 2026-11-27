@@ -15,7 +15,7 @@ import org.goldenport.record.Record
 /** Passive endpoint observations in the owning native records. Metrics never
   * select work, authorize an effect, acquire usage or change a close outcome.
   * @since   Oct. 29, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePhaseMetrics {
@@ -45,7 +45,8 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     total: Option[Long], inputSource: Option[String], outputSource: Option[String], totalSource: Option[String],
     provenance: Vector[String] = Vector.empty, provider: Option[String] = None, phaseSession: Option[String] = None,
     model: Option[String] = None, outcome: Option[String] = None, conflictingFields: Vector[String] = Vector.empty,
-    usageContract: Option[String] = None, continuation: Option[String] = None, unresolvedDispatch: Option[Boolean] = None)
+    usageContract: Option[String] = None, continuation: Option[String] = None, unresolvedDispatch: Option[Boolean] = None,
+    dispatchKind: Option[String] = None, nonstartReason: Option[String] = None)
   final case class TokenCoverage(value: Option[Long], observed: Int, executions: Int, overflow: Boolean)
   final case class CallGroup(engine: Option[String], route: Option[String], mode: Option[String], level: Option[String],
     executions: Int, retries: Int, fallbacks: Int, input: TokenCoverage, output: TokenCoverage, total: TokenCoverage,
@@ -54,7 +55,11 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   final case class Calls(groups: Vector[CallGroup], session: CallGroup, unknownExecutions: Int,
     notRun: Int, conflictingInvocations: Vector[String], observations: Vector[CallFact],
     conflicts: Vector[CallConflict] = Vector.empty)
-  given Encoder[CallFact] = deriveEncoder
+  given Encoder[CallFact] = deriveEncoder[CallFact].mapJson(_.mapObject { fields =>
+    Vector("dispatchKind", "nonstartReason").foldLeft(fields) { (prior, name) =>
+      if (prior(name).exists(_.isNull)) prior.remove(name) else prior
+    }
+  })
   given Decoder[CallFact] = deriveDecoder
   given Encoder[TokenCoverage] = deriveEncoder
   given Decoder[TokenCoverage] = deriveDecoder
@@ -73,13 +78,19 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     rolledBack: Option[Boolean], candidate: Option[String], validation: Option[String],
     sources: Vector[String])
   final case class RepairTool(tool: String, count: Option[Int], coverage: String, reason: String)
+  final case class RepairZeroPass(identity: String, tool: String, step: String, sourceRevision: String,
+    index: String, paths: Vector[String], candidate: String, validation: String, commit: String)
   final case class Repairs(tools: Vector[RepairTool], observations: Vector[RepairApplication],
-    coverage: String, reason: String)
+    coverage: String, reason: String, zeroPasses: Option[Vector[RepairZeroPass]] = None)
   given Encoder[RepairApplication] = deriveEncoder
   given Decoder[RepairApplication] = deriveDecoder
   given Encoder[RepairTool] = deriveEncoder
   given Decoder[RepairTool] = deriveDecoder
-  given Encoder[Repairs] = deriveEncoder
+  given Encoder[RepairZeroPass] = deriveEncoder
+  given Decoder[RepairZeroPass] = deriveDecoder
+  given Encoder[Repairs] = deriveEncoder[Repairs].mapJson(_.mapObject { fields =>
+    if (fields("zeroPasses").exists(_.isNull)) fields.remove("zeroPasses") else fields
+  })
   given Decoder[Repairs] = deriveDecoder
 
   /** Boundaries are retained observations, not estimates of process time. */
@@ -150,13 +161,201 @@ private[smworkflow] object GoalPhasePhaseMetrics {
       "Applications require changed bytes, successful normal revalidation and retained candidate evidence; unknown and rollback are excluded")
   }
 
+  /** A check observation is bound to the selected native validation and check.
+    * Missing outcomes never imply a skipped or successful check. */
+  final case class ValidationObservation(identity: String, kind: String, started: Option[Boolean],
+    outcome: String, reason: Option[String], candidates: Option[Int], selectedCases: Option[Int],
+    caseCoverage: Option[String])
+  final case class DiagnosticObservation(identity: String, tool: String, outcome: Option[String], selected: Option[Boolean], started: Option[Boolean])
+  final case class RouteFact(phaseSession: String, continuation: String, owner: String, revision: Long, source: String,
+    role: String, route: String, disposition: String, reason: String, stepIdentity: Option[String] = None)
+  given Encoder[RouteFact] = deriveEncoder
+  given Decoder[RouteFact] = deriveDecoder
+  final case class CountRow(identity: String, unit: String, total: Option[Int], selected: Option[Int],
+    excluded: Option[Int], started: Option[Int], completed: Option[Int], failed: Option[Int], skipped: Option[Int],
+    unknown: Option[Int], coverage: String, reason: String)
+  given Encoder[ValidationObservation] = deriveEncoder
+  given Decoder[ValidationObservation] = deriveDecoder
+  given Encoder[CountRow] = deriveEncoder
+  given Decoder[CountRow] = deriveDecoder
+
+  def validationCounts(raw: Vector[ValidationObservation]): Vector[CountRow] = {
+    val kinds = Vector("compile", "admission", "test-only", "full", "fix-check")
+    val groups = raw.filter(x => x.identity.nonEmpty && kinds.contains(x.kind)).groupBy(_.identity)
+    val unique = groups.values.filter(_.distinct.size == 1).map(_.head).toVector
+    val conflicting = groups.values.exists(_.distinct.size != 1)
+    kinds.flatMap { kind =>
+      val items = unique.filter(_.kind == kind)
+      val seen = items.nonEmpty
+      def count_(n: Int, allKnown: Boolean): Option[Int] = Option.when(seen && (n > 0 || allKnown))(n)
+      val known = items.forall(_.outcome != "unknown")
+      val reasons = items.flatMap(_.reason).filter(value => value.matches("[A-Za-z][A-Za-z0-9-]{0,63}"))
+        .groupBy(identity).toVector.sortBy(_._1).map((name, values) => name + "=" + values.size).mkString(", ")
+      val reason = (if (conflicting) "Conflicting retained identities omitted; coverage incomplete"
+        else "Observed selected checks only; unavailable plan and missing receipts remain unknown") +
+        (if (reasons.isEmpty) "" else "; " + reasons)
+      val checks = CountRow("validation:" + kind, "check", None, Option.when(seen)(items.size), None,
+        count_(items.count(_.started.contains(true)), items.forall(_.started.nonEmpty)),
+        count_(items.count(_.outcome == "succeeded"), known),
+        count_(items.count(_.outcome == "failed"), known),
+        count_(items.count(_.outcome == "not-executed"), known),
+        Option.when(seen)(items.count(x => x.outcome == "unknown" || x.started.isEmpty)),
+        if (seen) "partial" else "unavailable", reason)
+      val observed = items.filter(x => x.candidates.nonEmpty && x.selectedCases.nonEmpty && x.caseCoverage.nonEmpty)
+      def cases_(n: Int): Option[Int] = Option.when(observed.nonEmpty &&
+        (n > 0 || observed.forall(_.caseCoverage.contains("complete"))))(n)
+      val cases = CountRow("validation:" + kind + ":cases", "case",
+        cases_(observed.flatMap(_.candidates).sum),
+        cases_(observed.flatMap(_.selectedCases).sum),
+        cases_(observed.map(x => x.candidates.get - x.selectedCases.get).sum),
+        None, None, None, None, None,
+        if (observed.isEmpty) "unavailable" else "partial",
+        "Known same-pass case inventory subtotal; missing or partial discovery is not zero")
+      Vector(checks, cases)
+    }
+  }
+
+  /** Display rows for all known routes even when their owners retained no
+    * selection observation. Retained edits are a distinct unit from checks. */
+  def selectionRows(validation: Vector[CountRow], repairs: Option[Repairs],
+    rawPreviews: Vector[GoalPhaseNativeScalaCleanup.PreviewObservation] = Vector.empty,
+    rawDiagnostics: Vector[DiagnosticObservation] = Vector.empty): Vector[CountRow] = {
+    val ai = Vector("openai-daily", "openai-promotional-credit", "codex", "other").map { route =>
+      CountRow("ai:" + route, "logical-work", None, None, None, None, None, None, None, None,
+        "unavailable", "Selection denominator and disposition are not retained by this projection")
+    }
+    val edits = Vector("scalafix", "metals", "scalafmt", "built-in").map { tool =>
+      val retained = repairs.toVector.flatMap(_.tools).find(_.tool == tool)
+      CountRow("repair:" + tool, "edit", None, None, None, None, retained.flatMap(_.count), None, None, None,
+        retained.map(_.coverage).getOrElse("unavailable"), retained.map(_.reason).getOrElse("No retained tool observation"))
+    }
+    val grouped = rawPreviews.groupBy(_.identity)
+    val unique = grouped.values.filter(_.distinct.size == 1).map(_.head).toVector
+    val previews = Vector("scalafix", "metals", "scalafmt", "built-in").map { tool =>
+      val rows = unique.filter(_.tool == tool)
+      val seen = rows.nonEmpty
+      val complete = rows.count(row => Set("applied", "unchanged")(row.outcome))
+      val failed = rows.count(_.outcome == "failed")
+      val unknown = rows.count(row => !Set("applied", "unchanged", "failed")(row.outcome))
+      def known_(n: Int): Option[Int] = Option.when(seen && (n > 0 || unknown == 0))(n)
+      CountRow("repair:" + tool + ":preview", "source-file", None, Option.when(seen)(rows.size), None,
+        None, known_(complete), known_(failed), None, Option.when(seen)(unknown),
+        if (seen) "partial" else "unavailable",
+        "Retained preview outcomes; missing selections, starts and full coverage remain unknown")
+    }
+    val diagnostics = rawDiagnostics.groupBy(_.identity).values.filter(_.distinct.size == 1).map(_.head).toVector
+    val toolDiagnostics = Vector("scalafix", "metals", "scalafmt", "built-in").map { tool =>
+      val rows = diagnostics.filter(_.tool == tool)
+      val seen = rows.nonEmpty
+      val selected = rows.count(_.selected.contains(true))
+      val excluded = rows.count(_.selected.contains(false))
+      val unknown = rows.size - selected - excluded
+      def count_(value: Int): Option[Int] = Option.when(seen && (value > 0 || unknown == 0))(value)
+      val reasons = rows.flatMap(_.outcome).groupBy(identity).toVector.sortBy(_._1)
+        .map((name, values) => name + "=" + values.size).mkString(", ")
+      CountRow("repair:" + tool + ":diagnostic", "diagnostic", Option.when(seen)(rows.size),
+        count_(selected), count_(excluded),
+        Option.when(rows.exists(_.started.contains(true)))(rows.count(_.started.contains(true))),
+        count_(rows.count(row => row.selected.contains(true) && row.outcome.exists(Set("completed", "no-action")))),
+        count_(rows.count(_.outcome.exists(Set("timed-out", "incompatible")))), None, Option.when(seen)(unknown),
+        if (seen) "partial" else "unavailable",
+        "Observed diagnostic attempts only; no-action is not an accepted edit; " + reasons)
+    }
+    val zeroPasses = repairs.toVector.flatMap(_.zeroPasses.toVector.flatten).groupBy(_.identity).values
+      .filter(_.distinct.size == 1).map(_.head).toVector.sortBy(_.identity).map { pass =>
+        CountRow("repair:" + pass.tool + ":pass:" + pass.identity, "edit", Some(0), Some(0),
+          Some(0), Some(0), Some(0), Some(0), Some(0), Some(0), "complete",
+          "Observed unchanged bounded pass for step " + pass.step + ", source revision " + pass.sourceRevision +
+            ", index " + pass.index + ", paths " + pass.paths.mkString(", "))
+      }
+    ai ++ edits ++ zeroPasses ++ previews ++ toolDiagnostics ++ validation
+  }
+
+  /** Resolve the latest retained decision per issued work, owner and route, retaining
+    * ambiguity instead of attributing conflicting same-revision decisions. */
+  def withRouteRows(rows: Vector[CountRow], raw: Vector[RouteFact]): Vector[CountRow] = {
+    val valid = raw.filter(x => x.continuation.nonEmpty && x.source.nonEmpty && x.revision >= 0 &&
+      Set("dispatch", "api")(x.owner) && Set("selected", "excluded", "unknown")(x.disposition) &&
+      Set("codex", "openai-daily", "openai-promotional-credit", "openai-unspecified")(x.route))
+    val resolved = valid.groupBy(x => (x.phaseSession, x.continuation, x.owner, x.route)).values.flatMap { values =>
+      val latest = values.filter(_.revision == values.map(_.revision).max)
+      val distinct = latest.map(x => (x.role, x.route, x.disposition, x.reason)).distinct
+      if (distinct.size == 1) Vector(latest.head)
+      else latest.map(_.copy(disposition = "unknown", reason = "conflicting-decision")).groupBy(_.route).values.map(_.head).toVector
+    }.toVector
+    val routes = Vector("codex", "openai-daily", "openai-promotional-credit", "openai-unspecified")
+    def role_(kind: String): String = kind match {
+      case "ReviewStep" | "ReviewPhase" | "Review" => "review"
+      case "RepairStep" | "Repair" => "repair"
+      case "ImplementStep" | "Implement" | "DeliveryAcceptance" => "implementation"
+      case _ => "other"
+    }
+    val routeRows = routes.flatMap(route => (Vector(None) ++ Vector("review", "repair", "implementation", "other").map(Some(_))).map { role =>
+      val facts = resolved.filter(x => x.route == route && role.forall(_ == role_(x.role)))
+      val known = facts.forall(_.disposition != "unknown")
+      def number_(value: Int): Option[Int] = Option.when(facts.nonEmpty && (value > 0 || known))(value)
+      val reasons = facts.map(_.reason).filter(_.matches("[a-z][a-z0-9-]{0,63}"))
+        .groupBy(identity).toVector.sortBy(_._1).map((name, values) => name + "=" + values.size).mkString(", ")
+      CountRow("ai:" + route + role.map(":" + _).getOrElse(""), "logical-work", Option.when(facts.nonEmpty)(facts.size),
+        number_(facts.count(_.disposition == "selected")), number_(facts.count(_.disposition == "excluded")),
+        None, None, None, None, Option.when(facts.nonEmpty)(facts.count(_.disposition == "unknown")),
+        if (facts.nonEmpty) "partial" else "unavailable",
+        "Observed route decisions; unobserved work and untraversed alternatives remain unknown" +
+          (if (reasons.isEmpty) "" else "; " + reasons))
+    })
+    rows.filterNot(row => row.unit == "logical-work" && routeRows.exists(_.identity == row.identity)) ++ routeRows
+  }
+
+  /** Invocation facts remain distinct from logical routing decisions. Only the
+    * explicit route carried by the retained adapter may assign an invocation. */
+  def withCallRows(rows: Vector[CountRow], calls: Option[Calls]): Vector[CountRow] = {
+    val mapping = Vector("openai-daily" -> Set("openai-daily", "daily"),
+      "openai-promotional-credit" -> Set("openai-promotional-credit"), "codex" -> Set("codex"), "other" -> Set("other"))
+    val raw = calls.toVector.flatMap(_.observations)
+    val ambiguous = raw.groupBy(_.invocation).collect { case (id, facts)
+      if facts.flatMap(_.route).distinct.size > 1 || facts.flatMap(_.dispatchKind).distinct.size > 1 => id }.toSet ++
+      calls.toVector.flatMap(_.conflictingInvocations)
+    val observed = mapping.map { (route, names) =>
+      val associated = raw.filter(f => if (route == "codex") f.dispatchKind.contains("codex") else f.route.exists(names))
+      val facts = associated.filterNot(f => ambiguous(f.invocation))
+      val aggregate = Option.when(facts.nonEmpty)(GoalPhasePhaseMetrics.calls(facts))
+      val started = aggregate.map(_.session.executions)
+      val notrun = aggregate.map(_.notRun)
+      val unknownConflicts = associated.filter(f => ambiguous(f.invocation)).map(_.invocation).distinct.size
+      val resolved = resolveCalls(facts)._2.map(_._2)
+      def terminal(f: CallFact): Option[Boolean] = f.outcome.flatMap {
+        case "COMPLETED" | "completed" => Some(true)
+        case "FAILED" | "failed" => Some(false)
+        case _ => None
+      }
+      val startedFacts = resolved.filter(_.execution == "confirmed")
+      val unknownOutcomes = startedFacts.count(f => terminal(f).isEmpty)
+      val knownOutcomes = unknownOutcomes == 0 && unknownConflicts == 0 && resolved.forall(_.execution != "unknown")
+      def terminalCount(n: Int): Option[Int] = Option.when(startedFacts.nonEmpty && (n > 0 || knownOutcomes))(n)
+      val unknown = Option.when(aggregate.nonEmpty || unknownConflicts > 0)(aggregate.fold(0)(_.unknownExecutions) + unknownConflicts + unknownOutcomes)
+      val reasons = facts.groupBy(_.invocation).values.flatMap { values =>
+        values.flatMap(_.nonstartReason).filter(Set("unavailable", "declined", "budget-refused")).distinct match {
+          case Vector(reason) => Some(reason)
+          case _ => None
+        }
+      }.toVector.groupBy(identity).toVector.sortBy(_._1).map((name, values) => name + "=" + values.size).mkString(", ")
+      CountRow("ai:" + route + ":invocations", "invocation", None, None, None,
+        started, terminalCount(startedFacts.count(f => terminal(f).contains(true))),
+        terminalCount(startedFacts.count(f => terminal(f).contains(false))), notrun, unknown, if (aggregate.nonEmpty || unknownConflicts > 0) "partial" else "unavailable",
+        "Attributed invocation observations only; conflicting route evidence remains unknown and routing selection is separate" +
+          (if (reasons.isEmpty) "" else "; " + reasons))
+    }
+    rows.filterNot(_.identity.endsWith(":invocations")) ++ observed
+  }
+
   final case class Summary(schemaVersion: String, phaseSession: String, start: Option[Endpoint], end: Endpoint,
     netSourceLines: Option[Long], netReason: String, usage: Vector[Usage], profile: Option[GoalPhaseOperatingProfiles.Selection],
     issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
     comparison: Vector[GoalPhaseWorkComparison.Summary] = Vector.empty,
     retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None, calls: Option[Calls] = None,
     deterministicRepairs: Option[Repairs] = None, operationalTime: Option[OperationalTime] = None,
-    operations: Option[C.Operational] = None)
+    operations: Option[C.Operational] = None, selectionCounts: Option[Vector[CountRow]] = None,
+    routeObservations: Option[Vector[RouteFact]] = None)
 
   given Encoder[ResourceTreeQueryLimits] = deriveEncoder
   given Decoder[ResourceTreeQueryLimits] = deriveDecoder
@@ -174,7 +373,9 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val withoutCalls = if (withoutRetained("calls").exists(_.isNull)) withoutRetained.remove("calls") else withoutRetained
     val withoutRepairs = if (withoutCalls("deterministicRepairs").exists(_.isNull)) withoutCalls.remove("deterministicRepairs") else withoutCalls
     val withoutTime = if (withoutRepairs("operationalTime").exists(_.isNull)) withoutRepairs.remove("operationalTime") else withoutRepairs
-    if (withoutTime("operations").exists(_.isNull)) withoutTime.remove("operations") else withoutTime
+    val withoutOperations = if (withoutTime("operations").exists(_.isNull)) withoutTime.remove("operations") else withoutTime
+    val withoutCounts = if (withoutOperations("selectionCounts").exists(_.isNull)) withoutOperations.remove("selectionCounts") else withoutOperations
+    if (withoutCounts("routeObservations").exists(_.isNull)) withoutCounts.remove("routeObservations") else withoutCounts
   })
   private val _summary_decoder: Decoder[Summary] = deriveDecoder
   given Decoder[Summary] = Decoder.instance { cursor =>
@@ -276,7 +477,8 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     summarize(session.current.identity.value, started.sourceMetrics, end, Vector.empty, started.operatingProfile)
       .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations,
         operationalTime = Some(operationalTime(started.sourceMetrics.map(_.observedAt), Some(end.observedAt), operations.spans)),
-        deterministicRepairs = Some(deterministic), operations = Some(C.operational(operations, deterministic)))
+        deterministicRepairs = Some(deterministic), operations = Some(C.operational(operations, deterministic)),
+        selectionCounts = Some(withCallRows(selectionRows(validationCounts(operations.validation), Some(deterministic), operations.toolPreviews, operations.toolDiagnostics), None)))
   }
 
   /** Passive usage aggregation over already acquired attributable observations.
@@ -343,9 +545,8 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     }
   }
 
-  /** Revisions describe one invocation. Retain the raw snapshots so a replay
-    * cannot erase prior confirmed execution or a same-revision conflict. */
-  def calls(raw: Vector[CallFact]): Calls = {
+  /** Resolve stable invocation identities once for all projections. */
+  private def resolveCalls(raw: Vector[CallFact]): (Map[String, Vector[CallFact]], Vector[(String, CallFact)]) = {
     val valid = raw.filter(f => f.invocation.nonEmpty && f.source.nonEmpty && f.revision >= 0 &&
       Set("confirmed", "unknown", "not-run")(f.execution) &&
       Vector(f.input, f.output, f.total).forall(_.forall(_ >= 0)))
@@ -404,6 +605,15 @@ private[smworkflow] object GoalPhasePhaseMetrics {
         totalSource = if (total.nonEmpty) totalsource else None, outcome = outcome, conflictingFields = fields,
         provenance = facts.flatMap(f => f.provenance :+ f.source).distinct.sorted)
     }
+    (byid, resolved)
+  }
+
+  /** Revisions describe one invocation. Retain raw snapshots for existing readers. */
+  def calls(raw: Vector[CallFact]): Calls = {
+    val valid = raw.filter(f => f.invocation.nonEmpty && f.source.nonEmpty && f.revision >= 0 &&
+      Set("confirmed", "unknown", "not-run")(f.execution) &&
+      Vector(f.input, f.output, f.total).forall(_.forall(_ >= 0)))
+    val (byid, resolved) = resolveCalls(valid)
     val conflicts = resolved.collect { case (id, fact) if fact.conflictingFields.nonEmpty => id }.sorted
     val selected = resolved.map(_._2).sortBy(_.invocation)
     val confirmed = selected.filter(_.execution == "confirmed")
@@ -452,7 +662,11 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     }
     val retainedCalls = bound.toVector.flatMap(_.attempts.flatMap(_.call))
     val combinedCalls = summary.calls.toVector.flatMap(_.observations) ++ retainedCalls
-    summary.copy(usage = totals, calls = if (combinedCalls.nonEmpty) Some(calls(combinedCalls)) else summary.calls, operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
+    val callsSummary = if (combinedCalls.nonEmpty) Some(calls(combinedCalls)) else summary.calls
+    val routes = (bound.toVector.flatMap(_.routes.toVector.flatten) ++ requests.flatMap(_.callerRouteObservation))
+      .distinct.sortBy(r => (r.continuation, r.owner, r.revision, r.source))
+    summary.copy(usage = totals, calls = callsSummary, routeObservations = Option.when(routes.nonEmpty)(routes),
+      selectionCounts = summary.selectionCounts.map(rows => withRouteRows(withCallRows(rows, callsSummary), routes)), operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
       summary.operationalTime.toVector.flatMap(_.spans) ++ spans)), comparison = work.map(_.workClass).distinct.sorted.map { cls =>
       val projected = GoalPhaseWorkComparison.project(summary.phaseSession,
         GoalPhaseWorkComparison.Cohort(plan.identity + ":" + cls, "Step", cls, summary.start.map(_.observedAt),

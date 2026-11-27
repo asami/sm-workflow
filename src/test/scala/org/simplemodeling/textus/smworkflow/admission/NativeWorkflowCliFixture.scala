@@ -989,13 +989,15 @@ private[admission] object NativeWorkflowCliFixture {
   /** Isolated host with the checks required for the selected packaged fixture. */
   def freshPackagedMetals(car: Path, scala3: Boolean, serverSource: String, mode: String,
     formatter: Boolean = false, excludeFormatter: Boolean = false, scalafixRule: Option[String] = None,
-    history: Boolean = false, rejectFormattedCandidate: Boolean = false, structuralLint: Boolean = false): Scenario = {
+    history: Boolean = false, rejectFormattedCandidate: Boolean = false, structuralLint: Boolean = false,
+    terminalMetrics: Boolean = false): Scenario = {
     val membershipRepair = Option.when(mode.startsWith("membership-"))(mode.stripPrefix("membership-"))
     val metalsMode = if (membershipRepair.nonEmpty) "completed" else mode
     require(Set("completed", "unavailable", "refactor", "source")(metalsMode))
     require(!rejectFormattedCandidate || (scala3 && formatter && scalafixRule.contains("ProcedureSyntax")))
     require(!scalafixRule.contains("OrganizeImports") || (scala3 && formatter && history))
     require(!structuralLint || (scala3 && formatter && !excludeFormatter && scalafixRule.isEmpty))
+    require(!terminalMetrics || scalafixRule.contains("RedundantSyntax"))
     require(membershipRepair.forall(Set("pass", "rollback", "refuse", "unavailable", "ambiguous", "array", "local")) &&
       (membershipRepair.isEmpty || (scala3 && !formatter && scalafixRule.isEmpty && !structuralLint)))
     val parent = Files.createDirectories(_primary.resolve("target/sm-workflow/work/native-cli"))
@@ -1068,7 +1070,10 @@ private[admission] object NativeWorkflowCliFixture {
     val normal = ThreeWorkflowNormalHostFixture.definition(root)
     val host = normal.copy(target = normal.target.copy(root = repository.toString), goal = normal.goal.copy(
       input = input, candidatePaths = paths, stepValidation = normal.goal.stepValidation.copy(checks = checks),
-      phaseValidation = normal.goal.phaseValidation.copy(checks = checks)),
+      phaseValidation = normal.goal.phaseValidation.copy(checks = checks),
+      closure = if (terminalMetrics) normal.goal.closure.copy(programs = Vector(
+        GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2))) else normal.goal.closure),
       repository = normal.repository.copy(input = normal.repository.input.copy(repositoryIdentity = input.repositoryIdentity)))
     val plan = GoalPhaseOrderedProgression.Plan("packaged-metals", "1", input.phaseIdentity, input.repositoryIdentity,
       Vector(GoalPhaseOrderedProgression.Step("step-1", "Remove one invalid Scala import", paths, Vector.empty,
@@ -1100,7 +1105,12 @@ private[admission] object NativeWorkflowCliFixture {
       _.mapObject(_.add("operation", Json.fromString("compile"))))
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
-    val git = TypedGitHostPlanFixture.plan(target, kinds = Vector(GitOperationKind.CommitMetadata,
+    val git = if (terminalMetrics) TypedGitHostPlanFixture.plan(target,
+      kinds = TypedGitHostPlanFixture.observations ++ Vector(GitOperationKind.IndexTree,
+        GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected Step", "Complete selected Phase records"),
+      goalSelections = Vector(paths, paths))
+    else TypedGitHostPlanFixture.plan(target, kinds = Vector(GitOperationKind.CommitMetadata,
       GitOperationKind.TreeChanges, GitOperationKind.BlobContent))
     val gitPrograms = git.hcursor.get[Vector[Json]]("gitPrograms").fold(throw _, identity)
     val gitCapabilities = gitPrograms.map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing git capability")))
@@ -1139,11 +1149,12 @@ private[admission] object NativeWorkflowCliFixture {
       val added = (if (scalafixRule.contains("ProcedureSyntax")) Vector.empty else Vector(Json.fromString(ScalaMetalsProcess.capability))) ++
         (if (formatter) Vector(Json.fromString(formatcap)) else Vector.empty) ++
         (if (formatter || scalafixRule.nonEmpty) Vector(Json.fromString(WorkflowScalaToolProcess.scalafixCapability)) else Vector.empty)
-      grant.mapObject(_.add("capabilities", Json.fromValues(capabilities ++ added ++
-        (lintprograms ++ testprograms).map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing lint/test capability"))) ++ gitCapabilities)))
+      grant.mapObject(_.add("capabilities", Json.fromValues((capabilities ++ added ++
+        (lintprograms ++ testprograms).map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing lint/test capability"))) ++ gitCapabilities).distinct)))
     }
     val programs = process.hcursor.get[Vector[Json]]("programs").toOption.getOrElse(Vector.empty)
-    val updated = process.mapObject(_.add("gitPrograms", Json.fromValues(_array_(process, "gitPrograms") ++ gitPrograms))
+    val updated = process.mapObject(_.add("gitPrograms", Json.fromValues(
+      if (terminalMetrics) gitPrograms else _array_(process, "gitPrograms") ++ gitPrograms))
       .add("sbtPrograms", Json.fromValues(sbt ++ lintprograms ++ testprograms))
       .add("workspaces", Json.fromValues(_array_(process, "workspaces") ++ (lint.toVector ++ membershiptests.toVector).flatMap(_array_(_, "workspaces"))))
       .add("workspaceGrants", Json.fromValues(_array_(process, "workspaceGrants") ++ (lint.toVector ++ membershiptests.toVector).flatMap(_array_(_, "workspaceGrants"))))
@@ -1158,6 +1169,7 @@ private[admission] object NativeWorkflowCliFixture {
       else base.add("sm-workflow.source.history.style", Json.fromString("none"))
     }
     Files.writeString(configPath, configured.noSpaces)
+    if (terminalMetrics) scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
     scenario.prepareRepository()
     if (metalsMode == "unavailable") Files.delete(server)
     scenario

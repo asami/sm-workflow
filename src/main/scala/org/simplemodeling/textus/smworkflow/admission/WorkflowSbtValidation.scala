@@ -11,7 +11,7 @@ import org.goldenport.cncf.processexecution.*
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -118,23 +118,34 @@ private[smworkflow] object WorkflowSbtValidation {
     given Encoder[AdmissionCase] = deriveEncoder
     given Decoder[AdmissionCase] = deriveDecoder
   }
+  /** Same-pass Admission case inventory; partial counts are observed subtotals. */
+  final case class AdmissionInventory(candidates: Int, selected: Int, coverage: String) {
+    def valid: Boolean = candidates >= 0 && selected >= 0 && selected <= candidates &&
+      Set("complete", "partial")(coverage)
+  }
+  object AdmissionInventory {
+    given Encoder[AdmissionInventory] = deriveEncoder
+    given Decoder[AdmissionInventory] = deriveDecoder
+  }
   final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
     estimate: Option[SbtValidationEstimate] = None,
     mode: Option[Mode] = None, batch: Option[Vector[SbtValidationMode.CaseResult]] = None,
     private val estimateFieldPresent: Boolean = false,
     lintInput: Option[SbtLintInput] = None, testScope: Option[String] = None,
-    admissionCases: Option[Vector[AdmissionCase]] = None) {
+    admissionCases: Option[Vector[AdmissionCase]] = None, admissionInventory: Option[AdmissionInventory] = None) {
     def effectiveTestScope: SbtTestScope = if (testScope.contains("admission")) SbtTestScope.Admission else SbtTestScope.Full
     override def equals(other: Any): Boolean = other match {
       case that: Facts => kind == that.kind && outcome == that.outcome && selection == that.selection &&
         reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch && lintInput == that.lintInput &&
-        testScope == that.testScope && admissionCases == that.admissionCases
+        testScope == that.testScope && admissionCases == that.admissionCases && admissionInventory == that.admissionInventory
       case _ => false
     }
-    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch, lintInput, testScope, admissionCases).hashCode
+    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch, lintInput, testScope, admissionCases, admissionInventory).hashCode
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
       testScope != null && testScope.forall(s => kind == Kind.Test && s == "admission") &&
-      admissionCases != null && admissionCases.forall(rows => effectiveTestScope == SbtTestScope.Admission && rows.nonEmpty &&
+      admissionCases != null && admissionInventory != null && admissionInventory.forall(i => i != null && i.valid && effectiveTestScope == SbtTestScope.Admission &&
+        i.selected == admissionCases.fold(0)(_.size)) &&
+      admissionCases.forall(rows => effectiveTestScope == SbtTestScope.Admission && rows.nonEmpty &&
         rows.distinct == rows && rows.forall(row => row != null && row.suite != null && row.suite.nonEmpty && row.test != null && row.test.nonEmpty)) &&
       lintInput != null && lintInput.forall(input => kind == Kind.FixCheck && lintValid(input)) &&
       estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
@@ -174,7 +185,8 @@ private[smworkflow] object WorkflowSbtValidation {
       val batch = value.batch.fold(mode)(batch => mode.mapObject(_.add("batch", batch.asJson)))
       val lint = value.lintInput.fold(batch)(input => batch.mapObject(_.add("lintInput", input.asJson)))
       val scope = value.testScope.fold(lint)(s => lint.mapObject(_.add("testScope", s.asJson)))
-      value.admissionCases.fold(scope)(rows => scope.mapObject(_.add("admissionCases", rows.asJson)))
+      val cases = value.admissionCases.fold(scope)(rows => scope.mapObject(_.add("admissionCases", rows.asJson)))
+      value.admissionInventory.fold(cases)(inventory => cases.mapObject(_.add("admissionInventory", inventory.asJson)))
     }
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
@@ -187,8 +199,9 @@ private[smworkflow] object WorkflowSbtValidation {
       lint <- GoalPhaseNativeMetadata.optional[SbtLintInput](cursor, "lintInput")
       scope <- GoalPhaseNativeMetadata.optional[String](cursor, "testScope")
       cases <- GoalPhaseNativeMetadata.optional[Vector[AdmissionCase]](cursor, "admissionCases")
+      inventory <- GoalPhaseNativeMetadata.optional[AdmissionInventory](cursor, "admissionInventory")
       value = Facts(kind, outcome, selection, reason, estimate, mode, batch,
-        cursor.keys.exists(_.exists(_ == "estimate")), lint, scope, cases)
+        cursor.keys.exists(_.exists(_ == "estimate")), lint, scope, cases, inventory)
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
@@ -211,6 +224,30 @@ private[smworkflow] object WorkflowSbtValidation {
         case _ => true
       })
     } }
+
+  private val _inventory_marker = "SM-WORKFLOW-ADMISSION-INVENTORY-V1 "
+  private val _inventory_pattern = "SM-WORKFLOW-ADMISSION-INVENTORY-V1 (complete|partial) (0|[1-9][0-9]{0,8}) (0|[1-9][0-9]{0,8})".r
+
+  /** Only a complete retained process capture can bind this supplementary marker
+    * to the CNCF selection from the same process. It never changes CNCF status. */
+  private[admission] def admissionInventory(process: ProcessExecutionResult,
+    report: SbtAdmissionTestReport): Option[AdmissionInventory] = {
+    val stdout = WorkflowSbtCapture.text(process.stdout)
+    val stderr = WorkflowSbtCapture.text(process.stderr)
+    if (Set[ProcessExecutionTermination](ProcessExecutionTermination.NotStarted, ProcessExecutionTermination.LaunchFailed,
+        ProcessExecutionTermination.TerminationUnconfirmed)(process.termination) ||
+        process.stdout.truncated || process.stderr.truncated || stdout.textStatus != "complete" || stderr.textStatus != "complete" || stderr.value.contains(_inventory_marker)) None
+    else {
+      val lines = stdout.value.linesIterator.map(_.stripPrefix("[info] ")).filter(_.startsWith(_inventory_marker)).toVector
+      lines match {
+        case Vector(_inventory_pattern(coverage, candidates, selected)) =>
+          val inventory = AdmissionInventory(candidates.toInt, selected.toInt, coverage)
+          Option.when(inventory.valid && inventory.selected == report.selected.size &&
+            (inventory.selected > 0 || verifiedEmptyAdmission(process, report)))(inventory)
+        case _ => None
+      }
+    }
+  }
 
   private def verifiedEmptyAdmission(process: ProcessExecutionResult, report: SbtAdmissionTestReport): Boolean =
     process.termination == ProcessExecutionTermination.Exited(0) && report.selected.isEmpty &&
@@ -264,7 +301,9 @@ private[smworkflow] object WorkflowSbtValidation {
     rows = report.toVector.flatMap(_.selected).map((suite, test) => AdmissionCase(suite, test))
     retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch, lintInput = result.lintInput,
       testScope = Option.when(result.target.testScope == SbtTestScope.Admission)("admission"),
-      admissionCases = Option.when(rows.nonEmpty)(rows))
+      admissionCases = Option.when(rows.nonEmpty)(rows),
+      admissionInventory = Option.when(result.target.testScope == SbtTestScope.Admission)(report.flatMap(
+        admissionInventory(result.processResult, _))).flatten)
     _ <- retained.validateC
     _ <- if (scopeReceiptValid(Some(retained), Some(result.processResult), result.target.testScope)) Consequence.unit
       else Consequence.stateConflict("SBT Admission report differs from its retained selection or outcome")

@@ -1512,8 +1512,11 @@ and its genuine semantic payload, optional provider observations and retained
 resources. Launch configuration is never provider-observed evidence. Omitted
 observed model/effort stay unknown. `restore` requires the exact original Request
 and returns the retained resolution without reading changed mappings/capabilities.
-The caller forwards the semantic payload through ordinary Submit and retains the
-launch/result artifact under the existing evidence owner; no new workflow loop.
+Before the regular Submit, pass the actual retained GoalPhase dispatch/API snapshot and
+the ordinary submission once to `submission_with_caller_route` and submit its returned
+payload. If the caller has no actual snapshot, omit the observation honestly; do not
+manufacture one or require a user-supplied property. Retain the launch/result artifact
+under the existing evidence owner; no new workflow loop.
 
 The adapter's `rejected` operation permits another captured candidate only for
 `kind=model-effort-unavailable`, `executionStarted=false` and a genuine typed

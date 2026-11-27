@@ -14,7 +14,7 @@ import org.goldenport.configuration.ConfigurationValue
   * The existing completion record persists their first admitted projection;
   * later recollection never consults changed configuration.
   * @since   Nov.  2, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object GoalPhaseRetainedObservations {
   val schema = "sm-workflow.goal-phase-retained-observations.v1"
@@ -32,8 +32,14 @@ private[smworkflow] object GoalPhaseRetainedObservations {
   final case class Closure(stepIdentity: String, commitIdentity: String, endedAt: String, sourceReference: String)
   object Closure { given Encoder[Closure] = deriveEncoder; given Decoder[Closure] = deriveDecoder }
   final case class Retained(schemaVersion: String, phaseSession: String, sourceReference: String,
-    attempts: Vector[Attempt], closures: Vector[Closure], completeHistorySteps: Vector[String])
-  object Retained { given Encoder[Retained] = deriveEncoder; given Decoder[Retained] = deriveDecoder }
+    attempts: Vector[Attempt], closures: Vector[Closure], completeHistorySteps: Vector[String],
+    routes: Option[Vector[GoalPhasePhaseMetrics.RouteFact]] = None)
+  object Retained {
+    import GoalPhasePhaseMetrics.given
+    given Encoder[Retained] = deriveEncoder[Retained].mapJson(_.mapObject(fields =>
+      if (fields("routes").exists(_.isNull)) fields.remove("routes") else fields))
+    given Decoder[Retained] = deriveDecoder
+  }
   val declaration: ComponentParameterKey[Retained] = ComponentParameterKey.optional(
     "sm-workflow.goal-phase.retained-observations", ComponentParameterDecoder {
       case ConfigurationValue.StringValue(raw) => parseC(raw)
@@ -74,14 +80,29 @@ private[smworkflow] object GoalPhaseRetainedObservations {
         f.conflictingFields != null && f.conflictingFields.size <= 64 && f.conflictingFields.forall(text) &&
         Vector(f.engine, f.route, f.mode, f.level, f.inputSource, f.outputSource, f.totalSource, f.provider,
           f.model, f.outcome, f.usageContract).forall(o => o != null && o.forall(text)) &&
-        f.retry != null && f.fallback != null && f.unresolvedDispatch != null)) &&
+        f.retry != null && f.fallback != null && f.unresolvedDispatch != null &&
+        f.dispatchKind != null && f.dispatchKind.forall(_ == "codex") && f.nonstartReason != null &&
+        f.nonstartReason.forall(Set("unavailable", "declined", "budget-refused")))) &&
     value.attempts.map(_.executionIdentity).distinct.size == value.attempts.size &&
     value.attempts.flatMap(_.usage).map(u => (u.identity, u.revision)).distinct.size == value.attempts.flatMap(_.usage).size &&
     value.closures != null && value.closures.size <= 64 && value.closures.forall(c => c != null && text(c.stepIdentity) &&
       text(c.commitIdentity) && GitObjectId.parseC(c.commitIdentity).isSuccess && time(c.endedAt) && text(c.sourceReference)) &&
     value.closures.map(_.stepIdentity).distinct.size == value.closures.size &&
     value.completeHistorySteps != null && value.completeHistorySteps.size <= 64 &&
-    value.completeHistorySteps.distinct == value.completeHistorySteps && value.completeHistorySteps.forall(text)
+    value.completeHistorySteps.distinct == value.completeHistorySteps && value.completeHistorySteps.forall(text) &&
+    value.routes != null && value.routes.forall(routes => routes.size <= 512 && routes.forall(r => r != null &&
+      r.phaseSession == value.phaseSession && text(r.continuation) && r.continuation.startsWith(value.phaseSession + ":") &&
+      text(r.source) && r.revision >= 0 && Set("dispatch", "api")(r.owner) &&
+      Set("ImplementStep", "RepairStep", "ReviewStep", "ReviewPhase", "TriageStep")(r.role) &&
+      Set("codex", "openai-daily", "openai-promotional-credit", "openai-unspecified")(r.route) &&
+      Set("selected", "excluded", "unknown")(r.disposition) &&
+      ((r.owner == "dispatch" && r.route == "codex" && Set(
+        ("selected", "candidate-available"), ("excluded", "all-candidates-unavailable"),
+        ("unknown", "capability-unknown"))((r.disposition, r.reason))) ||
+       (r.owner == "api" && r.disposition == "selected" && Set(
+        ("openai-unspecified", "bounded-review-selected"), ("openai-daily", "verified-daily-reservation"),
+        ("openai-promotional-credit", "verified-promotional-reservation"))((r.route, r.reason)))) &&
+      r.stepIdentity != null && r.stepIdentity.forall(text)))
 
   /** Exact canonical fields make unknown, missing and duplicate wire facts an
     * explicit configuration error rather than silently dropping provenance.
@@ -94,6 +115,8 @@ private[smworkflow] object GoalPhaseRetainedObservations {
     val native = requests.filter(_.continuationIdentity.nonEmpty)
     if (!valid(value) || value.phaseSession != session || !value.attempts.forall(a => native.exists(n =>
         n.continuationIdentity.contains(a.continuationIdentity) && n.stepIdentity == a.stepIdentity && n.kind == a.kind)) ||
+        !value.routes.toVector.flatten.forall(r => native.exists(n => n.continuationIdentity.contains(r.continuation) &&
+          n.stepIdentity == r.stepIdentity && n.kind == r.role)) ||
         !value.closures.forall(c => completed.exists(s => s.step == c.stepIdentity && s.commit.identity == c.commitIdentity)) ||
         !value.completeHistorySteps.forall(id => plan.steps.exists(_.identity == id) &&
           native.exists(n => n.stepIdentity.contains(id) && n.kind == "ImplementStep")))

@@ -355,6 +355,23 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       refused.status shouldBe "BLOCKED"
       refused.message shouldBe "ai.cost-budget"
       refused.result shouldBe None
+      val refusedfacts = refused.metadata.flatMap(_.toJsonStringC.toOption).flatMap(io.circe.parser.parse(_).toOption)
+        .getOrElse(fail("Expected bounded refusal evidence"))
+      refusedfacts.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+
+      Then("the compiler path receives the original conclusion for each nonstart")
+      val task = GoalPhaseApiReview.BoundedRecordTask("compiler-repair", "attempt", "continuation",
+        "work:exact", "prompt", Record.dataAuto("type" -> "object"))
+      for (operation <- Vector("ai.task.declined", "ai.cost-budget")) {
+        terminal = Some(operation)
+        var nonstart = Option.empty[org.goldenport.Conclusion]
+        val result = GoalPhaseApiReview.boundedRecord(runner, task,
+          conclusion => nonstart = Some(conclusion), conclusion => nonstart = Some(conclusion))(using execution)
+        if (operation == "ai.task.declined") result shouldBe GoalPhaseApiReview.BoundedRecordResult.Declined
+        else result shouldBe GoalPhaseApiReview.BoundedRecordResult.Blocked("ai.cost-budget")
+        val observed = nonstart.flatMap(GoalPhaseApiReview.boundedFailureEvidence).getOrElse(fail("Expected nonstart evidence"))
+        observed.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+      }
 
       When("the producer reports a final failure or an uncertain dispatch")
       metadata = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> "observed-model",

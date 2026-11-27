@@ -79,6 +79,51 @@ class DispatchSpec(unittest.TestCase):
     def prepare(self, facts=None):
         return A.prepare(self.request, self.mapping, self.facts if facts is None else facts, ROOT, ROOT)
 
+    def test_caller_route_observation_keeps_issued_snapshot_separate(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['session_id'] = 'fixture-session'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        state = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+        observed = A.caller_route_observation(state)
+        self.assertEqual(observed['source'], 'fixture-parent')
+        self.assertEqual(observed['revision'], 2)
+        submission = {'result': {'outcome': 'completed'}}
+        prepared = A.submission_with_caller_route(state, submission)
+        self.assertEqual(prepared['callerRouteObservation'], observed)
+        self.assertNotIn('callerRouteObservation', submission)
+        self.assertEqual(observed['state']['routeSelection'], state['routeSelection'])
+        self.assertNotIn('launch', observed['state'])
+        observed['state']['status'] = 'changed'
+        self.assertNotEqual(observed['state']['status'], state['status'])
+        state.pop('routeSelection')
+        with self.assertRaises(ValueError):
+            A.caller_route_observation(state)
+
+    def test_caller_route_observation_omits_provider_content_and_secrets(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['session_id'] = 'fixture-session'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        state = {'schema': 'sm-workflow.api-review-attempt.v1', 'status': 'RETURNED', 'request': request,
+                 'routeSelection': {'schema': 'sm-workflow.caller-route-selection.v1', 'session': 'fixture-session',
+                    'continuation': 'fixture:work:1', 'kind': 'ReviewStep', 'route': 'openai-daily',
+                    'disposition': 'selected', 'reason': 'verified-daily-reservation', 'body': 'route-secret'},
+                 'arguments': {'input': {'boundedTask': True, 'attemptIdentity': 'attempt', 'body': 'request-secret'}},
+                 'response': {'attemptIdentity': 'attempt', 'continuationId': 'fixture:work:1', 'provider': 'openai',
+                    'result': {'summary': 'response-secret'}, 'metadata': {'ai.execution.provider': 'openai',
+                    'ai.usage.reservation_basis': 'verified-daily-reservation', 'ai.usage.model_group': 'openai-daily-group-1',
+                    'providerHttp.body': 'body-secret', 'token': 'token-secret', 'nested': {'secret': 'nested-secret'}}}}
+        compact = A.caller_route_observation(state)['state']
+        encoded = json.dumps(compact)
+        for secret in ('route-secret', 'request-secret', 'response-secret', 'body-secret', 'token-secret', 'nested-secret'):
+            self.assertNotIn(secret, encoded)
+        self.assertEqual(compact['response']['metadata'], {'ai.execution.provider': 'openai',
+            'ai.usage.reservation_basis': 'verified-daily-reservation', 'ai.usage.model_group': 'openai-daily-group-1'})
+        state['response']['metadata']['ai.usage.model_group'] = {'secret': 'not-a-scalar'}
+        with self.assertRaises(ValueError):
+            A.caller_route_observation(state)
+
     def test_supplied_review_binds_actual_work_and_uses_fresh_restricted_context(self):
         request = copy.deepcopy(self.request)
         request['result_type'] = 'GoalPhaseWorkResult'
@@ -454,9 +499,14 @@ class DispatchSpec(unittest.TestCase):
                             fact['availability'] = 'unavailable'
                 state = A.prepare(request, self.mapping, facts, ROOT, ROOT)
                 self.assertEqual(len(state['attempts']), unavailable)
+                decision = state['routeSelection']
+                self.assertEqual(decision['route'], 'codex')
+                self.assertEqual(decision['continuation'], request['issued_work_context']['continuation_id'])
                 if unavailable == len(path):
+                    self.assertEqual(decision['disposition'], 'excluded')
                     self.assertEqual(state['status'], 'UNAVAILABLE')
                 else:
+                    self.assertEqual(decision['disposition'], 'selected')
                     concrete = self.mapping['assignments'][path[unavailable]]
                     self.assertEqual(state['launch']['model'], concrete['model'])
                     self.assertEqual(state['launch']['reasoning_effort'], concrete['effort'])

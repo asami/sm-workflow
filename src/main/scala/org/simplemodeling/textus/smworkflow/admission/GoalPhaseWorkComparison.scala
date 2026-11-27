@@ -6,7 +6,7 @@ import java.time.{Duration, Instant}
 /** Observational comparable cohorts, using retained records only. Unknown time,
   * usage and first-pass history remain unknown, never zero or a success claim.
   * @since   Nov.  2, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object GoalPhaseWorkComparison {
   final case class Cohort(identity: String, unit: String, workClass: String, windowStart: Option[String],
@@ -27,7 +27,8 @@ private[smworkflow] object GoalPhaseWorkComparison {
     given Decoder[Summary] = deriveDecoder
   }
   final case class NativeWork(stepIdentity: Option[String], kind: String, profile: Option[GoalPhaseOperatingProfiles.Capture],
-    continuationIdentity: Option[String] = None, outcome: Option[String] = None)
+    continuationIdentity: Option[String] = None, outcome: Option[String] = None,
+    callerRouteObservation: Option[GoalPhasePhaseMetrics.RouteFact] = None)
 
   final case class RepairEpisode(identity: String, scope: String, failedStage: String, failedCheck: String,
     attempts: Vector[String] = Vector.empty, applications: Vector[String] = Vector.empty,
@@ -47,7 +48,10 @@ private[smworkflow] object GoalPhaseWorkComparison {
     * has at most one open validation or review repair at a time. */
   final case class NativeOperations(episodes: Vector[RepairEpisode] = Vector.empty,
     runs: Vector[StageRun] = Vector.empty, spans: Vector[GoalPhasePhaseMetrics.ObservedSpan] = Vector.empty,
-    approvals: Vector[Approval] = Vector.empty, routes: Vector[RouteSwitch] = Vector.empty) {
+    approvals: Vector[Approval] = Vector.empty, routes: Vector[RouteSwitch] = Vector.empty,
+    validation: Vector[GoalPhasePhaseMetrics.ValidationObservation] = Vector.empty,
+    toolPreviews: Vector[GoalPhaseNativeScalaCleanup.PreviewObservation] = Vector.empty,
+    toolDiagnostics: Vector[GoalPhasePhaseMetrics.DiagnosticObservation] = Vector.empty) {
     def inRepair(scope: String): Boolean = episodes.exists(e => e.scope == scope && e.resolution.isEmpty)
 
     def failure(identity: String, scope: String, stage: String, check: String): NativeOperations =

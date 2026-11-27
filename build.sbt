@@ -567,13 +567,17 @@ lazy val root: Project = project
       val loader = (Test / testLoader).value
       val log = streams.value.log
       try {
-        val selected = try LabelledTests.select((Test / fullClasspath).value.files,
-          (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
+        val selection = try LabelledTests.selectAdmission((Test / fullClasspath).value.files,
+          (Test / classDirectory).value, version.value, (Test / definedTests).value)
         catch {
           case scala.util.control.NonFatal(error) =>
             log.error("CNCF-ADMISSION-V1 unavailable")
             throw error
         }
+        selection.inventory.foreach { inventory =>
+          log.info(s"SM-WORKFLOW-ADMISSION-INVENTORY-V1 ${inventory.coverage} ${inventory.candidates} ${inventory.selected}")
+        }
+        val selected = selection.selected
         if (selected.isEmpty) {
           Def.task { log.info("CNCF-ADMISSION-V1 empty") }.andFinally(LabelledTests.closeLoader(loader))
         } else {
