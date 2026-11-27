@@ -21,19 +21,20 @@ import WorkflowManagementReconstruction as M
 /** Thin native adapter for correcting an unstarted request's derived policy.
   * The native bounded owner retains all prior checkpoints and owns Advance.
   * @since   Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object DelegateTaskRequestReconstruction {
   val purpose = "delegate-task-request-reconstruction"
   val describeOperation = "describeDelegateTaskRequestReconstruction"
   val reconstructOperation = "reconstructDelegateTaskRequest"
+  val clarifyFocusedTest = "ClarifyApprovedFocusedTest"
   val choices = Vector("AdoptDerivedValidationPolicy", "Defer")
   final case class Policy(checks: Vector[String], scalaLint: String)
   final case class Target(componentInstance: String, sessionId: String, sourceRevision: String,
     participant: String, requestIdentity: String, policy: Policy)
   final case class Observation(destinationIdentity: String, notificationStatus: String,
     intakeStatus: String, handlerStatus: String, destinationSessionId: Option[String],
-    sourceReferences: Vector[ContextReference])
+    sourceReferences: Vector[ContextReference], observerIdentity: Option[String] = None)
   final case class Direction(target: Target, policy: Policy, choice: String, rationale: String,
     participant: String, reference: ContextReference, observation: Observation)
   final case class Checkpoint(direction: Direction)
@@ -43,7 +44,8 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
   given Decoder[Policy] = deriveDecoder
   given Encoder[Target] = deriveEncoder
   given Decoder[Target] = deriveDecoder
-  given Encoder[Observation] = deriveEncoder
+  given Encoder[Observation] = deriveEncoder[Observation].mapJson(_.mapObject(fields =>
+    if (fields("observerIdentity").contains(Json.Null)) fields.remove("observerIdentity") else fields))
   given Decoder[Observation] = deriveDecoder
   given Encoder[Direction] = deriveEncoder
   given Decoder[Direction] = deriveDecoder
@@ -69,20 +71,23 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
       input.participant, ContextReference(input.reference.identity, input.reference.revision),
       Observation(observation.destinationIdentity, observation.notificationStatus, observation.intakeStatus,
         observation.handlerStatus, observation.destinationSessionId,
-        observation.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision))))
+        observation.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
+        observation.observerIdentity))
     _ <- _check(input.sessionId == target.sessionId, "input crosses its target Session")
     _ <- bindingC(direction)
   } yield direction
 
   def bindingC(direction: Direction): Consequence[Json] = for {
     _ <- targetC(direction.target.asJson.noSpaces)
-    _ <- _check(_policy_valid(direction.policy) && choices.contains(direction.choice) &&
+    _ <- _check(_policy_valid(direction.policy) && (choices.contains(direction.choice) || direction.choice == clarifyFocusedTest) &&
       _exact(direction.rationale) && direction.participant == direction.target.participant &&
-      _reference(direction.reference) && _observation_valid(direction.observation),
-      "complete policy, genuine Human reference, original participant and attributable intake observation are required")
+      _reference(direction.reference) && _observation_valid(direction.observation) &&
+      (direction.choice != clarifyFocusedTest || direction.observation.observerIdentity.nonEmpty),
+      "complete policy, evidence reference, original participant and attributable intake observation are required")
   } yield Json.obj("componentInstance" -> direction.target.componentInstance.asJson,
     "delegateTaskRequestReconstruction" -> Json.obj("target" -> direction.target.asJson,
-      "answer" -> Json.obj("source" -> "Human".asJson, "policy" -> direction.policy.asJson,
+      "answer" -> Json.obj("source" -> (if (direction.choice == clarifyFocusedTest) "IntakeObservation" else "Human").asJson,
+        "policy" -> direction.policy.asJson,
         "choice" -> direction.choice.asJson, "rationale" -> direction.rationale.asJson,
         "participant" -> direction.participant.asJson, "reference" -> direction.reference.asJson,
         "observation" -> direction.observation.asJson)))
@@ -101,7 +106,7 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
     selected <- bindingC(Direction(target, policy, choice, rationale, participant, reference, observation))
       .toOption.toRight("Invalid requester reconstruction direction")
     _ <- Either.cond(owner == target.componentInstance && selected == value, (),
-      "requester reconstruction evidence crosses its exact Human binding")
+      "requester reconstruction evidence crosses its exact admitted binding")
   } yield selected
 
   /** Structural eligibility does not infer any destination effect from absence. */
@@ -147,22 +152,28 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
   def selectedPayloadC(payload: Payload, direction: Direction,
     actualDirection: ContextReference): Consequence[Payload] = for {
     _ <- bindingC(direction)
-    _ <- _check(direction.choice == "AdoptDerivedValidationPolicy" && actualDirection == direction.reference &&
+    _ <- _check(direction.choice != "Defer" && actualDirection == direction.reference &&
       payload.state.input.requestIdentity == direction.target.requestIdentity &&
       payload.state.participant == direction.target.participant &&
       Policy(payload.state.input.checks, payload.state.input.scalaLint) == direction.target.policy,
-      "adoption crosses the retained request, original policy or actual Human direction")
+      "adoption crosses the retained request, original policy or admitted direction")
     assessment = assess(payload, Some(direction.observation))
     _ <- M.requireReconstructibleC(assessment)
-    selection <- M.selectedC(assessment, Some(actualDirection), adoptProposed = true)
-    _ <- _check(selection.adoptProposed && selection.resumePoint == M.ResumePoint.CurrentBoundary,
-      "reconstruction has no normal requester resume point")
+    _ <- if (direction.choice == clarifyFocusedTest) _check(
+      direction.observation.notificationStatus == "delivered" &&
+        direction.observation.intakeStatus == "rejected-before-start" &&
+        direction.policy.scalaLint == payload.state.input.scalaLint &&
+        DelegateTask.approvedFocusedChecks(payload.state.input).contains(direction.policy.checks),
+      "existing authority covers only the approved focused test after delivered intake rejected before Start")
+    else M.selectedC(assessment, Some(actualDirection), adoptProposed = true).flatMap(selection =>
+      _check(selection.adoptProposed && selection.resumePoint == M.ResumePoint.CurrentBoundary,
+        "reconstruction has no normal requester resume point"))
     corrected = payload.state.input.copy(checks = direction.policy.checks, scalaLint = direction.policy.scalaLint)
     _ <- DelegateTask.requesterInputC(corrected)
     // Logical declarations only: destination Start owns actual host resolution and execution.
     identities = (corrected.checks ++ Option.when(corrected.scalaLint == "required")("fix-check") ++
       Option.when(corrected.delegation.exists(_.validationScope == "broad"))("test")).distinct
-    logical <- StandardWorkflowRuntime.standardChecksC(identities)
+    logical <- StandardWorkflowRuntime.standardChecksC(identities, scopedTestOnly = direction.choice == clarifyFocusedTest)
     checks <- DelegateTask.selectChecksC(corrected, logical)
     _ <- DelegateTask.checksC(corrected, checks)
   } yield payload.copy(state = payload.state.copy(input = corrected),
@@ -224,8 +235,15 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
               val assessment = assess(payload)
               val issues = assessment.incompatible ++ assessment.uncertainEffects ++
                 Option.when(current.suspension.nonEmpty)("pending native work cannot be reconstructed").toVector
-              Consequence.success(_output(target, if (issues.isEmpty) "decision-required" else "ineligible",
-                "Describe supplies no authority; actual Human admission and ended pre-Start intake facts are required", issues))
+              val clarification = DelegateTask.approvedFocusedChecks(payload.state.input)
+              val message = clarification.fold(
+                "Describe supplies no authority; actual Human admission and ended pre-Start intake facts are required")(checks =>
+                "An ended pre-Start rejection may use existing authority to select " + checks.mkString(", ") +
+                  ". Other policy corrections require actual Human admission.")
+              val outcome = if (issues.nonEmpty) "ineligible"
+                else if (clarification.nonEmpty) "clarification-available"
+                else "decision-required"
+              Consequence.success(_output(target, outcome, message, issues, clarification.nonEmpty))
             case Some(answer) => for {
               direction <- directionC(answer)
               response <- payload.requestReconstruction match {
@@ -256,9 +274,9 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
     })
   }
   private def _output(target: Target, outcome: String, message: String,
-    issues: Vector[String] = Vector.empty): V.DelegateTaskRequestReconstructionDescriptionResult =
+    issues: Vector[String] = Vector.empty, clarify: Boolean = false): V.DelegateTaskRequestReconstructionDescriptionResult =
     V.DelegateTaskRequestReconstructionDescriptionResult(target.sessionId, outcome, message, target.asJson.noSpaces,
-      if (issues.isEmpty) choices else Vector("Defer"), issues)
+      if (issues.isEmpty) choices ++ Option.when(clarify)(clarifyFocusedTest) else Vector("Defer"), issues)
   private def _policy_valid(policy: Policy): Boolean = policy != null && policy.checks != null &&
     policy.checks.nonEmpty && policy.checks.forall(_exact) && policy.checks.distinct == policy.checks && Set("off", "required")(policy.scalaLint)
   private def _observation_valid(observation: Observation): Boolean = observation != null &&
@@ -267,7 +285,8 @@ private[smworkflow] object DelegateTaskRequestReconstruction {
     Set("ended", "live", "unknown")(observation.handlerStatus) && observation.destinationSessionId != null &&
     observation.destinationSessionId.forall(_exact) && observation.sourceReferences != null &&
     observation.sourceReferences.nonEmpty && observation.sourceReferences.forall(_reference) &&
-    observation.sourceReferences.distinct == observation.sourceReferences
+    observation.sourceReferences.distinct == observation.sourceReferences &&
+    observation.observerIdentity != null && observation.observerIdentity.forall(_exact)
   private def _reference(reference: ContextReference): Boolean = reference != null &&
     _exact(reference.identity) && _exact(reference.revision)
   private def _exact(text: String): Boolean = text != null && text.nonEmpty && text.trim == text && !text.exists(_.isControl)
