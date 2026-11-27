@@ -1,11 +1,30 @@
 # Phase 25.4 Acceptance Checklist
 
+- [ ] Use the installed Phase 25.3 route during actual Phase 25.4 development.
+  Record observed review and compiler-repair selections, actual usage and
+  billing evidence when available, and causes for bypass or fallback. Keep
+  unobserved cases explicit. Use the resulting evidence to decide when to
+  start Phase 25.5.
 - [ ] P254-01: Typed multidimensional task taxonomy covers ordinary repair, review and judgment; unknowns and reasoning versus change scope are distinct.
 - [ ] P254-02: Context sufficiency, missing evidence and candidate identity recorded; bounded context requests and Take Over verified.
 - [ ] P254-03: Provider-neutral capability requirements and deterministic,
   quota-safe strategic judgement routing verified.
 - [ ] P254-04: Failure-specific remedies preserve retry limits, recovery, authorization, rollback and Admission.
 - [ ] P254-05: Classification and execution observations retain provenance and missingness; comparable qualification evidence distinguishes measured outcomes from hypotheses.
+- [ ] P254-05: The retained completion covers all issued work purposes,
+  including work with missing classification. Check coverage against the
+  workflow declarations. Verify totals by completion route, attempts
+  and retries, rule or template matches followed by AI, fallback from an
+  external tool to AI, and confirmed zero versus unknown coverage after resume.
+- [ ] P254-05: Verify that the installed `sm-workflow` result includes the
+  relevant work opportunities for each invocation. Exercise a direct Advance,
+  Submit followed by Advance, and compact completion. Check the selected rows
+  against the retained structured data and human-readable output, including
+  a pending review and the owning dependency project where applicable.
+- [ ] P254-05: Reconcile the Phase total with the root project and each
+  dependency project. Exercise worktree and assigned-chat delivery, shared
+  references to one result, redelivery and resume, and missing project
+  attribution. Count requester adoption separately from dependency work.
 - [ ] P254-06: Verify deterministic resolution with zero AI calls, an
   applicable template sent directly to Terra with zero design-model calls,
   and strategic directive design for a case without an adequate template.

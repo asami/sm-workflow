@@ -1,9 +1,42 @@
 # Phase 25.3 Acceptance Checklist
 
-- [ ] P253-01: Both organization entitlements and exact model-group mappings verified; unknown and ineligible routes refused.
-- [ ] P253-02: Independent request-sized reservations, margins and settlement; concurrent admission cannot oversubscribe either group.
-- [ ] P253-02: Retry, reasoning usage, uncertain usage, restart, duplicate settlement and UTC rollover verified.
-- [ ] P253-03: Ordinary review and repair routes can use both groups concurrently; exhaustion does not transfer balances or authorize paid overage.
-- [ ] P253-03: Typed outcomes and group attribution available to completion metrics and cost-aware routing.
-- [ ] P253-04: Offline fixtures pass; bounded live qualification and billing evidence recorded where authorized and available, with limitations explicit.
-- [ ] Scoped validation and independent review recorded before closure.
+Whole-Phase release evidence: original candidate `f12b226f` passed Compile
+and FULL (3,195 tests), but FixCheck failed with exit 1 and 1,364 affected
+blocking diagnostics. The 1,181 outside directly changed Git lines and 836
+with unavailable analysis are overlapping subsets. `issue-10` remains open.
+The user directed deferral of whole-Phase FixCheck for the replacement release
+candidate; the failure is not a pass. Replacement validation, independent
+Phase review and the final commit were pending at that point. The
+replacement release `27742429` passed Compile and FULL (3,195 tests),
+the independent Phase review accepted all eight required conditions, and
+the Phase closed locally.
+
+- [x] Verify ordinary routing with an installed offline fixture. Reproduce and
+  fix missing or ineffective OpenAI setup. Verify distinct reasons for
+  disabled routing, unavailable binding, unsuitable input and allowance refusal.
+- [x] P253-01: Both organization entitlements and exact model-group mappings verified; unknown and ineligible routes refused.
+- [x] P253-02: Independent request-sized reservations, margins and settlement; concurrent admission cannot oversubscribe either group.
+- [x] P253-02: Retry, reasoning usage, uncertain usage, restart, duplicate settlement and UTC rollover verified.
+- [x] P253-03: Ordinary review and repair routes can use both groups concurrently; exhaustion does not transfer balances or authorize paid overage.
+- [x] P253-03: Typed outcomes and group attribution available to completion metrics and cost-aware routing.
+- [x] P253-04: The ordinary installed route produces one accepted review with
+  a real OpenAI response and one admitted compiler repair with a real OpenAI
+  response and successful recompile. Keep a case pending if OpenAI is
+  unavailable or allowance admission refuses it.
+- [x] P253-05: The normal installed completion reports matching candidate
+  totals, selections, exclusions, actual starts, successes, failures and
+  unknowns in structured data and in the initiating chat. Verify all declared
+  AI routes, all four automatic repair tools and validation checks, including
+  rows with zero selections and rows with unavailable evidence. Keep logical
+  requests, calls, diagnostics, edits, checks and test cases distinct.
+- [x] P253-05: Verify reasons for non-selection and selected work that did not
+  start. Preserve OpenAI allowance, token and billing evidence when available.
+  Verify replay deduplication and separate confirmed zero, partial totals and
+  unknowns. Include ADMISSION with zero selected cases and incomplete discovery.
+- [x] P253-05: The normal installed completion reports one retained and
+  revalidated Scalafix application, a confirmed zero on a fully observed run
+  with no applied edit, and unavailable coverage when evidence is missing.
+  Preserve separate coverage and reasons for Scalafix, Metals and Scalafmt.
+- [x] Record the installed version, effective configuration, qualified results
+  and remaining limits for Phase 25.4 operational observation.
+- [x] Scoped validation and independent review recorded before closure.
