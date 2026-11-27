@@ -2,22 +2,22 @@
 
 Plan: [Phase 25.2](phase-25.2.md)
 
-- [ ] P252-01: Completion reports confirmed AI calls by engine and configured
+- [x] P252-01: Completion reports confirmed AI calls by engine and configured
   route (Codex, OpenAI monthly, OpenAI daily, named other), mode, and level.
   A mixed run distinguishes actual execution, rejected dispatch, retry, fallback,
   unknown execution, and replay without claiming billing status.
   Report available input/output/total token usage and coverage. Fixtures cover
   complete, partial, absent and known-zero usage, cumulative and replayed
   usage, and token subcategories without double-counting.
-- [ ] P252-02: Completion reports retained, revalidated repair applications by
+- [x] P252-02: Completion reports retained, revalidated repair applications by
   Scalafix, Metals and other programmatic corrections. Controlled events prove
   attribution using available Phase 28.1 routes; no-op, check-only lint, rejected and rolled-back edits do not count.
   At least one currently available repair is verified end to end.
-- [ ] P252-03: Normal packaged completion displays the Markdown tables in the
+- [x] P252-03: Normal packaged completion displays the Markdown tables in the
   initiating Codex chat, with matching structured counts for ordinary,
   zero-activity, and incomplete-evidence runs. A CLI-only artifact is not enough.
   Resume/child replay is deduplicated, with no added AI call or closure gate.
-- [ ] P252-04: Verify the non-AI resolution numerator/denominator, attempts
+- [x] P252-04: Verify the non-AI resolution numerator/denominator, attempts
   vs retained edits, repeat compile/test/lint/review cycles, and elapsed time
   vs cumulative stage times. Include multiple edits in one episode, fallback
   to AI, unresolved or missing dispositions, resumed/replayed events, parallel
@@ -27,8 +27,8 @@ Plan: [Phase 25.2](phase-25.2.md)
   repair transactions bound to their original failure, measured process
   durations, and matching approval events when retained. Read-only projection
   failures and incomplete historical or caller evidence leave coverage partial
-  or unavailable. Final packaged qualification remains open.
-- [ ] P252-05: Qualify CNCF's typed `sbt_test` and `sbt_test_attempt` with
+  or unavailable. The installed completion fixture verified the measured repair and process totals.
+- [x] P252-05: Qualify CNCF's typed `sbt_test` and `sbt_test_attempt` with
   `Admission` and `Full`. Verify the existing single-argument forms retain
   FULL behavior. Through installed sm-workflow, accept an ordinary Step with
   ADMISSION and applicable focused checks, then require FULL for Phase closure.
@@ -38,7 +38,7 @@ Plan: [Phase 25.2](phase-25.2.md)
   use that result and that bound results survive resume. Show test-body
   and compile/setup times separately where observed. Preserve the existing
   Phase 25.1 Session and issued checks.
-- [ ] P252-05 RepositorySync: On final candidates prepared from local Git
+- [x] P252-05 RepositorySync: On final candidates prepared from local Git
   fixtures, verify no product tests for non-consumed documentation, ADMISSION
   only for source carried through without a logic merge, and FULL for combined
   or resolved logic. Include changes from different parents in separate source
@@ -48,17 +48,24 @@ Plan: [Phase 25.2](phase-25.2.md)
   Verify that a bounded failure can be corrected with FOCUSED and that
   acceptance still satisfies the candidate's selected scope. Preserve
   structural checks and conditional review.
-  Implementation coverage now includes shared base/parent/index selection,
-  typed Test scope and report binding, retained continuation/reuse checks, and
-  conservative Scala comment equivalence. Added regression cases are source
-  artifacts; they do not establish passed validation or installed two-stage
-  qualification. The installed fixture requirement above remains open.
-- [ ] Record review and release evidence. Distinguish live observations from
-  fixtures and unavailable tool routes.
+  The isolated installed qualification verified both merge stages with real
+  local Git and SBT. Regression tests cover retained results and conservative
+  Scala comment equivalence.
+- [ ] Deferred follow-up (not a Phase 25.2 closure criterion): show profile/version and
+  compare logical Step token ratios by task role and difficulty, with retry
+  deduplication, confirmed zero, partial usage and unknown attribution.
+  Verify calls per completed task, zero-call tasks, and separate failed-task
+  and observed allowance reporting without added executions or a release
+  dependency on Phase 25.4.
+- [x] Record review and release evidence. The Phase Compile and FULL passed
+  with 3,119 tests. The independent review accepted all six conditions,
+  including the installed empty ADMISSION and unavailable discovery cases.
+  FixCheck was disabled for this Phase. Its earlier FULL failure remains
+  in the Session history. The Phase closed locally at `d4f14e79`.
 
 
 P252-03 implementation: trusted retained attempt call facts are optional and bind to
 the actual Session and issued work as well as their execution and source identities.
 The normal terminal progress presentation projects the native completion metrics;
-missing facts remain unknown. Packaged and installed qualification remains a separate
-acceptance activity.
+missing facts remain unknown. The installed qualification and packaged caller
+output verified matching structured metrics and Markdown tables.

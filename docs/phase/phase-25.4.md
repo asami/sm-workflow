@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
-Scheduled: after [Phase 25.3](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-25.3.md), followed by [Phase 25.5](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-25.5.md)
+Scheduled: after [Phase 25.3](phase-25.3.md), followed by [Phase 25.5](phase-25.5.md)
 Depends on: existing Phase 9 routing, [Phase 25.2](phase-25.2.md) metrics and Phase 25.3 dual allowance
 Checklist: [Phase 25.4 acceptance](phase-25.4-checklist.md)
 
@@ -104,7 +104,7 @@ proceed immediately; a case outside the known patterns goes to strategic
 judgement without first attempting a speculative repair. Use the same
 distinction for reviews and other bounded work.
 
-Connect [Phase 25.5's diagnostic-driven repair strategies](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-25.5.md#p255-06--diagnostic-driven-repair-strategy-templates)
+Connect [Phase 25.5's diagnostic-driven repair strategies](phase-25.5.md#p255-06--diagnostic-driven-repair-strategy-templates)
 to the same applicability check and typed Task Specification. Phase 25.4
 qualifies the connection with fixtures. Phase 25.5 delivers pattern matching,
 template qualification, scope, versioning and invalidation after Phase 25.4.
@@ -161,7 +161,7 @@ Preserve reservations and apply existing recovery to uncertain dispatch or
 usage before considering another invocation.
 
 Model requirements are independent of entitlement: [Phase 23 P23-05 divergence
-recovery](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-23.md#bounded-divergence-recovery-p23-05) is an Astra-required
+recovery](phase-23.md#bounded-divergence-recovery-p23-05) is an Astra-required
 task class, not a routine strategic-judgement fallback. That separate
 policy may use separately authorized paid Astra when free Astra cannot
 admit the required context or quota. It does not change this default, allow
@@ -228,7 +228,7 @@ The same required checks, Admission, capability requirements (including any
 mandatory Astra class), authorization and retry/spend ceilings apply to all
 profiles. The profile is independent of model reasoning level and grants no
 permission to spend. Use [Phase 25.2](phase-25.2.md) metrics for ordinary-run
-comparison; [Phase 25.5](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-25.5.md) consumes the profile for optional
+comparison; [Phase 25.5](phase-25.5.md) consumes the profile for optional
 template and cache behavior.
 
 ## Ownership and boundaries

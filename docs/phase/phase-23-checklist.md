@@ -10,7 +10,7 @@ Priority: Phase 9 -> Phase 18 -> Phase 23.
 | P23-02 | Deterministic finding inventory preserves IDs, provenance, severity, required acceptance criteria and dependency evidence. | TODO |
 | P23-03 | Distinguish CURRENT, HYGIENE, FUTURE_ENHANCEMENT, STABILIZATION and UNDECIDED with conservative boundary rules. | TODO |
 | P23-04 | Compact Context Package is built without expensive AI; optional Local LLM/Luna assistance is bounded and may decline. | TODO |
-| P23-05 | Astra is invoked only for justified ambiguous strategic decisions, with bounded token/spend/attempt budget and structured result. Verify that the strategic assessment uses the Phase 24 Q1 language contract through Japanese presentation, preserving original evidence and typed dispositions. | TODO |
+| P23-05 | Astra is invoked only for justified ambiguous strategic decisions, with bounded token/spend/attempt budget and structured result. Verify that the strategic assessment uses the Phase 24 Q1 language contract through Japanese presentation, preserving original evidence and typed dispositions. Verify one Astra-only replan after divergence: free with intact context and eligible quota first; separately authorized paid Astra second; no qualified route means stop. Exercise the one bounded Terra retry, no-progress stop, hard limit, and resume without duplicate dispatch. | TODO |
 | P23-06 | Missing context or uncertain dependency yields UNDECIDED/decision-needed, not silent deferral. | TODO |
 | P23-07 | Mandatory correctness, security, Usage Contract and acceptance evidence cannot be reclassified away from CURRENT. | TODO |
 | P23-08 | Proposals pass through existing authorization/Admission or external planning approval; rejection leaves state unchanged. | TODO |

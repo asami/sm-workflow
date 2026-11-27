@@ -20,6 +20,37 @@ Treat all eligible AI execution routes as a **capability pool**, not a fixed Loc
 
 Track per route: provider/model, execution interface, account and shared quota pool, remaining allowance and reset/expiry when observable, confidence/unknown status, expected demand, measured success/retry cost, and whether incremental paid billing is authorized. Do not invent balances or assume free Copilot automation/SDK entitlements. Unknown capacity cannot be treated as verified free. Do not silently use paid overage or violate provider terms. Use deterministic scheduling, not an AI call to decide routing.
 
+## Strategic task design economics
+
+Consume [Phase 25.4](phase-25.4.md) strategic judgement, Task Design and
+Task Execution contracts and qualification evidence. Treat their separation
+as entitlement-independent, not a mechanism limited to complimentary usage.
+Prefer eligible free advanced design and suitable low-cost execution when
+economically justified. After free allowance exhaustion, consider explicitly
+budget-authorized paid advanced design (e.g. Sol/Astra-class) with lower-cost
+execution (e.g. Terra-class), programmatic or reused design, and direct
+execution alternatives. No automatic paid overage or implicit authorization.
+Use deterministic selection based on expected total incremental cost per
+successfully accepted task, including design, context, execution, retries,
+validation, failure risk and amortized reuse, subject to quality, security
+and latency constraints. Preserve independent allowance accounting and
+distinguish measured costs from estimates. Qualify the paid policy with
+fixtures and comparable evidence; live paid tests require explicit approval.
+Do not assume separation is always cheaper or better.
+
+## Scoped instruction generation and surplus investment
+
+Consume [Phase 25.5](phase-25.5.md) template suitability, scoped cache
+and reuse evidence. Select generation routes deterministically by required
+quality, expected reuse, total amortized cost, verified daily API allowance
+and weekly subscription headroom, reset/expiry and forecast demand.
+When both Astra and Sol meet requirements, prefer free Astra when suitable
+and lower-cost Sol for authorized paid generation; account for shared pools
+and opportunity cost. Prefer valid cached instructions; consider bounded
+pre-generation for planned projects/phases with stable context and likely
+reuse using otherwise-expiring capacity. Never generate solely to exhaust
+allowance or infer unknown weekly balances. No implicit paid fallback.
+
 ## Execution and billing model
 
 | Route | Execution boundary | Billing/allowance category |

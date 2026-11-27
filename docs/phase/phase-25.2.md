@@ -1,6 +1,6 @@
 # Phase 25.2: Workflow Completion Metrics
 
-Status: planned; execution not started
+Status: locally released on 2026-11-27 (Asia/Tokyo), commit `d4f14e79`
 Planned: 2026-11-24 (Asia/Tokyo)
 Scheduled: immediately after [Phase 25.1](phase-25.1.md), followed by [Phase 28.2](phase-28.2.md)
 Depends on: released [Phase 25](phase-25.md) Task API and existing execution ledger.
@@ -187,6 +187,33 @@ Record the selected scope and reason using existing candidate evidence and
 preserve issued plans and accepted results. Qualify the three outcomes through
 installed sm-workflow with local Git fixtures, including a clean logic merge,
 a comment-only conflict, and a build-consumed document.
+
+## Optimization comparison from ordinary executions
+
+Reuse completion metrics for the Human-selected
+[Phase 25.4 optimization profile](phase-25.4.md#p254-08--human-selected-optimization-profile)
+when its metadata is available. This reporting extension does not block the
+initial Phase 25.2 release on Phase 25.4. Record the requested profile, its
+version and effective mechanisms with each run; keep unspecified and legacy
+runs separate from Baseline.
+
+- Compare observed tokens per distinct logical Step within comparable task
+  role and difficulty cohorts (e.g. strategy judgment, compiler repair,
+  review). Sum actual invocations for the Step, including retries and
+  authorized fallbacks; do not count replay twice. Include confirmed zero-AI
+  Steps and report cohort size and token coverage. Where usage is partial,
+  report tokens per Step for the complete-coverage subset and show the
+  partial subtotal separately;
+  do not treat missing usage or unknown difficulty as zero or equivalent.
+- Also report actual AI calls per completed task, including tasks with zero
+  calls. Show incomplete/failed tasks and their observed usage separately so
+  that cheaper but less successful routes do not appear equivalent. Keep
+  observed Codex allowance usage, free API use and paid usage distinct where
+  measurable; do not derive Codex allowance units from token counts.
+- Use operational logs rather than regenerate the same program for metrics.
+  Compare only when role, difficulty and required acceptance are comparable;
+  identify model/route differences and sample size. No extra AI calls or
+  completion gate are introduced for measurement.
 
 ## Secondary breakdowns from existing records
 
