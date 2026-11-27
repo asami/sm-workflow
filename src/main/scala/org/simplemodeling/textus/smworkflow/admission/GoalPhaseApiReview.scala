@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 21, 2026
- * @version Nov. 23, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -295,8 +295,7 @@ private[smworkflow] object GoalPhaseApiReview {
       "taxonomyCategory" -> Json.fromString(observation.taxonomy.category.name),
       "taxonomySymptom" -> Json.fromString(observation.taxonomy.symptom.name)) ++
       kind.toVector.map(k => "causeKind" -> Json.fromString(k.name)) ++ provider ++
-      observation.properties.get(_reservation_basis_key).filter(_reservation_bases).toVector.map(
-        basis => _reservation_basis_key -> Json.fromString(basis)) ++
+      _allowance_facts(observation.properties, observation.properties.get("ai.execution.model")) ++
       providerHttp(observation.properties).toVector.map("providerHttp" -> _)
     val metadata = GoalPhaseNativeMetadata.record(Json.obj(facts*))
     val model = observation.properties.get("ai.execution.model").filter(_safe_provider_fact)
@@ -308,38 +307,90 @@ private[smworkflow] object GoalPhaseApiReview {
   private def _safe_provider_fact(text: String): Boolean =
     Option(text).exists(value => value.nonEmpty && value.length <= 256 && !value.exists(_.isControl))
 
-  private def _provider_metadata_json(values: Map[String, String], taskbinding: Map[String, String]): Option[Json] = {
+  private val _exhaustions_key = "ai.usage.pre_dispatch_exhaustions"
+  private val _allowance_keys = Vector("ai.usage.model_group", "ai.usage.allocation_provenance",
+    "ai.usage.external_provenance", "ai.usage.external_tokens_bound", _reservation_basis_key)
+
+  // Provenance is an operator-supplied identifier, not a free-form diagnostic or credential.
+  private def _safe_provenance(value: String): Boolean =
+    Option(value).exists(_.matches("[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}") && !value.toLowerCase.contains("sk-"))
+
+  private def _allowance_facts(values: Map[String, String], selectedModel: Option[String]): Vector[(String, Json)] = {
+    val groupAttributable = for {
+      observed <- values.get("ai.execution.model") if values.get("ai.execution.provider").contains("openai")
+      selected <- selectedModel if selected == observed
+      group <- values.get("ai.usage.model_group") if
+        (selected == "gpt-5.6-sol" && group == "openai-daily-group-1") ||
+        (selected == "gpt-5.6-terra" && group == "openai-daily-group-2")
+    } yield group
+    val ordinary = _allowance_keys.flatMap { key =>
+      values.get(key).filter { value =>
+        key match {
+          case "ai.usage.model_group" => groupAttributable.contains(value)
+          case "ai.usage.allocation_provenance" | "ai.usage.external_provenance" => _safe_provenance(value)
+          case "ai.usage.external_tokens_bound" => value.matches("[0-9]{1,19}") && value.toLongOption.exists(_ >= 0)
+          case _ => _reservation_bases(value)
+        }
+      }.map(value => key -> Json.fromString(value))
+    }
+    val exhausted = values.get(_exhaustions_key).filter(_.length <= 16384).flatMap { raw =>
+      io.circe.parser.parse(raw).toOption.flatMap(_.asArray).filter(items => items.nonEmpty && items.size <= 32)
+        .flatMap { items =>
+          val checked = items.map { item =>
+            val cursor = item.hcursor
+            for {
+              _ <- item.asObject.filter(_.keys.toSet == Set("provider", "model", "modelGroup", "allocationProvenance", "externalUsageProvenance", "externalUsageTokens", "providerInvoked"))
+              provider <- cursor.get[String]("provider").toOption if provider == "openai"
+              model <- cursor.get[String]("model").toOption
+              group <- cursor.get[String]("modelGroup").toOption
+              if (model == "gpt-5.6-sol" && group == "openai-daily-group-1") || (model == "gpt-5.6-terra" && group == "openai-daily-group-2")
+              allocation <- cursor.get[String]("allocationProvenance").toOption if _safe_provenance(allocation)
+              external <- cursor.get[String]("externalUsageProvenance").toOption if _safe_provenance(external)
+              tokens <- cursor.get[Long]("externalUsageTokens").toOption if tokens >= 0
+              invoked <- cursor.get[Boolean]("providerInvoked").toOption if !invoked
+            } yield Json.obj("provider" -> Json.fromString(provider), "model" -> Json.fromString(model),
+              "modelGroup" -> Json.fromString(group), "allocationProvenance" -> Json.fromString(allocation),
+              "externalUsageProvenance" -> Json.fromString(external), "externalUsageTokens" -> Json.fromLong(tokens),
+              "providerInvoked" -> Json.False)
+          }
+          Option.when(checked.forall(_.nonEmpty))(Json.fromValues(checked.flatten))
+        }
+    }
+    ordinary ++ exhausted.toVector.map(_exhaustions_key -> _)
+  }
+
+  private def _provider_metadata_json(values: Map[String, String], taskbinding: Map[String, String], selectedModel: Option[String]): Option[Json] = {
     val facts = values.filter { case (key, text) =>
-      (key.startsWith("ai.usage.") || Set("ai.execution.provider", "ai.execution.model", "ai.execution.profile",
+      (key.startsWith("ai.usage.") && !_allowance_keys.contains(key) && key != _exhaustions_key || Set("ai.execution.provider", "ai.execution.model", "ai.execution.profile",
         "openai.response_id", "openai.finish_reason", "gemma.response_id")(key)) && _safe_provider_fact(text) &&
         (key != "ai.usage.allowance_admission" || Set("verified-included", "authorized-paid")(text)) &&
         (key != _reservation_basis_key || _reservation_bases(text))
     }
     val projected = (facts ++ taskbinding).toVector.sortBy(_._1).map((k, v) => k -> Json.fromString(v)) ++
-      providerHttp(values).toVector.map("providerHttp" -> _)
+      _allowance_facts(values, selectedModel) ++ providerHttp(values).toVector.map("providerHttp" -> _)
     Option.when(projected.nonEmpty)(Json.obj(projected*))
   }
 
-  private def _provider_metadata(values: Map[String, String], taskbinding: Map[String, String]): Option[Record] =
-    _provider_metadata_json(values, taskbinding).map(GoalPhaseNativeMetadata.record)
+  private def _provider_metadata(values: Map[String, String], taskbinding: Map[String, String], selectedModel: Option[String]): Option[Record] =
+    _provider_metadata_json(values, taskbinding, selectedModel).map(GoalPhaseNativeMetadata.record)
 
   /** Finite observation for native compiler attempt history, with no response body. */
   def boundedRecordEvidence(response: AiRecordResponse): Option[Json] =
-    _bounded_observation(response.metadata)
+    _bounded_observation(response.metadata, response.model)
 
   def boundedFailureEvidence(conclusion: Conclusion): Option[Json] =
-    _bounded_observation(conclusion.observation.properties)
+    _bounded_observation(conclusion.observation.properties, conclusion.observation.properties.get("ai.execution.model"))
 
-  private def _bounded_observation(metadata: Map[String, String]): Option[Json] = {
+  private def _bounded_observation(metadata: Map[String, String], selectedModel: Option[String]): Option[Json] = {
     val usage = Vector("input_tokens", "output_tokens", "total_tokens", "cached_input_tokens", "reasoning_tokens")
       .flatMap(name => Vector("ai.usage." + name, "ai.usage." + name + "_source"))
     val fields = Vector("ai.execution.provider", "ai.execution.model", "ai.usage.cost_microunits", "ai.usage.tokens", "ai.provider.http.status",
       "ai.provider.http.request-id", "openai.response_id", "gemma.response_id", "ai.usage.allowance_admission",
-      _reservation_basis_key) ++ usage
+      _reservation_basis_key, _exhaustions_key) ++ _allowance_keys ++ usage
     val values: Map[String, String] = fields.foldLeft(Map.empty[String, String]) { (selected, key) =>
       metadata.get(key).fold(selected)(value => selected.updated(key, value))
     }
-    _provider_metadata_json(values, Map.empty)
+    _provider_metadata_json(values, Map.empty, selectedModel)
   }
 
   private[admission] def providerResult(attempt: String, continuation: String, record: Record,
@@ -356,7 +407,7 @@ private[smworkflow] object GoalPhaseApiReview {
       (!requireAcceptance || v.acceptance.nonEmpty))
     V.GoalPhaseApiReviewResult(if (valid) "COMPLETED" else "FAILED", attempt, continuation,
       Option.when(valid)(value).flatten, model.filter(_safe_provider_fact), responseMetadata.get("ai.execution.provider").filter(_safe_provider_fact),
-      _provider_metadata(responseMetadata, taskBinding),
+      _provider_metadata(responseMetadata, taskBinding, model),
       if (valid) "Submit separately for Admission" else "Provider returned an invalid typed review result or outcome",
       Option.when(!valid)(record))
   }
@@ -427,10 +478,12 @@ private[smworkflow] object GoalPhaseApiReview {
     socket.aiRunner(ComponentSelector(capabilities = Set(_bounded_contract))).toOption
 
   /** Call only after any required attempt intent has been retained by the caller. */
-  def boundedRecord(runner: AiRunner, task: BoundedRecordTask)(using ExecutionContext): BoundedRecordResult = {
+  def boundedRecord(runner: AiRunner, task: BoundedRecordTask,
+    onDeclined: Conclusion => Unit = _ => ())(using ExecutionContext): BoundedRecordResult = {
     val binding = task.binding
     _record_c(runner, task.prompt, task.schema, Some("openai"), binding + ("ai.task.kind" -> task.kind)) match {
       case Consequence.Failure(conclusion) if _illegal_operation(conclusion).contains("ai.task.declined") =>
+        onDeclined(conclusion)
         BoundedRecordResult.Declined
       case Consequence.Failure(conclusion) if _illegal_operation(conclusion).contains("ai.task.failed") =>
         BoundedRecordResult.Failed(conclusion)
@@ -441,7 +494,7 @@ private[smworkflow] object GoalPhaseApiReview {
         val provider = response.metadata.get("ai.execution.provider").filter(_safe_provider_fact)
         if (binding.forall { case (key, expected) => response.metadata.get(key).contains(expected) } &&
             model.nonEmpty && provider.nonEmpty) BoundedRecordResult.Completed(response)
-        else BoundedRecordResult.Unbound(model, provider, _provider_metadata(response.metadata, Map.empty))
+        else BoundedRecordResult.Unbound(model, provider, _provider_metadata(response.metadata, Map.empty, None))
     }
   }
 
@@ -486,11 +539,14 @@ private[smworkflow] object GoalPhaseApiReview {
         else "AI runner unavailable before execution")
       case Some(value) if bounded =>
         val task = BoundedRecordTask("independent-review", input.attemptIdentity, continuation, input.workResource, prompt, selectedSchema)
-        boundedRecord(value, task) match {
+        var declined = Option.empty[Conclusion]
+        boundedRecord(value, task, conclusion => declined = Some(conclusion)) match {
           case BoundedRecordResult.Completed(response) => providerResult(input.attemptIdentity, continuation,
             response.record, response.model, response.metadata, task.binding, requireAcceptance)
           case BoundedRecordResult.Blocked(reason) => _result_("BLOCKED", reason)
-          case BoundedRecordResult.Declined => _result_("DECLINED", "Bounded record producer declined before dispatch")
+          case BoundedRecordResult.Declined => V.GoalPhaseApiReviewResult("DECLINED", input.attemptIdentity,
+            continuation, None, None, None, declined.flatMap(boundedFailureEvidence).map(GoalPhaseNativeMetadata.record),
+            "Bounded record producer declined before dispatch", None)
           case BoundedRecordResult.Failed(conclusion) =>
             val observed = conclusion.observation.properties
             V.GoalPhaseApiReviewResult("FAILED", input.attemptIdentity, continuation, None,

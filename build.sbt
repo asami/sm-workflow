@@ -519,7 +519,9 @@ lazy val root: Project = project
         "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"
       val fixtureSources = Set(
         baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/Phase251OfflineAllowanceIntegrationSpec.scala",
-        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase251OfflineAllowanceFixture.scala"
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase251OfflineAllowanceFixture.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase253TwoGroupAllowanceFixture.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/Phase253TwoGroupAllowanceIntegrationSpec.scala"
       )
       (Test / unmanagedSources).value.filterNot(source =>
         source == strictspec || (phase251AllowanceFixtureJar.value.isEmpty && fixtureSources(source)))

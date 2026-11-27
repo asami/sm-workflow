@@ -124,6 +124,17 @@ separate process reopened the fixture database after test termination; the
 production application was not relaunched in that observation. Deadline closure
 was simulated directly rather than through an end-to-end caller interruption.
 These observations do not establish live provider or billing behavior.
+The adopted Textus AI delivery supports separately verified daily allocations for
+`gpt-5.6-sol` in `openai-daily-group-1` and `gpt-5.6-terra` in
+`openai-daily-group-2`. The legacy singleton configuration remains supported.
+The producer owns eligibility, request-sized reservations, external usage,
+settlement and the decision to try another candidate only after a known
+pre-dispatch refusal. It does not borrow between groups or infer paid permission.
+The consumer retains safe bounded group, allocation and external-use provenance,
+and a schema-checked list of pre-dispatch exhaustions when supplied. These facts
+are observations, not a claim of live use, verified cost or an invoice. The
+list is omitted if its structure or values are invalid or exceed its bound.
+
 The bound response records the verified allowance admission separately from
 observed token usage and provider-reported cost. A successful allowance check
 does not supply an invoice amount.
