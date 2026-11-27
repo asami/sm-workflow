@@ -27,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Executable specification for bounded diagnostic proposals.
   * @since   Nov. 22, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

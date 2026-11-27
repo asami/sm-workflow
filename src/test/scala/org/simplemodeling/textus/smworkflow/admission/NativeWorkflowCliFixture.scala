@@ -995,15 +995,19 @@ private[admission] object NativeWorkflowCliFixture {
   def freshPackagedMetals(car: Path, scala3: Boolean, serverSource: String, mode: String,
     formatter: Boolean = false, excludeFormatter: Boolean = false, scalafixRule: Option[String] = None,
     history: Boolean = false, rejectFormattedCandidate: Boolean = false, structuralLint: Boolean = false): Scenario = {
-    require(Set("completed", "unavailable", "refactor", "source")(mode))
+    val membershipRepair = Option.when(mode.startsWith("membership-"))(mode.stripPrefix("membership-"))
+    val metalsMode = if (membershipRepair.nonEmpty) "completed" else mode
+    require(Set("completed", "unavailable", "refactor", "source")(metalsMode))
     require(!rejectFormattedCandidate || (scala3 && formatter && scalafixRule.contains("ProcedureSyntax")))
     require(!scalafixRule.contains("OrganizeImports") || (scala3 && formatter && history))
     require(!structuralLint || (scala3 && formatter && !excludeFormatter && scalafixRule.isEmpty))
+    require(membershipRepair.forall(Set("pass", "rollback", "refuse", "unavailable", "ambiguous", "array", "local")) &&
+      (membershipRepair.isEmpty || (scala3 && !formatter && scalafixRule.isEmpty && !structuralLint)))
     val parent = Files.createDirectories(_primary.resolve("target/sm-workflow/work/native-cli"))
     val root = Files.createTempDirectory(parent, if (scala3) "packaged-metals-3-" else "packaged-metals-2-").toRealPath()
     TypedSbtHostPlanFixture.build(root, true)
     val repository = root.resolve("repository")
-    if (formatter || scalafixRule.nonEmpty) Files.writeString(root.resolve("packaged-scala-tools"), "enabled")
+    if (formatter || scalafixRule.nonEmpty || membershipRepair.nonEmpty) Files.writeString(root.resolve("packaged-scala-tools"), "enabled")
     val build = repository.resolve("build.sbt")
     if (scala3) Files.writeString(build, Files.readString(build).replace("2.12.18", "3.3.8"))
     if (formatter || scalafixRule.nonEmpty) Files.writeString(repository.resolve("project.yaml"),
@@ -1055,6 +1059,7 @@ private[admission] object NativeWorkflowCliFixture {
         (if (history) "docstrings.style = keep\n" else "") +
         (if (excludeFormatter) "project.excludePaths = [\"src/main/scala/RepairExample.scala\"]\n" else ""))
     if (structuralLint) _packaged_structural_lint(repository)
+    membershipRepair.foreach(value => VectorMembershipRepairFixture.configure(repository, value, _primary, _shared_lint_rule_artifact()))
     if (history) {
       val source = repository.resolve("src/main/scala/RepairExample.scala")
       Files.createDirectories(source.getParent)
@@ -1063,7 +1068,8 @@ private[admission] object NativeWorkflowCliFixture {
     val input = V.GoalPhaseStartInput("packaged-metals", "smwf-packaged-metals")
     val paths = Vector("src/main/scala/RepairExample.scala", "project.yaml")
     val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)) ++
-      Option.when(structuralLint)(GoalPhaseNativeValidation.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck))
+      Option.when(structuralLint || membershipRepair.nonEmpty)(GoalPhaseNativeValidation.Check("scala-lint", 2, WorkflowSbtValidation.Kind.FixCheck)) ++
+      Option.when(membershipRepair.nonEmpty)(GoalPhaseNativeValidation.Check("membership-tests", 3, WorkflowSbtValidation.Kind.TestOnly))
     val normal = ThreeWorkflowNormalHostFixture.definition(root)
     val host = normal.copy(target = normal.target.copy(root = repository.toString), goal = normal.goal.copy(
       input = input, candidatePaths = paths, stepValidation = normal.goal.stepValidation.copy(checks = checks),
@@ -1090,7 +1096,7 @@ private[admission] object NativeWorkflowCliFixture {
       "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin"),
         "SM_WORKFLOW_METALS_SERVER" -> Json.fromString(server.toString),
         "METALS_FIXTURE_TRACE" -> Json.fromString(root.resolve("metals.trace").toString),
-        "METALS_FIXTURE_MODE" -> Json.fromString(mode)), "allowedArtifacts" -> Json.arr(),
+        "METALS_FIXTURE_MODE" -> Json.fromString(metalsMode)), "allowedArtifacts" -> Json.arr(),
       "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False)
     val configPath = root.resolve(".textus/config.json")
     val config = parse(Files.readString(configPath)).fold(throw _, identity)
@@ -1125,23 +1131,27 @@ private[admission] object NativeWorkflowCliFixture {
           "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin")), "allowedArtifacts" -> Json.arr(),
           "allowedInputFiles" -> Json.obj(), "allowsWorkingDirectory" -> Json.False))
     }
-    val lint = Option.when(structuralLint)(TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable,
+    val lint = Option.when(structuralLint || membershipRepair.nonEmpty)(TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable,
       Vector(2), operation = org.goldenport.cncf.processexecution.SbtOperation.FixCheck))
+    val membershiptests = Option.when(membershipRepair.nonEmpty)(TypedSbtHostPlanFixture.plan(root,
+      TypedSbtHostPlanFixture.normalExecutable, Vector(3), operation = org.goldenport.cncf.processexecution.SbtOperation.TestOnly,
+      testClasses = Vector("example.MembershipSpec")))
     def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).fold(throw _, identity)
     val lintprograms = lint.toVector.flatMap(_array_(_, "sbtPrograms")).map(_.mapObject(_.add("lintInput", Json.True)))
+    val testprograms = membershiptests.toVector.flatMap(_array_(_, "sbtPrograms"))
     val grants = _array_(process, "grants").map { grant =>
       val capabilities = grant.hcursor.get[Vector[Json]]("capabilities").fold(throw _, identity)
       val added = (if (scalafixRule.contains("ProcedureSyntax")) Vector.empty else Vector(Json.fromString(ScalaMetalsProcess.capability))) ++
         (if (formatter) Vector(Json.fromString(formatcap)) else Vector.empty) ++
         (if (formatter || scalafixRule.nonEmpty) Vector(Json.fromString(WorkflowScalaToolProcess.scalafixCapability)) else Vector.empty)
       grant.mapObject(_.add("capabilities", Json.fromValues(capabilities ++ added ++
-        lintprograms.map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing lint capability"))) ++ gitCapabilities)))
+        (lintprograms ++ testprograms).map(_.hcursor.downField("capability").focus.getOrElse(throw new AssertionError("Missing lint/test capability"))) ++ gitCapabilities)))
     }
     val programs = process.hcursor.get[Vector[Json]]("programs").toOption.getOrElse(Vector.empty)
     val updated = process.mapObject(_.add("gitPrograms", Json.fromValues(_array_(process, "gitPrograms") ++ gitPrograms))
-      .add("sbtPrograms", Json.fromValues(sbt ++ lintprograms))
-      .add("workspaces", Json.fromValues(_array_(process, "workspaces") ++ lint.toVector.flatMap(_array_(_, "workspaces"))))
-      .add("workspaceGrants", Json.fromValues(_array_(process, "workspaceGrants") ++ lint.toVector.flatMap(_array_(_, "workspaceGrants"))))
+      .add("sbtPrograms", Json.fromValues(sbt ++ lintprograms ++ testprograms))
+      .add("workspaces", Json.fromValues(_array_(process, "workspaces") ++ (lint.toVector ++ membershiptests.toVector).flatMap(_array_(_, "workspaces"))))
+      .add("workspaceGrants", Json.fromValues(_array_(process, "workspaceGrants") ++ (lint.toVector ++ membershiptests.toVector).flatMap(_array_(_, "workspaceGrants"))))
       .add("grants", Json.fromValues(grants))
       .add("programs", Json.fromValues(programs ++ (if (scalafixRule.contains("ProcedureSyntax")) Vector.empty else Vector(program)) ++ formatprogram)))
     val configured = config.mapObject { fields =>
@@ -1154,7 +1164,7 @@ private[admission] object NativeWorkflowCliFixture {
     }
     Files.writeString(configPath, configured.noSpaces)
     scenario.prepareRepository()
-    if (mode == "unavailable") Files.delete(server)
+    if (metalsMode == "unavailable") Files.delete(server)
     scenario
   }
 

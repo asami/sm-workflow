@@ -24,3 +24,4 @@ org.simplemodeling.scalalint.NoTlsVerificationBypass
 org.simplemodeling.scalalint.NoWeakCryptographicConfiguration
 org.simplemodeling.scalalint.NoUncheckedJavaDeserialization
 org.simplemodeling.scalalint.NoPredictableSecurityRandom
+org.simplemodeling.scalalint.VectorStringMembershipMigration
