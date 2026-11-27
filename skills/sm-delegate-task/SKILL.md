@@ -122,9 +122,8 @@ It is the standard route for new authorized development deliverables sent to an
 existing chat. Apply the [new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations):
 continue corrections to the original deliverable in its existing request; use
 this entry for a distinct purpose or acceptance obligation. Do not duplicate
-ongoing legacy work or accept a direct development message as native admission.
-Missing setup is reported concretely, not silently bypassed with another skill
-or a standalone execution route.
+ongoing work. Use the destination Start or continue its retained Session as
+described below.
 
 The owning caller invokes the installed CLI directly with first-attempt scoped
 escalation. Use the native host's program-generated activity presentation and
@@ -145,10 +144,10 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
-Carry the selected JAR mode separately from the delivery choice. For an SBT
-consumer, follow the [parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
-for that mode when setting up the parent build or diagnosing a failed
-continuation.
+Carry the selected JAR mode separately from the delivery choice. The destination
+uses its own Start, validation and publication bindings. Check
+[parent build prerequisites](../../docs/spec/native-host-execution.md#parent-sbt-build-prerequisites)
+when setting up the consumer build or diagnosing a failed continuation.
 
 For a fresh request, use the intent already established during selection to
 author `workClassification` with separate `implementation`, `repair` and
@@ -159,8 +158,26 @@ The requester passes the assignment through the existing dispatch. The
 destination uses it for fresh issuance and follows the retained assignment for
 pending work.
 
-At dispatch, include the return chat identity, permitted information, covered
-work and a verifiable reference to the original user approval in the handoff.
+In the initial handoff, the requester supplies the adopted `DelegateTaskInput`
+for the destination or a reference it can read, the original authority
+reference, and the return chat and permitted information. The destination uses
+these for its normal Start. `Dispatch` and `dispatch-observed` belong to the
+requester. Do not require the destination to obtain a separate dispatch receipt.
+
+If the handoff is incomplete, first continue any retained destination Session.
+Otherwise recover the exact missing Start material from the existing request,
+or have the owning requester supply it through the authorized chat route.
+The requester reuses its saved request and authority. If no request has entered
+the runtime, the requester uses the ordinary entry once under the original
+authorization. Do not ask the user to reproduce records or repeat consent.
+
+Keep requester Session IDs and local evidence paths with their owner unless
+the selected operation requires them and sharing is authorized. If sharing
+is denied, retain the denial and use what the destination can already access
+under the existing authority. If Start still needs an unavailable item, name
+that item, the destination and why it is needed. Ask only for authorization
+to share that item.
+
 Carry the same authority into covered follow-up repairs. At return, send the
 result directly when all three scope elements still match, including for a new
 repair commit or Session. Resolve any uncovered part under the shared
