@@ -1,5 +1,10 @@
 # Phase 25.4 Acceptance Checklist
 
+- [ ] Use the installed Phase 25.3 route during actual Phase 25.4 development.
+  Record observed review and compiler-repair selections, actual usage and
+  billing evidence when available, and causes for bypass or fallback. Keep
+  unobserved cases explicit. Use the resulting evidence to decide when to
+  start Phase 25.5.
 - [ ] P254-01: Typed multidimensional task taxonomy covers ordinary repair, review and judgment; unknowns and reasoning versus change scope are distinct.
 - [ ] P254-02: Context sufficiency, missing evidence and candidate identity recorded; bounded context requests and Take Over verified.
 - [ ] P254-03: Provider-neutral capability requirements and deterministic,

@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-24 (Asia/Tokyo)
-Scheduled: immediately after [Phase 25.2](phase-25.2.md), followed by [Phase 7.2](phase-7.2.md)
+Scheduled: immediately after [Phase 25.2](phase-25.2.md), followed by [Phase 25.3](phase-25.3.md)
 Checklist: [Phase 28.2 acceptance](phase-28.2-checklist.md)
 Decision: [strict comparison migration journal](../journal/2026/11/2026-11-24-strict-scala-comparison-migration.md)
 
