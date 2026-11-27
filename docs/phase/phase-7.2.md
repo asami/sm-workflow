@@ -1,4 +1,4 @@
-# Phase 7.2: RepositorySync Retirement of Temporary Dependency Worktrees
+# Phase 7.2: RepositorySync FixCheck and Temporary Dependency Worktree Retirement
 
 Status: planned
 Planned: 2026-11-24
@@ -20,6 +20,9 @@ Phase closure remains local: complete and commit the Phase without waiting for
 GitHub synchronization. A failed or deferred synchronization, or incomplete
 retirement, does not reopen the completed Phase.
 
+Give build and RepositorySync validation the same deterministic FixCheck repair
+behavior. Each route has its own option, enabled by default.
+
 ## Delivery groups
 
 | Step | Work | Observable outcome |
@@ -27,6 +30,31 @@ retirement, does not reopen the completed Phase.
 | P72-01 | Temporary worktree ownership and intent | When a Phase explicitly selects temporary local dependency development at Start or during execution, prepare its dedicated worktree from the selected GitHub main tip through the existing managed workspace owner. Support the agreed local `.codex-workflow/checkouts` placement through the workspace mapping, not a hard-coded RepositorySync path. Record the exact worktree/repository, target branch, Phase, and explicit retire-after-sync intent. |
 | P72-02 | Verified synchronization and retirement | Reuse the existing direct RepositorySync route. After a verified remote result and successful safety checks, retire only the bound temporary worktree through Git. Automatic and manually invoked RepositorySync use the same persisted intent and post-sync path. |
 | P72-03 | Deferred recovery and installed qualification | Preserve the worktree and intent across sync failure, deferment, conflicts, unknown effects or unsafe retirement. Qualify later manual sync with automatic retirement, crash/reconnect and protection cases on disposable repositories. |
+| P72-04 | FixCheck selection and shared repair | Keep the existing build option and add an independent RepositorySync option. Both default to enabled. Use one deterministic repair and revalidation path, and return an error if blocking diagnostics remain. |
+
+## P72-04 — FixCheck selection and shared repair
+
+- Keep the existing build-time FixCheck option and add an independent
+  synchronization-time option. Both default to `true`. An explicit `false`
+  skips FixCheck and its automatic repair for that route. Compile and test
+  selection follow their existing impact rules.
+- In RepositorySync, select only Scala files whose program logic the merge
+  combines or edits. Apply this rule to both local-main integration and the
+  remote merge. A complete file carried through from either parent, including
+  an added file, is outside FixCheck scope. A proven ordinary comment or
+  source-history-only difference is also outside scope. Skip FixCheck when
+  there are no eligible files.
+- Share the same implementation for build and synchronization. Reuse the
+  deterministic Scala cleanup and candidate-bound patch path from
+  [Phase 28.1](phase-28.1.md#p281-02--apply-deterministic-formatting-and-lint-corrections).
+  Use the project's effective rule configuration. Apply only eligible
+  deterministic corrections within the selected scope and rerun the
+  applicable checks on the resulting candidate.
+- If automatic repair cannot clear all blocking diagnostics, return an error
+  and retain the diagnostic and candidate state. End the automatic repair
+  attempt at that point. A failed synchronization candidate cannot proceed to
+  commit, push or worktree retirement. The existing local Phase closure
+  remains valid.
 
 ## Boundaries
 
