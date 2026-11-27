@@ -1,10 +1,15 @@
 # Phase 28.2: Strict Scala Comparison Migration and Deterministic Repair
 
-Status: planned; execution not started
+Status: locally closed on 2026-11-27 (Asia/Tokyo)
 Planned: 2026-11-24 (Asia/Tokyo)
 Scheduled: immediately after [Phase 25.2](phase-25.2.md), followed by [Phase 25.3](phase-25.3.md)
 Checklist: [Phase 28.2 acceptance](phase-28.2-checklist.md)
 Decision: [strict comparison migration journal](../journal/2026/11/2026-11-24-strict-scala-comparison-migration.md)
+
+Session `caf6f6b001282349ac7b8632a3f92c63` reached Terminal at local release
+`d24bf0d5`. Compile, all 3,192 FULL tests and the four independent review
+conditions passed. The earlier whole-Phase FixCheck failure remains recorded,
+with 56 blocking diagnostics carried to [Phase 7.2](phase-7.2.md).
 
 ## Goal and boundaries
 
@@ -25,6 +30,35 @@ verification, and Admission integration. [Phase 29](phase-29.md) retains
 broader lint coverage, quality policy and annotation semantics.
 
 ## P282-01 — Adopt typed collection comparison in normal consumers
+
+The retained Phase 28.1 FixCheck inventory records
+`NoImplicitArrayEqualityInCollections.AnalysisUnavailable` at historical
+`NativeWorkflowCliFixture.scala:636` (tree
+`237cc9507ce1e6e0b1628a222d131051986933d2`). That observation remains
+unresolved; it is not a type proof or authorization for an automatic rewrite.
+The independently selected current fixture guard compares a `Vector[String]`
+of candidate paths to a `String` path with universal String equality. The
+consumer also uses the new lookup for `CommitHygiene` staging ordinals. Both
+use `Eq.fromUniversalEquals[String]` to retain the existing equality relation.
+The Core source delivery is commit `0cf6c63d85bc9b640a3f812ed592853a06233b81`,
+and the published `org.goldenport:goldenport-core_3:0.4.3-SNAPSHOT` JAR has
+SHA-256 `525e5fc27e1ae838f97d5ae8e82146d26b448b67045dee0e049ee6b62332b79b`.
+The ordinary consumer classpath and tests must still confirm that binary.
+The delivered lookup does not support a start-position argument; such a
+rewrite is outside this qualification.
+
+The retained P282-01 TestOnly attempt terminated with exit code 0, but its
+report was unverified as `InvalidReport`: the main project reported 42
+successes, including the two previously failing cases, while the separate
+ScalaStrictAuthoring project reported seven successes in a second summary.
+The separate summaries prevented attribution to the selected single-run
+contract. This attempt is retained and does not establish selected-test
+success. The Phase-local TestOnly selection is being limited to the root
+`CommitHygieneSpec` and `TypedCollectionMigrationSpec` suites for a fresh
+candidate check. The Phase FULL check continues to cover all suites;
+`DeterministicRepairSpec` is relevant to P282-02 and
+`WorkflowStrictComparisonSpec` to P282-03. Fresh validation and review remain
+pending.
 
 - Start from a real retained diagnostic attributable to a supported membership
   site, not a baseline example presumed to be a match. Separately record

@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{ValidationTestPolicy, Com
   * This adapter owns no suite catalog, annotation interpreter or metadata merge.
   * @since   Oct. 24, 2026
   *  version Oct. 31, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   */
 object LabelledTestSelection {
   def inventory(root: String, revision: String): String = {
@@ -21,8 +21,9 @@ object LabelledTestSelection {
       failure => throw new IllegalStateException(s"Canonical CNCF discovery failed: $failure"), identity)
     CompiledValidationInventory.encode(discovered)
   }
-  def select(root: String, revision: String, purpose: String, suites: Array[String],
-    exact: Array[String], containing: Array[String], explicitSuites: Array[String], properties: Array[String]): Array[Array[String]] = {
+  private def _select(root: String, revision: String, purpose: String, suites: Array[String],
+    exact: Array[String], containing: Array[String], explicitSuites: Array[String], properties: Array[String],
+    withInventory: Boolean): Array[Array[String]] = {
     val loader = getClass.getClassLoader
     val scope = D.DiscoveryScope("sm-workflow-tests", "1", Vector(D.ArtifactScope(
       "component:sm-workflow", "sm-workflow-tests", revision, "working-tree",
@@ -68,7 +69,9 @@ object LabelledTestSelection {
       "FULL classification conflict: HEAVY/external-service work must be a separate explicit selection")
     if (purpose == "ADMISSION" && selected.isEmpty && exact.isEmpty && containing.isEmpty && properties.isEmpty) {
       require(inventory.completeness != D.Completeness.UNKNOWN, "Admission discovery did not complete")
-      return Array.empty[Array[String]]
+      return if (withInventory) Array(Array("SM-WORKFLOW-ADMISSION-INVENTORY-V1", relevant.size.toString,
+        "0", if (inventory.completeness == D.Completeness.COMPLETE) "complete" else "partial"))
+      else Array.empty[Array[String]]
     }
     val executions = ValidationTestPolicy.executionsC(selected, exact.toSet, containing.toVector).toOption
       .getOrElse(throw new IllegalArgumentException("No labelled runnable operation selected; an empty run is not PASS"))
@@ -94,13 +97,26 @@ object LabelledTestSelection {
           "Selected ConfigMap inputs differ from the exact source schema")
       }
     }
-    operations.map { operation =>
+    val rows = operations.map { operation =>
       val row = Array(operation.selector.suiteClassName,
         operation.selector.testName, ValidationTestPolicy.requiresRuntime(operation).toString)
       if (operation.metadata.exists(_.executionRequirement.exists(_.capabilities.exists(
         _.identity == "sm-workflow.packaged-car")))) row :+ "true" else row
     }.toArray
+    if (withInventory) Array(Array("SM-WORKFLOW-ADMISSION-INVENTORY-V1", relevant.size.toString,
+      rows.length.toString, if (inventory.completeness == D.Completeness.COMPLETE) "complete" else "partial")) ++ rows
+    else rows
   }
+
+  def selectWithInventory(root: String, revision: String, purpose: String, suites: Array[String],
+    exact: Array[String], containing: Array[String], explicitSuites: Array[String], properties: Array[String]): Array[Array[String]] = {
+    require(purpose == "ADMISSION", "Inventory observation is only defined for Admission")
+    _select(root, revision, purpose, suites, exact, containing, explicitSuites, properties, true)
+  }
+
+  def select(root: String, revision: String, purpose: String, suites: Array[String],
+    exact: Array[String], containing: Array[String], explicitSuites: Array[String], properties: Array[String]): Array[Array[String]] =
+    _select(root, revision, purpose, suites, exact, containing, explicitSuites, properties, false)
 
   def select(root: String, revision: String, purpose: String, suites: Array[String],
     exact: Array[String], containing: Array[String], explicitSuites: Array[String]): Array[Array[String]] =

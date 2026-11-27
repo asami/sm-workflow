@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -90,6 +90,52 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       val checks = take(StandardWorkflowRuntime.standardChecksC(Vector("compile", "test-admission", "test-only")))
       checks(1).effectiveTestScope shouldBe SbtTestScope.Admission
       take(StandardWorkflowRuntime.standardChecksC(Vector("test"))).head.effectiveTestScope shouldBe SbtTestScope.Full
+    }
+    "retain only bounded same-pass Admission inventory from a complete capture" in {
+      Given("one selected case and a separate same-pass inventory marker")
+      def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+        .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      val row = token("org.example.InventorySpec") + ":" + token("case")
+      val marker = "SM-WORKFLOW-ADMISSION-INVENTORY-V1 complete 3 1"
+      val selection = Vector("CNCF-ADMISSION-V1 selected " + row,
+        "CNCF-ADMISSION-V1 succeeded " + row, "[info] org.example.InventorySpec:",
+        "[info] Total number of tests run: 1",
+        "[info] Suites: completed 1, aborted 0", "[info] Tests: succeeded 1, failed 0, canceled 0, ignored 0, pending 0",
+        "[info] All tests passed.", "CNCF-ADMISSION-V1 completed").mkString("\n")
+      val raw = _result(SbtOperation.Test)
+      val admission = raw.copy(target = raw.target.copy(testScope = SbtTestScope.Admission))
+      def receipt(text: String, truncated: Boolean = false) = {
+        val capture = _capture(text).copy(truncated = truncated)
+        val termination = if (truncated) ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout)
+          else admission.processResult.termination
+        take(V.sbtReceiptC("test-admission", Kind.Test, admission.copy(processResult =
+          admission.processResult.copy(stdout = capture, stderr = _capture(""), termination = termination))))
+      }
+      When("the native result retains and replays the observation")
+      val saved = receipt(marker + "\n" + selection)
+      val roundtrip = saved.asJson.as[V.Receipt].fold(throw _, identity)
+      Then("the selected case and complete denominator agree and survive the receipt")
+      roundtrip.sbt.flatMap(_.admissionInventory) shouldBe Some(AdmissionInventory(3, 1, "complete"))
+      GoalPhaseNativeValidation.successful(Vector(roundtrip), Vector(
+        GoalPhaseNativeValidation.Check("test-admission", 1, Kind.Test, testScope = Some("admission")))) shouldBe true
+      val partial = receipt(marker.replace("complete", "partial") + "\n" + selection)
+      partial.sbt.flatMap(_.admissionInventory) shouldBe Some(AdmissionInventory(3, 1, "partial"))
+      for (invalid <- Vector(selection, marker + "\n" + marker + "\n" + selection,
+        marker.replace("3 1", "0 1") + "\n" + selection, marker.replace("3 1", "3 2") + "\n" + selection)) {
+        receipt(invalid).sbt.flatMap(_.admissionInventory) shouldBe None
+      }
+      val truncated = receipt(marker + "\n" + selection, truncated = true)
+      val retainedTruncated = truncated.asJson.as[V.Receipt].fold(throw _, identity)
+      retainedTruncated.sbt.map(_.outcome) shouldBe Some(Outcome.Incomplete)
+      retainedTruncated.sbt.flatMap(_.admissionInventory) shouldBe None
+      GoalPhaseNativeValidation.successful(Vector(retainedTruncated), Vector(
+        GoalPhaseNativeValidation.Check("test-admission", 1, Kind.Test, testScope = Some("admission")))) shouldBe false
+      val empty = receipt("SM-WORKFLOW-ADMISSION-INVENTORY-V1 complete 0 0\nCNCF-ADMISSION-V1 empty")
+      empty.sbt.flatMap(_.admissionInventory) shouldBe Some(AdmissionInventory(0, 0, "complete"))
+      val partialempty = receipt("SM-WORKFLOW-ADMISSION-INVENTORY-V1 partial 0 0\nCNCF-ADMISSION-V1 empty")
+      partialempty.sbt.flatMap(_.admissionInventory) shouldBe Some(AdmissionInventory(0, 0, "partial"))
+      val unavailable = receipt("SM-WORKFLOW-ADMISSION-INVENTORY-V1 complete 0 0\nCNCF-ADMISSION-V1 unavailable")
+      unavailable.sbt.flatMap(_.admissionInventory) shouldBe None
     }
     "satisfy empty Admission only after Compile and keep independent focused obligations" in {
       import GoalPhaseNativeValidation.Check

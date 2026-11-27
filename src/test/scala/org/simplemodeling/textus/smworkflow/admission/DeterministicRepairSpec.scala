@@ -27,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Executable specification for bounded diagnostic proposals.
   * @since   Nov. 22, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -794,6 +794,9 @@ while True:
       val original = payload(output)
       val expected = DeterministicCompilerFinding("compile", "/work/src/A.scala", 395, column, source)
       deterministicCompilerFinding(original) shouldBe Some(expected)
+      compilerPatternDisposition(original) shouldBe Some(true)
+      compilerPatternDisposition(payload(output, truncated = true)) shouldBe None
+      compilerPatternDisposition(payload(output.replace(s":395:$column", s":395:${column + 1}"))) shouldBe Some(false)
       compilerLocator(original).map(x => (x.checkIdentity, x.path, x.line, x.column)) shouldBe
         Some(("compile", "/work/src/A.scala", 395, column))
       compilerLocator(original).map(_.message.contains("value message is not a member")) shouldBe Some(true)
@@ -1124,6 +1127,115 @@ while True:
           finalResult.work.map(_.kind) shouldBe Some("RepairStep")
           Files.readString(source) should include (invalid)
         }
+      }
+    }
+  }
+
+  /** The fixture supplies the same ordinary review and closure evidence that
+    * an installed caller receives; no private workflow state is written. */
+  private def _terminal_scalafix_fixture(scenario: F.Scenario, task: Path): V.GoalPhaseAdvanceResult = {
+    def save_(label: String, record: Record): String = {
+      val path = Files.createTempFile(scenario.root, label, ".json")
+      Files.writeString(path, take(record.toJsonStringC))
+      path.toUri.toASCIIString
+    }
+    def import_(operation: String, input: Record): Unit = {
+      val prepared = scenario.prepareHostInput(operation, input)
+      withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+      scenario.selectPreparedImport(prepared)
+    }
+    var terminal = Option.empty[V.GoalPhaseAdvanceResult]
+    var iteration = 0
+    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(15)
+    while (terminal.isEmpty && iteration < 20 && System.nanoTime() < deadline) {
+      val output = scenario.advance(task)
+      val state = scenario.readGoalPhaseResult(output)
+      state.work.map(_.kind) match {
+        case Some(kind) if Set("ReviewStep", "ReviewPhase")(kind) =>
+          val result = V.GoalPhaseWorkResult("accept", "Independent fixture accepts the actual candidate", Vector.empty,
+            None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+          val reference = V.WorkflowArtifactReference("scalafix-terminal-" + kind + "-" + iteration, "1")
+          val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("scalafix-independent-reviewer"), None, None)
+          val actual = output.business[V.GoalPhaseAdvanceResult]
+          val request = actual.retainedWork.map(_.resource).getOrElse(output.invocation.stdout.toUri.toASCIIString)
+          val preparation = V.WorkflowEvidencePreparationInput("GoalPhase", "review", request,
+            save_("review", result.toRecord()), save_("review-reference", reference.toRecord()),
+            save_("review-execution", execution.toRecord()), "normal-development-host", java.time.Instant.now().toString,
+            "entity:smworkflow.cli.host_evidence", None)
+          import_("prepareEvidence", preparation.toRecord())
+          val submitted = scenario.call("command", state.submitOperation.getOrElse(fail("Missing review submit")), Vector(
+            "--sessionId", state.submitSessionId.getOrElse(fail("Missing review session")),
+            "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+            "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces,
+            "--executionEvidence", NativeCallerExecutionFixture.json(execution.toRecord()).noSpaces))
+          submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        case Some(other) => fail("Unexpected terminal fixture work: " + other)
+        case None if state.kind == "Terminal" => terminal = Some(state)
+        case None if state.authorityContext.nonEmpty =>
+          val reference = V.WorkflowArtifactReference("scalafix-terminal-authority-" + iteration, "1")
+          val authority = V.WorkflowAuthorityPreparationInput(output.invocation.stdout.toUri.toASCIIString,
+            save_("authority-reference", reference.toRecord()), "participant", "normal-development-host",
+            java.time.Instant.now().toString, "entity:smworkflow.cli.host_evidence")
+          import_("prepareAuthority", authority.toRecord())
+        case None if state.kind == "Wait" => ()
+        case _ => fail("Unexpected terminal fixture state: " + state.kind)
+      }
+      iteration += 1
+    }
+    terminal.getOrElse(fail("Packaged Scalafix fixture did not reach terminal completion"))
+  }
+
+  "Packaged Scalafix completion metrics" should {
+    "retain one accepted revalidated edit and an independently observed unchanged pass" in {
+      Vector(true, false).foreach { changed =>
+        val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim).toAbsolutePath.normalize
+        val command = F.candidateCommand(car)
+        val scenario = F.freshPackagedMetals(car, false, metalsServerSource, "completed",
+          scalafixRule = Some("RedundantSyntax"), terminalMetrics = true)
+        scenario.selectPackagedInstalled(F.PackagedInstalled(Path.of(command.head), car, Some(command(2))))
+        scenario.enablePreparedImportRetention()
+        val preparation = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
+        withClue(preparation.invocation.logs) { preparation.exitCode shouldBe 0 }
+        scenario.selectPreparedImport(preparation)
+        val task = scenario.ownTask("packaged-scalafix-metrics")
+        val started = scenario.start().business[V.GoalPhaseStartResult]
+        scenario.retain(task, started)
+        val issued = scenario.readGoalPhaseResult(scenario.advance(task))
+        issued.work.map(_.kind) shouldBe Some("ImplementStep")
+        val source = Path.of(scenario.host.target.root).resolve(_compiler_path)
+        Files.createDirectories(source.getParent)
+        Files.writeString(source, (if (changed) "final " else "") + "object RepairExample {}\n")
+        val result = V.GoalPhaseWorkResult("completed", "Fixture selected source", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+        val reference = V.WorkflowArtifactReference("scalafix-metrics-implementation", "1")
+        val submitted = scenario.call("command", issued.submitOperation.get, Vector("--sessionId", issued.submitSessionId.get,
+          "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+          "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
+        submitted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        val terminal = _terminal_scalafix_fixture(scenario, task)
+        terminal.outcome shouldBe Some("completed")
+        val json = parse(take(terminal.completion.get.metrics.get.toJsonStringC)).fold(throw _, identity)
+        val metrics = GoalPhaseNativeMetadata.normalizePublicJson(json).toOption.get.as[GoalPhasePhaseMetrics.Summary].toOption.get
+        val tool = metrics.deterministicRepairs.get.tools.find(_.tool == "scalafix").get
+        if (changed) {
+          tool.count shouldBe Some(1)
+          tool.coverage shouldBe "partial"
+          metrics.deterministicRepairs.get.observations.exists(row => row.tool.contains("scalafix") &&
+            row.changed.contains(true) && row.revalidated.contains(true) && row.retained.contains(true) &&
+            row.rolledBack.contains(false) && row.validation.nonEmpty) shouldBe true
+        } else {
+          tool.count shouldBe None
+          tool.coverage shouldBe "unavailable"
+          val pass = metrics.deterministicRepairs.get.zeroPasses.toVector.flatten.find(_.tool == "scalafix").get
+          pass.step shouldBe "step-1"
+          pass.paths should contain (_compiler_path)
+          pass.validation.nonEmpty shouldBe true
+          pass.commit.nonEmpty shouldBe true
+          val row = metrics.selectionCounts.get.find(_.identity == "repair:scalafix:pass:" + pass.identity).get
+          row.completed shouldBe Some(0)
+          row.coverage shouldBe "complete"
+        }
+        Files.readString(source) shouldBe "object RepairExample {}\n"
       }
     }
   }

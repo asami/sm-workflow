@@ -379,6 +379,111 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
     return resolve(state, capabilities)
 
 
+def caller_route_observation(state):
+    """Carry the actual issued caller snapshot alongside, never inside, the worker result."""
+    if not isinstance(state, dict) or state.get('schema') not in (SCHEMA, 'sm-workflow.api-review-attempt.v1'):
+        raise ValueError('A retained Phase caller snapshot is required')
+    request = state.get('request', {})
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    if alias(request, 'resultType', 'result_type') != 'GoalPhaseWorkResult' or not state.get('routeSelection'):
+        raise ValueError('The actual Phase route selection is required')
+    revision = alias(issued, 'expectedRevision', 'expected_revision')
+    requirement = alias(issued, 'executionRequirement', 'execution_requirement')
+    origin = alias(requirement['disposition'], 'originContextIdentity', 'origin_context_identity')
+    if not isinstance(origin, str) or not origin or not isinstance(revision, str) or not revision.isdigit():
+        raise ValueError('The issued caller identity and revision are required')
+    # Preserve only the typed facts consumed by the finite native reader.
+    def scalar_fields(value, keys):
+        if not isinstance(value, dict):
+            raise ValueError('Caller route observation requires objects')
+        result = {}
+        for key in keys:
+            if key in value:
+                item = value[key]
+                if not isinstance(item, str) or not item or len(item) > 4096 or any(ord(c) < 32 or ord(c) == 127 for c in item):
+                    raise ValueError('Caller route observation requires bounded scalar fields')
+                result[key] = item
+        return result
+
+    compact_request = {'session_id': alias(request, 'sessionId', 'session_id'),
+        'work': scalar_fields(request['work'], ('kind', 'stepIdentity', 'step_identity')),
+        'issued_work_context': {'run_id': alias(issued, 'runId', 'run_id'),
+            'continuation_id': alias(issued, 'continuationId', 'continuation_id'),
+            'expected_revision': revision,
+            'execution_requirement': {'disposition': {'origin_context_identity': origin}}}}
+    scalar_fields(compact_request, ('session_id',))
+    scalar_fields(compact_request['issued_work_context'], ('run_id', 'continuation_id', 'expected_revision'))
+    scalar_fields(compact_request['issued_work_context']['execution_requirement']['disposition'], ('origin_context_identity',))
+    selected = scalar_fields(state, ('schema', 'status'))
+    selected['routeSelection'] = scalar_fields(state['routeSelection'],
+        ('schema', 'session', 'continuation', 'kind', 'route', 'disposition', 'reason'))
+    selected['request'] = compact_request
+    roles = {'mechanical', 'small', 'sol-medium', 'ordinary', 'difficult', 'hardest'}
+    if 'policy' in state:
+        candidates = state['policy'].get('candidates', [])
+        if not isinstance(candidates, list) or len(candidates) > 16 or any(not isinstance(x, str) or x not in roles for x in candidates):
+            raise ValueError('Invalid finite caller candidate selection')
+        selected['policy'] = {'candidates': list(candidates)}
+    if 'attempts' in state:
+        attempts = state['attempts']
+        if not isinstance(attempts, list) or len(attempts) > 16:
+            raise ValueError('Invalid finite caller attempts')
+        selected['attempts'] = []
+        for item in attempts:
+            attempt = scalar_fields(item, ('status', 'candidate'))
+            if attempt.get('candidate') not in roles or not isinstance(item.get('executionStarted'), bool):
+                raise ValueError('Invalid caller attempt selection')
+            attempt['executionStarted'] = item['executionStarted']
+            selected['attempts'].append(attempt)
+    if 'resolved' in state:
+        resolved = scalar_fields(state['resolved'], ('candidate',))
+        if resolved.get('candidate') not in roles:
+            raise ValueError('Invalid selected caller candidate')
+        selected['resolved'] = resolved
+    if 'arguments' in state:
+        args = state['arguments'].get('input', {})
+        selected['arguments'] = {'input': scalar_fields(args, ('attemptIdentity',))}
+        if 'boundedTask' in args:
+            if not isinstance(args['boundedTask'], bool):
+                raise ValueError('Invalid bounded task selection')
+            selected['arguments']['input']['boundedTask'] = args['boundedTask']
+    if 'response' in state:
+        response = state['response']
+        selected['response'] = scalar_fields(response,
+            ('attemptIdentity', 'attempt_identity', 'continuationId', 'continuation_id', 'provider'))
+        if 'metadata' in response:
+            metadata = scalar_fields(response['metadata'],
+                ('ai.execution.provider', 'ai.usage.reservation_basis', 'ai.usage.model_group'))
+            allowed = {'ai.execution.provider': {'openai'},
+                       'ai.usage.reservation_basis': {'verified-daily-reservation', 'verified-promotional-credit-reservation'},
+                       'ai.usage.model_group': {'openai-daily-group-1', 'openai-daily-group-2'}}
+            if any(value not in allowed[key] for key, value in metadata.items()):
+                raise ValueError('Unrecognized caller route association fact')
+            selected['response']['metadata'] = metadata
+    return dict(schemaVersion='sm-workflow.caller-route-observation.v1', source=origin,
+                revision=int(revision), state=selected)
+
+
+def submission_with_caller_route(state, submission):
+    """Attach this caller's observation to ordinary Submit metadata."""
+    if not isinstance(submission, dict) or 'callerRouteObservation' in submission:
+        raise ValueError('Unambiguous ordinary submission metadata is required')
+    result = copy.deepcopy(submission)
+    result['callerRouteObservation'] = caller_route_observation(state)
+    return result
+
+
+def route_selection(state, route, disposition, reason):
+    """Retain the decision at its owner; this is not a provider invocation."""
+    issued = alias(state['request'], 'issuedWorkContext', 'issued_work_context')
+    state['routeSelection'] = dict(schema='sm-workflow.caller-route-selection.v1',
+        session=alias(issued, 'runId', 'run_id'),
+        continuation=alias(issued, 'continuationId', 'continuation_id'),
+        kind=state['request']['work']['kind'], route=route,
+        disposition=disposition, reason=reason)
+    return state
+
+
 def resolve(state, capabilities):
     """Called before launch, or after a typed confirmed-unstarted rejection only."""
     state = copy.deepcopy(state)
@@ -391,7 +496,7 @@ def resolve(state, capabilities):
         if len(facts) != 1 or facts[0].get('availability') not in ('available', 'unavailable') or not facts[0].get('source'):
             state['status'] = 'CAPABILITY_UNKNOWN'
             state['detail'] = 'Missing unambiguous caller capability evidence; no inferred absence or launch'
-            return state
+            return route_selection(state, 'codex', 'unknown', 'capability-unknown')
         fact = facts[0]
         if fact['availability'] == 'unavailable':
             state['attempts'].append(dict(candidate=candidate, concrete=concrete, status='UNAVAILABLE',
@@ -424,10 +529,10 @@ def resolve(state, capabilities):
             message=instructions + ('\n\n' if state.get('suppliedReview') else
                                    '\n\nAdmitted working repository: ' + state['repository'] + '\n\n') + input_message)
         state['status'] = 'PREPARED'
-        return state
+        return route_selection(state, 'codex', 'selected', 'candidate-available')
     state['status'] = 'UNAVAILABLE'
     state['detail'] = 'Captured finite chain exhausted before execution'
-    return state
+    return route_selection(state, 'codex', 'excluded', 'all-candidates-unavailable')
 
 
 def launch_identity(result):
@@ -520,7 +625,8 @@ def project_result(request, value, work_resource=None):
         value = value['result']
     if (not isinstance(value, dict) or not isinstance(value.get('outcome'), str)
             or not value['outcome'].strip() or 'dependencyAdmission' in value
-            or 'dependency_admission' in value or set(value) & envelope_keys):
+            or 'dependency_admission' in value or 'callerRouteObservation' in value
+            or 'caller_route_observation' in value or set(value) & envelope_keys):
         raise ValueError('The complete public semantic result is required')
     return copy.deepcopy(value)
 
@@ -589,9 +695,10 @@ def api_prepare(request, supplied_review, work_resource, attempt_identity, packa
                      attemptIdentity=attempt_identity, packageResource=path.as_uri())
     if bounded_task:
         arguments['boundedTask'] = True
-    return dict(schema='sm-workflow.api-review-attempt.v1', status='PREPARED', request=copy.deepcopy(request),
+    state = dict(schema='sm-workflow.api-review-attempt.v1', status='PREPARED', request=copy.deepcopy(request),
                 suppliedReview=copy.deepcopy(supplied_review), operation='GoalPhaseService.runGoalPhaseApiReview',
                 arguments=dict(input=arguments))
+    return route_selection(state, 'openai-unspecified', 'selected', 'bounded-review-selected') if bounded_task else state
 
 
 def api_started(state, arguments, invocation_identity):
@@ -613,6 +720,18 @@ def api_complete(state, invocation_identity, response):
     state = copy.deepcopy(state)
     state.update(status=response['status'] if response['status'] in ('UNCERTAIN', 'BLOCKED') else 'RETURNED',
                  response=copy.deepcopy(response))
+    if response['status'] in ('UNAVAILABLE', 'DECLINED', 'BLOCKED'):
+        reason = {'UNAVAILABLE': 'unavailable', 'DECLINED': 'declined', 'BLOCKED': 'budget-refused'}[response['status']]
+        route_selection(state, 'openai-unspecified', 'excluded', reason)
+    metadata = response.get('metadata') or {}
+    if isinstance(metadata, dict) and response['status'] not in ('UNAVAILABLE', 'DECLINED', 'BLOCKED'):
+        basis = metadata.get('ai.usage.reservation_basis')
+        group = metadata.get('ai.usage.model_group')
+        provider = metadata.get('ai.execution.provider', response.get('provider'))
+        if provider == 'openai' and basis == 'verified-daily-reservation' and group in ('openai-daily-group-1', 'openai-daily-group-2'):
+            route_selection(state, 'openai-daily', 'selected', 'verified-daily-reservation')
+        elif provider == 'openai' and basis == 'verified-promotional-credit-reservation':
+            route_selection(state, 'openai-promotional-credit', 'selected', 'verified-promotional-reservation')
     return state
 
 
@@ -772,7 +891,7 @@ def dispatch(request, mapping, capabilities, launch, root=None, repository=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['prepare', 'review_package', 'assemble_review_package', 'launched', 'rejected', 'complete', 'uncertain', 'api_prepare', 'api_started', 'api_complete', 'api_uncertain', 'api_execution_evidence', 'inline_complete', 'execution_evidence', 'restore'])
+    parser.add_argument('operation', choices=['prepare', 'review_package', 'assemble_review_package', 'launched', 'rejected', 'complete', 'uncertain', 'api_prepare', 'api_started', 'api_complete', 'api_uncertain', 'api_execution_evidence', 'inline_complete', 'execution_evidence', 'caller_route_observation', 'submission_with_caller_route', 'restore'])
     parser.add_argument('input', help='JSON object containing operation arguments; output is stdout only')
     args = parser.parse_args()
     values = json.loads(Path(args.input).read_text())

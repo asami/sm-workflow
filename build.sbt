@@ -519,7 +519,9 @@ lazy val root: Project = project
         "src/test/scala/org/simplemodeling/textus/smworkflow/admission/WorkflowStrictComparisonSpec.scala"
       val fixtureSources = Set(
         baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/Phase251OfflineAllowanceIntegrationSpec.scala",
-        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase251OfflineAllowanceFixture.scala"
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase251OfflineAllowanceFixture.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/ai/runtime/Phase253TwoGroupAllowanceFixture.scala",
+        baseDirectory.value / "src/test/scala/org/simplemodeling/textus/smworkflow/admission/Phase253TwoGroupAllowanceIntegrationSpec.scala"
       )
       (Test / unmanagedSources).value.filterNot(source =>
         source == strictspec || (phase251AllowanceFixtureJar.value.isEmpty && fixtureSources(source)))
@@ -565,13 +567,17 @@ lazy val root: Project = project
       val loader = (Test / testLoader).value
       val log = streams.value.log
       try {
-        val selected = try LabelledTests.select((Test / fullClasspath).value.files,
-          (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
+        val selection = try LabelledTests.selectAdmission((Test / fullClasspath).value.files,
+          (Test / classDirectory).value, version.value, (Test / definedTests).value)
         catch {
           case scala.util.control.NonFatal(error) =>
             log.error("CNCF-ADMISSION-V1 unavailable")
             throw error
         }
+        selection.inventory.foreach { inventory =>
+          log.info(s"SM-WORKFLOW-ADMISSION-INVENTORY-V1 ${inventory.coverage} ${inventory.candidates} ${inventory.selected}")
+        }
+        val selected = selection.selected
         if (selected.isEmpty) {
           Def.task { log.info("CNCF-ADMISSION-V1 empty") }.andFinally(LabelledTests.closeLoader(loader))
         } else {
@@ -622,42 +628,58 @@ lazy val root: Project = project
     // Native typed TestOnly receives the same selection/preparation.
     // runtimeTestOnly is only a descriptive alias.
     Test / testOnly := Def.inputTaskDyn {
-      val request = LabelledTests.request(sbt.complete.DefaultParsers.spaceDelimited("selection").parsed)
-      val loader = (Test / testLoader).value
-      try {
-        val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
-        val selected = LabelledTests.select((Test / fullClasspath).value.files,
-          (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing, request.properties)
-        streams.value.log.info(s"Labelled execution: purpose=${request.purpose} suites=${selected.size} operations=${selected.map(_.definition.selectors.length).sum} runtime=${selected.exists(_.requiresRuntime)}")
-        // One ordinary SBT execution produces its genuine aggregate report.
-        // Definitions retain their own metadata-selected TestSelector arrays.
-        val execution = Def.valueStrict(LabelledTests.execute(selected, (Test / loadedTestFrameworks).value,
-          loader, (Test / labelledTestExecution / testExecution).value, streams.value.log,
-          properties = request.properties, fork = (Test / fork).value))
-        val resultLogger = (Test / labelledTestExecution / testResultLogger).value
-        val log = streams.value.log
-        val runs = Def.task {
-          resultLogger.run(log, execution.value, "Test / labelledTestExecution")
+      val arguments = sbt.complete.DefaultParsers.spaceDelimited("selection").parsed
+      val request = LabelledTests.request(arguments)
+      val rootTests = (Test / definedTests).value
+      val childTests = (scalaStrictAuthoring / Test / definedTests).value.map(_.name).toSet
+      val rootNames = rootTests.map(_.name).toSet
+      // Only the ordinary aggregate command can rely on the child to report its
+      // real results. Aliases, filters, patterns and unknown names still fail
+      // through the root's canonical selection path.
+      val directCommand = state.value.currentCommand.exists(_.commandLine.trim.split("\\s+").toSeq ==
+        (Seq("testOnly") ++ arguments))
+      val childOnly = (Test / testOnly / aggregate).value && directCommand &&
+        request.purpose == "EXPLICIT" && arguments.nonEmpty &&
+        arguments.forall(_.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)+")) &&
+        arguments.forall(name => childTests(name) && !rootNames(name))
+      if (childOnly) Def.task { () }
+      else {
+        val loader = (Test / testLoader).value
+        try {
+          val candidates = LabelledTests.candidates(request, rootTests)
+          val selected = LabelledTests.select((Test / fullClasspath).value.files,
+            (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing, request.properties)
+          streams.value.log.info(s"Labelled execution: purpose=${request.purpose} suites=${selected.size} operations=${selected.map(_.definition.selectors.length).sum} runtime=${selected.exists(_.requiresRuntime)}")
+          // One ordinary SBT execution produces its genuine aggregate report.
+          // Definitions retain their own metadata-selected TestSelector arrays.
+          val execution = Def.valueStrict(LabelledTests.execute(selected, (Test / loadedTestFrameworks).value,
+            loader, (Test / labelledTestExecution / testExecution).value, streams.value.log,
+            properties = request.properties, fork = (Test / fork).value))
+          val resultLogger = (Test / labelledTestExecution / testResultLogger).value
+          val log = streams.value.log
+          val runs = Def.task {
+            resultLogger.run(log, execution.value, "Test / labelledTestExecution")
+          }
+          val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
+            cozyPrepareRuntime.value
+            prepareTestArtifacts.value
+            preparePackagedTestCar.value
+            prepareScalaToolFixture.value
+            runs
+          } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
+            cozyPrepareRuntime.value
+            prepareTestArtifacts.value
+            preparePackagedTestCar.value
+            runs
+          } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
+            cozyPrepareRuntime.value
+            prepareTestArtifacts.value
+            runs
+          } else Def.taskDyn { prepareTestArtifacts.value; runs }
+          prepared.andFinally(LabelledTests.closeLoader(loader))
+        } catch {
+          case error: Throwable => LabelledTests.closeLoader(loader); throw error
         }
-        val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
-          cozyPrepareRuntime.value
-          prepareTestArtifacts.value
-          preparePackagedTestCar.value
-          prepareScalaToolFixture.value
-          runs
-        } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
-          cozyPrepareRuntime.value
-          prepareTestArtifacts.value
-          preparePackagedTestCar.value
-          runs
-        } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
-          cozyPrepareRuntime.value
-          prepareTestArtifacts.value
-          runs
-        } else Def.taskDyn { prepareTestArtifacts.value; runs }
-        prepared.andFinally(LabelledTests.closeLoader(loader))
-      } catch {
-        case error: Throwable => LabelledTests.closeLoader(loader); throw error
       }
     }.evaluated,
     runtimeTestOnly := (Test / testOnly).evaluated,

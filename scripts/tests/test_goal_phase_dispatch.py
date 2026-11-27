@@ -79,6 +79,51 @@ class DispatchSpec(unittest.TestCase):
     def prepare(self, facts=None):
         return A.prepare(self.request, self.mapping, self.facts if facts is None else facts, ROOT, ROOT)
 
+    def test_caller_route_observation_keeps_issued_snapshot_separate(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['session_id'] = 'fixture-session'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        state = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+        observed = A.caller_route_observation(state)
+        self.assertEqual(observed['source'], 'fixture-parent')
+        self.assertEqual(observed['revision'], 2)
+        submission = {'result': {'outcome': 'completed'}}
+        prepared = A.submission_with_caller_route(state, submission)
+        self.assertEqual(prepared['callerRouteObservation'], observed)
+        self.assertNotIn('callerRouteObservation', submission)
+        self.assertEqual(observed['state']['routeSelection'], state['routeSelection'])
+        self.assertNotIn('launch', observed['state'])
+        observed['state']['status'] = 'changed'
+        self.assertNotEqual(observed['state']['status'], state['status'])
+        state.pop('routeSelection')
+        with self.assertRaises(ValueError):
+            A.caller_route_observation(state)
+
+    def test_caller_route_observation_omits_provider_content_and_secrets(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['session_id'] = 'fixture-session'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        state = {'schema': 'sm-workflow.api-review-attempt.v1', 'status': 'RETURNED', 'request': request,
+                 'routeSelection': {'schema': 'sm-workflow.caller-route-selection.v1', 'session': 'fixture-session',
+                    'continuation': 'fixture:work:1', 'kind': 'ReviewStep', 'route': 'openai-daily',
+                    'disposition': 'selected', 'reason': 'verified-daily-reservation', 'body': 'route-secret'},
+                 'arguments': {'input': {'boundedTask': True, 'attemptIdentity': 'attempt', 'body': 'request-secret'}},
+                 'response': {'attemptIdentity': 'attempt', 'continuationId': 'fixture:work:1', 'provider': 'openai',
+                    'result': {'summary': 'response-secret'}, 'metadata': {'ai.execution.provider': 'openai',
+                    'ai.usage.reservation_basis': 'verified-daily-reservation', 'ai.usage.model_group': 'openai-daily-group-1',
+                    'providerHttp.body': 'body-secret', 'token': 'token-secret', 'nested': {'secret': 'nested-secret'}}}}
+        compact = A.caller_route_observation(state)['state']
+        encoded = json.dumps(compact)
+        for secret in ('route-secret', 'request-secret', 'response-secret', 'body-secret', 'token-secret', 'nested-secret'):
+            self.assertNotIn(secret, encoded)
+        self.assertEqual(compact['response']['metadata'], {'ai.execution.provider': 'openai',
+            'ai.usage.reservation_basis': 'verified-daily-reservation', 'ai.usage.model_group': 'openai-daily-group-1'})
+        state['response']['metadata']['ai.usage.model_group'] = {'secret': 'not-a-scalar'}
+        with self.assertRaises(ValueError):
+            A.caller_route_observation(state)
+
     def test_supplied_review_binds_actual_work_and_uses_fresh_restricted_context(self):
         request = copy.deepcopy(self.request)
         request['result_type'] = 'GoalPhaseWorkResult'
@@ -122,6 +167,36 @@ class DispatchSpec(unittest.TestCase):
         crossed['work']['candidate']['tree'] = 'another-tree'
         with self.assertRaisesRegex(ValueError, 'differs'):
             A.prepare(crossed, self.mapping, self.facts, ROOT, ROOT, supplied_review=package)
+
+    def test_standard_bounded_review_selection_requires_an_exact_ready_package(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        request['issued_work_context']['run_id'] = 'fixture-session'
+        request['work']['checks_receipt'] = 'fixture:validation:1'
+        request['work']['candidate'] = {'head': 'head', 'tree': 'tree'}
+        request['work']['review'] = {'diff': 'diff', 'checks': [{'identity': 'check'}]}
+        package = A.review_package(request, [{'name': 'spec', 'content': 'required'}], True, 'complete')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'package.json'
+            path.write_text(json.dumps(package['packet'], ensure_ascii=False, sort_keys=True,
+                                       separators=(',', ':')), encoding='utf-8')
+            selected = A.prepare(request, self.mapping, self.facts, ROOT, ROOT,
+                                 supplied_review=package, supplied_review_path=str(path))
+            self.assertEqual(selected['status'], 'PREPARED')
+            self.assertEqual(selected['operation'], 'GoalPhaseService.runGoalPhaseApiReview')
+            self.assertTrue(selected['arguments']['input']['boundedTask'])
+            disabled = dict(self.mapping)
+            disabled.pop('suppliedReviewApi')
+            ordinary = A.prepare(request, disabled, self.facts, ROOT, ROOT,
+                                 supplied_review=package, supplied_review_path=str(path))
+            self.assertIn('launch', ordinary)
+            self.assertNotIn('operation', ordinary)
+            unsuitable = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+            self.assertIn('launch', unsuitable)
+            path.write_text('{}', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'canonical'):
+                A.prepare(request, self.mapping, self.facts, ROOT, ROOT,
+                          supplied_review=package, supplied_review_path=str(path))
 
     def test_candidate_file_assembly_is_ordered_bounded_and_keeps_provenance_local(self):
         # Given an issued review and Git's actual candidate object responses.
@@ -424,9 +499,14 @@ class DispatchSpec(unittest.TestCase):
                             fact['availability'] = 'unavailable'
                 state = A.prepare(request, self.mapping, facts, ROOT, ROOT)
                 self.assertEqual(len(state['attempts']), unavailable)
+                decision = state['routeSelection']
+                self.assertEqual(decision['route'], 'codex')
+                self.assertEqual(decision['continuation'], request['issued_work_context']['continuation_id'])
                 if unavailable == len(path):
+                    self.assertEqual(decision['disposition'], 'excluded')
                     self.assertEqual(state['status'], 'UNAVAILABLE')
                 else:
+                    self.assertEqual(decision['disposition'], 'selected')
                     concrete = self.mapping['assignments'][path[unavailable]]
                     self.assertEqual(state['launch']['model'], concrete['model'])
                     self.assertEqual(state['launch']['reasoning_effort'], concrete['effort'])

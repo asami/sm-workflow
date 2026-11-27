@@ -21,7 +21,7 @@ import WorkflowScalaToolProcess as Tool
 
 /** Ordered formatter effects in the candidate inspection that owns the selected sources.
   * @since   Nov. 24, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeScalaCleanup {
@@ -32,6 +32,8 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
   private val _lint_provider = "sm-workflow-scalafix-preview"
   private val _source_limit = 1048576
   private val _tool_result = "ordered-candidate:(scala-cleanup:(?:scalafix|scalafix-imports|scalafmt):[0-9]+:apply)-result".r
+  private val _preview_result = "ordered-candidate:(scala-cleanup:(?:scalafix|scalafix-imports|scalafmt):[0-9]+:preview)-result".r
+  private val _zero_batch_result = "ordered-candidate:(scala-cleanup:(?:scalafix|scalafmt):zero-batch)-result".r
   private val _history_result = "ordered-candidate:source-history-result-([0-9]+)".r
   private val _compile_result = "ordered-candidate:(scala-cleanup:semantic-compile:([1-9][0-9]*):(compile|test)):result".r
 
@@ -124,6 +126,78 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
     AppliedTool(original.identity.value + ":scala-cleanup:" + original.revision.value + ":" + tool,
       tool, step, original.revision.value.toString, rows.head._2, rows.map(_._3), rows.map(_._4))
   }
+
+  /** Retain actual preview decisions, including unchanged and unavailable; a
+    * preview is not proof of a retained edit or full Phase-wide coverage. */
+  final case class PreviewObservation(identity: String, tool: String, outcome: String)
+
+  def previewObservationsC(session: F.Session, core: ActionCall.Core, original: InstanceRecord,
+    candidate: InstanceRecord, step: String): Consequence[Vector[PreviewObservation]] = for {
+    _ <- if (DeterministicRepair.retainedPrefix(original, candidate) &&
+      DeterministicRepair.retainedPrefix(candidate, session.current)) Consequence.unit
+      else F.invalid("Scala preview observation crosses native candidate ancestry")
+    tools <- session.storage.bindMechanicalC(F.advanceOperation, _codec)
+    rows <- candidate.history.drop(original.history.size).foldLeft(Consequence.success(Vector.empty[PreviewObservation])) {
+      (prior, entry) => prior.flatMap { values => entry.causation.value match {
+        case _preview_result(prefix) => for {
+          pair <- _result_pair_c(tools, session, core, original, entry, prefix + "-intent", prefix + "-result")
+          (intent, result) = pair
+          _ <- if (intent.outcome.isEmpty && result.outcome.nonEmpty && intent.sourceRevision == result.sourceRevision &&
+            intent.sourceRevision == original.revision.value.toString && intent.step == step && result.step == step &&
+            intent.index == result.index && intent.path == result.path && intent.tool == result.tool &&
+            intent.stage == "preview" && result.stage == "preview" &&
+            prefix.startsWith("scala-cleanup:" + result.tool + ":")) Consequence.unit
+            else F.invalid("Scala preview observation crosses its issued intent")
+          tool = if (result.tool == "scalafix-imports") "scalafix" else result.tool
+          id = original.identity.value + ":ordered-candidate:" + original.revision.value + ":" + prefix + "-result"
+        } yield values :+ PreviewObservation(id, tool, result.outcome.get)
+        case _ => Consequence.success(values)
+      }}
+    }
+  } yield rows
+
+  /** One completed selected-file pass. This proves no applied edit only for
+    * the named pass, not for other inspections or an entire Phase. */
+  final case class ZeroBatchObservation(identity: String, tool: String, step: String,
+    sourceRevision: String, index: String, paths: Vector[String])
+  private final case class ZeroBatch(sourceRevision: String, step: String, tool: String, index: String,
+    paths: Vector[String], completed: Boolean)
+  private given Encoder[ZeroBatch] = deriveEncoder
+  private given Decoder[ZeroBatch] = deriveDecoder
+  private val _zero_batch_codec = new WorkflowResultJsonV1.PayloadCodec[ZeroBatch] {
+    val typeIdentity = "GoalPhaseNativeScalaCleanupZeroBatch"
+    def encode(value: ZeroBatch): Json = Json.obj("schemaVersion" -> "sm-workflow.scala-cleanup-zero-batch.v1".asJson,
+      "payload" -> value.asJson)
+    def decode(value: Json): Either[String, ZeroBatch] = for {
+      payload <- value.hcursor.get[ZeroBatch]("payload").left.map(_.message)
+      _ <- Either.cond(Option(payload.sourceRevision).exists(_.toLongOption.exists(_ > 0)) &&
+        Option(payload.step).exists(_text(_, 256)) && Option(payload.tool).exists(Set("scalafix", "scalafmt")) &&
+        Option(payload.index).exists(value => GitObjectId.parseC(value).isSuccess) && Option(payload.paths).exists(paths =>
+          paths.nonEmpty && paths.size <= 4096 && paths.distinct == paths && paths.forall(path => Option(path).exists(_handwritten))) &&
+        encode(payload) == value, (), "Invalid cleanup zero batch")
+    } yield payload
+  }
+
+  def zeroBatchesC(session: F.Session, core: ActionCall.Core, original: InstanceRecord,
+    candidate: InstanceRecord, step: String): Consequence[Vector[ZeroBatchObservation]] = for {
+    _ <- if (DeterministicRepair.retainedPrefix(original, candidate) && DeterministicRepair.retainedPrefix(candidate, session.current))
+      Consequence.unit else F.invalid("Scala cleanup zero batch crosses native candidate ancestry")
+    batches <- session.storage.bindMechanicalC(F.advanceOperation, _zero_batch_codec)
+    result <- candidate.history.drop(original.history.size).foldLeft(Consequence.success(Vector.empty[ZeroBatchObservation])) {
+      (prior, entry) => prior.flatMap { values => entry.causation.value match {
+        case _zero_batch_result(prefix) => for {
+          pair <- _result_pair_c(batches, session, core, original, entry, prefix + "-intent", prefix + "-result")
+          (intent, done) = pair
+          _ <- if (!intent.completed && done.completed && done.copy(completed = false) == intent &&
+            done.sourceRevision == original.revision.value.toString && done.step == step &&
+            prefix == "scala-cleanup:" + done.tool + ":zero-batch") Consequence.unit
+            else F.invalid("Scala cleanup zero batch crosses its intent")
+          identity = original.identity.value + ":ordered-candidate:" + original.revision.value + ":" + prefix + "-result"
+        } yield values :+ ZeroBatchObservation(identity, done.tool, done.step, done.sourceRevision, done.index, done.paths)
+        case _ => Consequence.success(values)
+      }}
+    }
+  } yield result
 
   private def _result_pair_c[A](adapter: WorkflowManagedMechanicalTransition[A], session: F.Session,
     core: ActionCall.Core, original: InstanceRecord, entry: HistoryEntry, intentKey: String,
@@ -487,10 +561,21 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
         adapter <- session.storage.bindMechanicalC(F.advanceOperation, _codec)
         index <- RepositorySyncManagedGitObservation.indexTreeC(core)
         call = new Formatter(declaration, core, source, step, FileTarget(workspace), index, selection, inspect, adapter)
-        result <- pathsselected.zipWithIndex.foldLeft(Consequence.success(current)) { case (previous, (path, ordinal)) =>
-          previous.flatMap(call.formatC(_, path, ordinal))
+        evaluated <- pathsselected.zipWithIndex.foldLeft(Consequence.success(current -> true)) { case (previous, (path, ordinal)) =>
+          previous.flatMap { case (prior, unchanged) => call.formatC(prior, path, ordinal).map {
+            case (next, observed) => next -> (unchanged && observed)
+          }}
         }
-      } yield result }
+        (result, unchanged) = evaluated
+        observed <- if (!unchanged || pathsselected.size > 4096) Consequence.success(result) else for {
+          batches <- session.storage.bindMechanicalC(F.advanceOperation, _zero_batch_codec)
+          batch = ZeroBatch(source.revision.value.toString, step, selection.tool, index, pathsselected, false)
+          key = "scala-cleanup:" + selection.tool + ":zero-batch"
+          intent <- _save_effect_c(batches, declaration, core, source, result, _zero_batch_codec.typeIdentity, key + "-intent", batch)
+          done <- _save_effect_c(batches, declaration, core, source, intent, _zero_batch_codec.typeIdentity,
+            key + "-result", batch.copy(completed = true))
+        } yield done
+      } yield observed }
     } yield formatted
   }
 
@@ -518,11 +603,11 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
     inspect: () => Consequence[Unit],
     adapter: WorkflowManagedMechanicalTransition[Receipt]) {
 
-    def formatC(current: InstanceRecord, path: String, ordinal: Int): Consequence[InstanceRecord] = for {
+    def formatC(current: InstanceRecord, path: String, ordinal: Int): Consequence[(InstanceRecord, Boolean)] = for {
       _ <- _pinned_c
       file <- WorkspaceFilePath.parseC(path)
       read <- WorkflowFileExecution.readTextC(core, target, file, FileReadPolicy(ResourceReadLimits(_source_limit)))
-      result <- read.text.fold(Consequence.success(current)) { original => for {
+      result <- read.text.fold(Consequence.success(current -> false)) { original => for {
         input <- Consequence.success(Tool.Input(path, original, Map(selection.configPath -> selection.configuration)))
         first <- previewC(current, ordinal, "preview", input)
         formatted <- first._2.replacement.fold(Consequence.success(first._1)) { replacement => for {
@@ -536,7 +621,8 @@ private[smworkflow] object GoalPhaseNativeScalaCleanup {
           result <- if (preserves) applyProposalC(second._1, ordinal, file, original, replacement, first._2)
             else Consequence.success(second._1)
         } yield result }
-      } yield formatted }
+      } yield formatted -> (first._2.status == Tool.PreviewStatus.Unchanged && first._2.replacement.isEmpty &&
+        first._2.programIdentity.nonEmpty) }
     } yield result
 
     def previewC(current: InstanceRecord, ordinal: Int, stage: String,

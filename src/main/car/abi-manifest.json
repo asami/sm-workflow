@@ -988,6 +988,13 @@
           "output": "DelegateTaskScopeCorrectionView"
         },
         {
+          "service": "DelegateTaskService",
+          "name": "extendDelegateTaskOwnedPaths",
+          "kind": "COMMAND",
+          "input": "DelegateTaskOwnedPathsExtensionInput",
+          "output": "DelegateTaskScopeCorrectionView"
+        },
+        {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareDelegateTaskCandidateContinuation",
           "kind": "COMMAND",
@@ -9316,6 +9323,42 @@
             {
               "name": "reference",
               "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskOwnedPathsExtensionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "additionalOwnedPaths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "dispatchState",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

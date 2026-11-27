@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -125,6 +125,36 @@ private[smworkflow] object NativeWorkflowResultInput {
     */
   private[admission] def goalResultC(request: Request): Consequence[GoalPhaseNativeWork.Result] = for {
     record <- NativeWorkflowOperationInput.recordC(request, "result")
+    _ <- if (!record.fields.exists(f => Set("callerRouteObservation", "caller_route_observation")(f.key.toString))) Consequence.unit
+      else _invalid("callerRouteObservation is a named caller input, not a worker result field")
+    caller <- request.toRecord.getAny("callerRouteObservation") match {
+      case None => Consequence.success(Option.empty[GoalPhasePhaseMetrics.RouteFact])
+      case Some(_) => for {
+        raw <- NativeWorkflowOperationInput.recordC(request, "callerRouteObservation")
+        jsonText <- raw.toJsonStringC
+        json <- io.circe.parser.parse(jsonText).fold(e => _invalid(e.message), Consequence.success)
+        _ <- if (json.noSpaces.length <= 1048576 && json.asObject.exists(_.keys.toSet == Set("schemaVersion", "source", "revision", "state")) &&
+          json.hcursor.get[String]("schemaVersion").toOption.contains("sm-workflow.caller-route-observation.v1")) Consequence.unit
+          else _invalid("caller route observation requires its closed bounded envelope")
+        source <- json.hcursor.get[String]("source").fold(e => _invalid(e.message), Consequence.success)
+        revision <- json.hcursor.get[Long]("revision").fold(e => _invalid(e.message), Consequence.success)
+        state <- json.hcursor.get[Json]("state").fold(e => _invalid(e.message), Consequence.success)
+        session <- state.hcursor.downField("request").get[String]("session_id").toOption
+          .orElse(state.hcursor.downField("request").get[String]("sessionId").toOption)
+          .map(Consequence.success).getOrElse(_invalid("caller route observation has no session"))
+        requestState = state.hcursor.downField("request")
+        issued = requestState.downField("issuedWorkContext").focus.orElse(requestState.downField("issued_work_context").focus).getOrElse(Json.Null).hcursor
+        issuedRevision = issued.get[String]("expectedRevision").toOption.orElse(issued.get[String]("expected_revision").toOption)
+          .flatMap(s => scala.util.Try(s.toLong).toOption)
+        requirement = issued.downField("executionRequirement").focus.orElse(issued.downField("execution_requirement").focus).getOrElse(Json.Null).hcursor
+        disposition = requirement.downField("disposition")
+        issuedOrigin = disposition.get[String]("originContextIdentity").toOption.orElse(disposition.get[String]("origin_context_identity").toOption)
+        _ <- if (issuedRevision.contains(revision) && issuedOrigin.contains(source)) Consequence.unit
+          else _invalid("caller route snapshot crosses its issued revision or caller")
+        route <- org.simplemodeling.textus.smworkflow.caller.NativeCallerPhaseMetrics.retainedRoute(session, source, revision, state)
+          .map(Consequence.success).getOrElse(_invalid("caller route observation is not a valid issued selection"))
+      } yield Some(route)
+    }
     _ <- GoalPhasePurposeRepair.validatePublicResultC(record)
     _ <- IncrementalSbtDiagnosisRepair.validatePublicResultC(record)
     _ <- GoalPhaseDependencyValidation.validatePublicResultC(record)
@@ -140,7 +170,7 @@ private[smworkflow] object NativeWorkflowResultInput {
     diagnostic <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
   } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
     GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions, sources,
-    dependencyValidation = validation, diagnosticRepair = diagnostic)
+    dependencyValidation = validation, diagnosticRepair = diagnostic, callerRouteObservation = caller)
 
   def repository(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: RepositorySyncManagedFetch.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =

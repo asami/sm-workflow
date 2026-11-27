@@ -662,7 +662,11 @@ host; Human uses its independent actual human channel and genuine evidence;
 Wait follows its actual condition without spin/polling; Terminal ends. Display
 GoalPhase `Terminal/outcome=completed` as **Phase completed**, followed separately
 by `completion.synchronization.state`, its actual `reason`, and any
-`childSessionId`/`advanceOperation`. A deferred, failed, Human, running or unknown
+`childSessionId`/`advanceOperation`. Forward the bounded Markdown metrics from
+the ordinary caller. For a direct Advance, run the same caller's read-only
+`phase-completion --response <absolute retained response> --session-id <Session>`
+and forward its output. Preserve observed zero, partial coverage and unknown
+values. A deferred, failed, Human, running or unknown
 sync does not reopen the Phase or require another Phase review. Never claim
 repository convergence unless the result contains actual succeeded synchronization.
 Reopen only to read the normal retained completion projection; never poll it or
@@ -1508,8 +1512,11 @@ and its genuine semantic payload, optional provider observations and retained
 resources. Launch configuration is never provider-observed evidence. Omitted
 observed model/effort stay unknown. `restore` requires the exact original Request
 and returns the retained resolution without reading changed mappings/capabilities.
-The caller forwards the semantic payload through ordinary Submit and retains the
-launch/result artifact under the existing evidence owner; no new workflow loop.
+Before the regular Submit, pass the actual retained GoalPhase dispatch/API snapshot and
+the ordinary submission once to `submission_with_caller_route` and submit its returned
+payload. If the caller has no actual snapshot, omit the observation honestly; do not
+manufacture one or require a user-supplied property. Retain the launch/result artifact
+under the existing evidence owner; no new workflow loop.
 
 The adapter's `rejected` operation permits another captured candidate only for
 `kind=model-effort-unavailable`, `executionStarted=false` and a genuine typed

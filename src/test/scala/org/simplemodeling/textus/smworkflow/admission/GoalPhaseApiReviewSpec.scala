@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 21, 2026
- * @version Nov. 23, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -122,6 +122,63 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
         val failed = uncertain.copy(observation = uncertain.observation.copy(properties = metadata))
         GoalPhaseApiReview.failureResult("attempt", "continuation", failed).metadata.flatMap(_.getString(key)) shouldBe expected
         GoalPhaseApiReview.boundedFailureEvidence(failed).flatMap(_.hcursor.get[String](key).toOption) shouldBe expected
+      }
+    }
+    "retain bounded group and pre-dispatch exhaustion evidence for review and repair outcomes" in {
+      // Given two independently attributed reservations and a prior exhausted group
+      val record = Record.dataAuto("outcome" -> "accept", "summary" -> "review", "findings" -> Vector.empty[String])
+      val exhaustion = """[{"provider":"openai","model":"gpt-5.6-sol","modelGroup":"openai-daily-group-1","allocationProvenance":"operator-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","externalUsageProvenance":"external-evidence-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","externalUsageTokens":7,"providerInvoked":false}]"""
+      exhaustion.length should be > 256
+      val base = Consequence.operationIllegal("ai.task.uncertain", "fixture").conclusion
+      for ((model, group) <- Vector("gpt-5.6-sol" -> "openai-daily-group-1", "gpt-5.6-terra" -> "openai-daily-group-2")) {
+        val facts = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> model,
+          "ai.usage.model_group" -> group, "ai.usage.allocation_provenance" -> "operator-evidence",
+          "ai.usage.external_provenance" -> "external-evidence", "ai.usage.external_tokens_bound" -> "7",
+          "ai.usage.pre_dispatch_exhaustions" -> exhaustion, "ai.usage.reservation_basis" -> "verified-daily-reservation")
+        val failure = base.copy(observation = base.observation.copy(properties = facts))
+        // When the ordinary review and repair projections observe success or uncertainty
+        val review = GoalPhaseApiReview.providerResult("attempt", "continuation", record, Some(model), facts)
+        val failed = GoalPhaseApiReview.failureResult("attempt", "continuation", failure)
+        val evidence = Vector(review.metadata, failed.metadata).map(_.flatMap(_.toJsonStringC.toOption)
+          .flatMap(io.circe.parser.parse(_).toOption).getOrElse(fail("Expected review evidence"))) ++ Vector(
+          GoalPhaseApiReview.boundedRecordEvidence(AiRecordResponse(record, Some(model), facts)),
+          GoalPhaseApiReview.boundedFailureEvidence(failure)).map(_.getOrElse(fail("Expected repair evidence")))
+        // Then exact group, provenance and known pre-dispatch outcome survive without a claimed cost
+        evidence.foreach { json =>
+          json.hcursor.get[String]("ai.usage.model_group").toOption shouldBe Some(group)
+          json.hcursor.get[String]("ai.usage.allocation_provenance").toOption shouldBe Some("operator-evidence")
+          json.hcursor.get[String]("ai.usage.external_tokens_bound").toOption shouldBe Some("7")
+          json.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+          json.hcursor.downField("ai.usage.cost_microunits").focus shouldBe None
+        }
+      }
+      // Invalid, secret-bearing, crossed or oversized data cannot become retained evidence.
+      for (bad <- Vector(exhaustion.replace("false", "true"), exhaustion.replace("gpt-5.6-sol", "gpt-5.6-terra"),
+        exhaustion.replace("operator-evidence", "sk-secret"), exhaustion.dropRight(1), "x" * 16385)) {
+        val result = GoalPhaseApiReview.boundedRecordEvidence(AiRecordResponse(record, None,
+          Map("ai.usage.pre_dispatch_exhaustions" -> bad)))
+        result shouldBe None
+      }
+    }
+    "attribute selected groups only to matching observed OpenAI models" in {
+      val record = Record.dataAuto("outcome" -> "accept", "summary" -> "review", "findings" -> Vector.empty[String])
+      val base = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> "gpt-5.6-sol",
+        "ai.usage.model_group" -> "openai-daily-group-1", "ai.usage.total_tokens" -> "9")
+      val examples = Vector(
+        (base, Some("gpt-5.6-sol"), Some("openai-daily-group-1")),
+        (base.updated("ai.execution.model", "gpt-5.6-terra").updated("ai.usage.model_group", "openai-daily-group-2"), Some("gpt-5.6-terra"), Some("openai-daily-group-2")),
+        (base.updated("ai.usage.model_group", "openai-daily-group-2"), Some("gpt-5.6-sol"), None),
+        (base - "ai.execution.model", Some("gpt-5.6-sol"), None),
+        (base - "ai.execution.provider", Some("gpt-5.6-sol"), None),
+        (base.updated("ai.execution.provider", "other"), Some("gpt-5.6-sol"), None),
+        (base, None, None),
+        (base, Some("gpt-5.6-terra"), None))
+      examples.foreach { case (facts, model, expected) =>
+        val review = GoalPhaseApiReview.providerResult("attempt", "continuation", record, model, facts)
+        review.metadata.flatMap(_.getString("ai.usage.model_group")) shouldBe expected
+        val evidence = GoalPhaseApiReview.boundedRecordEvidence(AiRecordResponse(record, model, facts)).get
+        evidence.hcursor.get[String]("ai.usage.model_group").toOption shouldBe expected
+        evidence.hcursor.get[String]("ai.usage.total_tokens").toOption shouldBe Some("9")
       }
     }
     "retain only observed safe provider identity in failure and compiler evidence" in {
@@ -254,6 +311,17 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       request.requirement.provider shouldBe Some("openai")
       request.requirement.tools shouldBe empty
       request.properties should contain (Property("ai.record.retry-limit", "0", None))
+      When("the ordinary bounded review receives either attributed OpenAI group")
+      for ((selectedmodel, group) <- Vector("gpt-5.6-sol" -> "openai-daily-group-1", "gpt-5.6-terra" -> "openai-daily-group-2")) {
+        model = Some(selectedmodel)
+        metadata = metadata.updated("ai.usage.model_group", group).updated("ai.execution.model", selectedmodel)
+        val selected = run(bounded)
+        selected.status shouldBe "COMPLETED"
+        selected.model shouldBe Some(selectedmodel)
+        selected.metadata.flatMap(_.getString("ai.usage.model_group")) shouldBe Some(group)
+      }
+      metadata = metadata - "ai.usage.model_group" - "ai.execution.model"
+      model = Some("actual-model")
       When("any task binding is missing or mismatched, or actual execution identity is absent")
       val matching = metadata
       for (key <- Vector("ai.task.contract", "ai.task.id", "ai.task.continuation", "ai.task.input-reference", "ai.execution.provider")) {
@@ -272,6 +340,38 @@ final class GoalPhaseApiReviewSpec extends AnyWordSpec with Matchers with GivenW
       unqualified.status shouldBe "UNCERTAIN"
       unqualified.result shouldBe None
       unqualified.providerRecord shouldBe None
+
+      When("the producer declines or refuses its allowance before dispatch")
+      terminal = Some("ai.task.declined")
+      metadata = matching.updated("ai.usage.pre_dispatch_exhaustions",
+        """[{"provider":"openai","model":"gpt-5.6-sol","modelGroup":"openai-daily-group-1","allocationProvenance":"allocation","externalUsageProvenance":"external","externalUsageTokens":7,"providerInvoked":false}]""")
+      val declined = run(bounded)
+      declined.status shouldBe "DECLINED"
+      val declinedfacts = declined.metadata.flatMap(_.toJsonStringC.toOption).flatMap(io.circe.parser.parse(_).toOption)
+        .getOrElse(fail("Expected pre-dispatch evidence"))
+      declinedfacts.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+      terminal = Some("ai.cost-budget")
+      val refused = run(bounded)
+      refused.status shouldBe "BLOCKED"
+      refused.message shouldBe "ai.cost-budget"
+      refused.result shouldBe None
+      val refusedfacts = refused.metadata.flatMap(_.toJsonStringC.toOption).flatMap(io.circe.parser.parse(_).toOption)
+        .getOrElse(fail("Expected bounded refusal evidence"))
+      refusedfacts.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+
+      Then("the compiler path receives the original conclusion for each nonstart")
+      val task = GoalPhaseApiReview.BoundedRecordTask("compiler-repair", "attempt", "continuation",
+        "work:exact", "prompt", Record.dataAuto("type" -> "object"))
+      for (operation <- Vector("ai.task.declined", "ai.cost-budget")) {
+        terminal = Some(operation)
+        var nonstart = Option.empty[org.goldenport.Conclusion]
+        val result = GoalPhaseApiReview.boundedRecord(runner, task,
+          conclusion => nonstart = Some(conclusion), conclusion => nonstart = Some(conclusion))(using execution)
+        if (operation == "ai.task.declined") result shouldBe GoalPhaseApiReview.BoundedRecordResult.Declined
+        else result shouldBe GoalPhaseApiReview.BoundedRecordResult.Blocked("ai.cost-budget")
+        val observed = nonstart.flatMap(GoalPhaseApiReview.boundedFailureEvidence).getOrElse(fail("Expected nonstart evidence"))
+        observed.hcursor.downField("ai.usage.pre_dispatch_exhaustions").downArray.get[Boolean]("providerInvoked").toOption shouldBe Some(false)
+      }
 
       When("the producer reports a final failure or an uncertain dispatch")
       metadata = Map("ai.execution.provider" -> "openai", "ai.execution.model" -> "observed-model",

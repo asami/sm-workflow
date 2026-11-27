@@ -49,14 +49,18 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                           "input": {"value": 0, "observed": 1, "executions": 1},
                           "output": {"value": None, "observed": 0, "executions": 1}}],
                           "unknown_executions": 0, "not_run": 0},
-                      "deterministic_repairs": {"tools": [{"tool": "metals", "count": 0, "coverage": "partial"}]},
+                      "deterministic_repairs": {"tools": [
+                          {"tool": "metals", "count": 0, "coverage": "complete", "reason": "Observed zero"},
+                          {"tool": "scalafix", "coverage": "unavailable", "reason": "No retained application evidence"},
+                      ]},
                       "operations": {"resolved_without_ai": 0, "rework": [{"stage": "test", "cycles": 0}]},
                       "operational_time": {"elapsed_millis": 0, "totals": [{"category": "ai", "millis": None}]}}}}
         markdown = CALLER.phase_completion_markdown(response, context)
         self.assertIn("codex\\|x", markdown)
         self.assertIn("0 (1/1)", markdown)
         self.assertIn("unknown (0/1)", markdown)
-        self.assertIn("metals", markdown)
+        self.assertIn("| metals | 0 | complete | Observed zero |", markdown)
+        self.assertIn("| scalafix | unknown | unavailable | No retained application evidence |", markdown)
         self.assertIn("elapsed", markdown)
         for mode in ("summary", "detail"):
             with patch.object(CALLER, "display_observation") as display:
@@ -88,7 +92,69 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         metrics["operations"]["coverage"] = "partial"
         self.assertIn("| 0 | 0 | 0 | 0 | partial |", CALLER.phase_completion_markdown(response, context))
         del metrics["calls"]
-        self.assertIn("| unknown | unknown |", CALLER.phase_completion_markdown(response, context))
+        metrics["usage"] = [
+            {"destination": "codex", "total_tokens": 0, "coverage": "complete", "reason": "Observed zero"},
+            {"destination": "local", "coverage": "unavailable", "reason": "No retained usage"},
+        ]
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("No attributable call observations", markdown)
+        self.assertIn("| codex | unknown | unknown | 0 | complete | Observed zero |", markdown)
+        self.assertIn("| local | unknown | unknown | unknown | unavailable | No retained usage |", markdown)
+
+    def test_direct_phase_completion_renders_only_the_matching_retained_response(self):
+        path = self.root / "phase-terminal.json"
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "control_summary": {"completion": {"metrics": {"phase_session": "s"}}}}
+        path.write_text(json.dumps(response), encoding="utf-8")
+        arguments = ["phase-completion", "--response", str(path), "--session-id", "s"]
+        output, error = io.StringIO(), io.StringIO()
+        with patch.object(CALLER, "native_call") as native:
+            with redirect_stdout(output), redirect_stderr(error):
+                self.assertEqual(0, CALLER.main(arguments))
+                self.assertEqual(2, CALLER.main(arguments[:-1] + ["other"]))
+            native.assert_not_called()
+        self.assertIn("No attributable call observations", output.getvalue())
+        self.assertIn("selected Session", error.getvalue())
+        del response["control_summary"]["completion"]["metrics"]
+        path.write_text(json.dumps(response), encoding="utf-8")
+        with redirect_stdout(output):
+            self.assertEqual(0, CALLER.main(arguments))
+        self.assertIn("No completion metrics were retained", output.getvalue())
+
+    def test_completion_renders_retained_selection_rows_without_recounting(self):
+        context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
+                   "outerSessionId": "s", "targetSessionId": "s"}
+        row = {"identity": "validation:admission:cases", "unit": "case", "total": 5,
+               "selected": 2, "excluded": 3, "started": None, "completed": None,
+               "failed": None, "skipped": None, "unknown": None, "coverage": "partial",
+               "reason": "same-pass subtotal"}
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "completion": {"metrics": {"phase_session": "s", "selection_counts": [row]}}}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("Selection and outcomes", markdown)
+        self.assertIn("| validation:admission:cases | case | 5 | 2 | 3 |", markdown)
+        self.assertIn("same-pass subtotal", markdown)
+
+    def test_completion_renders_all_selection_rows_with_zero_and_unknown(self):
+        session = "phase-fixture"
+        counts = [{"identity": "route-{}".format(i), "unit": "logical-work",
+                   "total": 0 if i % 2 == 0 else None, "selected": 0,
+                   "excluded": None, "started": None, "completed": None,
+                   "failed": None, "skipped": None, "unknown": 0,
+                   "coverage": "partial", "reason": "fixture"}
+                  for i in range(48)]
+        counts[-1]["identity"] = "ai:openai-daily:review"
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": session,
+                    "control_summary": {"completion": {"metrics": {
+                        "phase_session": session, "selection_counts": counts}}}}
+        context = {"operation": "GoalPhaseService.advanceGoalPhase", "outerSessionId": session, "targetSessionId": session}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        for row in counts:
+            self.assertIn("| " + row["identity"] + " |", markdown)
+        self.assertIn("| ai:openai-daily:review |", markdown)
+        self.assertIn("| 0 |", markdown)
+        self.assertIn("| unknown |", markdown)
+        self.assertEqual("", CALLER.phase_completion_markdown(response, dict(context, targetSessionId="other")))
 
     def test_large_completion_omits_only_complete_rows_and_keeps_later_tables(self):
         context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
@@ -2032,6 +2098,20 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.submission.write_text(json.dumps({'result': envelope, 'resultReference': reference}))
         with self.assertRaises(CALLER.CallerError):
             CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', issued_request=issued, work_resource='sm-workflow-work:actual')
+
+    def test_phase_submission_forwards_optional_caller_observation_separately(self):
+        issued = {'kind': 'Request', 'resultType': 'GoalPhaseWorkResult',
+                  'issuedWorkContext': {'resultType': 'GoalPhaseWorkResult', 'continuationId': 'fixture', 'expectedRevision': '1'}}
+        result = {'outcome': 'completed', 'summary': 'fixture', 'findings': []}
+        observation = {'schemaVersion': 'sm-workflow.caller-route-observation.v1', 'source': 'caller', 'revision': 1, 'state': {}}
+        self.submission.write_text(json.dumps({'result': result, 'resultReference': {'identity': 'r', 'revision': '1'},
+                                               'callerRouteObservation': observation}))
+        pairs = CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', resource_result=True, issued_request=issued)
+        self.assertEqual(json.loads(pairs[pairs.index('--callerRouteObservation') + 1]), observation)
+        self.assertNotIn('callerRouteObservation', json.loads(pairs[pairs.index('--result') + 1]))
+        issued['resultType'] = 'GoalTaskWorkResult'
+        with self.assertRaises(CALLER.CallerError):
+            CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', resource_result=True, issued_request=issued)
 
     def test_resource_result_transport_does_not_extend_other_semantic_actions(self):
         """RS-COMPLETE-RESULT-TRANSPORT: only conflict and repair Submit select optional Resource mode."""

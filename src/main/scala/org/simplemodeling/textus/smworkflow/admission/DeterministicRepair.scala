@@ -17,7 +17,7 @@ import scala.util.Try
 
 /** Producer-neutral, revision-bound proposals. Admission does not apply edits.
   * @since   Nov. 22, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DeterministicRepair {
@@ -227,6 +227,26 @@ private[smworkflow] object DeterministicRepair {
         }
       }
     }
+  }
+
+  /** A complete bounded diagnostic can prove that the one supported built-in
+    * compiler pattern is absent. None includes missing, truncated and otherwise
+    * unqualified evidence; it must never be interpreted as no candidate. */
+  def compilerPatternDisposition(payload: GoalPhaseNativeValidation.Payload): Option[Boolean] = {
+    val kinds = Set(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Kind.TestCompile,
+      WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Kind.TestOnly)
+    for {
+      value <- Option(payload)
+      if value.outcome.exists(Set("repair-required", "repair-limit-reached")) && GoalPhaseNativeValidation.repairable(value)
+      pair <- value.receipts.zip(value.selected).lastOption
+      (receipt, check) = pair
+      if kinds(check.kind) && !check.carLint && receipt.group.isEmpty && RepositorySyncNativeMergeValidation.storedProductOutputValid(receipt)
+      process <- receipt.processObservation
+      if !process.stdout.truncated && !process.stderr.truncated &&
+        WorkflowSbtCapture.text(process.stdout).textStatus == "complete" && WorkflowSbtCapture.text(process.stderr).textStatus == "complete"
+      diagnosis = IncrementalSbtFailureDiagnosis.extract(receipt, check.kind, value.sourceRevision, value.candidate)
+      if diagnosis.omittedGroups == 0 && diagnosis.groups.forall(_.omittedOccurrences == 0)
+    } yield deterministicCompilerFinding(value).nonEmpty
   }
 
   /** Own the normal repository checkout and authenticate a compiler locator

@@ -1,10 +1,11 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  2, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.{Files, Path}
+import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.ComponentInitializationParameters
 import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentOrigin}
@@ -57,7 +58,17 @@ final class CommitHygieneSpec extends AnyWordSpec with GivenWhenThen with ThreeW
     val git = TypedGitHostPlanFixture.plan(target, goalPaths = paths,
       goalMessages = host.goal.closure.programs.map(p => "Goal Step " + p.step),
       goalSelections = Vector(Vector(selected) ++ additionalSelected), denied = denied)
-    val process = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+    val combined = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+    // The combined fixture reconstructs grants from program declarations, so
+    // retain this episode's deliberate denials after combining the two plans.
+    val grants = combined.hcursor.downField("grants").focus.flatMap(_.asArray)
+      .getOrElse(throw new IllegalStateException("Fixture plan requires a grants array")).map { grant =>
+      val capabilities = grant.hcursor.downField("capabilities").focus.flatMap(_.asArray)
+        .getOrElse(throw new IllegalStateException("Fixture grant requires a capabilities array"))
+        .filterNot(value => value.asString.exists(denied))
+      grant.mapObject(_.add("capabilities", Json.fromValues(capabilities)))
+    }
+    val process = combined.mapObject(_.add("grants", Json.fromValues(grants)))
     _with_runtime_(root, "Goal", Some(host), Map("textus.subsystem.process-execution.plan" -> process.noSpaces)) { (_, _, _, prepare) =>
       prepare(_.setupC(_setup_commands_(root, "Goal").size))
       task(repository, prepare)

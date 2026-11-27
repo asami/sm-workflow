@@ -234,8 +234,9 @@ template and cache behavior.
 ## Operational validation of Phase 25.3
 
 Use the installed Phase 25.3 route for eligible actual work during Phase 25.4
-development. Observe ordinary reviews and bounded compiler repairs as they
-arise, with the existing evidence, allowance, cost and Admission policies.
+development. Extend the two live release cases from Phase 25.3 by observing
+ordinary reviews and bounded compiler repairs as they arise, with the existing
+evidence, allowance, cost and Admission policies.
 Record actual provider and model, allowance group, reported tokens and
 verified billing separately. Preserve reasons for deterministic resolution,
 ineligibility, fallback, or uncertainty. Use the observed classification and

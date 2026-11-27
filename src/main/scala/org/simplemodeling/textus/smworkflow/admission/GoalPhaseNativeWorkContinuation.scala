@@ -6,7 +6,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.event.ManagedEventHistory
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, ProcessExecutionTermination}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, ProcessExecutionTermination, SbtAdmissionTestReport}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeIdentity, *}
@@ -53,11 +53,53 @@ import RepositorySyncManagedGitObservation as G
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
   val closingType = StateMachineResultTypeReference("GoalPhaseWorkSubmissionResult")
+  /** Project selected checks from the typed retained capture, preserving nonstarts. */
+  private[admission] def validationObservations(payload: GoalPhaseNativeValidation.Payload,
+    reference: String): Vector[Metrics.ValidationObservation] = {
+    payload.selected.filterNot(_.carLint).flatMap { check =>
+        val kind = check.kind match {
+          case WorkflowSbtValidation.Kind.Compile => Some("compile")
+          case WorkflowSbtValidation.Kind.Test if check.testScope.contains("admission") => Some("admission")
+          case WorkflowSbtValidation.Kind.Test => Some("full")
+          case WorkflowSbtValidation.Kind.TestOnly => Some("test-only")
+          case WorkflowSbtValidation.Kind.FixCheck => Some("fix-check")
+          case _ => None
+        }
+        kind.map { name =>
+          val attempts = (payload.stopped ++ payload.receipts).filter(_.identity == check.identity)
+          val terminal = payload.receipts.find(_.identity == check.identity)
+          val stopped = payload.stopped.reverseIterator.find(r => r.identity == check.identity &&
+            r.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.NotExecuted))
+          val result = terminal.orElse(stopped)
+          val started = if (attempts.exists(r => r.processObservation.exists(p => p.termination match {
+            case ProcessExecutionTermination.NotStarted | ProcessExecutionTermination.LaunchFailed => false
+            case ProcessExecutionTermination.TerminationUnconfirmed => false
+            case _ => true
+          }))) Some(true) else if (attempts.exists(_.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.NotExecuted))) Some(false) else None
+          val outcome = result.flatMap(_.sbt).map(_.outcome) match {
+            case Some(WorkflowSbtValidation.Outcome.Succeeded | WorkflowSbtValidation.Outcome.AdmissionEmpty) => "succeeded"
+            case Some(WorkflowSbtValidation.Outcome.Failed) => "failed"
+            case Some(WorkflowSbtValidation.Outcome.Unverified) if terminal.flatMap(_.sbt).exists(f => WorkflowSbtValidation.formalTestFailure(f.reason)) => "failed"
+            case Some(WorkflowSbtValidation.Outcome.NotExecuted) => "not-executed"
+            case _ => "unknown"
+          }
+          val inventory = terminal.flatMap { receipt => for {
+            retained <- receipt.sbt.flatMap(_.admissionInventory)
+            process <- receipt.processObservation
+            actual <- WorkflowSbtValidation.admissionInventory(process, SbtAdmissionTestReport.assess(process))
+            if actual == retained
+          } yield retained }
+          Metrics.ValidationObservation(reference + ":" + check.identity, name, started, outcome,
+            result.flatMap(_.sbt).flatMap(_.reason).orElse(Option.when(terminal.isEmpty)(stopped).flatten.map(_.termination)), inventory.map(_.candidates), inventory.map(_.selected), inventory.map(_.coverage))
+        }
+      }
+  }
+
   /** Hashes prove only the final write to each path, not survival of earlier
     * intermediate edits. Returning to any prior state is not a retained write. */
   private[admission] def retainedRepairApplications(applications: Vector[Vector[ByteChange]],
@@ -308,7 +350,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
   private final case class AppliedRepair(identity: String, tool: Option[String], origin: String,
     changes: Vector[ByteChange], sources: Vector[String])
   private final case class RepairCandidate(snapshot: O.Snapshot, step: String, applications: Vector[AppliedRepair],
-    validation: Option[String] = None, commit: Option[String] = None)
+    validation: Option[String] = None, commit: Option[String] = None,
+    zeroBatches: Vector[GoalPhaseNativeScalaCleanup.ZeroBatchObservation] = Vector.empty)
 
   private final case class Cursor(from: InstanceRecord, controller: O.State,
     documents: Option[D.Bound], candidate: Option[GoalPhaseNativeCandidate.Saved],
@@ -2119,6 +2162,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           GoalPhaseNativeScalaCleanup.appliedToolsC(source, core, cursor.from, value.record, value.payload.step).toOption
         else Some(Vector.empty)
       } catch { case NonFatal(_) => None }
+      val zeroBatches = try {
+        if (GoalPhaseNativeScalaCleanup.recordedAfter(cursor.from, value.record))
+          GoalPhaseNativeScalaCleanup.zeroBatchesC(source, core, cursor.from, value.record, value.payload.step).toOption
+        else Some(Vector.empty)
+      } catch { case NonFatal(_) => None }
       // A missing cleanup receipt must never discard a separately authenticated
       // diagnostic application or prevent ordinary native progress. Coverage is
       // always partial unless a producer explicitly establishes it.
@@ -2127,8 +2175,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           val tool = if (effect.tool == "scalafix-imports") "scalafix" else effect.tool
           AppliedRepair(effect.identity, Some(tool), effect.tool, effect.changes, effect.references)
         }
-        RepairCandidate(snapshot, value.payload.step, applications)
-      }.filter(_.applications.nonEmpty)
+        RepairCandidate(snapshot, value.payload.step, applications, zeroBatches = zeroBatches.getOrElse(Vector.empty))
+      }.filter(candidate => candidate.applications.nonEmpty || candidate.zeroBatches.nonEmpty)
     }
 
     /** Immutable staged bytes are read only at projection time, never while
@@ -2157,6 +2205,19 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
     }
 
+    private def _repair_metrics(candidates: Vector[RepairCandidate], tree: String, core: ActionCall.Core): Metrics.Repairs = {
+      val base = Metrics.repairs(candidates.flatMap(_metric_rows(_, tree, core)), Set.empty)
+      val passes = candidates.flatMap { candidate =>
+        for {
+          validation <- candidate.validation.toVector
+          commit <- candidate.commit.toVector
+          pass <- candidate.zeroBatches
+        } yield Metrics.RepairZeroPass(pass.identity, pass.tool, pass.step, pass.sourceRevision, pass.index,
+          pass.paths, candidate.snapshot.tree, validation, commit)
+      }
+      base.copy(zeroPasses = Option.when(passes.nonEmpty)(passes))
+    }
+
     private def _accepted_metric_tree(state: O.State): String =
       state.releaseCommit.map(_.tree).orElse(state.completed.lastOption.map(_.commit.tree)).getOrElse(state.base.tree)
 
@@ -2173,8 +2234,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Frontier(cursor) => _deterministic_repair_metrics(cursor, core) -> cursor.operations
         case Paused(cursor, _, _) => _deterministic_repair_metrics(cursor, core) -> cursor.operations
         case Human(_, _, cursor) => _deterministic_repair_metrics(cursor, core) -> cursor.operations
-        case Work(prepared) => Metrics.repairs((prepared.metricRetainedRepairs ++ prepared.metricRepairCandidate)
-          .flatMap(_metric_rows(_, _accepted_metric_tree(prepared.controller), core)), Set.empty) -> prepared.operations
+        case Work(prepared) => _repair_metrics(prepared.metricRetainedRepairs ++ prepared.metricRepairCandidate,
+          _accepted_metric_tree(prepared.controller), core) -> prepared.operations
         case _ => Metrics.repairs(Vector.empty, Set.empty) -> Comparison.NativeOperations()
       }
       val enriched = if (includeApprovalSpans) operations.copy(spans = operations.spans ++
@@ -2233,7 +2294,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       val checks = payload.selected.map(check => check.identity -> check).toMap
       val actual = payload.stopped.zipWithIndex.map { case (receipt, index) => (receipt, "stopped-" + index) } ++
         payload.receipts.map(receipt => (receipt, "receipt"))
-      val observed = actual.foldLeft(cursor.operations) { case (facts, (receipt, receiptKind)) =>
+      val selection = validationObservations(payload, reference)
+      val builtIn = DeterministicRepair.compilerPatternDisposition(payload).map { applies =>
+        Metrics.DiagnosticObservation(reference + ":built-in-compiler-pattern", "built-in",
+          Option.when(!applies)("compiler-pattern-no-match"), Option.when(!applies)(false), None)
+      }
+      val observed = actual.foldLeft(cursor.operations.copy(validation = cursor.operations.validation ++ selection,
+        toolDiagnostics = cursor.operations.toolDiagnostics ++ builtIn)) { case (facts, (receipt, receiptKind)) =>
         checks.get(receipt.identity).fold(facts) { check =>
           val process = receipt.processObservation.orElse(receipt.carLint.map(_.process)).filter { execution => execution.termination match {
             case ProcessExecutionTermination.NotStarted | ProcessExecutionTermination.LaunchFailed => false
@@ -2277,7 +2344,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     }
 
     private def _deterministic_repair_metrics(cursor: Cursor, core: ActionCall.Core): Metrics.Repairs =
-      Metrics.repairs((cursor.metricRetainedRepairs ++ cursor.metricRepairCandidate).flatMap(_metric_rows(_, _accepted_metric_tree(cursor.controller), core)), Set.empty)
+      _repair_metrics(cursor.metricRetainedRepairs ++ cursor.metricRepairCandidate, _accepted_metric_tree(cursor.controller), core)
 
     /** The sole read-only traversal follows only contiguous actual predecessors. */
     private def _walk_c(source: F.Session, cursor: Cursor, soughtwork: Option[ContinuationIdentity],
@@ -2381,9 +2448,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               saved.value.proposal.forall(proposal => DeterministicRepair.matchesCompilerSource(source, cursor.from,
                 candidate, validation, proposal, step.ownedPaths.toSet))) Consequence.unit
             else F.invalid("Metals attempt crosses failed candidate or allowlisted source")
+          diagnostic = Metrics.DiagnosticObservation(source.current.identity.value + ":scala-metals:" + value.sourceRevision,
+            if (value.tool.nonEmpty) "scalafix" else "metals", value.outcome,
+            if (value.process.nonEmpty || value.outcome.exists(Set("completed", "no-action", "timed-out", "incompatible"))) Some(true)
+              else if (value.outcome.contains("disabled") || (value.tool.isEmpty && value.outcome.contains("unavailable"))) Some(false)
+              else None,
+            value.process.flatMap(p => if (p.termination.startsWith("Exited(") || Set("TimedOut", "Cancelled")(p.termination)) Some(true)
+              else if (Set("NotStarted", "LaunchFailed")(p.termination)) Some(false) else None))
+          recorded = cursor.copy(operations = cursor.operations.copy(toolDiagnostics = cursor.operations.toolDiagnostics :+ diagnostic))
           result <- value.outcome match {
-            case None | Some("unknown") => _paused_c(source, cursor, "Metals process outcome remains UNKNOWN; no redispatch.")
-            case Some(_) => _walk_c(source, cursor.copy(from = saved.record, diagnosticTool = Some(saved)),
+            case None | Some("unknown") => _paused_c(source, recorded, "Metals process outcome remains UNKNOWN; no redispatch.")
+            case Some(_) => _walk_c(source, recorded.copy(from = saved.record, diagnosticTool = Some(saved)),
               soughtwork, soughthuman, soughtrecording, core, historyonly)
           }
         } yield result
@@ -2847,7 +2922,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       metricProfiles = ((cursor.metricProfiles ++ prepared.input.operatingProfile): Vector[GoalPhaseOperatingProfiles.Capture]).distinct,
                       metricRequests = cursor.metricRequests :+ GoalPhaseWorkComparison.NativeWork(
                         prepared.input.stepIdentity, prepared.input.kind, prepared.input.operatingProfile,
-                        Some(value.completion.result.continuationId.value), Some(value.completion.result.result.value.outcome)),
+                        Some(value.completion.result.continuationId.value), Some(value.completion.result.result.value.outcome),
+                        value.completion.result.result.value.callerRouteObservation),
                       candidate = if (clear) None else cursor.candidate,
                       validation = if (clear) None else cursor.validation,
                       sourcehistoryfailedrepair = if (prepared.input.kind == "RepairStep" &&
@@ -3288,7 +3364,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             state <- GoalPhaseNativeCandidate.observedStateC(cursor.controller, value.payload, cursor.documentpolicy, N.managementPaths(cursor.findings))
             record <- _native_record_c(source, cursor.from, value.record, "ordered-candidate:", state.stage)
             metric = _metric_candidate(source, cursor, value, core)
+            previews = try {
+              if (GoalPhaseNativeScalaCleanup.recordedAfter(cursor.from, value.record))
+                GoalPhaseNativeScalaCleanup.previewObservationsC(source, core, cursor.from, value.record, value.payload.step).toOption.getOrElse(Vector.empty)
+              else Vector.empty
+            } catch { case NonFatal(_) => Vector.empty }
             result <- _walk_c(source, cursor.copy(from = record, controller = state,
+              operations = cursor.operations.copy(toolPreviews = cursor.operations.toolPreviews ++ previews),
               candidate = Some(value.copy(record = record)), validation = None, prerequisiteRecovery = None,
               metricDiagnostic = None, metricRepairCandidate = metric,
               prerequisiteUnknownDirection = None, prerequisiteWaitSource = None, primaryPublicationDirections = Vector.empty,
@@ -4728,6 +4810,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           source <- F.retainedSessionC(submitted.handle.instanceIdentity.value, d, definition, call)
           plan <- _locate_assigned_c(source, submitted.continuationId, call)
           _ <- _historical_freshness_c(plan, call)
+          _ <- _caller_route_binding_c(plan, submitted)
           _ <- GoalPhaseOperatingProfiles.admitExecutionC(plan.input.operatingProfile, submitted.evidence)
           _ <- if (plan.input.providerDecline.forall(prior => submitted.evidence.execution.exists(o =>
               o.executorContextIdentity != prior.executor) && !submitted.evidence.references.exists(r =>
@@ -4831,7 +4914,23 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
   } yield CallScopedOperationBinding.wrapResult(declared, (core, result) => F.bindC(d, definition, core)
     .flatMap(_native_c).flatMap(n => port.operationC(Some(core), n, Some(result))))
 
+  private def _caller_route_binding_c(plan: Prepared, submitted: ContinuationResult[S.Result]): Consequence[Unit] =
+    submitted.result.value.callerRouteObservation match {
+      case None => Consequence.unit
+      case Some(route) =>
+        val origin = submitted.evidence.execution.map(_.originContextIdentity)
+        val revision = scala.util.Try(submitted.expectedRevision.value.toLong).toOption
+        val bounded = GoalPhaseRetainedObservations.Retained(GoalPhaseRetainedObservations.schema,
+          submitted.runId.value, route.source, Vector.empty, Vector.empty, Vector.empty, Some(Vector(route)))
+        if (GoalPhaseRetainedObservations.valid(bounded) && route.phaseSession == submitted.runId.value &&
+            route.continuation == submitted.continuationId.value && revision.contains(route.revision) &&
+            route.role == plan.input.kind && route.stepIdentity == plan.input.stepIdentity &&
+            origin.contains(route.source)) Consequence.unit
+        else F.invalid("caller route observation crosses its issued Session, continuation, revision, work or caller")
+    }
+
   private def _completed_state_c(plan: Prepared, submitted: ContinuationResult[S.Result]): Consequence[O.State] = for {
+    _ <- _caller_route_binding_c(plan, submitted)
     _ <- IncrementalSbtDiagnosisRepair.admitC(plan.input, submitted.result.value)
     dependency <- _dependency_admission_c(plan, submitted.result.value, retained = true)
     _ <- if (dependency == submitted.result.value.dependencyAdmission) Consequence.unit
@@ -4990,7 +5089,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     step.identity, value.candidate, finding.checkIdentity, reference, attempt, continuation, None, None, None)
                   adapter <- source.storage.bindMechanicalC(F.advanceOperation, BoundedCompilerSupport._compiler_attempt_codec)
                   intended <- BoundedCompilerSupport._compiler_save_c(adapter, d, core, cursor.from, cursor.from, initial, "intent")
-                  output = GoalPhaseApiReview.boundedRecord(provider, selected)
+                  nonstart = scala.collection.mutable.ArrayBuffer.empty[org.goldenport.Conclusion]
+                  output = GoalPhaseApiReview.boundedRecord(provider, selected,
+                    conclusion => nonstart += conclusion, conclusion => nonstart += conclusion)
                   recorded = output match {
                     case GoalPhaseApiReview.BoundedRecordResult.Completed(response) =>
                       val evidence = Json.obj(
@@ -5005,9 +5106,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                           initial.copy(outcome = Some("rejected"), evidence = Some(rejected))
                       }
                     case GoalPhaseApiReview.BoundedRecordResult.Blocked(reason) =>
-                      initial.copy(outcome = Some("blocked"), evidence = Some(Json.obj("reason" -> Json.fromString(reason))))
+                      initial.copy(outcome = Some("blocked"), evidence = Some(Json.obj(
+                        "reason" -> Json.fromString(reason),
+                        "observation" -> nonstart.headOption.flatMap(GoalPhaseApiReview.boundedFailureEvidence).getOrElse(Json.Null))))
                     case GoalPhaseApiReview.BoundedRecordResult.Declined =>
-                      initial.copy(outcome = Some("declined"))
+                      initial.copy(outcome = Some("declined"), evidence = nonstart.headOption.flatMap(GoalPhaseApiReview.boundedFailureEvidence))
                     case GoalPhaseApiReview.BoundedRecordResult.Failed(conclusion) =>
                       initial.copy(outcome = Some("failed"), evidence = GoalPhaseApiReview.boundedFailureEvidence(conclusion))
                     case GoalPhaseApiReview.BoundedRecordResult.Unbound(model, provider, metadata) =>

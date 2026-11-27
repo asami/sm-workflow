@@ -6,7 +6,7 @@ import scalafix.v1._
 
 /** Small shared signature queries; no independent analysis runtime.
   * @since Nov. 19, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 27, 2026
   * @author ASAMI, Tomoharu
   */
 private[scalalint] object SafetySemantic {
@@ -189,6 +189,24 @@ private[scalalint] object SafetySemantic {
     // Inherited methods retain their library owner. A user override can define
     // a distinct nonempty/comparison contract and is not a library operation.
     info(tree).exists(_.owner.value.startsWith("scala/collection/"))
+  }
+
+  /** Exact receiver and method proof for the opt-in String membership recipe.
+    * Do not use base types here: widening or an override changes eligibility. */
+  def vectorStringMembership(receiver: Term, argument: Term, call: Term)(implicit doc: SemanticDocument): Boolean = {
+    def _string_(found: SemanticType): Boolean =
+      Set("java/lang/String#", "scala/Predef.String#")(name(found))
+    val vector = tpe(receiver).exists {
+      case TypeRef(_, symbol, List(element)) =>
+        symbol.value == "scala/collection/immutable/Vector#" && _string_(element)
+      case _ => false
+    }
+    vector && tpe(argument).exists(_string_) &&
+      info(call).exists(found => found.symbol.value == "scala/collection/SeqOps#contains()." &&
+        (found.signature match {
+          case MethodSignature(_, List(List(_)), result) => name(result) == "scala/Boolean#"
+          case _ => false
+        }))
   }
 
   def unresolved(tree: Tree, purpose: String): Patch = Patch.lint(Diagnostic("AnalysisUnavailable", "Required " + purpose + " type/signature analysis is unavailable", tree.pos))

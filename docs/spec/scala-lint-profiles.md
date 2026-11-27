@@ -755,3 +755,25 @@ are explicit unsupported cases. No empty/clean fallback is supplied.
 The original SLP-4 paired fixtures and their recorded qualification limits are
 described in the existing
 [bounded integration notes](../notes/phase8.1-producer-deliveries.md).
+
+## Phase 28.2 opt-in Vector migration
+
+`VectorStringMembershipMigration` is opt-in; no default profile enables it.
+The deterministic apply recipe is available only when it is the sole effective
+rule. It supports one resolved immutable `Vector[String].contains(String)`
+value comparison with a simple receiver and argument and the required uniquely
+resolved Core and Cats binary API. Its replacement supplies `Eq[String]`
+explicitly. Unavailable semantic or binary evidence, ambiguous APIs, multiple
+calls, unsupported syntax or types and comparison intent outside this narrow
+value case are not authorization to edit. The normal authenticated candidate
+patch path repeats the originating lint and validation and rolls back a failed
+revalidation. It does not infer a domain identity or migrate arrays.
+
+For direct Scala 3 comparisons, a bounded `CanEqual` permits only declared
+compatible value types; Cats `Eq` can express the selected value comparator.
+Source identity may instead compare the typed IDs. For byte arrays,
+`java.util.Arrays.equals` compares elements and `eq` compares references;
+neither substitutes for a separately specified nested-array or domain policy.
+The strict authoring module exercises these distinctions, while unrelated
+source remains unchanged. The authored examples alone do not establish installed
+route qualification or Phase acceptance.

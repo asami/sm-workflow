@@ -17,7 +17,7 @@ import GoalPhaseNativeWork as W
 
 /** Candidate-bound use of an already executed, read-only Scalafix check.
   * @since   Nov. 24, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ScalaLintRepair {
@@ -33,6 +33,7 @@ private[smworkflow] object ScalaLintRepair {
     else "")
 
   private val _recipe = "scalafix-redundant-final-object-v1"
+  private val _membership_recipe = "scalafix-vector-string-membership-v1"
 
   /** Narrow Scala 3 migration diagnostic whose fix is consumable by the
     * pinned Scala 2 parser. The provider must propose these exact bytes. */
@@ -59,16 +60,19 @@ private[smworkflow] object ScalaLintRepair {
     val config = ConfigFactory.parseString(input.configJson, com.typesafe.config.ConfigParseOptions.defaults().setSyntax(com.typesafe.config.ConfigSyntax.JSON))
     val rules = config.getStringList("rules").asScala.toVector
     require(java.util.Objects.equals(input.identity, "sm-workflow-shared-scala-lint") && java.util.Objects.equals(input.revision, "1") &&
-      input.configJson.getBytes(UTF_8).length <= 65536 && config.isResolved &&
-      rules.count(value => java.util.Objects.equals(value, "RedundantSyntax")) == 1 &&
-      config.getBoolean("RedundantSyntax.finalObject") && !config.getBoolean("RedundantSyntax.stringInterpolator"))
+      input.configJson.getBytes(UTF_8).length <= 65536 && config.isResolved)
+    val recipe = if (rules == Vector("VectorStringMembershipMigration")) _membership_recipe else {
+      require(rules.count(value => java.util.Objects.equals(value, "RedundantSyntax")) == 1 &&
+        config.getBoolean("RedundantSyntax.finalObject") && !config.getBoolean("RedundantSyntax.stringInterpolator"))
+      _recipe
+    }
     val base = config.getString("sm-workflow.scala-lint.context.diffBase")
-    val proof = Attestation(checkIdentity, input.identity, input.revision, base, _recipe)
+    val proof = Attestation(checkIdentity, input.identity, input.revision, base, recipe)
     require(valid(proof))
     proof
   }.toOption
 
-  def valid(value: Attestation): Boolean = Option(value).exists(proof => proof.recipe == _recipe) &&
+  def valid(value: Attestation): Boolean = Option(value).exists(proof => Set(_recipe, _membership_recipe)(proof.recipe)) &&
     value.inputIdentity == "sm-workflow-shared-scala-lint" && value.inputRevision == "1" &&
     Option(value.checkIdentity).exists(_.matches("[A-Za-z0-9_.-]{1,128}")) &&
     Option(value.diffBase).exists(_.matches("[0-9a-f]{40}|[0-9a-f]{64}"))
@@ -78,7 +82,7 @@ private[smworkflow] object ScalaLintRepair {
       after.lastOption.exists(value => valid(value) && value.checkIdentity == check) &&
       !before.exists(_.checkIdentity == check))
 
-  final case class Finding(checkIdentity: String, reportedPath: String, diff: Vector[String])
+  final case class Finding(checkIdentity: String, reportedPath: String, diff: Vector[String], recipe: String = _recipe)
 
   /** Only complete, ordinary failed FixCheck captures can locate a source. */
   def finding(payload: GoalPhaseNativeValidation.Payload): Option[Finding] = {
@@ -114,16 +118,29 @@ private[smworkflow] object ScalaLintRepair {
                   value.matches("Total time: [^\\r\\n]+")
               }
             }
-            Option.when(diff.nonEmpty && diff.size <= 12 && acceptederrors &&
-              rows.count(_.startsWith("+++ ")) == 1 && rows.count(_.startsWith("@@ ")) == 1)(
-              Finding(check.identity, rows(index).stripPrefix("--- "), diff))
+            if (diff.nonEmpty && diff.size <= 12 && diff.forall(_.length <= 4096) && acceptederrors &&
+              rows.count(_.startsWith("+++ ")) == 1 && rows.count(_.startsWith("@@ ")) == 1)
+              proof.headOption.map(item => Finding(check.identity, rows(index).stripPrefix("--- "), diff, item.recipe))
+            else None
           case _ => None
         }
       }
     }
   }
 
-  /** Derive a single exact token deletion from the actual one-hunk tool diff. */
+  private def _membership_line(line: String): Option[String] = {
+    val expression = """(?<![A-Za-z0-9_.$])([A-Za-z_][A-Za-z0-9_]*)\.contains\(([A-Za-z_][A-Za-z0-9_]*|"[A-Za-z0-9 _.-]*")\)""".r
+    expression.findAllMatchIn(line).toVector match {
+      case Vector(found) =>
+        val replacement = "_root_.org.goldenport.util.TypeSafeCollections.typeSafe[_root_.scala.Predef.String](" + found.group(1) +
+          ").containsEq[_root_.scala.Predef.String](" + found.group(2) +
+          ")(using _root_.cats.Eq.fromUniversalEquals[_root_.scala.Predef.String])"
+        Some(line.take(found.start) + replacement + line.drop(found.end))
+      case _ => None
+    }
+  }
+
+  /** Derive one exact edit from an authenticated, bounded one-hunk tool diff. */
   def rendered(finding: Finding, document: Document): Option[String] = {
     val header = raw"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@".r
     val source = document.text.split("\n", -1).toVector
@@ -140,9 +157,12 @@ private[smworkflow] object ScalaLintRepair {
           !document.text.contains('\r') && body.forall(row => row.headOption.exists(Set(' ', '-', '+')))
         removed <- body.filter(_.startsWith("-")) match { case Vector(value) => Some(value.drop(1)); case _ => None }
         added <- body.filter(_.startsWith("+")) match { case Vector(value) => Some(value.drop(1)); case _ => None }
-        if removed.matches(" *final object [A-Za-z_][A-Za-z0-9_]* \\{\\}?")
+        replacement <- if (finding.recipe == _recipe && removed.matches(" *final object [A-Za-z_][A-Za-z0-9_]* \\{\\}?")) {
+          val indent = removed.takeWhile(_ == ' ').length
+          Some(removed.take(indent) + removed.drop(indent + 6))
+        } else if (finding.recipe == _membership_recipe) _membership_line(removed) else None
+        if java.util.Objects.equals(added, replacement)
         indent = removed.takeWhile(_ == ' ').length
-        if java.util.Objects.equals(added, removed.take(indent) + removed.drop(indent + 6))
         offset <- oldlines.zipWithIndex.collect { case (row, index) if row == removed && newlines.lift(index).contains(added) => index } match {
           case Vector(value) => Some(value); case _ => None
         }
@@ -152,14 +172,17 @@ private[smworkflow] object ScalaLintRepair {
           oldlines.updated(offset, added) == newlines
         // The CLI uses exactly three lines of context on either side.
         if start == math.max(0, line - 3) && start + count == math.min(source.size - 1, line + 4)
+        range = if (finding.recipe == _recipe) Range(Position(line, indent), Position(line, indent + 6))
+          else Range(Position(line, 0), Position(line, removed.length))
+        inserted = if (finding.recipe == _recipe) "" else added
         diagnostic = Diagnostic("scalafix", document.uri, document.revision, document.version,
-          _recipe, Range(Position(line, indent), Position(line, indent + 6)), "RedundantSyntax.finalObject")
-        action = Action("scalafix", _recipe, diagnostic,
-          Vector(Edit(document.uri, document.version, diagnostic.range, "")))
+          finding.recipe, range, finding.recipe)
+        action = Action("scalafix", finding.recipe, diagnostic,
+          Vector(Edit(document.uri, document.version, diagnostic.range, inserted)))
         patch <- admit(action, document, Set(document.uri), Vector(new Rule {
           def accepts(document: Document, diagnostic: Diagnostic, action: Action): Boolean =
-            action.identity == _recipe && action.edits == Vector(Edit(document.uri, document.version, diagnostic.range, ""))
-        }), Limits(1, 0)).toOption
+            action.identity == finding.recipe && action.edits == Vector(Edit(document.uri, document.version, diagnostic.range, inserted))
+        }), Limits(1, 4096)).toOption
         text <- render(patch, document).toOption
       } yield text
       case _ => None

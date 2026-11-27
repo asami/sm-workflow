@@ -30,8 +30,9 @@ state: retain each state before the next effect, and do not redispatch a
 started or uncertain attempt. Socket availability is not evidence that a
 provider is configured or that a call succeeded.
 
-To enable bounded API review in ordinary dispatch, set
-`"suppliedReviewApi": "bounded"` in the selected caller mapping. Pass the READY
+The standard caller mapping selects `"suppliedReviewApi": "bounded"` for an
+eligible supplied review. A mapping without that setting disables this route.
+Pass the READY
 `supplied_review` and the canonical file's absolute path as
 `supplied_review_path`. The caller derives the attempt identity from the issued
 Session, work Resource, Continuation and expected revision. Retain the attempt
@@ -52,6 +53,11 @@ Advertise the capability on the configured instance after installing a binding
 with a qualified usage policy and bounded invoker. To opt into OpenAI, set
 `textus.ai.bounded-task.openai` to the string value `"true"`, select the
 registered OpenAI connection, and configure the Textus AI allowance authority.
+These are host-owned settings: selecting the caller mapping alone does not
+install a provider, configure credentials, establish allowance, or authorize
+a paid request. The host must use its free-only policy; unknown allowance is
+not evidence of inclusion. A missing binding remains unavailable and an
+unsuitable or refused task does not imply a provider invocation.
 The built-in authority reads `textus.ai.bounded-task.openai-allocation` with
 verified organization, project, model group, allocation and validity. A host
 can also supply its own `OpenAiTaskAllowanceAuthority`. The authority assesses
@@ -118,6 +124,17 @@ separate process reopened the fixture database after test termination; the
 production application was not relaunched in that observation. Deadline closure
 was simulated directly rather than through an end-to-end caller interruption.
 These observations do not establish live provider or billing behavior.
+The adopted Textus AI delivery supports separately verified daily allocations for
+`gpt-5.6-sol` in `openai-daily-group-1` and `gpt-5.6-terra` in
+`openai-daily-group-2`. The legacy singleton configuration remains supported.
+The producer owns eligibility, request-sized reservations, external usage,
+settlement and the decision to try another candidate only after a known
+pre-dispatch refusal. It does not borrow between groups or infer paid permission.
+The consumer retains safe bounded group, allocation and external-use provenance,
+and a schema-checked list of pre-dispatch exhaustions when supplied. These facts
+are observations, not a claim of live use, verified cost or an invoice. The
+list is omitted if its structure or values are invalid or exceed its bound.
+
 The bound response records the verified allowance admission separately from
 observed token usage and provider-reported cost. A successful allowance check
 does not supply an invoice amount.
