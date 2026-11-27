@@ -23,12 +23,19 @@ Plan: [Phase 25.2](phase-25.2.md)
   to AI, unresolved or missing dispositions, resumed/replayed events, parallel
   spans, and unknown duration. Show AI role and route-switch reasons where
   retained evidence is available, without requiring a new instrumentation path.
+  The completion snapshot projects authenticated validation and review cycles,
+  repair transactions bound to their original failure, measured process
+  durations, and matching approval events when retained. Read-only projection
+  failures and incomplete historical or caller evidence leave coverage partial
+  or unavailable. Final packaged qualification remains open.
 - [ ] P252-05: Qualify CNCF's typed `sbt_test` and `sbt_test_attempt` with
   `Admission` and `Full`. Verify the existing single-argument forms retain
   FULL behavior. Through installed sm-workflow, accept an ordinary Step with
   ADMISSION and applicable focused checks, then require FULL for Phase closure.
-  Verify the executed selection, ordinary exclusions, an unavailable or empty
-  selection, and the preservation of bound results on resume. Show test-body
+  Verify the executed selection and ordinary exclusions. Show
+  `ADMISSION対象0件` after complete empty discovery and successful Compile.
+  Verify that an unavailable discovery or a selected test's failure cannot
+  use that result and that bound results survive resume. Show test-body
   and compile/setup times separately where observed. Preserve the existing
   Phase 25.1 Session and issued checks.
 - [ ] P252-05 RepositorySync: On final candidates prepared from local Git
@@ -41,5 +48,17 @@ Plan: [Phase 25.2](phase-25.2.md)
   Verify that a bounded failure can be corrected with FOCUSED and that
   acceptance still satisfies the candidate's selected scope. Preserve
   structural checks and conditional review.
+  Implementation coverage now includes shared base/parent/index selection,
+  typed Test scope and report binding, retained continuation/reuse checks, and
+  conservative Scala comment equivalence. Added regression cases are source
+  artifacts; they do not establish passed validation or installed two-stage
+  qualification. The installed fixture requirement above remains open.
 - [ ] Record review and release evidence. Distinguish live observations from
   fixtures and unavailable tool routes.
+
+
+P252-03 implementation: trusted retained attempt call facts are optional and bind to
+the actual Session and issued work as well as their execution and source identities.
+The normal terminal progress presentation projects the native completion metrics;
+missing facts remain unknown. Packaged and installed qualification remains a separate
+acceptance activity.

@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{ValidationTestPolicy, Com
   * This adapter owns no suite catalog, annotation interpreter or metadata merge.
   * @since   Oct. 24, 2026
   *  version Oct. 31, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 26, 2026
   */
 object LabelledTestSelection {
   def inventory(root: String, revision: String): String = {
@@ -55,11 +55,21 @@ object LabelledTestSelection {
     // The producer remains responsible for query semantics and class/operation composition.
     val candidatesSelected = D.selectC(candidateinventory, query).fold(
       failure => throw new IllegalStateException(s"Canonical CNCF test selection failed: $failure"), identity)
-    val selected = if (purpose == "FULL")
+    // Admission is a shorter ordinary run and must retain the same HEAVY and
+    // external-service exclusions as FULL, even when metadata includes both.
+    val ordinary = if (Set("FULL", "ADMISSION")(purpose))
       ValidationTestPolicy.fullC(candidatesSelected).toOption.getOrElse(throw new IllegalArgumentException(
-        "Contradictory FULL metadata")) else candidatesSelected
+        "Contradictory ordinary validation metadata")) else candidatesSelected
+    val selected = if (purpose == "ADMISSION") {
+      val excluded = Set("org.goldenport.tags.ManualSpec", "org.goldenport.tags.TimingSpec")
+      ordinary.filterNot(_.framework.exists(_.tags.exists(excluded)))
+    } else ordinary
     require(ValidationTestPolicy.admitC(query, selected).toOption.isDefined,
       "FULL classification conflict: HEAVY/external-service work must be a separate explicit selection")
+    if (purpose == "ADMISSION" && selected.isEmpty && exact.isEmpty && containing.isEmpty && properties.isEmpty) {
+      require(inventory.completeness != D.Completeness.UNKNOWN, "Admission discovery did not complete")
+      return Array.empty[Array[String]]
+    }
     val executions = ValidationTestPolicy.executionsC(selected, exact.toSet, containing.toVector).toOption
       .getOrElse(throw new IllegalArgumentException("No labelled runnable operation selected; an empty run is not PASS"))
     val operations = executions.flatMap(_.operations)
@@ -75,7 +85,7 @@ object LabelledTestSelection {
       require(mode.nonEmpty == provider.nonEmpty && provider.forall(Set("fixture", "live")) &&
         mode.forall(value => E.normalizeC(Set(value)).toOption.contains(Set(value))), "Mode/provider must be a canonical shared pair")
       operations.foreach { operation =>
-        val metadata = operation.metadata.get
+        val metadata = operation.metadata.getOrElse(throw new NoSuchElementException("None.get"))
         require(metadata.executionModes.forall(required => mode.exists(required)),
           "Selected mode conflicts with the source test's required execution modes")
         require(!metadata.executionRequirement.exists(_.capabilities.exists(_.identity == ValidationTestPolicy.externalServiceCapability)) ||
@@ -103,4 +113,17 @@ object LabelledTestSelection {
 
   def select(root: String, revision: String, purpose: String, suites: Array[String]): Array[Array[String]] =
     select(root, revision, purpose, suites, Array.empty[String], Array.empty[String])
+}
+
+/** Report actual ScalaTest success identities for CNCF's Admission protocol. */
+final class AdmissionSuccessReporter extends org.scalatest.Reporter {
+  override def apply(event: org.scalatest.events.Event): Unit = event match {
+    case success: org.scalatest.events.TestSucceeded =>
+      def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+        .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      success.suiteClassName.foreach { suite =>
+        Console.println("CNCF-ADMISSION-V1 succeeded " + token(suite) + ":" + token(success.testName))
+      }
+    case _ => ()
+  }
 }

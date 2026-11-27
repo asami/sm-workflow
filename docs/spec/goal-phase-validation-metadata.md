@@ -3,6 +3,22 @@
 The 2026-10-24 migration introduced
 [inventory-based discovery and selection](label-driven-test-selection.md).
 Historical individually enrolled CLI evidence retains its original scope.
+
+For native GoalPhase checks, an explicit `test-admission` selects the typed
+SBT `Test` operation with `Admission`; the existing `test` selection remains
+`Full`. A missing `testScope` in an existing check or result means Full. A
+host-bound Test check may explicitly use `testScope: "admission"` or
+`"full"`; the scope is fixed with the issued check, not inferred when a run
+resumes. Phase closure does not substitute Admission for Full. Focused
+`test-only`, Compile and FixCheck remain independently selected checks.
+
+Admission receipts retain the producer's exact selected suite and case rows,
+scope, process capture and outcome. Reuse compares the requested and actual
+scope and reassesses the retained capture against the producer's Admission
+report; Full and Admission receipts cannot satisfy one another. Missing,
+empty or unavailable selection cannot be accepted as success. Existing Full
+receipts keep their historical wire form. Process elapsed time is retained;
+separate setup and test-body times are not inferred when unavailable.
 Goal Phase consumes the shared selection before preparing its workspace.
 See [LTEST delivery and acceptance](../notes/label-driven-test-migration-plan.md)
 for the original implementation and acceptance.

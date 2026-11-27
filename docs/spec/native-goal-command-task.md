@@ -1682,3 +1682,10 @@ The finite completion specification also executes a test-owned installed executa
 without replacing the subprocess transport. It checks literal argv, Submit/Advance
 order and raw streams. That child is a fixture, not a real Workflow acceptance.
 Changed, missing or corrupt routing after accepted Submit stops before Advance.
+
+
+Phase completion responses from the owning `advanceGoalPhase` invocation include compact
+Markdown tables in response progress when the terminal completed response carries bound
+structured metrics. The tables use those same counts and preserve unknown values and
+coverage; they are a presentation projection and never alter the response or route.
+The full native response remains available for details and omitted rows.

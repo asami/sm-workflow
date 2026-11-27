@@ -14,12 +14,15 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private final class AdmissionReporterFixture extends AnyWordSpec {
+    "fixture" should { "pass" in { assert(true) } }
+  }
   private val _classes = Vector("example.FirstSpec", "example.SecondSpec")
   private def _capture(text: String): ProcessExecutionCapture = {
     val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
@@ -32,6 +35,107 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "emit Admission identities only for genuine ScalaTest success events" in {
+      val fixture = new AdmissionReporterFixture
+      val output = new java.io.ByteArrayOutputStream()
+      val reporter = new org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter
+      Console.withOut(new java.io.PrintStream(output, true, "UTF-8")) {
+        fixture.run(Some("fixture should pass"), org.scalatest.Args(reporter)).waitUntilCompleted()
+      }
+      def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+        .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      output.toString("UTF-8").linesIterator.toVector shouldBe Vector(
+        "CNCF-ADMISSION-V1 succeeded " + token(fixture.getClass.getName) + ":" + token("fixture should pass"))
+    }
+    "retain and recheck the selected Admission scope without reusing legacy Full receipts" in {
+      import GoalPhaseNativeValidation.Check
+      Given("an actual-shaped producer report for one selected ScalaTest case")
+      def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+        .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      val suite = "org.example.SelectedSpec"
+      val test = "fixture case"
+      val row = token(suite) + ":" + token(test)
+      val output = Vector("CNCF-ADMISSION-V1 selected " + row,
+        "CNCF-ADMISSION-V1 succeeded " + row, "[info] org.example.SelectedSpec:",
+        "[info] Total number of tests run: 1", "[info] Suites: completed 1, aborted 0",
+        "[info] Tests: succeeded 1, failed 0, canceled 0, ignored 0, pending 0",
+        "[info] All tests passed.", "CNCF-ADMISSION-V1 completed").mkString("\n")
+      val raw = _result(SbtOperation.Test)
+      val process = raw.processResult.copy(stdout = _capture(output), stderr = _capture(""))
+      val actual = raw.copy(target = raw.target.copy(testScope = SbtTestScope.Admission), processResult = process)
+      val receipt = take(V.sbtReceiptC("test-admission", Kind.Test, actual))
+      val selected = Check("test-admission", 1, Kind.Test, testScope = Some("admission"))
+      val full = Check("test-admission", 1, Kind.Test)
+      When("the result is persisted and compared to the selected check")
+      val retained = receipt.asJson.as[V.Receipt].fold(throw _, identity)
+      Then("Admission preserves exact cases and cannot satisfy or reuse Full")
+      retained.sbt.map(_.testScope) shouldBe Some(Some("admission"))
+      retained.sbt.map(_.admissionCases) shouldBe Some(Some(Vector(AdmissionCase(suite, test))))
+      GoalPhaseNativeValidation.successful(Vector(retained), Vector(selected)) shouldBe true
+      GoalPhaseNativeValidation.successful(Vector(retained), Vector(full)) shouldBe false
+      val legacy = take(V.sbtReceiptC("test-admission", Kind.Test, raw))
+      GoalPhaseNativeValidation.successful(Vector(legacy), Vector(selected)) shouldBe false
+      val wrongOutput = output.replace("CNCF-ADMISSION-V1 succeeded " + row,
+        "CNCF-ADMISSION-V1 succeeded " + token("org.example.OtherSpec") + ":" + token(test))
+      val forged = retained.copy(stdout = wrongOutput,
+        processObservation = Some(process.copy(stdout = _capture(wrongOutput))))
+      GoalPhaseNativeValidation.successful(Vector(forged), Vector(selected)) shouldBe false
+      val unavailable = actual.copy(processResult = process.copy(stdout = _capture("CNCF-ADMISSION-V1 unavailable")))
+      val failed = take(V.sbtReceiptC("test-admission", Kind.Test, unavailable))
+      failed.sbt.map(_.outcome) shouldBe Some(Outcome.Unverified)
+      GoalPhaseNativeValidation.successful(Vector(failed), Vector(selected)) shouldBe false
+      full.asJson.hcursor.downField("testScope").succeeded shouldBe false
+      full.asJson.as[Check].map(_.effectiveTestScope) shouldBe Right(SbtTestScope.Full)
+      selected.asJson.as[Check] shouldBe Right(selected)
+      val checks = take(StandardWorkflowRuntime.standardChecksC(Vector("compile", "test-admission", "test-only")))
+      checks(1).effectiveTestScope shouldBe SbtTestScope.Admission
+      take(StandardWorkflowRuntime.standardChecksC(Vector("test"))).head.effectiveTestScope shouldBe SbtTestScope.Full
+    }
+    "satisfy empty Admission only after Compile and keep independent focused obligations" in {
+      import GoalPhaseNativeValidation.Check
+      val raw = _result(SbtOperation.Test)
+      val admission = raw.copy(target = raw.target.copy(testScope = SbtTestScope.Admission))
+      def observed(text: String, terminal: ProcessExecutionTermination = ProcessExecutionTermination.Exited(0)) =
+        take(V.sbtReceiptC("test-admission", Kind.Test, admission.copy(processResult =
+          admission.processResult.copy(stdout = _capture(text), termination = terminal))))
+      val empty = observed("[info] CNCF-ADMISSION-V1 empty")
+      val compile = take(V.sbtReceiptC("compile", Kind.Compile, _result(SbtOperation.Compile)))
+      val badCompile = take(V.sbtReceiptC("compile", Kind.Compile,
+        _result(SbtOperation.Compile, ProcessExecutionTermination.Exited(1))))
+      val focused = take(V.sbtReceiptC("focused", Kind.TestOnly, _result(SbtOperation.TestOnly,
+        selection = Some(SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.ZeroTests)))))
+      val compileCheck = Check("compile", 1, Kind.Compile)
+      val admissionCheck = Check("test-admission", 2, Kind.Test, testScope = Some("admission"))
+      val focusedCheck = Check("focused", 3, Kind.TestOnly)
+      val selected = Vector(compileCheck, admissionCheck, focusedCheck)
+
+      empty.sbt.map(_.outcome) shouldBe Some(Outcome.AdmissionEmpty)
+      V.productSuccessful(empty, Kind.Test) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty), selected) shouldBe true
+      GoalPhaseNativeValidation.successful(Vector(empty), Vector(admissionCheck)) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(badCompile, empty), selected) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty, focused), selected) shouldBe false
+      GoalPhaseNativeValidation.successful(Vector(compile, empty),
+        Vector(compileCheck, admissionCheck.copy(testScope = None))) shouldBe false
+      Vector(
+        observed("[error] CNCF-ADMISSION-V1 unavailable"),
+        observed("[error] CNCF-ADMISSION-V1 empty"),
+        observed("no producer observation"),
+        observed("[info] CNCF-ADMISSION-V1 empty\n[info] CNCF-ADMISSION-V1 completed"),
+        observed("[info] CNCF-ADMISSION-V1 empty\n[error] CNCF-ADMISSION-V1 completed"),
+        observed("[error] CNCF-ADMISSION-V1 empty", ProcessExecutionTermination.Exited(1))
+      ).foreach { receipt =>
+        receipt.sbt.map(_.outcome) should not be Some(Outcome.AdmissionEmpty)
+        GoalPhaseNativeValidation.successful(Vector(compile, receipt), selected) shouldBe false
+      }
+      val mergeChecks = Vector(V.Check("compile", 1, Kind.Compile),
+        V.Check("test-admission", 2, Kind.Test, testScope = Some("admission")), V.Check("focused", 3, Kind.TestOnly))
+      val local = V.Receipt("index-local", "exited", Some(0), "", "")
+      val remote = V.Receipt("index-remote", "exited", Some(0), "", "")
+      V.successful(Vector(local, remote, compile, empty), selected = mergeChecks) shouldBe true
+      V.successful(Vector(local, remote, empty), selected = mergeChecks.tail) shouldBe false
+      V.successful(Vector(local, remote, compile, empty, focused), selected = mergeChecks) shouldBe false
+    }
     "retain admitted immutable lint input and reject echoed, missing or crossed provenance" in {
       Given("a selected typed FixCheck result and its actual producer-admitted input")
       val input = SbtLintInput("shared-scala-lint", "1", "{\"rules\":[\"NoOptionGet\"]}")

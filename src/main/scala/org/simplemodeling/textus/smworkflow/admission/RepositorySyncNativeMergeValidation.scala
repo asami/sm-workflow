@@ -8,7 +8,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{GitExecutionOutcome, GitIndexCheck, GitObjectId, GitOperation,
-  ProcessExecutionResult, ProcessExecutionTermination, SbtExecutionAttempt, SbtExecutionResult, SbtTarget}
+  ProcessExecutionResult, ProcessExecutionTermination, SbtExecutionAttempt, SbtExecutionResult, SbtTarget, SbtTestScope}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
 import GoalPhaseNativeMetadata.given
@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -34,7 +34,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   }
   final case class Check(identity: String, ordinal: Int, kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     workspace: Option[String] = None, setupRequired: Option[String] = None,
-    metadata: Option[GoalPhaseNativeMetadata.Profile] = None, invocation: Option[Invocation] = None, ordinaryDiscovery: Boolean = false) {
+    metadata: Option[GoalPhaseNativeMetadata.Profile] = None, invocation: Option[Invocation] = None, ordinaryDiscovery: Boolean = false,
+    testScope: Option[String] = None) {
+    def effectiveTestScope: SbtTestScope = if (testScope.contains("admission")) SbtTestScope.Admission else SbtTestScope.Full
+    def scopeValid: Boolean = metadata != null && invocation != null && testScope != null && testScope.forall(scope => kind == WorkflowSbtValidation.Kind.Test &&
+      scope == "admission" && !ordinaryDiscovery && metadata.isEmpty && invocation.isEmpty)
     def workspaceIdentity: String = workspace.getOrElse("sm-workflow-repository-validation-" + ordinal)
   }
   object Check {
@@ -45,7 +49,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       val setup = value.setupRequired.fold(workspace)(reason => workspace.mapObject(_.add("setupRequired", reason.asJson)))
       val metadata = value.metadata.fold(setup)(profile => setup.mapObject(_.add("metadata", profile.asJson)))
       val invocation = value.invocation.fold(metadata)(invocation => metadata.mapObject(_.add("invocation", invocation.asJson)))
-      if (value.ordinaryDiscovery) invocation.mapObject(_.add("ordinaryDiscovery", Json.True)) else invocation
+      val ordinary = if (value.ordinaryDiscovery) invocation.mapObject(_.add("ordinaryDiscovery", Json.True)) else invocation
+      value.testScope.fold(ordinary)(scope => ordinary.mapObject(_.add("testScope", scope.asJson)))
     })
     given Decoder[Check] = Decoder.instance(cursor => for {
       identity <- cursor.get[String]("identity")
@@ -56,9 +61,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       metadata <- GoalPhaseNativeMetadata.optional[GoalPhaseNativeMetadata.Profile](cursor, "metadata")
       invocation <- GoalPhaseNativeMetadata.optional[Invocation](cursor, "invocation")
       ordinary <- GoalPhaseNativeMetadata.optional[Boolean](cursor, "ordinaryDiscovery")
+      scope <- GoalPhaseNativeMetadata.optional[String](cursor, "testScope")
+      check = Check(identity, ordinal, kind, workspace, setup, metadata, invocation, ordinary.getOrElse(false), scope)
+      _ <- Either.cond(check.scopeValid, (), DecodingFailure("Invalid repository Test scope", cursor.history))
       _ <- Either.cond(workspace.forall(value => org.goldenport.cncf.workspace.WorkspaceId.parseC(value).isSuccess), (),
         DecodingFailure("Invalid validation workspace", cursor.history))
-    } yield Check(identity, ordinal, kind, workspace, setup, metadata, invocation, ordinary.getOrElse(false)))
+    } yield check)
   }
   final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check],
     assessment: Option[RepositorySyncMergeAssessment.Policy] = None,
@@ -68,7 +76,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
         reason.trim.nonEmpty && checks != null &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
-          c.kind != null && c.ordinal > 0) && checks.map(_.identity).distinct.size == checks.size &&
+          c.kind != null && c.scopeValid && c.ordinal > 0) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
         assessment != null && impact != null && setupRequired != null && dependencyInputs != null &&
         setupRequired.forall(value => value != null && value.trim.nonEmpty && !value.exists(_.isControl)) &&
@@ -281,6 +289,28 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       consumedPaths = (inputs.consumedPaths ++ consumed).distinct.sorted)
   }
 
+  /** Admit only an exact, previously issued legacy plan for the same candidate.
+    * The effective selected checks remain those of that intent, including any
+    * discovered operations; a scoped check cannot stand in for a Full check. */
+  private[admission] def retainedLegacySelection(state: State, policy: Policy,
+    inputs: RepositorySyncDocumentInputs.Assessment, sourceRevision: String, remote: Boolean): Boolean =
+    policy.impact.exists { impact =>
+      val legacy = if (remote) RepositorySyncProgramImpact.selectRemote(impact, inputs)
+        else RepositorySyncProgramImpact.select(impact, inputs)
+      state.sourceRevision == sourceRevision && state.mode == policy.mode &&
+        state.dependencyInputs == policy.dependencyInputs &&
+        RepositorySyncDocumentInputs.applicable(state.inputs, Some(inputs)) &&
+        state.impact.exists(old => Set("FOCUSED", "FULL").contains(old.depth) &&
+          legacy.depth == old.depth && legacy.checks == old.checks &&
+          state.selected.forall(check => RepositorySyncProgramImpact.belongs(check, old.checks)) &&
+          old.checks.forall(check => state.selected.exists(selected => RepositorySyncProgramImpact.belongs(selected, Vector(check)))) &&
+          state.selected.map(check => old.checks.indexWhere(original =>
+            RepositorySyncProgramImpact.belongs(check, Vector(original)))) ==
+            state.selected.map(check => old.checks.indexWhere(original =>
+              RepositorySyncProgramImpact.belongs(check, Vector(original)))).sorted &&
+          state.selected.forall(check => RepositorySyncProgramImpact.registeredCheck(check, policy.checks)))
+    }
+
   private def _impact_c(store: N.Store, pending: N.Stage, policy: Policy,
     inputs: RepositorySyncDocumentInputs.Assessment, namespace: String):
       Consequence[(Option[RepositorySyncProgramImpact.Selection], Map[String, Receipt])] = {
@@ -295,40 +325,48 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       reuse.validation.startsWith(store.identity + ":native-local-main-local-") &&
         reuse.closure == store.identity + ":native-local-main-local-commit-observed")
     for {
+      current <- if (inputs.documentOnly) Consequence.success(Option.empty[RepositorySyncProgramImpact.Selection])
+        else policy.impact match {
+          case Some(value) => RepositorySyncProgramImpact.validateC(value).flatMap(_ =>
+            RepositorySyncProgramImpact.selectMergeC(store, pending, value, inputs)).map(Some(_))
+          case None => Consequence.success(Option.empty[RepositorySyncProgramImpact.Selection])
+        }
       first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
       retained = first.flatMap(_.payload.validation).flatMap(_.impact)
-      prior <- if (eligible && retained.forall(_native_)) policy.impact match {
-        case Some(value) => RepositorySyncProgramImpact.reuseLocalC(store, pending, policy, value,
+      legacy = first.exists(value => value.record.revision == pending.record.revision.next &&
+        value.record.history.dropRight(1) == pending.record.history &&
+        value.payload.indexTree == pending.payload.indexTree &&
+        value.payload.mergeHead == pending.payload.mergeHead && value.payload.before == pending.payload.before &&
+        value.payload.after == pending.payload.after && value.payload.validation.exists(state =>
+          retainedLegacySelection(state, policy, inputs, pending.record.revision.value.toString,
+            store.declaration.hop.exists(_.cursor.phase == "remote"))))
+      _ <- if (retained.forall(old => current.exists(now => old.depth == now.depth && old.checks == now.checks)) || legacy) Consequence.unit
+        else N.invalid("Retained merge selection crosses the current parent/index logic or typed Test scope")
+      effective = if (legacy) retained else current
+      prior <- if (eligible && effective.nonEmpty && retained.forall(_native_)) policy.impact match {
+        case Some(value) => RepositorySyncProgramImpact.reuseLocalC(store, pending, policy, value, effective.get,
           retained.toVector.flatMap(_.reused))
         case None => Consequence.success(None)
       } else Consequence.success(None)
-      local = prior.filter(value => !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
-        value._1.checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      local = prior.filter(value => value._1.checks == effective.toVector.flatMap(_.checks) &&
+        (!policy.assessment.exists(_.requiresLint(inputs.changedPaths)) || value._1.checks.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)))
       _ <- if (retained.exists(_native_) && !local.exists(value => retained.exists(old =>
           old.checks == value._1.checks && old.reused == value._1.reused)))
         N.invalid("Retained local-hop reuse no longer matches its actual checked references and selected plan") else Consequence.unit
-      result <- retained match {
-        case Some(value) if !_native_(value) && value.reused.nonEmpty => policy.impact match {
-          case Some(current) => RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get,
-            current, value.copy(reused = Vector.empty), value.reused).flatMap { (selected, receipts) =>
-              if (selected.reused == value.reused) Consequence.success((Some(value), receipts))
-              else N.invalid("Retained prior reuse no longer matches its actual evidence references")
-            }
-          case None => N.invalid("Retained prior reuse has no current impact policy")
+      result <- if (local.nonEmpty) Consequence.success((Some(retained.getOrElse(local.get._1)), local.get._2))
+        else (effective, policy.impact) match {
+          case (Some(selection), Some(value)) if retained.exists(_.reused.nonEmpty) =>
+            RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get,
+              value, selection.copy(reused = Vector.empty), retained.toVector.flatMap(_.reused)).flatMap { (selected, receipts) =>
+                if (retained.exists(_.reused == selected.reused)) Consequence.success((Some(selected), receipts))
+                else N.invalid("Retained prior reuse no longer matches its actual evidence references")
+              }
+          case (Some(selection), Some(value)) if retained.isEmpty && !supplement && policy.dependencyInputs.isEmpty &&
+              policy.setupRequired.isEmpty && !selection.checks.exists(_.setupRequired.nonEmpty) =>
+            RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get, value, selection)
+              .map((selected, receipts) => (Some(selected), receipts))
+          case _ => Consequence.success((retained.orElse(current), Map.empty[String, Receipt]))
         }
-        case Some(value) if !_native_(value) => Consequence.success((Some(value), Map.empty[String, Receipt]))
-        case _ if local.nonEmpty => Consequence.success((Some(retained.getOrElse(local.get._1)), local.get._2))
-        case _ if inputs.documentOnly => Consequence.success((Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
-        case _ => policy.impact match {
-          case Some(value) if supplement || policy.dependencyInputs.nonEmpty || policy.setupRequired.nonEmpty ||
-              RepositorySyncProgramImpact.selectForStore(store, value, inputs).checks.exists(_.setupRequired.nonEmpty) =>
-            RepositorySyncProgramImpact.validateC(value).map(_ =>
-            (Some(RepositorySyncProgramImpact.selectForStore(store, value, inputs)), Map.empty[String, Receipt]))
-          case Some(value) => RepositorySyncProgramImpact.prepareC(store, pending, inputs, value)
-            .map((selection, receipts) => (Some(selection), receipts))
-          case None => Consequence.success((Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
-        }
-      }
     } yield result
   }
 
@@ -468,8 +506,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         _ <- completedC(value, pending, policy, merge)
         _ <- if (value.payload.validation.exists(state => RepositorySyncDocumentInputs.applicable(state.inputs, inputs))) Consequence.unit
           else N.invalid("retained validation crosses its actual document/consumption inputs")
-        _ <- if ((pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty && !mergecheck) || value.payload.validation.exists(state =>
-            state.selected == checks && state.receipts.take(seed.size) == seed)) Consequence.unit
+        _ <- if (value.payload.validation.exists(state => state.selected == checks) &&
+          ((pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty && !mergecheck) || value.payload.validation.exists(state =>
+            state.receipts.take(seed.size) == seed))) Consequence.unit
           else N.invalid("retained supplemented validation crosses its authenticated successful prefix")
       } yield value
       case None => for {
@@ -522,9 +561,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
           } yield value
           case (Some(value), None) =>
             if (value.payload.validation.exists(state => state.sourceRevision == selection.sourceRevision &&
-                state.receipts.size == index + 1 && applies(state, policy) &&
+                state.receipts.size == index + 1 && state.selected == selection.selected && applies(state, policy) &&
                 state.receipts.last.identity == check.identity && (index < structural ||
-                  _receipt_kind(state.receipts.last, check.kind)))) Consequence.success(value)
+                  receiptMatches(state.receipts.last, check)))) Consequence.success(value)
             else N.invalid("retained check result crosses the selected candidate/check")
           case (None, None) => for {
             intent <- store.loadC(N.candidateKey(namespace, "validation-intent-" + index))
@@ -564,7 +603,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                     } yield payload
                     case None if merge || RepositorySyncConsumedInputs.related(store.core) =>
                       E.repositoryValidationTargetedAttemptC(store.core, check.ordinal, check.kind, check.workspace,
-                        lintBase = Some(pending.payload.before.head)).flatMap { (target, attempt) =>
+                        lintBase = Some(pending.payload.before.head), testScope = check.effectiveTestScope).flatMap { (target, attempt) =>
                         _product_attempt_payload_c(prepared.payload, check, attempt, target, allowPreparedLint = true)
                       }
                     case None => E.repositoryValidationC(store.core, check.ordinal, check.kind,
@@ -611,7 +650,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     */
   private[admission] def productTargetC(check: Check): Consequence[SbtTarget] =
     if (check.invocation.nonEmpty) RepositorySyncProgramImpact.operationC(check).map(_.intent.target)
-    else org.goldenport.cncf.workspace.WorkspaceId.parseC(check.workspaceIdentity).map(SbtTarget(_))
+    else org.goldenport.cncf.workspace.WorkspaceId.parseC(check.workspaceIdentity)
+      .flatMap(workspace => if (check.scopeValid) Consequence.success(SbtTarget(workspace, testScope = check.effectiveTestScope))
+        else N.invalid("Selected repository Test scope is invalid"))
 
   private[admission] def productAttemptPayloadC(prepared: N.Payload, check: Check,
     actual: SbtExecutionAttempt): Consequence[N.Payload] =
@@ -657,7 +698,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
   private[admission] def applies(state: State, policy: Policy): Boolean =
     state.mode == policy.mode && state.dependencyInputs == policy.dependencyInputs &&
-      state.selected.forall(check => RepositorySyncProgramImpact.belongs(check, policy.checks))
+      state.selected.forall(check => RepositorySyncProgramImpact.belongs(check, policy.checks) ||
+        (policy.impact.nonEmpty && state.impact.exists(_.checks.contains(check)) && check.scopeValid &&
+          check.testScope.nonEmpty && RepositorySyncProgramImpact.belongs(check.copy(testScope = None), policy.checks)))
 
   private[admission] def knownFailure(value: N.Stage, policy: Policy): Boolean =
     value.payload.stage == "ValidationChecking" && value.payload.validation.exists { state =>
@@ -665,7 +708,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       applies(state, policy) && offset >= 0 && state.selected.lift(offset).exists { check =>
         val failed = state.receipts.last
         successful(state.receipts.dropRight(1), merge = true, selected = state.selected) &&
-          failed.identity == check.identity && _receipt_kind(failed, check.kind) &&
+          failed.identity == check.identity && receiptMatches(failed, check) &&
           storedProductOutputValid(failed) && ((failed.termination == "exited" && failed.exitCode.exists(_ != 0)) ||
             failed.group.exists(_.knownFailure))
       }
@@ -782,7 +825,23 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       receipt.exitCode.contains(0) && storedProductOutputValid(receipt) &&
       receipt.processObservation.forall(p => !p.stdout.truncated && !p.stderr.truncated &&
         WorkflowSbtCapture.text(p.stdout).textStatus == "complete" && WorkflowSbtCapture.text(p.stderr).textStatus == "complete") &&
-      receipt.sbt.forall(_.outcome == WorkflowSbtValidation.Outcome.Succeeded)
+      receipt.sbt.forall(_.outcome == WorkflowSbtValidation.Outcome.Succeeded) &&
+      WorkflowSbtValidation.scopeReceiptValid(receipt.sbt, receipt.processObservation,
+        receipt.sbt.map(_.effectiveTestScope).getOrElse(SbtTestScope.Full))
+
+  /** Scope and reporter rows are part of the selected product observation. */
+  private[admission] def receiptMatches(receipt: Receipt, check: Check): Boolean =
+    receipt != null && check != null && check.scopeValid && _receipt_kind(receipt, check.kind) &&
+      WorkflowSbtValidation.scopeReceiptValid(receipt.sbt, receipt.processObservation, check.effectiveTestScope)
+
+  private[admission] def productSuccessful(receipt: Receipt, check: Check): Boolean =
+    receiptMatches(receipt, check) && productSuccessful(receipt, check.kind)
+
+  private[admission] def emptyAdmission(receipt: Receipt): Boolean =
+    _receipt_kind(receipt, WorkflowSbtValidation.Kind.Test) && receipt.termination == "exited" &&
+      receipt.exitCode.contains(0) && storedProductOutputValid(receipt) &&
+      receipt.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.AdmissionEmpty) &&
+      WorkflowSbtValidation.scopeReceiptValid(receipt.sbt, receipt.processObservation, SbtTestScope.Admission)
 
   /** CNCF bounds acquisition; retained historical and typed text preserve complete results. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
@@ -825,7 +884,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       receipts.drop(count).zipWithIndex.forall { case (receipt, index) =>
         if (selected.isEmpty) productSuccessful(receipt)
         else selected.lift(index).exists(check => receipt != null && receipt.identity == check.identity &&
-          productSuccessful(receipt, check.kind))
+          (productSuccessful(receipt, check) ||
+            (check.effectiveTestScope == SbtTestScope.Admission && emptyAdmission(receipt) &&
+              receipts.drop(count).take(index).zip(selected).exists { (prior, compile) =>
+                compile.kind == WorkflowSbtValidation.Kind.Compile && productSuccessful(prior, compile)
+              })))
       }
   }
   private def _ordinary_text(text: String): Boolean = text != null && !text.contains('\u0000') &&

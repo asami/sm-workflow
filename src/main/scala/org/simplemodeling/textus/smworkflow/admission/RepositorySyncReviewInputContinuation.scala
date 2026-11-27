@@ -23,7 +23,7 @@ import RepositorySyncPostReviewValidation as P
 /** Append-only correction of input classification, followed by fresh independent
   * review. Native references retain the old checks and decision-needed result.
   * @since   Nov.  3, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object RepositorySyncReviewInputContinuation {
   val policy = "sm-workflow.repository-sync-review-input-continuation.v3"
@@ -172,7 +172,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
 
   private def _uncovered(original: D.Assessment, proposed: D.Assessment, validation: C.Policy,
     selected: Vector[C.Check]): Vector[String] = {
-    val coverage = validation.impact.toVector.flatMap(_.coverage).filter(c => selected.contains(c.check))
+    val coverage = validation.impact.toVector.flatMap(_.coverage).filter(c => selected.exists(check => check == c.check || check.copy(testScope = None) == c.check))
     proposed.consumedPaths.filter(original.unknownPaths.contains)
       .filterNot(path => coverage.exists(c => RepositorySyncProgramImpact.covers(c.inputPaths, path)))
   }
@@ -190,7 +190,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     supplemental match {
       case Some(plan) =>
         val covered = _obligations(plan.binding).map(_uncovered_issue + _)
-        val expanded = validation.impact.exists(p => RepositorySyncProgramImpact.select(p, proposed).checks == (selected :+ plan.check))
+        val expanded = validation.impact.exists(p => RepositorySyncProgramImpact.selectRetained(p, proposed, selected).checks == (selected :+ plan.check))
         issues.filterNot(issue => covered.contains(issue) || (expanded && issue == _different_selection))
       case None if _configured_obligation(original, validation) => issues :+ _unresolved_supplement
       case None => issues
@@ -206,13 +206,13 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       return Vector("Input assessment or fixed validation selection is incomplete")
     val originaldocs = original.changedPaths.filterNot(path => original.consumedPaths.contains(path) || original.unknownPaths.contains(path))
     val proposeddocs = proposed.changedPaths.filterNot(path => proposed.consumedPaths.contains(path) || proposed.unknownPaths.contains(path))
-    val coverage = validation.impact.toVector.flatMap(_.coverage).filter(c => selected.contains(c.check))
+    val coverage = validation.impact.toVector.flatMap(_.coverage).filter(c => selected.exists(check => check == c.check || check.copy(testScope = None) == c.check))
     // Preserve already-known documents even under broad program coverage;
     // only newly classified old unknown paths require this consumption check.
     val programdocs = proposeddocs.filter(original.unknownPaths.contains)
       .filter(path => coverage.exists(c => RepositorySyncProgramImpact.covers(c.inputPaths, path)))
     val uncovered = _uncovered(original, proposed, validation, selected)
-    val selection = validation.impact.map(p => RepositorySyncProgramImpact.select(p, proposed).checks)
+    val selection = validation.impact.map(p => RepositorySyncProgramImpact.selectRetained(p, proposed, selected).checks)
     (if (original.changedPaths != proposed.changedPaths) Vector("Actual changed paths differ from the original assessed candidate") else Vector.empty) ++
       (if (original.binaryPaths != proposed.binaryPaths) Vector("Actual binary observations differ from the original candidate") else Vector.empty) ++
       (if (proposed.binaryPaths.nonEmpty) Vector("Binary inputs remain unexamined: " + proposed.binaryPaths.mkString(",")) else Vector.empty) ++
@@ -227,7 +227,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       uncovered.map(_uncovered_issue + _) ++
       (if (validation.impact.isEmpty) Vector("Current fixed program impact policy is absent") else Vector.empty) ++
       (if (!selection.contains(selected)) Vector(_different_selection) else Vector.empty) ++
-      (if (validation.checks.filter(selected.contains) != selected) Vector("Current fixed check identity, kind, ordinal or order differs from original selection") else Vector.empty)
+      (if (validation.checks.flatMap(check => selected.find(original => original == check || original.copy(testScope = None) == check)) != selected) Vector("Current fixed check identity, kind, ordinal or order differs from original selection") else Vector.empty)
   }
   def validTarget(t: Target): Boolean = t != null && N.validPhase(t.phase) && _text(t.sessionId) && t.context != null &&
     t.context.productIterator.forall(v => v.isInstanceOf[String] && _text(v.asInstanceOf[String])) &&
@@ -695,14 +695,14 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     evidence: Option[SupplementalEvidence]): N.Payload = {
     val state = original.validation.get
     val selected = state.selected ++ direction.target.supplemental.map(_.check)
-    val impact = direction.target.validationPolicy.impact.map(p => RepositorySyncProgramImpact.select(p, direction.target.proposedInputs))
+    val impact = direction.target.validationPolicy.impact.map(p => RepositorySyncProgramImpact.selectRetained(p, direction.target.proposedInputs, selected))
     original.copy(stage = "MergeValidated", validation = Some(state.copy(selected = selected,
       receipts = state.receipts ++ evidence.flatMap(_.lint), inputs = Some(direction.target.proposedInputs),
       impact = impact.map(i => i.copy(checks = selected, reused = state.impact.toVector.flatMap(_.reused))))),
       reviewInputs = Some(direction), reviewSupplemental = evidence)
   }
   private def _coverage_scope(validation: C.Policy, selected: Vector[C.Check]): Vector[(C.Check, Vector[String], Vector[String])] =
-    validation.impact.toVector.flatMap(_.coverage).filter(c => selected.contains(c.check))
+    validation.impact.toVector.flatMap(_.coverage).filter(c => selected.exists(check => check == c.check || check.copy(testScope = None) == c.check))
       .map(c => (c.check, c.affectedPaths, c.inputPaths))
   private def _supplemental_scope(validation: C.Policy) =
     validation.impact.map(p => (p.fullPaths, p.fullChecks, p.priorEvidence))

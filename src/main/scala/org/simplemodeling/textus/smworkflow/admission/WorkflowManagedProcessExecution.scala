@@ -19,7 +19,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -153,20 +153,24 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     estimate: Option[SbtValidationEstimate] = None,
     lintBase: Option[String] = None,
     lintCandidateWorkspace: Option[String] = None,
-    expectedWorkspaceRoot: Option[Path] = None): Consequence[SbtExecutionAttempt] =
+    expectedWorkspaceRoot: Option[Path] = None,
+    testScope: SbtTestScope = SbtTestScope.Full): Consequence[SbtExecutionAttempt] =
     repositoryValidationTargetedAttemptC(core, ordinal, kind, workspaceIdentity, estimate, lintBase,
-      lintCandidateWorkspace, expectedWorkspaceRoot)
+      lintCandidateWorkspace, expectedWorkspaceRoot, testScope)
       .map(_._2)
 
   private[admission] def repositoryValidationTargetedAttemptC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind, workspaceIdentity: Option[String],
     estimate: Option[SbtValidationEstimate] = None, lintBase: Option[String] = None,
     lintCandidateWorkspace: Option[String] = None,
-    expectedWorkspaceRoot: Option[Path] = None): Consequence[(SbtTarget, SbtExecutionAttempt)] = for {
+    expectedWorkspaceRoot: Option[Path] = None,
+    testScope: SbtTestScope = SbtTestScope.Full): Consequence[(SbtTarget, SbtExecutionAttempt)] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
+    _ <- if (testScope != null && (testScope == SbtTestScope.Full || kind == WorkflowSbtValidation.Kind.Test)) Consequence.unit
+      else Consequence.stateConflict("Admission scope requires the typed Test operation")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
-    basetarget <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationEstimate = estimate))
+    basetarget <- RepositorySyncConsumedInputs.targetC(core, SbtTarget(workspace, validationEstimate = estimate, testScope = testScope))
     lint = if (kind == WorkflowSbtValidation.Kind.FixCheck)
       WorkflowScalaLintAction.prepareC(core, workspace.value, lintBase, lintCandidateWorkspace)
       else Consequence.success(Option.empty[SbtLintInput])
@@ -314,7 +318,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     def prepareSbt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionResult] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile(target)
       case WorkflowSbtValidation.Kind.TestCompile => sbt_test_compile(target)
-      case WorkflowSbtValidation.Kind.Test => sbt_test(target)
+      case WorkflowSbtValidation.Kind.Test => sbt_test(target, target.testScope)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
       case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check(target)
     }
@@ -322,7 +326,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     def prepareSbtAttempt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionAttempt] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile_attempt(target)
       case WorkflowSbtValidation.Kind.TestCompile => sbt_test_compile_attempt(target)
-      case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target)
+      case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target, target.testScope)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only_attempt(target)
       case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check_attempt(target)
     }

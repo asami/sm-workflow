@@ -136,10 +136,13 @@ independently of the CNCF delivery.
 - Select `ADMISSION` through [validation metadata](../spec/goal-phase-validation-metadata.md)
   and apply the [ordinary-test exclusions](../spec/label-driven-test-selection.md#execution-and-preservation).
   Use about one minute of test-body time as the selection target. Preserve
-  the existing prerequisites. Empty, unavailable or unverified selection
-  leaves the required check unsatisfied with a reason; broader validation
-  runs when the Plan selects it. No external-service test may start through
-  routine `ADMISSION`.
+  the existing prerequisites. When complete discovery verifies an empty
+  ADMISSION selection, start no test bodies and show `ADMISSION対象0件`.
+  Successful Compile in the same validation candidate satisfies the Scala
+  minimum in that case. Unavailable or unverified discovery leaves the
+  required check unsatisfied. Any selected focused checks still run, and
+  Phase closure continues to require FULL. No external-service test may
+  start through routine `ADMISSION`.
 - Qualify the published CNCF contract in the installed sm-workflow path.
   Record one ordinary Step accepted with `ADMISSION` and its applicable
   focused checks, followed by Phase closure with `FULL`. Confirm result

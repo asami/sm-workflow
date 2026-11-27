@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 26, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -27,7 +27,7 @@ import RepositorySyncProgramImpact as P
   * the isolated bare fixture, never a live GitHub endpoint or another checkout.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen with Phase69ConfiguredRepositoryFixture {
   private val sourceWorkspace = "sm-workflow-repository"
   private val mainWorkspace = "canonical-main"
@@ -41,6 +41,10 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
   private val _right_test = C.Check("right-test", 3, WorkflowSbtValidation.Kind.Test)
   private val _shared_test = C.Check("shared-test", 4, WorkflowSbtValidation.Kind.Test)
   private val _full_test = C.Check("ordinary-full", 5, WorkflowSbtValidation.Kind.Test)
+  private val _regression_suite = "org.simplemodeling.textus.smworkflow.fixture.LocalMainSourceSpec"
+  private def _admission(checks: Vector[C.Check]): Vector[C.Check] =
+    checks.map(check => if (check.kind == WorkflowSbtValidation.Kind.Test)
+      check.copy(testScope = Some("admission")) else check)
   private def _impact_policy: P.Policy = {
     val broad = Vector("build.sbt", "project")
     val sources = Vector(_shared_source, _left_source, _right_source)
@@ -56,16 +60,29 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
     super._prepare_sbt_build_(root, scenario)
     if (_regression(scenario)) {
-      val build = root.resolve("repository/build.sbt")
-      Files.writeString(build, Files.readString(build) + "\nGlobal / onLoad := {\n" +
-        "  val original = (Global / onLoad).value\n  state => {\n    val loaded = original(state)\n" +
-        "    IO.append(file(" + root.resolve("selected-launches.txt").toString.asJson.noSpaces +
-        "), state.remainingCommands.map(_.commandLine).mkString(\"|\") + \"\\n\")\n    loaded\n  }\n}\n")
-      val product = root.resolve("repository/src/test/scala/ProductCheck.scala")
-      Files.writeString(product, Files.readString(product).replace("println(\"PRODUCT_CHECK_PASSED\")",
+      val repository = root.resolve("repository")
+      val build = repository.resolve("build.sbt")
+      val product = repository.resolve("src/test/scala/ProductCheck.scala")
+      val body = Files.readString(product).replace("println(\"PRODUCT_CHECK_PASSED\")",
         "val source = java.nio.file.Files.readString(root.resolve(\"src/main/java/Shared.java\"))\n" +
         "    assert(!source.contains(\"<<<<<<<\") && source.contains(\"int value\"), \"integrated source is required\")\n" +
-        "    println(\"PRODUCT_CHECK_PASSED\")"))
+        "    println(\"PRODUCT_CHECK_PASSED\")")
+      TypedSbtHostPlanFixture.buildMetadata(root, classOf[RepositorySyncLocalMainSpec])
+      Files.writeString(build, Files.readString(build).replace(classOf[RepositorySyncLocalMainSpec].getName, _regression_suite)
+        .replace("sbt-executions.txt", "sbt-launch-pids.txt"))
+      TypedSbtHostPlanFixture.appendAdmissionTask(repository)
+      Files.writeString(product, "package org.simplemodeling.textus.smworkflow.fixture\n\n" + body + """
+        |final class LocalMainSourceDeclaration
+        |    extends org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration
+        |
+        |@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+        |  declaration = classOf[LocalMainSourceDeclaration])
+        |final class LocalMainSourceSpec extends org.scalatest.wordspec.AnyWordSpec {
+        |  "the integrated source" should {
+        |    "execute its actual checked input" in { ProductCheck.main(Array.empty[String]) }
+        |  }
+        |}
+        |""".stripMargin)
     }
   }
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
@@ -184,7 +201,7 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
       "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", message)
     Vector(Vector("init", "--bare", "--initial-branch=main", remote.toString),
       Vector("init", "--initial-branch=main", repository.toString),
-      Vector("-C", repository.toString, "add", "--", _shared_source, "docs/shared.md"),
+      Vector("-C", repository.toString, "add", "--", _shared_source, "docs/shared.md", "project/LabelledTests.scala"),
       _commit_(repository, "base product"), Vector("-C", repository.toString, "push", remote.toString, "HEAD:refs/heads/main"),
       Vector("-C", repository.toString, "worktree", "add", "-b", "contribution", work.toString, "main"),
       Vector("-C", work.toString, "add", "--all"), _commit_(work, "local source contribution"),
@@ -266,8 +283,8 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
               batch.repositories.head.kind shouldBe "Request"
             }
           }
-          def _launches_(): Vector[String] = if (Files.exists(root.resolve("selected-launches.txt")))
-            Files.readString(root.resolve("selected-launches.txt")).linesIterator.toVector else Vector.empty
+          def _launches_(): Vector[String] = if (Files.exists(root.resolve("sbt-launch-pids.txt")))
+            Files.readString(root.resolve("sbt-launch-pids.txt")).linesIterator.toVector else Vector.empty
           Then("the remote conflict waits after one local compile and its directly affected registered tests")
           withClue(s"Fixture $root aggregate member=${batch.repositories.head}: ") {
             batch.repositories.head.kind shouldBe "Wait"
@@ -276,7 +293,7 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
           var local = Option.empty[RepositorySyncNativeProgressStore.Stage]
           prepare(call => _stage_c(call, session, "local-main-local-merge-validated").map { value =>
             local = Some(value)
-            value.payload.validation.get.selected shouldBe (if (scenario == "RegressionDisjoint")
+            value.payload.validation.get.selected shouldBe _admission(if (scenario == "RegressionDisjoint")
               Vector(_compile, _left_test) else Vector(_compile, _left_test, _shared_test))
             C.successful(value.payload.validation.get.receipts, selected = value.payload.validation.get.selected) shouldBe true
             ()
@@ -321,8 +338,11 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
           } yield {
             remote = Some(value)
             val state = value.payload.validation.get
-            state.selected shouldBe (if (scenario == "RegressionDisjoint")
-              Vector(_compile, _left_test, _right_test, _shared_test) else Vector(_compile, _left_test, _shared_test))
+            state.selected shouldBe (scenario match {
+              case "RegressionDisjoint" => _admission(Vector(_compile, _left_test, _right_test))
+              case "RegressionOverlap" => Vector(_compile, _full_test)
+              case _ => _admission(Vector(_compile, _left_test, _shared_test))
+            })
             state.receipts.take(2).map(_.identity) shouldBe Vector("index-local", "index-remote")
             C.successful(state.receipts, selected = state.selected) shouldBe true
             current.history.count(_.causation.value.contains("local-main-remote-validation-result-0")) shouldBe 1
@@ -341,10 +361,13 @@ final class RepositorySyncLocalMainSpec extends AnyWordSpec with GivenWhenThen w
             }
             ()
           })
-          val expected = if (scenario == "RegressionSameTree") 3 else 6
+          val (expected, bodies) = scenario match {
+            case "RegressionSameTree" => (3, 2)
+            case "RegressionOverlap" => (5, 3)
+            case _ => (5, 3)
+          }
           _launches_().size shouldBe expected
-          Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe
-            (if (scenario == "RegressionSameTree") 2 else 4)
+          Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe bodies
           val launches = _launches_()
           _collect_().repositories.head.kind shouldBe "Request"
           _launches_() shouldBe launches

@@ -65,12 +65,47 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 /** Strict v3 classification continuation, preserved historical codecs and real
   * production eligibility predicates. Native process evidence is separate.
   * @since   Nov.  3, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 26, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncReviewInputContinuationFixture.*
+
+  "Retained candidate Test scope" should {
+    "refuse Admission reuse after a document becomes a consumed program input" in {
+      Given("an issued source Admission check and a newly classified build-consumed document")
+      val check = C.Check("source-test", 1, testScope = Some("admission"))
+      val full = C.Check("full-test", 2)
+      val policy = P.Policy(Vector(P.Coverage(check.copy(testScope = None), Vector("src", "docs"),
+        Vector("src", "docs"), "Declared coverage")), Vector(full), Vector.empty, "Full for wider inputs", Vector.empty)
+      val original = D.Assessment(Vector("docs/schema.md", "src/Input.scala"), Vector("src/Input.scala"),
+        Vector("docs/schema.md"), Vector.empty, "Retained candidate")
+      val proposed = original.copy(consumedPaths = original.changedPaths, unknownPaths = Vector.empty)
+      When("review-input reconstruction compares the proposed inputs to the issued scoped checks")
+      val selected = P.selectRetained(policy, proposed, Vector(check))
+      Then("the stronger Full requirement cannot be fulfilled by the retained Admission observation")
+      selected.depth shouldBe "FULL"
+      selected.checks shouldBe Vector(full)
+      R.eligibilityIssues(original, proposed, C.Policy("scope-policy", 1, "required", policy.reason,
+        policy.checks, impact = Some(policy)), Vector(check)).exists(_.contains("different ordered checks")) shouldBe true
+    }
+
+    "retain a required Full check across bounded repair or input reclassification" in {
+      Given("the original full candidate requirement and a separate exact TestOnly repair duty")
+      val full = C.Check("full-test", 2)
+      val repair = C.Check("focused-repair", 3, WorkflowSbtValidation.Kind.TestOnly)
+      val policy = P.Policy(Vector(P.Coverage(repair, Vector("src"), Vector("src"), "Affected repair")),
+        Vector(full), Vector.empty, "Full candidate coverage", Vector.empty)
+      val inputs = D.Assessment(Vector("src/Input.scala"), Vector("src/Input.scala"), Vector.empty, Vector.empty, "Same candidate")
+      When("the original issued selection is reconstructed after the bounded behavior check")
+      val selected = P.selectRetained(policy, inputs, Vector(full))
+      Then("focused repair stays separate and cannot replace the candidate's Full requirement")
+      selected.checks shouldBe Vector(full)
+      repair.effectiveTestScope shouldBe org.goldenport.cncf.processexecution.SbtTestScope.Full
+      selected.checks should not contain repair
+    }
+  }
 
   "Retained Git submodule references" should {
     "reclassify a covered pointer update with the same successful check selection" in {

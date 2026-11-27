@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import scala.util.control.NonFatal
+import GoalPhaseWorkComparison as C
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.resource.{ResourceTreeEntry, ResourceTreeQueryLimits, ResourceTreeSelection}
@@ -14,7 +15,7 @@ import org.goldenport.record.Record
 /** Passive endpoint observations in the owning native records. Metrics never
   * select work, authorize an effect, acquire usage or change a close outcome.
   * @since   Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePhaseMetrics {
@@ -37,11 +38,125 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     inputTokens: Option[Long], outputTokens: Option[Long], cachedInputTokens: Option[Long],
     reasoningOutputTokens: Option[Long], totalTokens: Option[Long], observations: Vector[UsageObservation],
     tokensPerNetSourceLine: Option[BigDecimal], ratioReason: String)
+  /** Individual observations retain their original provenance and unknown values. */
+  final case class CallFact(invocation: String, revision: Long, source: String, execution: String,
+    engine: Option[String], route: Option[String], mode: Option[String], level: Option[String],
+    retry: Option[Boolean], fallback: Option[Boolean], input: Option[Long], output: Option[Long],
+    total: Option[Long], inputSource: Option[String], outputSource: Option[String], totalSource: Option[String],
+    provenance: Vector[String] = Vector.empty, provider: Option[String] = None, phaseSession: Option[String] = None,
+    model: Option[String] = None, outcome: Option[String] = None, conflictingFields: Vector[String] = Vector.empty,
+    usageContract: Option[String] = None, continuation: Option[String] = None, unresolvedDispatch: Option[Boolean] = None)
+  final case class TokenCoverage(value: Option[Long], observed: Int, executions: Int, overflow: Boolean)
+  final case class CallGroup(engine: Option[String], route: Option[String], mode: Option[String], level: Option[String],
+    executions: Int, retries: Int, fallbacks: Int, input: TokenCoverage, output: TokenCoverage, total: TokenCoverage,
+    provider: Option[String] = None, unknownRetries: Int = 0, unknownFallbacks: Int = 0)
+  final case class CallConflict(invocation: String, fields: Vector[String])
+  final case class Calls(groups: Vector[CallGroup], session: CallGroup, unknownExecutions: Int,
+    notRun: Int, conflictingInvocations: Vector[String], observations: Vector[CallFact],
+    conflicts: Vector[CallConflict] = Vector.empty)
+  given Encoder[CallFact] = deriveEncoder
+  given Decoder[CallFact] = deriveDecoder
+  given Encoder[TokenCoverage] = deriveEncoder
+  given Decoder[TokenCoverage] = deriveDecoder
+  given Encoder[CallGroup] = deriveEncoder
+  given Decoder[CallGroup] = deriveDecoder
+  given Encoder[CallConflict] = deriveEncoder
+  given Decoder[CallConflict] = deriveDecoder
+  given Encoder[Calls] = deriveEncoder
+  given Decoder[Calls] = deriveDecoder
+
+  /** An application is identified by its native effect, never by file or rule.
+    * Each positive condition requires its own retained evidence. Unknown is not
+    * a negative observation and cannot establish either a repair or a zero. */
+  final case class RepairApplication(identity: String, tool: Option[String], origin: String,
+    changed: Option[Boolean], revalidated: Option[Boolean], retained: Option[Boolean],
+    rolledBack: Option[Boolean], candidate: Option[String], validation: Option[String],
+    sources: Vector[String])
+  final case class RepairTool(tool: String, count: Option[Int], coverage: String, reason: String)
+  final case class Repairs(tools: Vector[RepairTool], observations: Vector[RepairApplication],
+    coverage: String, reason: String)
+  given Encoder[RepairApplication] = deriveEncoder
+  given Decoder[RepairApplication] = deriveDecoder
+  given Encoder[RepairTool] = deriveEncoder
+  given Decoder[RepairTool] = deriveDecoder
+  given Encoder[Repairs] = deriveEncoder
+  given Decoder[Repairs] = deriveDecoder
+
+  /** Boundaries are retained observations, not estimates of process time. */
+  final case class ObservedSpan(identity: String, category: String, start: Option[String], end: Option[String],
+    role: Option[String], source: String, processMillis: Option[Long] = None)
+  final case class SpanTotal(category: String, millis: Option[Long], completeSpans: Int,
+    incompleteSpans: Int, conflictingIdentities: Vector[String], coverage: String)
+  final case class OperationalTime(elapsedMillis: Option[Long], elapsedReason: String,
+    spans: Vector[ObservedSpan], totals: Vector[SpanTotal])
+  given Encoder[ObservedSpan] = deriveEncoder
+  given Decoder[ObservedSpan] = deriveDecoder
+  given Encoder[SpanTotal] = deriveEncoder
+  given Decoder[SpanTotal] = deriveDecoder
+  given Encoder[OperationalTime] = deriveEncoder
+  given Decoder[OperationalTime] = deriveDecoder
+
+  private def spanMillis(start: Option[String], end: Option[String]): Option[Long] = for {
+    a <- start.flatMap(s => scala.util.Try(java.time.Instant.parse(s)).toOption)
+    b <- end.flatMap(s => scala.util.Try(java.time.Instant.parse(s)).toOption)
+    millis <- Option.when(!b.isBefore(a))(scala.util.Try(java.time.Duration.between(a, b).toMillis).toOption).flatten
+  } yield millis
+
+  def operationalTime(start: Option[String], end: Option[String], raw: Vector[ObservedSpan]): OperationalTime = {
+    val valid = raw.filter(s => s.identity.nonEmpty && s.source.nonEmpty &&
+      Set("ai", "build-test", "human-wait")(s.category))
+    val grouped = valid.groupBy(s => (s.category, s.identity))
+    val conflicts = grouped.collect { case (key, rows) if rows.distinct.size != 1 => key }.toSet
+    val unique = grouped.toVector.filterNot(x => conflicts(x._1)).map(_._2.head).sortBy(s => (s.category, s.identity))
+    val totals = Vector("ai", "build-test", "human-wait").map { category =>
+      val selected = unique.filter(_.category == category)
+      val values = selected.flatMap(s => spanMillis(s.start, s.end).orElse(
+        Option.when(s.category == "build-test")(s.processMillis.filter(_ >= 0)).flatten))
+      val conflicting = conflicts.collect { case (`category`, id) => id }.toVector.sorted
+      val total = scala.util.Try(values.foldLeft(0L)(Math.addExact)).toOption.filter(_ => values.nonEmpty)
+      SpanTotal(category, total, values.size, selected.size - values.size, conflicting,
+        if (total.isEmpty) "unavailable" else "partial")
+    }
+    val elapsed = spanMillis(start, end)
+    OperationalTime(elapsed, if (elapsed.nonEmpty) "Original retained endpoint boundaries" else "Original endpoint boundary unavailable or incompatible",
+      valid.distinct.sortBy(s => (s.category, s.identity, s.source)), totals)
+  }
+
+  /** completeTools is explicit evidence of complete route observation, not the
+    * set of tools seen. Conflicts and unknown origins remain partial. */
+  def repairs(raw: Vector[RepairApplication], completeTools: Set[String]): Repairs = {
+    val tools = Vector("scalafix", "metals", "scalafmt", "built-in")
+    val rows = raw.filter(x => x.identity.nonEmpty && x.origin.nonEmpty && x.sources.nonEmpty)
+    val grouped = rows.groupBy(_.identity)
+    val unique = grouped.values.filter(_.distinct.size == 1).map(_.head).toVector
+    val conflict = grouped.values.exists(_.distinct.size != 1)
+    val unassigned = unique.exists(x => x.tool.forall(t => !tools.contains(t))) || conflict || rows.size != raw.size
+    def eligible(x: RepairApplication): Boolean = x.changed.contains(true) && x.revalidated.contains(true) &&
+      x.retained.contains(true) && x.rolledBack.contains(false) && x.candidate.nonEmpty && x.validation.nonEmpty
+    def uncertain(x: RepairApplication): Boolean = !x.changed.contains(false) && !x.revalidated.contains(false) &&
+      !x.retained.contains(false) && !x.rolledBack.contains(true) && !eligible(x)
+    val results = tools.map { tool =>
+      val selected = unique.filter(_.tool.contains(tool))
+      val count = selected.count(eligible)
+      val partial = unassigned || selected.exists(uncertain) || !completeTools(tool)
+      val available = count > 0 || (!partial && completeTools(tool))
+      RepairTool(tool, Option.when(available)(count), if (!available) "unavailable" else if (partial) "partial" else "complete",
+        if (partial) "Only proven applications are counted; other route or retention evidence is incomplete"
+        else "Complete retained route evidence, including observed zero")
+    }
+    val coverage = if (results.forall(_.coverage == "complete")) "complete"
+      else if (results.exists(_.count.nonEmpty)) "partial" else "unavailable"
+    Repairs(results, rows.distinct.sortBy(x => (x.identity, x.origin)), coverage,
+      "Applications require changed bytes, successful normal revalidation and retained candidate evidence; unknown and rollback are excluded")
+  }
+
   final case class Summary(schemaVersion: String, phaseSession: String, start: Option[Endpoint], end: Endpoint,
     netSourceLines: Option[Long], netReason: String, usage: Vector[Usage], profile: Option[GoalPhaseOperatingProfiles.Selection],
     issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
     comparison: Vector[GoalPhaseWorkComparison.Summary] = Vector.empty,
-    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None, calls: Option[Calls] = None,
+    deterministicRepairs: Option[Repairs] = None, operationalTime: Option[OperationalTime] = None,
+    operations: Option[C.Operational] = None)
 
   given Encoder[ResourceTreeQueryLimits] = deriveEncoder
   given Decoder[ResourceTreeQueryLimits] = deriveDecoder
@@ -55,12 +170,19 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   given Decoder[Usage] = deriveDecoder
   given Encoder[Summary] = deriveEncoder[Summary].mapJson(_.mapObject { fields =>
     val withoutEmpty = if (fields("comparison").exists(_.asArray.exists(_.isEmpty))) fields.remove("comparison") else fields
-    if (withoutEmpty("retainedObservations").exists(_.isNull)) withoutEmpty.remove("retainedObservations") else withoutEmpty
+    val withoutRetained = if (withoutEmpty("retainedObservations").exists(_.isNull)) withoutEmpty.remove("retainedObservations") else withoutEmpty
+    val withoutCalls = if (withoutRetained("calls").exists(_.isNull)) withoutRetained.remove("calls") else withoutRetained
+    val withoutRepairs = if (withoutCalls("deterministicRepairs").exists(_.isNull)) withoutCalls.remove("deterministicRepairs") else withoutCalls
+    val withoutTime = if (withoutRepairs("operationalTime").exists(_.isNull)) withoutRepairs.remove("operationalTime") else withoutRepairs
+    if (withoutTime("operations").exists(_.isNull)) withoutTime.remove("operations") else withoutTime
   })
   private val _summary_decoder: Decoder[Summary] = deriveDecoder
   given Decoder[Summary] = Decoder.instance { cursor =>
     val normalized = cursor.value.mapObject(fields =>
-      if (fields.contains("comparison")) fields else fields.add("comparison", Json.arr()))
+      {
+        val comparison = if (fields.contains("comparison")) fields else fields.add("comparison", Json.arr())
+        if (comparison.contains("calls")) comparison else comparison.add("calls", Json.Null)
+      })
     _summary_decoder.decodeJson(normalized)
   }
 
@@ -143,8 +265,18 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty): Summary = {
     val started = session.started.receipt.payload.value
     val selected = started.sourceMetrics.map(_.scope).getOrElse(scope(d))
-    summarize(session.current.identity.value, started.sourceMetrics, capture(core, selected, source), Vector.empty, started.operatingProfile)
-      .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations)
+    // This passive projection uses the same retained Session. An unavailable
+    // observation cannot change normal completion or become an inferred zero.
+    val observed = try {
+      GoalPhaseNativeWorkContinuation.bindC(d, session.current.definition)
+        .flatMap(_.completionOperationalEvidenceC(session, core)).toOption
+    } catch { case NonFatal(_) => None }
+    val (deterministic, operations) = observed.getOrElse(repairs(Vector.empty, Set.empty) -> C.NativeOperations())
+    val end = capture(core, selected, source)
+    summarize(session.current.identity.value, started.sourceMetrics, end, Vector.empty, started.operatingProfile)
+      .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations,
+        operationalTime = Some(operationalTime(started.sourceMetrics.map(_.observedAt), Some(end.observedAt), operations.spans)),
+        deterministicRepairs = Some(deterministic), operations = Some(C.operational(operations, deterministic)))
   }
 
   /** Passive usage aggregation over already acquired attributable observations.
@@ -198,6 +330,106 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     }
   }
 
+  private[admission] def selectUsagePair(revisions: Vector[(Long, Vector[CallFact])],
+    value: CallFact => Option[Long], source: CallFact => Option[String]): (Option[Long], Option[String], Boolean, Boolean) = {
+    val pairs = revisions.iterator.map { case (_, rows) => rows.flatMap(f => value(f).map(_ -> source(f))).distinct }
+      .find(_.nonEmpty).getOrElse(Vector.empty)
+    val values = pairs.map(_._1).distinct
+    if (values.size > 1) (None, None, true, false)
+    else if (values.isEmpty) (None, None, false, false)
+    else {
+      val sources = pairs.map(_._2).distinct
+      (values.headOption, if (sources.size == 1) sources.head else None, false, sources.size > 1)
+    }
+  }
+
+  /** Revisions describe one invocation. Retain the raw snapshots so a replay
+    * cannot erase prior confirmed execution or a same-revision conflict. */
+  def calls(raw: Vector[CallFact]): Calls = {
+    val valid = raw.filter(f => f.invocation.nonEmpty && f.source.nonEmpty && f.revision >= 0 &&
+      Set("confirmed", "unknown", "not-run")(f.execution) &&
+      Vector(f.input, f.output, f.total).forall(_.forall(_ >= 0)))
+    // An unresolved dispatch can be joined only when its continuation has exactly
+    // one retained launch. Never guess when later attempts make it ambiguous.
+    val launches = valid.filter(f => f.continuation.nonEmpty && f.unresolvedDispatch.contains(false))
+      .groupBy(_.continuation.get).view.mapValues(_.map(_.invocation).distinct).toMap
+    val reconciled = valid.map { f =>
+      val candidates = f.continuation.toVector.flatMap(c => launches.getOrElse(c, Vector.empty))
+      if (f.unresolvedDispatch.contains(true) && candidates.size == 1) f.copy(invocation = candidates.head) else f
+    }
+    val byid = reconciled.groupBy(_.invocation)
+    val resolved = byid.toVector.map { case (id, facts) =>
+      val revisions = facts.groupBy(_.revision).toVector.sortBy(-_._1)
+      val latest = revisions.head._2.sortBy(_.source).head
+      val conflicts = Vector.newBuilder[String]
+      def field_[A](name: String, f: CallFact => Option[A]): Option[A] = {
+        revisions.iterator.map { case (_, rows) => rows.flatMap(f).distinct }.find(_.nonEmpty).flatMap { values =>
+          if (values.size == 1) values.headOption else { conflicts += name; None }
+        }
+      }
+      val execution = if (facts.exists(_.execution == "confirmed")) "confirmed"
+        else if (facts.exists(_.execution == "not-run")) "not-run" else "unknown"
+      if (facts.exists(_.execution == "confirmed") && facts.exists(_.execution == "not-run")) conflicts += "execution"
+      val phase = field_("phaseSession", _.phaseSession)
+      val engine = field_("engine", _.engine)
+      val provider = field_("provider", _.provider)
+      val model = field_("model", _.model)
+      val route = field_("route", _.route)
+      val mode = field_("mode", _.mode)
+      val level = field_("level", _.level)
+      val retry = field_("retry", _.retry)
+      val fallback = field_("fallback", _.fallback)
+      def usage_(name: String, value: CallFact => Option[Long], source: CallFact => Option[String]): (Option[Long], Option[String]) = {
+        val (number, attribution, valueConflict, sourceConflict) = selectUsagePair(revisions, value, source)
+        if (valueConflict) conflicts += name
+        if (sourceConflict) conflicts += (name + "Source")
+        (number, attribution)
+      }
+      val (input, inputsource) = usage_("input", _.input, _.inputSource)
+      val (output, outputsource) = usage_("output", _.output, _.outputSource)
+      // Derive only within one observation, before revision merging. This prevents
+      // unrelated sources or revisions from supplying the two operands.
+      def derived_(f: CallFact): Option[Long] = if (f.usageContract.contains("input-plus-output"))
+        for { in <- f.input; out <- f.output; sum <- scala.util.Try(Math.addExact(in, out)).toOption } yield sum
+      else None
+      val totalPair = field_("total", f => f.total.map(value => (value, f.totalSource))
+        .orElse(derived_(f).map(value => (value, Some("derived:input+output")))))
+      val total = totalPair.map(_._1)
+      val totalsource = totalPair.flatMap(_._2)
+      val outcome = field_("outcome", _.outcome)
+      val fields = conflicts.result().distinct.sorted
+      id -> latest.copy(execution = execution, phaseSession = phase, engine = engine, provider = provider,
+        model = model, route = route, mode = mode, level = level, retry = retry, fallback = fallback,
+        input = input, output = output, total = total, inputSource = if (input.nonEmpty) inputsource else None, outputSource = if (output.nonEmpty) outputsource else None,
+        totalSource = if (total.nonEmpty) totalsource else None, outcome = outcome, conflictingFields = fields,
+        provenance = facts.flatMap(f => f.provenance :+ f.source).distinct.sorted)
+    }
+    val conflicts = resolved.collect { case (id, fact) if fact.conflictingFields.nonEmpty => id }.sorted
+    val selected = resolved.map(_._2).sortBy(_.invocation)
+    val confirmed = selected.filter(_.execution == "confirmed")
+    def group(values: Vector[CallFact], engine: Option[String], route: Option[String], mode: Option[String], level: Option[String], provider: Option[String]): CallGroup = {
+      def coverage(f: CallFact => Option[Long]): TokenCoverage = {
+        val numbers = values.flatMap(f)
+        val sum = scala.util.Try(numbers.foldLeft(0L)(Math.addExact)).toOption
+        TokenCoverage(Option.when(numbers.nonEmpty)(sum).flatten, numbers.size, values.size, numbers.nonEmpty && sum.isEmpty)
+      }
+      val total = coverage(_.total)
+      val derivationOverflow = values.exists(f => byid(f.invocation).exists(row => row.total.isEmpty &&
+        row.usageContract.contains("input-plus-output") && row.input.nonEmpty && row.output.nonEmpty &&
+        scala.util.Try(Math.addExact(row.input.get, row.output.get)).isFailure))
+      CallGroup(engine, route, mode, level, values.size, values.count(_.retry.contains(true)),
+        values.count(_.fallback.contains(true)), coverage(_.input), coverage(_.output),
+        total.copy(overflow = total.overflow || derivationOverflow), provider,
+        values.count(_.retry.isEmpty), values.count(_.fallback.isEmpty))
+    }
+    val groups = confirmed.groupBy(f => (f.engine, f.route, f.mode, f.level, f.provider)).toVector
+      .sortBy { case ((engine, route, mode, level, provider), _) => Vector(engine, route, mode, level, provider).map(_.getOrElse("")).mkString("\u0000") }
+      .map { case ((engine, route, mode, level, provider), values) => group(values, engine, route, mode, level, provider) }
+    Calls(groups, group(confirmed, None, None, None, None, None), selected.count(_.execution == "unknown"),
+      selected.count(_.execution == "not-run"), conflicts, valid.distinct.sortBy(f => (f.invocation, f.revision, f.source, f.toString)),
+      resolved.collect { case (id, fact) if fact.conflictingFields.nonEmpty => CallConflict(id, fact.conflictingFields) }.sortBy(_.invocation))
+  }
+
   def record(summary: Summary): Record = GoalPhaseNativeMetadata.record(summary.asJson)
   def withMetrics(result: org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult,
     metrics: Option[Summary]): org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult =
@@ -212,7 +444,16 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val observations = summary.usage.flatMap(_.observations) ++ bound.toVector.flatMap(_.attempts.flatMap(_.usage))
     val totals = aggregate(summary.phaseSession, observations, summary.netSourceLines, summary.netReason)
     val sources = bound.toVector.flatMap(r => Vector(r.sourceReference) ++ r.attempts.map(_.sourceReference) ++ r.closures.map(_.sourceReference)).distinct
-    summary.copy(usage = totals, comparison = work.map(_.workClass).distinct.sorted.map { cls =>
+    val spans = bound.toVector.flatMap(_.attempts).map { a =>
+      ObservedSpan(a.executionIdentity, "ai", a.startedAt, a.endedAt, a.usage.map(_.role).distinct match {
+        case Vector(role) => Some(role)
+        case _ => None
+      }, a.sourceReference)
+    }
+    val retainedCalls = bound.toVector.flatMap(_.attempts.flatMap(_.call))
+    val combinedCalls = summary.calls.toVector.flatMap(_.observations) ++ retainedCalls
+    summary.copy(usage = totals, calls = if (combinedCalls.nonEmpty) Some(calls(combinedCalls)) else summary.calls, operationalTime = Some(operationalTime(summary.start.map(_.observedAt), Some(summary.end.observedAt),
+      summary.operationalTime.toVector.flatMap(_.spans) ++ spans)), comparison = work.map(_.workClass).distinct.sorted.map { cls =>
       val projected = GoalPhaseWorkComparison.project(summary.phaseSession,
         GoalPhaseWorkComparison.Cohort(plan.identity + ":" + cls, "Step", cls, summary.start.map(_.observedAt),
           summary.end.observedAt, summary.end.sourceTree), work, observations)

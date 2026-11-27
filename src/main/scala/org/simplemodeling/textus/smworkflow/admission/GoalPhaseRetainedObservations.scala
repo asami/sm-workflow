@@ -14,16 +14,19 @@ import org.goldenport.configuration.ConfigurationValue
   * The existing completion record persists their first admitted projection;
   * later recollection never consults changed configuration.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object GoalPhaseRetainedObservations {
   val schema = "sm-workflow.goal-phase-retained-observations.v1"
   final case class Attempt(continuationIdentity: String, stepIdentity: Option[String], kind: String,
     executionIdentity: String, status: String, startedAt: Option[String], endedAt: Option[String],
-    sourceReference: String, usage: Vector[GoalPhasePhaseMetrics.UsageObservation])
+    sourceReference: String, usage: Vector[GoalPhasePhaseMetrics.UsageObservation],
+    call: Option[GoalPhasePhaseMetrics.CallFact] = None)
   object Attempt {
     import GoalPhasePhaseMetrics.given
-    given Encoder[Attempt] = deriveEncoder
+    given Encoder[Attempt] = deriveEncoder[Attempt].mapJson(_.mapObject { fields =>
+      if (fields("call").exists(_.isNull)) fields.remove("call") else fields
+    })
     given Decoder[Attempt] = deriveDecoder
   }
   final case class Closure(stepIdentity: String, commitIdentity: String, endedAt: String, sourceReference: String)
@@ -60,7 +63,18 @@ private[smworkflow] object GoalPhaseRetainedObservations {
         Vector(u.inputTokens, u.outputTokens, u.cachedInputTokens, u.reasoningOutputTokens).forall(n => n != null && n.forall(_ >= 0)) &&
         Set("self-only", "inclusive", "unknown")(u.inclusion) && u.coveredExecutions != null &&
         u.coveredExecutions.size <= 512 && u.coveredExecutions.distinct == u.coveredExecutions && u.coveredExecutions.forall(text) &&
-        Set("complete", "partial", "unavailable")(u.coverage) && text(u.status))) &&
+        Set("complete", "partial", "unavailable")(u.coverage) && text(u.status)) && a.call != null && a.call.forall(f =>
+        f != null && f.invocation == a.executionIdentity && f.source == a.sourceReference && f.revision >= 0 &&
+        f.phaseSession != null && f.phaseSession.contains(value.phaseSession) && f.continuation != null && f.continuation.exists(c =>
+          text(c) && (c == "dispatch:" + a.continuationIdentity ||
+            c.startsWith("api:" + a.continuationIdentity + ":"))) &&
+        Set("confirmed", "unknown", "not-run")(f.execution) &&
+        Vector(f.input, f.output, f.total).forall(n => n != null && n.forall(_ >= 0)) &&
+        f.provenance != null && f.provenance.size <= 64 && f.provenance.forall(text) &&
+        f.conflictingFields != null && f.conflictingFields.size <= 64 && f.conflictingFields.forall(text) &&
+        Vector(f.engine, f.route, f.mode, f.level, f.inputSource, f.outputSource, f.totalSource, f.provider,
+          f.model, f.outcome, f.usageContract).forall(o => o != null && o.forall(text)) &&
+        f.retry != null && f.fallback != null && f.unresolvedDispatch != null)) &&
     value.attempts.map(_.executionIdentity).distinct.size == value.attempts.size &&
     value.attempts.flatMap(_.usage).map(u => (u.identity, u.revision)).distinct.size == value.attempts.flatMap(_.usage).size &&
     value.closures != null && value.closures.size <= 64 && value.closures.forall(c => c != null && text(c.stepIdentity) &&

@@ -52,7 +52,7 @@ private[admission] object RepositorySyncRequiredLintContinuationFixture {
 /** Strict v2 append-only selection and independent evidence ingress, with v1
   * decoding preserved. Fixture facts never authenticate real native provenance.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 26, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -60,6 +60,24 @@ final class RepositorySyncRequiredLintContinuationSpec extends AnyWordSpec with 
   import RepositorySyncRequiredLintContinuationFixture.*
 
   "DEV-RS-RETAINED-REQUIRED-LINT explicit versioned contracts" should {
+    "retain the selected Test scope while appending lint and reject crossed receipt scopes" in {
+      Given("the exact original typed Admission selection with finite retained case identities")
+      val selected = oldChecks.updated(1, oldChecks.last.copy(testScope = Some("admission")))
+      val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Outcome.Succeeded,
+        None, None, testScope = Some("admission"), admissionCases = Some(Vector(WorkflowSbtValidation.AdmissionCase("fixture.Spec", "case"))))
+      val admission = target.copy(retainedSelection = target.retainedSelection.copy(selected = selected),
+        expandedChecks = selected :+ checks.last,
+        receiptOrigins = origins.updated(origins.size - 1, origins.last.copy(sbt = Some(facts))))
+      When("required-lint reconstructs its original selection and only adds the missing FixCheck")
+      val restored = L.decodeTarget(admission.asJson)
+      Then("the selected scope survives and Full facts cannot be substituted for the original Admission facts")
+      restored shouldBe Right(admission)
+      L.validTarget(admission) shouldBe true
+      L.validTarget(admission.copy(receiptOrigins = origins)) shouldBe false
+      L.validPrefix(prefix, selected) shouldBe false
+    }
+
+
     "bind every original lint receipt to its exact phase while retaining legacy absence" in {
       target.asJson.hcursor.downField("phase").focus shouldBe None
       L.decodeTarget(target.asJson).map(_.asJson) shouldBe Right(target.asJson)

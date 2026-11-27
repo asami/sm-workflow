@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real managed current-workspace acquisition plus retained-native completion
   * and passive caller-resource fixtures. Numeric fixtures are not live usage.
   * @since   Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,6 +36,171 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
   private def _usage(id: String, destination: String = "codex", input: Long = 100, output: Long = 50) =
     M.UsageObservation(id, 1, _session, id, destination, "parent", Some("spec-model"), _at, _at,
       Some(input), Some(output), Some(25), Some(10), "self-only")
+
+  "Operational time" should {
+    "retain overlapping execution durations and expose incomplete and conflicting observations" in {
+      val second = "2026-10-29T00:00:01Z"
+      val span = M.ObservedSpan("a", "ai", Some(_at), Some(second), Some("review"), "receipt")
+      val parallel = span.copy(identity = "b")
+      val missing = span.copy(identity = "c", end = None)
+      val conflict = span.copy(identity = "d")
+      val result = M.operationalTime(Some(_at), Some(second), Vector(span, span, parallel, missing,
+        conflict, conflict.copy(end = Some(_at))))
+      result.elapsedMillis shouldBe Some(1000L)
+      val ai = result.totals.find(_.category == "ai").get
+      ai.millis shouldBe Some(2000L)
+      ai.incompleteSpans shouldBe 1
+      ai.conflictingIdentities shouldBe Vector("d")
+      ai.coverage shouldBe "partial"
+      result.totals.find(_.category == "human-wait").get.millis shouldBe None
+      M.operationalTime(None, Some(second), Vector.empty).elapsedMillis shouldBe None
+    }
+
+    "sum measured native build durations separately from approval intervals and wall time" in {
+      val end = "2026-10-29T00:00:01Z"
+      val build = M.ObservedSpan("compile-result", "build-test", None, None, Some("compile"), "native", Some(0L))
+      val test = build.copy(identity = "test-result", role = Some("test"), processMillis = Some(1500L))
+      val wait = M.ObservedSpan("human-7", "human-wait", Some(_at), Some(end), Some("judgment"), "native")
+      val unobserved = wait.copy(identity = "human-8", end = None)
+      val totals = M.operationalTime(Some(_at), Some(end), Vector(build, build, test, wait, unobserved))
+      totals.elapsedMillis shouldBe Some(1000L)
+      totals.totals.find(_.category == "build-test").get.millis shouldBe Some(1500L)
+      totals.totals.find(_.category == "human-wait").get.millis shouldBe Some(1000L)
+      totals.totals.find(_.category == "human-wait").get.incompleteSpans shouldBe 1
+    }
+  }
+
+  "Operational repair and rework projection" should {
+    "group retained deterministic edits per episode and distinguish fallback, unresolved and absent proof" in {
+      import GoalPhaseWorkComparison as C
+      val facts = C.NativeOperations()
+        .stage("compile-initial", "one", "candidate-1", "compile")
+        .stage("test-initial", "one", "candidate-1", "test")
+        .failure("failed-test", "one", "validation", "test")
+        .attempted("one", "apply-1", Some("effect-1"))
+        .failure("repeat-test-failure", "one", "validation", "test")
+        .attempted("one", "apply-2", Some("effect-2"))
+        .stage("compile-repeat", "one", "candidate-2", "compile")
+        .stage("test-repeat-1", "one", "candidate-2", "test")
+        .stage("test-repeat-2", "one", "candidate-2", "test")
+        .succeeded("one", "validation", Set("compile"), "wrong-check")
+        .succeeded("one", "validation", Set("test"), "verified")
+        .stage("review-initial", "one", "review-1", "review")
+        .failure("failed-review", "one", "review", "ReviewStep")
+        .attempted("one", "apply-3", Some("effect-3"))
+        .ai("one", Some(true))
+        .stage("review-repeat", "one", "review-2", "review")
+        .succeeded("one", "review", Set("ReviewStep"), "accepted")
+        .failure("still-open", "two", "validation", "test")
+        .attempted("two", "apply-4", None)
+        .failure("diagnostics-only", "three", "validation", "test")
+        .failure("unknown-ai", "four", "validation", "test")
+        .attempted("four", "apply-5", Some("effect-5"))
+        .ai("four", None)
+        .succeeded("four", "validation", Set("test"), "verified-2")
+      val repairs = M.repairs(Vector("effect-1", "effect-2", "effect-3", "effect-5").map(id =>
+        M.RepairApplication(id, Some("metals"), "fixture", Some(true), Some(true), Some(true),
+          Some(false), Some("accepted-tree"), Some("validation"), Vector("receipt:" + id))), Set.empty)
+      val route = C.RouteSwitch("switch-1", "RepairStep", "ordinary", "difficult", Some("retained failure trend"))
+      val aggregate = C.operational(facts.copy(episodes = facts.episodes ++ facts.episodes,
+        runs = facts.runs ++ facts.runs, routes = Vector(route, route)), repairs)
+      aggregate.resolvedWithoutAi shouldBe 1
+      aggregate.attemptedWithKnownDisposition shouldBe 3
+      aggregate.unresolvedAttempted shouldBe 1
+      aggregate.unobservable shouldBe 2
+      aggregate.episodes.size shouldBe 5
+      aggregate.episodes.find(_.identity == "failed-test").flatMap(_.resolution) shouldBe Some("verified")
+      aggregate.rework.map(r => r.stage -> r.cycles).toMap shouldBe Map("compile" -> Some(1),
+        "test" -> Some(1), "lint" -> None, "review" -> Some(1))
+      aggregate.routeSwitches shouldBe Vector(route)
+      C.operational(C.NativeOperations(), repairs).coverage shouldBe "unavailable"
+    }
+
+    "retain the repair association for review after validation resolves the failure" in {
+      import GoalPhaseWorkComparison as C
+      val facts = C.NativeOperations().stage("review-1", "step", "first", "review")
+        .failure("failure", "step", "validation", "compile")
+        .attempted("step", "apply", Some("effect"))
+        .succeeded("step", "validation", Set("compile"), "passed")
+        .stage("review-2", "step", "second", "review")
+      facts.runs.last.rework shouldBe true
+    }
+  }
+
+  "Deterministic application projection" should {
+    "count one retained application per actual identity and preserve incomplete coverage" in {
+      def fact(id: String, tool: Option[String], changed: Option[Boolean] = Some(true),
+        checked: Option[Boolean] = Some(true), retained: Option[Boolean] = Some(true),
+        rollback: Option[Boolean] = Some(false)) = M.RepairApplication(id, tool, "native-receipt",
+          changed, checked, retained, rollback, Some("candidate"), Some("validation"), Vector("receipt:" + id))
+      val good = fact("a", Some("metals"))
+      val rows = Vector(good, good, fact("b", Some("scalafix")), fact("c", Some("scalafmt")),
+        fact("d", Some("built-in")), fact("rollback", Some("metals"), rollback = Some(true)),
+        fact("unknown", Some("metals"), checked = None), fact("preview", Some("scalafix"), changed = Some(false)))
+      val result = M.repairs(rows, Set("scalafix", "scalafmt", "built-in"))
+      result.tools.map(x => x.tool -> x.count).toMap shouldBe Map("scalafix" -> Some(1),
+        "metals" -> Some(1), "scalafmt" -> Some(1), "built-in" -> Some(1))
+      result.tools.find(_.tool == "metals").map(_.coverage) shouldBe Some("partial")
+      result.observations.count(_.identity == "a") shouldBe 1
+      M.repairs(Vector.empty, Set("metals")).tools.find(_.tool == "metals").flatMap(_.count) shouldBe Some(0)
+      M.repairs(Vector.empty, Set.empty).tools.find(_.tool == "metals").flatMap(_.count) shouldBe None
+      M.repairs(Vector(good, good.copy(tool = Some("scalafix"))), Set.empty).coverage shouldBe "unavailable"
+    }
+  }
+
+  "Retained byte attribution" should {
+    "only count independently proven final writes after reversals or intermediate states" in {
+      import GoalPhaseNativeScalaCleanup.ByteChange
+      val project = GoalPhaseNativeWorkContinuation.retainedRepairApplications _
+      def change(path: String, before: String, after: String) = ByteChange(path, before, after)
+      val a = "a" * 64
+      val b = "b" * 64
+      val c = "c" * 64
+      val reverseThenChange = Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", b, a)),
+        Vector(change("One.scala", a, c)))
+      project(reverseThenChange, Map("One.scala" -> c)) shouldBe Set(2)
+      project(reverseThenChange.take(2), Map("One.scala" -> a)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", b, c))), Map("One.scala" -> c)) shouldBe Set(1)
+      project(Vector(Vector(change("One.scala", a, b))), Map("One.scala" -> b)) shouldBe Set(0)
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("Two.scala", a, c))),
+        Map("One.scala" -> b, "Two.scala" -> c)) shouldBe Set(0, 1)
+      project(Vector(Vector(change("One.scala", a, b), change("Two.scala", a, c))),
+        Map("One.scala" -> b, "Two.scala" -> c)) shouldBe Set(0)
+      project(reverseThenChange, Map("One.scala" -> b)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b)), Vector(change("One.scala", c, b))), Map("One.scala" -> b)) shouldBe Set.empty
+      project(Vector(Vector(change("One.scala", a, b), change("Two.scala", a, c))), Map("One.scala" -> b)) shouldBe Set.empty
+
+      val proven = project(reverseThenChange, Map("One.scala" -> c))
+      val rows = reverseThenChange.indices.map { index =>
+        val retained = Option.when(proven.contains(index))(true)
+        M.RepairApplication("app-" + index, Some(Vector("metals", "scalafix", "scalafmt")(index)),
+          "native-receipt", Some(true), Some(true), retained, retained.map(_ => false),
+          Some("tree"), Some("check"), Vector("receipt-" + index))
+      }.toVector
+      val counts = M.repairs(rows, Set.empty).tools.map(x => x.tool -> x.count).toMap
+      counts("scalafmt") shouldBe Some(1)
+      counts("metals") should not be Some(1)
+      counts("scalafix") should not be Some(1)
+    }
+  }
+
+  "Deterministic application provenance" should {
+    "group several source writes into one tool application and exclude cancelled or failed effects" in {
+      val first = M.RepairApplication("inspection:scalafix", Some("scalafix"), "scalafix-imports",
+        Some(true), Some(true), Some(true), Some(false), Some("tree"), Some("check"),
+        Vector("intent-result:file-a", "intent-result:file-b", "accepted-commit"))
+      val cancelled = first.copy(identity = "cancelled", retained = Some(false))
+      val failed = first.copy(identity = "failed", revalidated = Some(false))
+      val rollback = first.copy(identity = "rolled-back", rolledBack = Some(true))
+      val rejected = first.copy(identity = "rejected", changed = Some(false))
+      val result = M.repairs(Vector(first, first, cancelled, failed, rollback, rejected), Set("scalafix"))
+      result.tools.find(_.tool == "scalafix").map(_.count) shouldBe Some(Some(1))
+      result.observations.find(_.identity == first.identity).map(_.sources.size) shouldBe Some(3)
+      val unknown = first.copy(identity = "unknown-tool", tool = None)
+      M.repairs(Vector(first, unknown), Set("scalafix")).tools.find(_.tool == "scalafix")
+        .map(_.coverage) shouldBe Some("partial")
+    }
+  }
 
   "Phase source endpoint metrics" should {
     "count physical blank/comment/unterminated lines directly from immutable selected bytes" in {
@@ -208,6 +373,288 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
       Caller.observations("foreign", Vector(Caller.RetainedExecution(restored, "codex", "parent", _at, _at))) shouldBe empty
     }
 
+    "project mixed retained calls once while preserving partial usage and unknown execution" in {
+      Given("two observed engines, a replay, and an unconfirmed dispatch")
+      val first = M.CallFact("one", 1, "fixture:one", "confirmed", Some("model-a"), Some("included"),
+        Some("implementation"), Some("high"), Some(false), Some(false), Some(0), Some(4), None,
+        Some("provider"), Some("provider"), None, usageContract = Some("input-plus-output"))
+      val second = first.copy(invocation = "two", source = "fixture:two", engine = Some("model-b"),
+        route = Some("api"), input = Some(3), output = None, total = Some(9), totalSource = Some("provider"),
+        retry = Some(true))
+      val unknown = first.copy(invocation = "three", source = "fixture:three", execution = "unknown")
+      val skipped = first.copy(invocation = "four", source = "fixture:four", execution = "not-run")
+      When("the same result and a later revision are projected")
+      val result = M.calls(Vector(first, first, second, second.copy(revision = 2), unknown, skipped))
+      Then("each actual invocation contributes once and coverage is explicit")
+      result.session.executions shouldBe 2
+      result.session.input.value shouldBe Some(3L)
+      result.session.input.observed shouldBe 2
+      result.session.output.value shouldBe Some(4L)
+      result.session.output.observed shouldBe 1
+      result.session.total.value shouldBe Some(13L)
+      result.session.retries shouldBe 1
+      result.unknownExecutions shouldBe 1
+      result.notRun shouldBe 1
+      result.groups.map(_.engine).toSet shouldBe Set(Some("model-a"), Some("model-b"))
+      result.observations.find(_.invocation == "one").get.input shouldBe Some(0L)
+    }
+
+    "read actual dispatch and bounded API facts without inferring a route" in {
+      Given("retained successful starts and provider metadata")
+      val dispatch = io.circe.parser.parse("""{"schema":"sm-workflow.caller-dispatch.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work-one"}},"status":"RETURNED","launch":{"task_name":"actual-one"},"launchReturn":{"agent_id":"actual-one"},"observed":{"model":"engine-a","effort":"high"},"resources":{"input_tokens":0,"output_tokens":4}}""").toOption.get
+      val api = io.circe.parser.parse("""{"schema":"sm-workflow.api-review-attempt.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work-two"}},"arguments":{"input":{"attemptIdentity":"try-two"}},"status":"RETURNED","invocationIdentity":"actual-two","response":{"status":"COMPLETED","attemptIdentity":"try-two","continuationId":"work-two","metadata":{"ai.execution.provider":"openai","ai.execution.model":"engine-b","ai.usage.total_tokens":"9","ai.usage.total_tokens_source":"provider"}}}""").toOption.get
+      When("retained facts are projected")
+      val facts = Vector(Caller.retainedCall(_session, "dispatch.json", 1, dispatch, Some("subscription"), Some("review")),
+        Caller.retainedCall(_session, "api.json", 1, api, None, Some("review"))).flatten
+      Then("the actual identities and provenance survive and missing values remain unknown")
+      facts.map(_.invocation) shouldBe Vector("work-one:actual-one", "work-two:actual-two")
+      facts(0).engine shouldBe Some("codex")
+      facts(0).model shouldBe Some("engine-a")
+      facts(1).engine shouldBe Some("openai")
+      facts(0).input shouldBe Some(0L)
+      facts(0).totalSource shouldBe None
+      facts(1).route shouldBe None
+      facts(1).totalSource shouldBe Some("provider")
+      M.calls(facts).session.total.value shouldBe Some(9L)
+    }
+
+    "count separately confirmed retry and fallback identities even after replay" in {
+      Given("two independently confirmed invocation identities and one skipped candidate")
+      val one = M.CallFact("actual-first", 1, "first", "confirmed", Some("engine"), Some("route"),
+        Some("review"), Some("high"), Some(false), Some(false), Some(2L), Some(1L), None, None, None, None)
+      val two = one.copy(invocation = "actual-second", source = "second", retry = Some(true), fallback = Some(true))
+      val skipped = one.copy(invocation = "candidate-unstarted", source = "candidate", execution = "not-run")
+      When("the observations are replayed")
+      val result = M.calls(Vector(one, two, skipped, one, two))
+      Then("the two calls and their known labels occur once each")
+      result.session.executions shouldBe 2
+      result.session.retries shouldBe 1
+      result.session.fallbacks shouldBe 1
+      result.session.total.value shouldBe None
+      result.notRun shouldBe 1
+    }
+
+    "exclude conflicting facts and report token overflow without losing zero" in {
+      Given("contradictory replay and independent large observations")
+      val base = M.CallFact("conflict", 1, "one", "confirmed", Some("engine"), None, None, None,
+        None, None, Some(1L), Some(0L), None, None, None, None)
+      val huge = base.copy(invocation = "huge", input = Some(Long.MaxValue), output = Some(1L), usageContract = Some("input-plus-output"))
+      val zero = base.copy(invocation = "zero", input = Some(0L), output = Some(0L), usageContract = Some("input-plus-output"))
+      When("they are aggregated")
+      val result = M.calls(Vector(base, base.copy(input = Some(2L)), huge, zero))
+      Then("the contradiction is visible and overflowing totals are not wrapped")
+      result.conflictingInvocations shouldBe Vector("conflict")
+      result.session.executions shouldBe 3
+      result.session.input.observed shouldBe 2
+      result.session.total.overflow shouldBe true
+      result.session.output.value shouldBe Some(1L)
+    }
+
+    "distinguish execution engine from model and configured entitlement route" in {
+      Given("a Codex launch and two completed OpenAI executions using distinct routes")
+      val codex = M.CallFact("c", 1, "c.json", "confirmed", Some("codex"), Some("subscription"),
+        Some("review"), Some("high"), None, None, None, None, None, None, None, None, model = Some("shared-model"))
+      val daily = codex.copy(invocation = "d", source = "d.json", engine = Some("openai"), route = Some("daily"))
+      val monthly = daily.copy(invocation = "m", source = "m.json", route = Some("monthly"))
+      When("their facts are grouped")
+      val result = M.calls(Vector(codex, daily, monthly))
+      Then("the same model does not collapse the three execution groups")
+      result.groups.map(g => (g.engine, g.route)).toSet shouldBe Set(
+        (Some("codex"), Some("subscription")), (Some("openai"), Some("daily")), (Some("openai"), Some("monthly")))
+      result.observations.map(_.model).distinct shouldBe Vector(Some("shared-model"))
+    }
+
+    "distinguish a local API start from actual provider execution" in {
+      Given("a bound local invocation with a blocked, uncertain, and completed response")
+      def state_(status: String, response: String) = io.circe.parser.parse(
+        """{"schema":"sm-workflow.api-review-attempt.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"arguments":{"input":{"attemptIdentity":"try"}},"status":"$$status","invocationIdentity":"local-id","response":$$response}""".replace("$$status", status).replace("$$response", response)).toOption.get
+      val blocked = state_("BLOCKED", """{"status":"BLOCKED","attemptIdentity":"try","continuationId":"work"}""")
+      val unavailable = state_("RETURNED", """{"status":"UNAVAILABLE","attemptIdentity":"try","continuationId":"work"}""")
+      val uncertain = state_("UNCERTAIN", "null")
+      val failed = state_("RETURNED", """{"status":"FAILED","attemptIdentity":"try","continuationId":"work","metadata":{"ai.execution.provider":"openai","providerHttp":{"status":429}}}""")
+      val completed = state_("RETURNED", """{"status":"COMPLETED","attemptIdentity":"try","continuationId":"work","metadata":{"ai.execution.provider":"openai","ai.execution.model":"model-x"}}""")
+      When("each retained state is parsed")
+      val facts = Vector(blocked, unavailable, uncertain, failed, completed).zipWithIndex.flatMap { case (state, index) =>
+        Caller.retainedCall(_session, "source-" + index, 1, state, Some("daily"), Some("review"))
+      }
+      Then("only the attributable completed provider call is confirmed")
+      facts.map(_.execution) shouldBe Vector("not-run", "not-run", "unknown", "confirmed", "confirmed")
+      facts.last.engine shouldBe Some("openai")
+      facts.last.model shouldBe Some("model-x")
+      facts.head.outcome shouldBe Some("BLOCKED")
+    }
+
+    "keep unstarted fallback candidates separate from a confirmed launch" in {
+      Given("a retained dispatch with a rejected candidate and a later launch")
+      val state = io.circe.parser.parse("""{"schema":"sm-workflow.caller-dispatch.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"status":"RETURNED","launch":{"task_name":"actual"},"launchReturn":{"agent_id":"actual"},"attempts":[{"status":"UNAVAILABLE","executionStarted":false}],"observed":{"model":"m"}}""").toOption.get
+      When("the retained prefix and launch are read")
+      val facts = Caller.retainedCalls(_session, "retained", 1, state, None, None)
+      Then("the skipped candidate does not count as a call")
+      M.calls(facts).notRun shouldBe 1
+      M.calls(facts).session.executions shouldBe 1
+      M.calls(facts).session.fallbacks shouldBe 1
+    }
+
+    "keep execution and raw conflicts across re-projection and select newer cumulative usage" in {
+      Given("two same-revision token disagreements after an earlier confirmed call")
+      val first = M.CallFact("call", 1, "first", "confirmed", Some("codex"), None, None, None,
+        None, None, Some(1L), Some(2L), None, None, None, None)
+      val left = first.copy(revision = 2, source = "left", execution = "unknown", input = Some(4L))
+      val right = left.copy(source = "right", input = Some(5L))
+      When("the retained observations are repeatedly projected")
+      val initial = M.calls(Vector(first, left, right))
+      val replay = M.calls(initial.observations)
+      Then("the call remains confirmed and the conflicted field remains unavailable")
+      initial.session.executions shouldBe 1
+      initial.session.input.value shouldBe None
+      replay shouldBe initial
+      initial.conflictingInvocations shouldBe Vector("call")
+      initial.conflicts.head.fields should contain("input")
+      val resolved = M.calls(initial.observations :+ left.copy(revision = 3, source = "latest", input = Some(7L)))
+      resolved.session.executions shouldBe 1
+      resolved.session.input.value shouldBe Some(7L)
+    }
+
+    "reconcile dispatch snapshots only within a uniquely launched continuation" in {
+      def dispatch(work: String, status: String, launch: String) = io.circe.parser.parse(
+        s"""{"schema":"sm-workflow.caller-dispatch.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"$work"}},"status":"$status",$launch"attempts":[{"executionStarted":false}]}""").toOption.get
+      val prepared = dispatch("a", "PREPARED", "")
+      val started = dispatch("a", "STARTED", "\"launch\":{},\"launchReturn\":{\"agent_id\":\"one\"},")
+      val other = dispatch("b", "PREPARED", "")
+      val facts = Caller.retainedCalls(_session, "one", 1, prepared, None, None) ++
+        Caller.retainedCalls(_session, "two", 2, started, None, None) ++
+        Caller.retainedCalls(_session, "three", 1, prepared, None, None) ++
+        Caller.retainedCalls(_session, "four", 1, other, None, None)
+      val result = M.calls(facts)
+      result.session.executions shouldBe 1
+      result.unknownExecutions shouldBe 1
+      result.notRun shouldBe 2
+      M.calls(result.observations) shouldBe result
+    }
+
+    "reject mismatched responses and derive only coherent contracted totals" in {
+      val good = io.circe.parser.parse("""{"schema":"sm-workflow.api-review-attempt.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"arguments":{"input":{"attemptIdentity":"try"}},"status":"RETURNED","invocationIdentity":"actual","response":{"status":"COMPLETED","attemptIdentity":"try","continuationId":"work","metadata":{"ai.execution.provider":"real","ai.usage.input_tokens":"0","ai.usage.output_tokens":"4","ai.usage.contract":"input-plus-output"}}}""").toOption.get
+      val bad = good.deepMerge(io.circe.parser.parse("""{"response":{"attemptIdentity":"wrong","metadata":{"ai.execution.provider":"wrong","ai.usage.total_tokens":"999"}}}""").toOption.get)
+      val first = Caller.retainedCall(_session, "good", 1, good, None, None).get
+      val replacement = Caller.retainedCall(_session, "bad", 2, bad, None, None).get
+      replacement.execution shouldBe "unknown"
+      replacement.provider shouldBe None
+      replacement.total shouldBe None
+      val result = M.calls(Vector(first, replacement))
+      result.session.total.value shouldBe Some(4L)
+      result.groups.head.provider shouldBe Some("real")
+      val noContract = first.copy(usageContract = None)
+      M.calls(Vector(noContract)).session.total.value shouldBe None
+      val split = Vector(first.copy(source = "a", input = Some(1), output = None),
+        first.copy(source = "b", revision = 2, input = None, output = Some(2)))
+      M.calls(split).session.total.value shouldBe None
+    }
+
+    "keep rejected slots separate and deduplicate the retained rejection prefix" in {
+      def json(s: String) = io.circe.parser.parse(s).toOption.get
+      val rejected = json("""{"schema":"sm-workflow.caller-dispatch.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"status":"STOPPED","resolved":{"candidate":"first"},"rejection":{"executionStarted":false,"kind":"unavailable"},"attempts":[]}""")
+      val returned = json("""{"schema":"sm-workflow.caller-dispatch.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"status":"RETURNED","launch":{},"launchReturn":{"agent_id":"second"},"attempts":[{"candidate":"first","executionStarted":false,"reason":{"executionStarted":false,"kind":"unavailable"}}]}""")
+      val facts = Caller.retainedCalls(_session, "first", 1, rejected, None, None) ++
+        Caller.retainedCalls(_session, "replay", 2, returned, None, None)
+      val result = M.calls(facts)
+      result.notRun shouldBe 1
+      result.session.executions shouldBe 1
+      result.conflictingInvocations shouldBe empty
+    }
+
+    "join only the same API attempt and ignore crossed observed effort" in {
+      def api(attempt: String, invocation: String, response: String, effort: String) = io.circe.parser.parse(
+        s"""{"schema":"sm-workflow.api-review-attempt.v1","request":{"issued_work_context":{"run_id":"metrics-spec-phase","continuation_id":"work"}},"arguments":{"input":{"attemptIdentity":"$attempt"}},$invocation"observed":{"effort":"$effort"},"response":$response}""").toOption.get
+      val prepared = api("first", "", "null", "wrong")
+      val actual = api("first", "\"invocationIdentity\":\"actual-1\",", """{"attemptIdentity":"first","continuationId":"work","status":"COMPLETED"}""", "high")
+      val crossed = api("first", "\"invocationIdentity\":\"actual-1\",", """{"attemptIdentity":"other","continuationId":"work","status":"COMPLETED"}""", "wrong")
+      val second = api("second", "\"invocationIdentity\":\"actual-2\",", """{"attemptIdentity":"second","continuationId":"work","status":"COMPLETED"}""", "low")
+      val facts = Vector(prepared, actual, crossed, second).zipWithIndex.map { case (state, i) =>
+        Caller.retainedCall(_session, "s" + i, i.toLong, state, None, None).get
+      }
+      facts.head.level shouldBe None
+      facts(2).level shouldBe None
+      val result = M.calls(facts ++ facts)
+      result.session.executions shouldBe 2
+      result.unknownExecutions shouldBe 0
+      result.groups.map(_.level).toSet shouldBe Set(Some("high"), Some("low"))
+    }
+
+    "select input and output values with their own retained provenance" in {
+      val old = M.CallFact("pair", 1, "old", "confirmed", None, None, None, None, None, None,
+        Some(3), Some(4), None, Some("provider-a"), Some("provider-a"), None)
+      def selected(rows: Vector[M.CallFact], input: Boolean) = {
+        val revisions = rows.groupBy(_.revision).toVector.sortBy(-_._1)
+        if (input) M.selectUsagePair(revisions, _.input, _.inputSource)
+        else M.selectUsagePair(revisions, _.output, _.outputSource)
+      }
+      Vector(true, false).foreach { input =>
+        def change(f: M.CallFact, number: Option[Long], source: Option[String]) =
+          if (input) f.copy(input = number, inputSource = source) else f.copy(output = number, outputSource = source)
+        val olderValue = if (input) 3L else 4L
+        val newer = change(old.copy(revision = 2, source = "new"), Some(7), None)
+        selected(Vector(old, newer), input) shouldBe ((Some(7L), None, false, false))
+        val sourceOnly = change(newer, None, Some("provider-b"))
+        selected(Vector(old, sourceOnly), input) shouldBe ((Some(olderValue), Some("provider-a"), false, false))
+        val agreeing = change(newer.copy(source = "other"), Some(7), Some("provider-b"))
+        selected(Vector(old, newer, agreeing), input) shouldBe ((Some(7L), None, false, true))
+        val disagreement = change(agreeing, Some(8), Some("provider-b"))
+        selected(Vector(old, newer, disagreement), input) shouldBe ((None, None, true, false))
+        val projected = M.calls(Vector(old, newer, agreeing))
+        val coverage = if (input) projected.session.input else projected.session.output
+        coverage.value shouldBe Some(7L)
+        projected.conflicts.head.fields should contain(if (input) "inputSource" else "outputSource")
+        val conflicted = M.calls(Vector(old, newer, disagreement))
+        conflicted.conflicts.head.fields should contain(if (input) "input" else "output")
+      }
+      val legacy = io.circe.parser.parse("""{"invocation":"legacy","revision":1,"source":"old","execution":"confirmed","input":3,"output":4,"provenance":[],"conflictingFields":[]}""").toOption.get
+        .as[M.CallFact].toOption.get
+      val legacyResult = M.calls(Vector(legacy))
+      legacyResult.session.input.value shouldBe Some(3L)
+      legacyResult.session.output.value shouldBe Some(4L)
+      selected(Vector(legacy), true)._2 shouldBe None
+      selected(Vector(legacy), false)._2 shouldBe None
+    }
+
+    "retain the provenance of the winning total observation" in {
+      val old = M.CallFact("one", 1, "old", "confirmed", None, None, None, None, None, None,
+        Some(1), Some(2), None, None, None, None, usageContract = Some("input-plus-output"))
+      val current = old.copy(revision = 2, source = "new", total = Some(5), totalSource = Some("provider"))
+      val result = M.calls(Vector(old, current))
+      result.session.total.value shouldBe Some(5L)
+      result.conflictingInvocations shouldBe empty
+    }
+
+    "bind retained call facts to the actual work and preserve v1 absence" in {
+      import io.circe.syntax.*
+      import GoalPhaseRetainedObservations as R
+      val plan = GoalPhaseOrderedProgression.Plan("metrics", "1", "6.10", "sm-workflow",
+        Vector(GoalPhaseOrderedProgression.Step("one", "fixture", Vector("src"), Vector.empty, Vector("compile"))), Vector("test"))
+      val continuation = _session + ":ordered-implementation:1"
+      val invocation = continuation + ":agent"
+      val fact = M.CallFact(invocation, 1, "receipt", "confirmed", Some("codex"), Some("route"),
+        Some("implementation"), None, Some(false), Some(false), Some(0L), None, None, None, None, None,
+        phaseSession = Some(_session), continuation = Some("dispatch:" + continuation), unresolvedDispatch = Some(false))
+      val attempt = R.Attempt(continuation, Some("one"), "ImplementStep", invocation, "completed",
+        None, None, "receipt", Vector.empty, Some(fact))
+      val retained = R.Retained(R.schema, _session, "host", Vector(attempt), Vector.empty, Vector.empty)
+      val native = Vector(GoalPhaseWorkComparison.NativeWork(Some("one"), "ImplementStep", None, Some(continuation)))
+      R.bindC(retained, _session, plan, Vector.empty, native).isSuccess shouldBe true
+      val summary = M.summarize(_session, None, _endpoint(20), Vector.empty, None).copy(retainedObservations = Some(retained))
+      val projected = M.withComparison(summary, plan, Vector.empty, native)
+      projected.calls.get.session.executions shouldBe 1
+      projected.calls.get.session.input.value shouldBe Some(0L)
+      projected.calls.get.session.output.value shouldBe None
+      M.withComparison(projected, plan, Vector.empty, native).calls shouldBe projected.calls
+      R.bindC(retained, _session, plan, Vector.empty, native.map(_.copy(kind = "ReviewStep"))).isSuccess shouldBe false
+      R.valid(retained.copy(attempts = Vector(attempt.copy(call = Some(fact.copy(source = "other")))))) shouldBe false
+      R.valid(retained.copy(attempts = Vector(attempt.copy(call = Some(fact.copy(phaseSession = Some("other"))))))) shouldBe false
+      val legacy = retained.copy(attempts = Vector(attempt.copy(call = None)))
+      val wire = legacy.asJson
+      wire.hcursor.downField("attempts").downN(0).downField("call").focus shouldBe None
+      R.decodeC(wire).toOption shouldBe Some(legacy)
+    }
+
     "preserve legacy absent Start metrics through the actual native Start codec" in {
       val plan = GoalPhaseOrderedProgression.Plan("metrics-legacy", "1", "6.10", "sm-workflow",
         Vector(GoalPhaseOrderedProgression.Step("one", "Owned fixture", Vector("src"), Vector.empty, Vector("compile"))), Vector("test"))
@@ -235,6 +682,18 @@ final class Phase610PhaseMetricsSpec extends AnyWordSpec with Matchers with Give
         val summary = io.circe.parser.parse(take(metric.toJsonStringC)).toOption.get
         summary.hcursor.downField("start").get[String]("status").toOption shouldBe Some("available")
         summary.hcursor.downField("end").get[String]("status").toOption shouldBe Some("available")
+        val decoded = GoalPhaseNativeMetadata.normalizePublicJson(summary).toOption.get.as[M.Summary].toOption.get
+        decoded.operationalTime.flatMap(_.elapsedMillis) should not be empty
+        decoded.operations.toVector.flatMap(_.rework).find(_.stage == "review").flatMap(_.cycles) shouldBe Some(0)
+        val repairs = M.repairs(Vector(M.RepairApplication("fixture-effect", Some("metals"), "fixture",
+          Some(true), Some(true), Some(true), Some(false), Some("tree"), Some("check"), Vector("receipt"))), Set.empty)
+        val completion = closed.completion.get.copy(metrics = Some(M.record(decoded.copy(deterministicRepairs = Some(repairs)))))
+        val projected = Caller.project(session, completion, Vector.empty)
+        val projectedJson = io.circe.parser.parse(take(projected.metrics.get.toJsonStringC)).toOption.get
+        val reparsed = GoalPhaseNativeMetadata.normalizePublicJson(projectedJson).toOption.get.as[M.Summary].toOption.get
+        reparsed.deterministicRepairs shouldBe Some(repairs)
+        reparsed.operations shouldBe decoded.operations
+        reparsed.operationalTime shouldBe decoded.operationalTime
         closed.message should include("Source physical lines")
         terminal = Some(closed)
         Complete.phaseExecutions(root) shouldBe checks

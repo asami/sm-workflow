@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Step acceptance establishes test inputs, never production AI/reviewer proof.
   * Failed/unknown observations and original review references remain distinct.
   * @since   Oct. 28, 2026
-  * @version Nov. 19, 2026
+  * @version Nov. 26, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -51,7 +51,45 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
 
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit =
     if (scenario == "Goal") super._prepare_sbt_build_(root, scenario)
-    else if (!Files.exists(root.resolve("repository/build.sbt"))) TypedSbtHostPlanFixture.build(root, true)
+    else if (!Files.exists(root.resolve("repository/build.sbt"))) {
+      if (scenario == "Focused") _source_admission_build(root) else TypedSbtHostPlanFixture.build(root, true)
+    }
+  /** Real framework execution, shared build-owned selector and genuine success
+    * reporter. This fixture is not claimed qualified until its native run. */
+  private def _source_admission_build(root: Path): Unit = {
+    TypedSbtHostPlanFixture.buildMetadata(root, classOf[RepositorySyncNativeValidationApplicabilitySpec])
+    val repository = root.resolve("repository")
+    Files.writeString(repository.resolve("value.txt"), "expected\n")
+    val suite = "org.simplemodeling.textus.smworkflow.fixture.SourceCarryThroughSpec"
+    val build = repository.resolve("build.sbt")
+    Files.writeString(build, Files.readString(build).replace(classOf[RepositorySyncNativeValidationApplicabilitySpec].getName, suite))
+    val source = repository.resolve("src/test/scala/ProductCheck.scala")
+    Files.createDirectories(source.getParent)
+    Files.writeString(source, """package org.simplemodeling.textus.smworkflow.fixture
+      |final class SourceCarryThroughDeclaration
+      |    extends org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration
+      |
+      |@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+      |  declaration = classOf[SourceCarryThroughDeclaration])
+      |final class SourceCarryThroughSpec extends org.scalatest.wordspec.AnyWordSpec
+      |    with org.scalatest.matchers.should.Matchers with org.scalatest.GivenWhenThen {
+      |  "source carry-through" should {
+      |    "retain the actual selected Java behavior" in {
+      |      Given("a source file carried from one merge parent")
+      |      val selected = Class.forName("Bounded").getMethod("value")
+      |      When("the actual candidate behavior executes")
+      |      val actual = selected.invoke(null)
+      |      Then("its original result is preserved")
+      |      actual shouldBe Integer.valueOf(42)
+      |      java.nio.file.Files.writeString(java.nio.file.Path.of("../sbt-bodies.txt"), "source-body\n",
+      |        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
+      |    }
+      |  }
+      |}
+      |""".stripMargin)
+    TypedSbtHostPlanFixture.appendAdmissionTask(repository)
+  }
+
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {
     if (scenario == "Goal") return super._setup_commands_(root, scenario)
     val repository = root.resolve("repository"); val peer = root.resolve("peer"); val remote = root.resolve("upstream.git")
@@ -67,7 +105,8 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
       case _ => "src/main/java/Bounded.java"
     }
     val initial = Vector("-C", repository.toString, "add", "--", "docs/base.md") ++
-      Option.when(scenario == "Gitlink")(".gitmodules")
+      Option.when(scenario == "Gitlink")(".gitmodules") ++
+      Option.when(scenario == "Focused")("project/LabelledTests.scala")
     val change = if (scenario == "Gitlink") Vector("-C", repository.toString, "update-index", "--cacheinfo",
       s"160000,$_submodule_after,$_submodule_path") else Vector("-C", repository.toString, "add", "--", path)
     Vector(Vector("init", "--bare", "--initial-branch=main", remote.toString),
@@ -188,6 +227,75 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
       }
     }
 
+    "resume a persisted legacy Full merge after ordinary source selection becomes Admission" in {
+      val directory = root("legacy-full-continuation")
+      val scenario = "Focused"
+      _with_runtime_(directory, scenario, hostParameters = parameters()) { (owner, component, actor, prepare) =>
+        prepare(call => call.setupC(_setup_commands_(directory, scenario).size, scenario = scenario))
+        val session = start(owner, component, actor)
+        val input = ThreeWorkflowNormalHostFixture.definition(directory).repository.input.copy(
+          remoteEndpointIdentity = directory.resolve("upstream.git").toString)
+        val declaration = RepositorySyncManagedFetch.Declaration(_configuration_, _collection_("instances"),
+          _collection_("continuations"), input,
+          org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target(
+            directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString),
+          runtimeCleanSync = true, documentInputs = Some(RepositorySyncDocumentInputs.Policy(
+            Vector("docs"), Vector("src", "value.txt") ++ broad, "Source is consumed; docs are not")))
+        val oldImpact = policy().copy(fullPaths = Vector("src") ++ broad, ordinaryMergeSources = false)
+        val newImpact = oldImpact.copy(ordinaryMergeSources = true)
+        val oldPolicy = C.Policy("legacy-full", 1, "required", "Retained original merge checks",
+          Vector(compileCheck, focused, full), impact = Some(oldImpact))
+        val newPolicy = oldPolicy.copy(impact = Some(newImpact))
+        prepare { setup =>
+          for {
+            definition <- RepositorySyncDefinitionBinding.bindC
+            selected <- RepositorySyncManagedFetch.sessionC(session, declaration, definition, setup.core)
+            fetched <- RepositorySyncManagedFetch.fetchC(selected, declaration, setup.core, () => Consequence.unit)
+            store <- RepositorySyncNativeProgressStore.bindC(selected, declaration, setup.core, _ => Consequence.unit)
+            preserved <- RepositorySyncNativePreservation.preserveC(store, fetched._1, fetched._2.after.get)
+            pending <- RepositorySyncNativeIntegration.integrateC(store, preserved)
+            _ = pending.payload.stage shouldBe "PendingMergePrepared"
+            inputs <- RepositorySyncDocumentInputs.captureC(store, pending)
+            oldSelection <- P.selectMergeC(store, pending, oldImpact, inputs)
+            newSelection <- P.selectMergeC(store, pending, newImpact, inputs)
+            _ = oldSelection.depth shouldBe "FULL"
+            _ = oldSelection.checks shouldBe Vector(full)
+            _ = newSelection.depth shouldBe "ADMISSION"
+            _ = newSelection.checks shouldBe Vector(compileCheck, focused.copy(testScope = Some("admission")))
+            first <- C.advanceC(store, pending, oldPolicy)
+            intent <- store.loadC("validation-intent-0")
+            receipt <- store.loadC("validation-result-2")
+            _ = first.payload.validation.get.selected shouldBe Vector(full)
+            _ = intent.get.payload.validation.get.selected shouldBe Vector(full)
+            _ = C.productSuccessful(receipt.get.payload.validation.get.receipts.last, full) shouldBe true
+            _ = receipt.get.payload.validation.get.receipts.last.sbt.get.effectiveTestScope shouldBe
+              org.goldenport.cncf.processexecution.SbtTestScope.Full
+            executions = Files.readString(directory.resolve("sbt-executions.txt"))
+            current <- RepositorySyncManagedFetch.sessionC(session, declaration, definition, setup.core)
+            resumedStore <- RepositorySyncNativeProgressStore.bindC(current, declaration, setup.core, _ => Consequence.unit)
+            savedPending <- resumedStore.loadC("pending-merge")
+            resumed <- C.advanceC(resumedStore, savedPending.get, newPolicy)
+            savedIntent <- resumedStore.loadC("validation-intent-0")
+            savedReceipt <- resumedStore.loadC("validation-result-2")
+          } yield {
+            def sameStage(actual: RepositorySyncNativeProgressStore.Stage,
+              expected: RepositorySyncNativeProgressStore.Stage): Unit = {
+              actual.payload shouldBe expected.payload
+              take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.encodeC(actual.record)) shouldBe
+                take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.encodeC(expected.record))
+            }
+            sameStage(savedPending.get, pending)
+            resumed.payload.validation.get.selected shouldBe Vector(full)
+            resumed.payload.validation.get.receipts shouldBe first.payload.validation.get.receipts
+            sameStage(savedIntent.get, intent.get)
+            sameStage(savedReceipt.get, receipt.get)
+            Files.readString(directory.resolve("sbt-executions.txt")) shouldBe executions
+            ()
+          }
+        }
+      }
+    }
+
     "select actual focused compile and bounded product coverage without FULL or AI" in {
       val directory = root("focused")
       _with_runtime_(directory, "Focused", hostParameters = parameters()) { (owner, component, actor, prepare) =>
@@ -203,14 +311,23 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
         result.review shouldBe None
         prepare(call => call.validationC(ThreeWorkflowNormalHostFixture.definition(directory).repository.input,
           InstanceIdentity(session), directory, "merge-validated").map { state =>
-          state.selected shouldBe Vector(compileCheck, focused)
-          state.impact.get.depth shouldBe "FOCUSED"
-          state.impact.get.reason should include("src/main/java/Bounded.java")
+          state.selected shouldBe Vector(compileCheck, focused.copy(testScope = Some("admission")))
+          state.impact.get.depth shouldBe "ADMISSION"
+          state.impact.get.reason should include("final source files carry through one parent")
+           state.inputs.get.consumedPaths shouldBe Vector("src/main/java/Bounded.java")
           state.impact.get.reused shouldBe empty
-          state.receipts.drop(2).forall(r => C.productSuccessful(r, state.selected.find(_.identity == r.identity).get.kind)) shouldBe true
+          state.receipts.drop(2).forall(r => C.productSuccessful(r, state.selected.find(_.identity == r.identity).get)) shouldBe true
+           val receipt = state.receipts.last
+           receipt.sbt.get.kind shouldBe WorkflowSbtValidation.Kind.Test
+           receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+           receipt.sbt.get.reason shouldBe None
+           receipt.sbt.get.effectiveTestScope shouldBe org.goldenport.cncf.processexecution.SbtTestScope.Admission
+           receipt.sbt.get.admissionCases shouldBe Some(Vector(WorkflowSbtValidation.AdmissionCase(
+             "org.simplemodeling.textus.smworkflow.fixture.SourceCarryThroughSpec", "source carry-through should retain the actual selected Java behavior")))
           ()
         })
-        Files.readString(directory.resolve("sbt-executions.txt")).linesIterator.size shouldBe 1
+        Files.readString(directory.resolve("sbt-bodies.txt")).linesIterator.toVector shouldBe Vector("source-body")
+        Files.readString(directory.resolve("sbt-command-lines.txt")) should include("testAdmission")
       }
     }
 
@@ -252,7 +369,7 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
         result.kind should not be "Terminal"
         result.convergence shouldBe None
         prepare(call => call.nativeStageC(ThreeWorkflowNormalHostFixture.definition(directory).repository.input,
-          InstanceIdentity(session), directory, "validation-result-3").map { stage =>
+          InstanceIdentity(session), directory, "validation-result-2").map { stage =>
           stage.get.payload.validation.get.receipts.last.exitCode.exists(_ != 0) shouldBe true
           C.productSuccessful(stage.get.payload.validation.get.receipts.last) shouldBe false
           ()
@@ -297,11 +414,26 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
       }
     }
 
-    "reuse a genuinely accepted Step compile and original review across document and rationale metadata changes" in {
+    "preserve prior accepted Step evidence without using compile-only receipts for newly required Full" in {
+      def assertRetainedRecord(
+        actual: org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord,
+        expected: org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
+      ): Unit = {
+        actual.definition.workflowIdentity shouldBe expected.definition.workflowIdentity
+        actual.definition.workflowRevision shouldBe expected.definition.workflowRevision
+        actual.definition.producerAbiIdentity shouldBe expected.definition.producerAbiIdentity
+        actual.definition.producerRevision shouldBe expected.definition.producerRevision
+        actual.definition.workflowAbiIdentity shouldBe expected.definition.workflowAbiIdentity
+        actual.definition.bootstrapAbiIdentity shouldBe expected.definition.bootstrapAbiIdentity
+        actual.definition.sourceCorrelation shouldBe expected.definition.sourceCorrelation
+        actual.copy(definition = expected.definition) shouldBe expected
+      }
       val directory = root("native-reuse")
       var prior = Option.empty[P.Prior]
       var originalReview = Option.empty[String]
       var originalReceipt = Option.empty[C.Receipt]
+       var originalValidation = Option.empty[GoalPhaseNativeValidation.Saved]
+       var originalGoal = Option.empty[org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord]
       standard = false
       try episode(directory, initialize = true) { e =>
         Given("a normal fixture-owned GoalPhase Step with real Compile and paired independent Step acceptance")
@@ -314,12 +446,18 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
           validation = input.checksReceipt.get
           ()
         })
-        originalReceipt = Some(e.native.retained(identity, validation.split(":")(2), "validation").get.payload.receipts.head)
+        originalValidation = e.native.retained(identity, validation.split(":")(2), "validation")
+         originalReceipt = Some(originalValidation.get.payload.receipts.head)
         e.native.acceptStep(step)
         val closing = e.current(identity).revision.value.toString
         e.advance(identity).work.get.kind shouldBe "ReviewPhase"
         prior = Some(P.Prior(identity, validation, identity + ":ordered-step-closure:" + closing + ":committed"))
-        originalReview = Some("known-failed-fixture-step-review")
+        e.native.prepare(call => call.goalWorkC(InstanceIdentity(identity)).flatMap(NativeWorkflowOperationOutput.workInputC).map { input =>
+           originalReview = input.completed.head.review
+           ()
+         })
+         originalReview.nonEmpty shouldBe true
+         originalGoal = Some(e.current(identity))
         // Diverge the remote from the original base. The local accepted Step
         // commit is preserved. Only the remote documentation is new to its
         // validated tree; commit metadata and repository relation differ.
@@ -339,26 +477,42 @@ final class Phase69ProgramImpactSpec extends AnyWordSpec with GivenWhenThen with
         reason = "Changed explanatory metadata; the consumed-input scopes and fixed check remain identical", compileOnly = true)) {
         (owner, component, actor, prepare) =>
           val executions = compileExecutions(directory)
+          val bodymarker = directory.resolve("phase-test-executions.txt")
+          val bodies = if (Files.exists(bodymarker)) Files.readString(bodymarker).linesIterator.size else 0
           val session = start(owner, component, actor)
           When("the normal sync owner compares actual accepted native evidence with the current merged input tree")
           val result = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(Request.of(
             component = component.name, service = "RepositorySyncService", operation = "advanceRepositorySync",
             properties = List(Property("sessionId", session, None))), actor)))
-          Then("the original check is reused with its original review reference and no new compile or review claim")
+          Then("the original Compile and review remain retained but cannot satisfy consumed non-source Full")
           result.kind shouldBe "Terminal"
           result.review shouldBe None
           compileExecutions(directory) shouldBe executions
-          prepare(call => call.validationC(ThreeWorkflowNormalHostFixture.definition(directory).repository.input,
-            InstanceIdentity(session), directory, "merge-validated").map { state =>
-            state.selected shouldBe Vector(compileCheck)
-            state.impact.get.depth shouldBe "FOCUSED"
-            state.impact.get.reused.map(_.validation) shouldBe Vector(prior.get.validation)
-            state.impact.get.reused.map(_.review) shouldBe Vector(originalReview)
-            state.receipts.last shouldBe originalReceipt.get
-            C.productSuccessful(state.receipts.last, WorkflowSbtValidation.Kind.Compile) shouldBe true
+          Files.readString(bodymarker).linesIterator.size shouldBe bodies + 1
+          prepare(call => call.nativeStageC(ThreeWorkflowNormalHostFixture.definition(directory).repository.input,
+            InstanceIdentity(session), directory, "merge-validated").map { found =>
+            val state = found.get.payload.validation.get
+            state.selected shouldBe Vector(full)
+            state.impact.get.depth shouldBe "FULL"
+            state.impact.get.reused shouldBe empty
+            state.receipts.last should not be originalReceipt.get
+            C.productSuccessful(state.receipts.last, full) shouldBe true
+            state.receipts.last.sbt.get.effectiveTestScope shouldBe org.goldenport.cncf.processexecution.SbtTestScope.Full
             ()
           })
       }
+      standard = false
+      try episode(directory) { e =>
+        val accepted = prior.get
+        assertRetainedRecord(e.current(accepted.session), originalGoal.get)
+        val retainedValidation = e.native.retained(accepted.session, accepted.validation.split(":")(2), "validation").get
+        retainedValidation.payload shouldBe originalValidation.get.payload
+        assertRetainedRecord(retainedValidation.record, originalValidation.get.record)
+        e.native.prepare(call => call.goalWorkC(InstanceIdentity(accepted.session)).flatMap(NativeWorkflowOperationOutput.workInputC).map { input =>
+          input.completed.head.review shouldBe originalReview
+          ()
+        })
+      } finally standard = true
     }
   }
 }

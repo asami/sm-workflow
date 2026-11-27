@@ -40,6 +40,85 @@ SPEC.loader.exec_module(CALLER)
 class NativeGoalCommandSpecification(unittest.TestCase):
     """Each leaf binds adjacent Given/When/Then to a frozen example and rule."""
 
+    def test_phase_terminal_metrics_presentation_uses_the_same_counts(self):
+        context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
+                   "outerSessionId": "s", "targetSessionId": "s"}
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "completion": {"metrics": {"phase_session": "s",
+                      "calls": {"groups": [{"engine": "codex|x", "executions": 1,
+                          "input": {"value": 0, "observed": 1, "executions": 1},
+                          "output": {"value": None, "observed": 0, "executions": 1}}],
+                          "unknown_executions": 0, "not_run": 0},
+                      "deterministic_repairs": {"tools": [{"tool": "metals", "count": 0, "coverage": "partial"}]},
+                      "operations": {"resolved_without_ai": 0, "rework": [{"stage": "test", "cycles": 0}]},
+                      "operational_time": {"elapsed_millis": 0, "totals": [{"category": "ai", "millis": None}]}}}}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("codex\\|x", markdown)
+        self.assertIn("0 (1/1)", markdown)
+        self.assertIn("unknown (0/1)", markdown)
+        self.assertIn("metals", markdown)
+        self.assertIn("elapsed", markdown)
+        for mode in ("summary", "detail"):
+            with patch.object(CALLER, "display_observation") as display:
+                CALLER.display_response(response, dict(context, responseReference="/tmp/response.json"), mode)
+                CALLER.response_progress(response, context)
+                self.assertIn(markdown, display.call_args.args[0]["presentation"]["commentary"])
+        self.assertEqual("", CALLER.phase_completion_markdown(dict(response, kind="Request"), context))
+        self.assertEqual("", CALLER.phase_completion_markdown(response, dict(context, targetSessionId="other")))
+        self.assertEqual("", CALLER.phase_completion_markdown(response, dict(context, operation="GoalPhaseService.submitGoalPhaseWorkResult")))
+
+    def test_compact_completion_keeps_rollup_and_unavailable_distinct_from_zero(self):
+        context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
+                   "outerSessionId": "s", "targetSessionId": "s"}
+        coverage = {"value": 0, "observed": 1, "executions": 1}
+        metrics = {"phase_session": "s", "calls": {"session": {"executions": 1, "input": coverage},
+                    "groups": [], "observations": [{"unused": list(range(2000))}]},
+                   "operations": {"coverage": "unavailable", "resolved_without_ai": 0,
+                       "attempted_with_known_disposition": 0, "unresolved_attempted": 0, "unobservable": 0,
+                       "route_switches": [{"role": "review", "from": "daily", "to": "local", "reason": "fallback"}]}}
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "control_summary": {"completion": {"metrics": metrics}}}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("AI session totals", markdown)
+        self.assertIn("0 (1/1)", markdown)
+        self.assertIn("| unknown | unknown | unknown | unknown | unavailable |", markdown)
+        self.assertIn("| review | daily | local | fallback |", markdown)
+        self.assertEqual("", CALLER.phase_completion_markdown(dict(response, session_id="other"), context))
+        self.assertEqual("", CALLER.phase_completion_markdown(dict(response, completion=None), context))
+        metrics["operations"]["coverage"] = "partial"
+        self.assertIn("| 0 | 0 | 0 | 0 | partial |", CALLER.phase_completion_markdown(response, context))
+        del metrics["calls"]
+        self.assertIn("| unknown | unknown |", CALLER.phase_completion_markdown(response, context))
+
+    def test_large_completion_omits_only_complete_rows_and_keeps_later_tables(self):
+        context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",
+                   "outerSessionId": "s", "targetSessionId": "s"}
+        long_name = "a" * 160
+        groups = [{"engine": long_name, "provider": long_name, "route": long_name,
+                   "mode": long_name, "level": long_name, "executions": i}
+                  for i in range(32)]
+        metrics = {"phase_session": "s", "calls": {"groups": groups,
+                   "session": {"executions": 32}, "unknown_executions": 0, "not_run": 0},
+                   "deterministic_repairs": {"tools": [{"tool": "metals", "count": 0}]},
+                   "operations": {"coverage": "partial", "resolved_without_ai": 0,
+                       "rework": [{"stage": "test", "cycles": 0}],
+                       "route_switches": [{"role": "review", "from": "a", "to": "b"}]},
+                   "operational_time": {"elapsed_millis": 0,
+                       "totals": [{"category": "ai", "millis": 0}]}}
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "completion": {"metrics": metrics}}
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertLessEqual(len(markdown), 16000)
+        self.assertIn("Additional rows omitted; see raw response.", markdown)
+        for title in ("AI session totals", "Call coverage", "Retained edits",
+                      "Resolution episodes", "Rework", "Route switches", "Time (ms"):
+            self.assertIn(title, markdown)
+        self.assertIn("| metals | 0 |", markdown)
+        self.assertIn("| elapsed | 0 |", markdown)
+        for line in markdown.splitlines():
+            if line.startswith("|"):
+                self.assertTrue(line.endswith("|"), line)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

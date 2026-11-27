@@ -48,9 +48,38 @@ This contract adds no periodic observation or speculative Git preflight loop.
 
 ## Validation and semantic judgment
 
-The planned [Phase 25.2 merge selection](../phase/phase-25.2.md#repositorysync-merge-validation)
-will specialize ordinary merge validation with the shared CNCF test selector.
-The following describes the existing impact-based route.
+The [Phase 25.2 merge selection](../phase/phase-25.2.md#repositorysync-merge-validation)
+uses the same candidate classifier for local-main and remote merges. It reads
+the retained merge base, both parents and the final index through typed Git
+TreeChanges and BlobContent observations. The strongest requirement determines
+the selected product checks:
+
+| Final candidate evidence | Selected product scope |
+| --- | --- |
+| Declared documentation outside consumed build/runtime inputs | Structural checks; no product Test |
+| Each changed source file carries through one complete parent, or differs from a parent only in proven ordinary Scala comments | Typed Test with `Admission` |
+| Combined or edited logic within a file, consumed non-source input, explicit broad coverage, or uncertain classification | Existing declared `Full` checks |
+
+The comment comparison preserves strings, token boundaries, leading indentation
+and newlines. It rejects unsupported syntax and comments with compiler/tool
+meaning; these cases require Full rather than an inferred equivalence. Exact
+carry-through uses complete regular Git file modes and blobs, including a
+carried-through deletion. Inferred ordinary source coverage may specialize the
+standard catch-all merge default. Explicit project broad-input requirements
+remain authoritative. Equal, push-only and fast-forward keep their existing
+selection.
+
+Selected Test checks persist their requested scope. The actual typed target,
+retained scope and Admission case/report identities must agree at execution,
+acceptance, reuse and continuation. An omitted historical scope means Full;
+a Full receipt cannot satisfy Admission or vice versa. Required lint and
+review-input continuations preserve their original successful prefix and
+reconstruct the selected scope. Focused TestOnly repair checks retain their
+existing duty and cannot replace the candidate's required Test scope.
+
+These are implementation rules. Installed two-stage Git fixture qualification
+for all three outcomes remains a Phase 25.2 acceptance obligation until its
+actual execution evidence is retained.
 
 Assess changes from both parents and any actual conflict-resolution edits.
 Program impact includes source, executable specifications, build/dependency
@@ -170,11 +199,11 @@ configuration, authored specifications and remaining qualification limits.
 ### Validation after local-first integration
 
 The remote merge uses the candidate staged after Git integration or conflict
-resolution. Its differences from both parents identify the combined change and
-the scope of semantic review. For a change to program inputs, the focused
-selection covers compilation and the declared tests for those inputs, including
-tests that consume changed shared inputs. Broad inputs and incomplete focused
-coverage select ordinary FULL. HEAVY remains a separate operation.
+resolution. Its differences from the retained base and both parents identify
+file carry-through, ordinary comments and integrated logic using the same
+classifier as the local-main stage. Declared affected checks remain applicable;
+consumed non-source, broad and uncertain inputs select ordinary FULL. Current
+scope must match any reused receipt. HEAVY remains a separate operation.
 
 The Workflow can reuse successful checks from the preceding canonical local
 integration in the same Session when the selected checks still apply. The

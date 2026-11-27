@@ -6,7 +6,7 @@ import java.time.{Duration, Instant}
 /** Observational comparable cohorts, using retained records only. Unknown time,
   * usage and first-pass history remain unknown, never zero or a success claim.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object GoalPhaseWorkComparison {
   final case class Cohort(identity: String, unit: String, workClass: String, windowStart: Option[String],
@@ -28,6 +28,82 @@ private[smworkflow] object GoalPhaseWorkComparison {
   }
   final case class NativeWork(stepIdentity: Option[String], kind: String, profile: Option[GoalPhaseOperatingProfiles.Capture],
     continuationIdentity: Option[String] = None, outcome: Option[String] = None)
+
+  final case class RepairEpisode(identity: String, scope: String, failedStage: String, failedCheck: String,
+    attempts: Vector[String] = Vector.empty, applications: Vector[String] = Vector.empty,
+    aiRepair: Option[Boolean] = Some(false), resolution: Option[String] = None) derives Codec.AsObject
+  final case class StageRun(identity: String, scope: String, cycle: String, stage: String,
+    rework: Boolean) derives Codec.AsObject
+  final case class Rework(stage: String, cycles: Option[Int], coverage: String) derives Codec.AsObject
+  final case class Approval(identity: String, issuedRevision: String, answeredRevision: Option[String],
+    started: Option[String])
+  final case class RouteSwitch(identity: String, role: String, from: String, to: String,
+    reason: Option[String]) derives Codec.AsObject
+  final case class Operational(resolvedWithoutAi: Int, attemptedWithKnownDisposition: Int,
+    unresolvedAttempted: Int, unobservable: Int, episodes: Vector[RepairEpisode], rework: Vector[Rework],
+    routeSwitches: Vector[RouteSwitch], coverage: String) derives Codec.AsObject
+
+  /** Ephemeral facts from authenticated, contiguous native replay. A scope
+    * has at most one open validation or review repair at a time. */
+  final case class NativeOperations(episodes: Vector[RepairEpisode] = Vector.empty,
+    runs: Vector[StageRun] = Vector.empty, spans: Vector[GoalPhasePhaseMetrics.ObservedSpan] = Vector.empty,
+    approvals: Vector[Approval] = Vector.empty, routes: Vector[RouteSwitch] = Vector.empty) {
+    def inRepair(scope: String): Boolean = episodes.exists(e => e.scope == scope && e.resolution.isEmpty)
+
+    def failure(identity: String, scope: String, stage: String, check: String): NativeOperations =
+      if (inRepair(scope) || episodes.exists(_.identity == identity)) this
+      else copy(episodes = episodes :+ RepairEpisode(identity, scope, stage, check))
+
+    def attempted(scope: String, identity: String, application: Option[String]): NativeOperations =
+      copy(episodes = episodes.map { episode =>
+        if (episode.scope != scope || episode.resolution.nonEmpty) episode
+        else episode.copy(attempts = (episode.attempts :+ identity).distinct,
+          applications = (episode.applications ++ application).distinct)
+      })
+
+    def ai(scope: String, observed: Option[Boolean]): NativeOperations = copy(episodes = episodes.map { episode =>
+      if (episode.scope != scope || episode.resolution.nonEmpty || episode.aiRepair.contains(true)) episode
+      else episode.copy(aiRepair = observed)
+    })
+
+    def succeeded(scope: String, stage: String, checks: Set[String], proof: String): NativeOperations =
+      copy(episodes = episodes.map { episode =>
+        if (episode.scope == scope && episode.failedStage == stage && checks(episode.failedCheck) && episode.resolution.isEmpty)
+          episode.copy(resolution = Some(proof)) else episode
+      })
+
+    def stage(identity: String, scope: String, cycle: String, kind: String): NativeOperations = {
+      val prior = runs.exists(r => r.scope == scope && r.stage == kind && r.cycle != cycle)
+      // Validation can resolve the episode before the required independent
+      // re-review, so retain the association across that boundary.
+      val repair = inRepair(scope) || (kind == "review" && episodes.exists(e => e.scope == scope && e.resolution.nonEmpty))
+      copy(runs = runs :+ StageRun(identity, scope, cycle, kind, prior && repair))
+    }
+  }
+
+  def operational(facts: NativeOperations, repairs: GoalPhasePhaseMetrics.Repairs): Operational = {
+    val definite = repairs.observations.groupBy(_.identity).values.filter(_.distinct.size == 1).map(_.head)
+      .filter(r => r.tool.exists(Set("scalafix", "metals", "scalafmt", "built-in")) &&
+        r.changed.contains(true) && r.revalidated.contains(true) && r.retained.contains(true) &&
+        r.rolledBack.contains(false) && r.candidate.nonEmpty && r.validation.nonEmpty).map(_.identity).toSet
+    val groups = facts.episodes.groupBy(_.identity)
+    val unique = groups.values.filter(_.distinct.size == 1).map(_.head).toVector.sortBy(_.identity)
+    val observed = unique.filter(_.attempts.nonEmpty)
+    val resolved = observed.filter(_.resolution.nonEmpty)
+    val deterministic = resolved.count(e => e.aiRepair.contains(false) && e.applications.exists(definite))
+    val uncertain = unique.count(e => e.attempts.isEmpty || e.aiRepair.isEmpty ||
+      (e.resolution.nonEmpty && e.aiRepair.contains(false) && !e.applications.exists(definite))) +
+      groups.values.count(_.distinct.size != 1)
+    val runs = facts.runs.groupBy(_.identity).values.filter(_.distinct.size == 1).map(_.head).toVector
+    val rework = Vector("compile", "test", "lint", "review").map { stage =>
+      val selected = runs.filter(_.stage == stage)
+      val repeats = selected.filter(_.rework).map(r => (r.scope, r.cycle)).distinct.size
+      Rework(stage, Option.when(selected.nonEmpty)(repeats), if (selected.isEmpty) "unavailable" else "partial")
+    }
+    Operational(deterministic, resolved.size, observed.count(_.resolution.isEmpty), uncertain, unique, rework,
+      facts.routes.groupBy(_.identity).values.filter(_.distinct.size == 1).map(_.head).toVector.sortBy(_.identity),
+      if (unique.isEmpty && runs.isEmpty && facts.routes.isEmpty) "unavailable" else "partial")
+  }
   private val _terminal = Set("accepted", "failed", "exhausted", "cancelled", "deferred", "abandoned")
   private def _millis(start: Option[String], end: Option[String]): Option[Long] = for {
     a <- start.flatMap(x => scala.util.Try(Instant.parse(x)).toOption)

@@ -25,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 26, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -309,10 +309,12 @@ private[smworkflow] object StandardWorkflowRuntime {
       else shared.validation.repositoryC(target.root, call)
     documentInputs = initialized.documents
     programInputs = initialized.program
+    explicitProgramInputs <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.Policy])
+      else RepositorySyncProgramImpact.resolveC(parameters)
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
     ordinaryValidation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
-      initialized.projectProvidesFixCheck)
+      initialized.projectProvidesFixCheck, ordinaryMergeSources = explicitProgramInputs.isEmpty)
       else repositoryValidation
     validation = ordinaryValidation.copy(dependencyInputs = RepositorySyncConsumedInputs.subject(call))
     programEvidence <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.EvidencePort]) else for {
@@ -752,17 +754,21 @@ private[smworkflow] object StandardWorkflowRuntime {
         accumulated <- prior
         kind <- id match {
           case "test" => Consequence.success(WorkflowSbtValidation.Kind.Test)
+          case "test-admission" => Consequence.success(WorkflowSbtValidation.Kind.Test)
           case "test-only" => Consequence.success(WorkflowSbtValidation.Kind.TestOnly)
           case "compile" => Consequence.success(WorkflowSbtValidation.Kind.Compile)
           case "fix-check" => Consequence.success(WorkflowSbtValidation.Kind.FixCheck)
           case _ => invalid("Check " + id + " needs an explicit runtime check binding")
         }
-      } yield accumulated :+ GoalPhaseNativeValidation.Check(id, index + 1, kind)
+      } yield accumulated :+ GoalPhaseNativeValidation.Check(id, index + 1, kind,
+        testScope = Option.when(id == "test-admission")("admission"))
     }
 
   private[admission] def goalSettingsC(plan: GoalPhaseOrderedProgression.Plan,
     target: RepositoryGitRuntimePrograms.Target): Consequence[ThreeWorkflowRuntimeParameters.Definition] = for {
     _ <- GoalPhaseOrderedProgression.validatePlanC(plan)
+    _ <- if (!plan.phaseChecks.contains("test-admission")) Consequence.unit
+      else invalid("Phase closure requires Full rather than Admission")
     steps <- standardChecksC(plan.steps.flatMap(_.checks).distinct)
     phase <- standardChecksC(plan.phaseChecks)
   } yield {
@@ -782,8 +788,10 @@ private[smworkflow] object StandardWorkflowRuntime {
 
   private[admission] def normalRepositoryValidation(programInputs: Option[RepositorySyncProgramImpact.Policy],
     declarationReadFailure: Option[WorkflowProjectDeclaration.ReadFailure] = None,
-    projectProvidesFixCheck: Boolean = false): RepositorySyncNativeMergeValidation.Policy = {
-    val validation = programInputs.fold(documentValidation.copy(setupRequired =
+    projectProvidesFixCheck: Boolean = false,
+    ordinaryMergeSources: Boolean = false): RepositorySyncNativeMergeValidation.Policy = {
+    val mergeinputs = programInputs.map(policy => policy.copy(ordinaryMergeSources = ordinaryMergeSources || policy.ordinaryMergeSources))
+    val validation = mergeinputs.fold(documentValidation.copy(setupRequired =
       declarationReadFailure.map(failure => s"ValidationSetupRequired: ${failure.diagnostic}")))(p => documentValidation.copy(
       identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
       assessment = documentValidation.assessment.map(_.copy(lintReason = p.reason))))

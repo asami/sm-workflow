@@ -5,15 +5,17 @@ import io.circe.parser.parse
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.{ResolvedSpiMember, SpiMemberMetadata}
 import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse,
   AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocketSet}
+import org.goldenport.cncf.workflow.WorkflowComponentStorage
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
 import org.goldenport.convert.ValueReader
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.Record
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeWorkflowCliFixture as F
 import org.goldenport.cncf.processexecution.*
@@ -25,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Executable specification for bounded diagnostic proposals.
   * @since   Nov. 22, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -440,6 +442,30 @@ while True:
         causes.count(value => java.util.Objects.equals(value, ScalaMetalsProcess.intentCause)) shouldBe 1
         causes.count(value => java.util.Objects.equals(value, "ordered-scala-metals:result")) shouldBe 1
         causes.count(value => java.util.Objects.equals(value, DeterministicRepair.applyIntentCause)) shouldBe 1
+        val composition = take(ThreeWorkflowRuntimeParameters.decodeC(
+          ComponentCreate(owner, ComponentOrigin.Builtin), component.initializationParameters, actor))
+        val port = take(GoalPhaseNativeWorkContinuation.bindC(composition.goal, take(GoalPhaseRuntimeCatalog.loadC()).definition))
+        var observedMetrics = Option.empty[GoalPhasePhaseMetrics.Repairs]
+        prepare(call => for {
+          catalog <- GoalPhaseRuntimeCatalog.loadC()
+          storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+            SmWorkflowComponent.componentId, composition.goal.configuration, Vector(catalog.definition),
+            composition.goal.instances, composition.goal.continuations)
+          reader <- storage.bindMechanicalC(GoalPhaseNativeRun.startOperation, GoalPhaseNativeRun.codec)
+          retained <- reader.loadRetainedC(GoalPhaseNativeRun.reference(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Specification Goal start is absent")))
+          session = GoalPhaseNativeRun.Session(storage, retained, retained.receipt.payload.value.participantIdentity, retained.current)
+          metrics <- port.deterministicRepairMetricsC(session, call.core)
+        } yield { observedMetrics = Some(metrics); () })
+        val metrics = observedMetrics.getOrElse(fail("native repair metrics unavailable"))
+        val metals = metrics.observations.filter(_.tool.contains("metals"))
+        metals.size shouldBe 1
+        metals.head.changed shouldBe Some(true)
+        metals.head.revalidated shouldBe Some(true)
+        metals.head.validation should not be empty
+        metals.head.retained shouldBe None
+        metals.head.sources should not be empty
+        metrics.tools.find(_.tool == "metals").flatMap(_.count) shouldBe None
         causes should not contain "ordered-bounded-compiler:intent"
         Files.readString(root.resolve("metals.trace")).linesIterator.count(value => java.util.Objects.equals(value, "textDocument/codeAction")) shouldBe 1
         Files.readString(root.resolve("metals.trace")) should include ("only:[\"quickfix\"]")

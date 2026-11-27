@@ -15,7 +15,7 @@ import WorkflowSbtValidation.Kind
 
 /** Supplemental validation of tracked lint inputs after review.
   * @since   Nov. 20, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 26, 2026
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
 final class RepositorySyncPostReviewValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -70,14 +70,15 @@ final class RepositorySyncPostReviewValidationSpec extends AnyWordSpec with Matc
           Vector(compile.copy(identity = "replacement-compile"), test, _fix_check),
           Vector(compile.copy(kind = Kind.Test), test, _fix_check),
           Vector(compile.copy(ordinal = 4), test, _fix_check),
-          Vector(test, compile, _fix_check)
+          Vector(test, compile, _fix_check),
+          Vector(compile, test.copy(testScope = Some("admission")), _fix_check)
         )
 
         When("the modified check sequences are compared with the retained sequence")
         val selected = orders.map(checks => take(P.selectC(_policy.copy(checks = checks), _old_checks, _uncovered)))
 
         Then("every changed sequence is refused")
-        selected shouldBe Vector(None, None, None, None)
+        selected shouldBe Vector.fill(orders.size)(None)
       }
 
       "refuses an unexpected uncovered input or an invalid fixed selection" in {

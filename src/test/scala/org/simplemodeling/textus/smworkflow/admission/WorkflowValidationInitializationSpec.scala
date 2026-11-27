@@ -10,7 +10,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared defaults never create grants, precise coverage or successful results.
   * @since   Nov.  9, 2026
-  * @version Nov. 22, 2026
+  * @version Nov. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -96,7 +96,8 @@ final class WorkflowValidationInitializationSpec extends AnyWordSpec with Matche
       val declared = take(RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, managed, providesFixCheck = true))
       val absent = take(RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, managed, providesFixCheck = false))
       Then("only the declared project receives a lint check alongside its discovered tests")
-      declared.get.checks.map(_.identity) shouldBe Vector("ordinary-project-full", "scala-lint")
+      declared.get.fullChecks.map(_.identity) shouldBe Vector("ordinary-project-full", "scala-lint")
+      declared.get.coverage.map(_.check.identity) shouldBe Vector("scala-lint")
       absent.get.checks.map(_.identity) shouldBe Vector("ordinary-project-full")
     }
     "preserve independent explicit policy and evidence overrides" in {

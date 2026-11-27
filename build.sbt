@@ -87,6 +87,7 @@ lazy val checkSkillBundleReproducibility = taskKey[File]("Verify skill ZIP bytes
 lazy val prepareTestArtifacts = taskKey[Unit]("Prepare the fresh component JAR and reproducible skill distribution for tests")
 lazy val runtimeTestOnly = inputKey[Unit]("Select canonical metadata, prepare selected runtime requirements and execute exact tests")
 lazy val labelledFullTests = taskKey[Seq[LabelledTests.Selected]]("Canonical default FULL operations")
+lazy val testAdmission = taskKey[Unit]("Run canonical ordinary ADMISSION operations")
 lazy val labelledTestSelection = inputKey[Seq[TestDefinition]]("Inspect canonical test selection without executing selected bodies")
 lazy val preparePackagedTestCar = taskKey[Unit]("Build and locate the candidate CAR for selected packaged-runtime tests")
 lazy val prepareScalaToolFixture = taskKey[Unit]("Resolve isolated Scala tool classpaths for selected deterministic repair tests")
@@ -560,6 +561,52 @@ lazy val root: Project = project
       else Def.task { prepareTestArtifacts.value; () }
     }.value,
     Test / test := (Test / test).dependsOn(prepareFullTests).value,
+    testAdmission := Def.taskDyn {
+      val loader = (Test / testLoader).value
+      val log = streams.value.log
+      try {
+        val selected = try LabelledTests.select((Test / fullClasspath).value.files,
+          (Test / classDirectory).value, version.value, "ADMISSION", (Test / definedTests).value)
+        catch {
+          case scala.util.control.NonFatal(error) =>
+            log.error("CNCF-ADMISSION-V1 unavailable")
+            throw error
+        }
+        if (selected.isEmpty) {
+          Def.task { log.info("CNCF-ADMISSION-V1 empty") }.andFinally(LabelledTests.closeLoader(loader))
+        } else {
+          val rows = selected.flatMap(s => s.definition.selectors.collect {
+            case t: sbt.testing.TestSelector => s.definition.name -> t.testName()
+          })
+          require(rows.nonEmpty && rows.distinct.size == rows.size, "Empty or duplicate admission selection")
+          def token(value: String): String = java.util.Base64.getUrlEncoder.withoutPadding()
+            .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+          log.info("CNCF-ADMISSION-V1 selected " + rows.map { case (suite, name) => token(suite) + ":" + token(name) }.mkString(","))
+          val frameworks = (Test / loadedTestFrameworks).value
+          val config = (Test / labelledTestExecution / testExecution).value
+          val forkTests = (Test / fork).value
+          val resultLogger = (Test / labelledTestExecution / testResultLogger).value
+          // The producer verifies one genuine ScalaTest summary per selected suite.
+          val runs = selected.map { suite =>
+            val execution = Def.valueStrict(LabelledTests.execute(Seq(suite), frameworks, loader, config, log,
+              properties = Seq("-C", "org.simplemodeling.textus.smworkflow.testing.AdmissionSuccessReporter"), fork = forkTests))
+            Def.task { resultLogger.run(log, execution.value, "Test / testAdmission") }
+          }
+          val done = Def.task { log.info("CNCF-ADMISSION-V1 completed") }
+          val run = Def.sequential(runs :+ done)
+          val prepared = if (needsScalaToolFixture(selected)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; prepareScalaToolFixture.value; run
+          } else if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; run
+          } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
+            cozyPrepareRuntime.value; prepareTestArtifacts.value; run
+          } else Def.taskDyn { prepareTestArtifacts.value; run }
+          prepared.andFinally(LabelledTests.closeLoader(loader))
+        }
+      } catch {
+        case error: Throwable => LabelledTests.closeLoader(loader); throw error
+      }
+    }.value,
     labelledTestSelection := {
       val request = LabelledTests.request(sbt.complete.DefaultParsers.spaceDelimited("selection").parsed)
       val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
