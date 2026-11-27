@@ -12,7 +12,7 @@ import GoalPhaseNativeWork as W
 /** Configured ownership, separate from transport and from execution authority.
   * The existing bounded Workflow owns execution, commit and local publication.
   * @since   Nov. 12, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object DependencyDevelopmentDelivery {
   val fixed = "Fixed"
@@ -76,7 +76,7 @@ private[smworkflow] object DependencyDevelopmentDelivery {
          Option(route.machinePrograms).flatten.exists(p => p != null && _exact(p.publication) && _exact(p.consumer) &&
            _exact(p.jarWorkspace) && p.discovery != null && p.discovery.componentIdentity == route.edge.consumer.identity &&
            p.discovery.validateC.isSuccess)) &&
-      (choice != subtree || route.destinationIdentity == _subtree_destination(route.edge))
+      (choice != subtree || route.destinationIdentity == subtreeDestination(route.edge))
 
   def offerValid(offer: Offer, work: W.Request, result: W.Result): Boolean =
     offer != null && offer.alternatives.map(_.choice) == routeChoices &&
@@ -128,7 +128,7 @@ private[smworkflow] object DependencyDevelopmentDelivery {
   private def _label(choice: String): String =
     if (choice == subtree) "Local worktree" else "Assigned development chat"
 
-  private def _subtree_destination(edge: ManagedDevelopment.Edge): String = "managed-worktree:" + edge.provider.workspace
+  private[admission] def subtreeDestination(edge: ManagedDevelopment.Edge): String = "managed-worktree:" + edge.provider.workspace
 
   private def _offer(provider: D.Component, consumer: D.Component,
     configured: Option[ManagedDevelopmentRuntime.Policy], core: ActionCall.Core,
@@ -168,7 +168,7 @@ private[smworkflow] object DependencyDevelopmentDelivery {
     } yield (policy.definition, edge, member, artifact)
     val alternatives = routeChoices.map { choice =>
       val selected = common.flatMap { case (definition, edge, member, (owner, programs)) =>
-        val destination = if (choice == subtree) Some(_subtree_destination(edge))
+        val destination = if (choice == subtree) Some(subtreeDestination(edge))
           else chat
         destination.map(identity => Consequence.success(Route(edge, definition.scope, choice, identity,
           member.root, member.localBranch, definition.ownerWorkspace, owner, definition.repository, definition.staging, programs)))

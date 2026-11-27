@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Minimal real producer -> private repository -> immutable selection -> consumer
   * compilation. Fixture setup creates inputs; SBT effects use CNCF's native UoW.
   * @since   Nov. 12, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -1498,6 +1498,37 @@ allowedKinds = ["text"]
     root
   }
 
+  private[admission] def prepareManagedLocalReceiptRecovery(): Path = {
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath),
+      "local-receipt-recovery-").toRealPath()
+    ConnectedFixture.exercise(root, localReceiptRecovery = true)
+    root
+  }
+
+  private[admission] def recoverManagedConsumerVerificationWithoutAttempt(): Unit = {
+    val memory = new Memory {
+      override def consumerCompileRootC(edge: Edge, actual: Input, selection: Selection): Consequence[String] =
+        if (actual.requestIdentity == input.requestIdentity) invalid("original Compile never wrote an input file")
+        else Consequence.success("/consumer")
+    }
+    run("publish", memory).status shouldBe "published"
+    run("select", memory, input).status shouldBe "selected-unverified"
+    val verification = input.copy(requestIdentity = "verified-consumer")
+    memory.execution = Execution("succeeded", Json.obj("operation" -> "Compile".asJson, "workspace" -> edge.consumer.workspace.asJson,
+      "termination" -> "Exited(0)".asJson, "program" -> "fixed-consumer-compile".asJson))
+    run("compile", memory, verification).status shouldBe "verified"
+    val recovery = ConsumerVerificationRecoveryInput(input.edgeIdentity, input.requestIdentity,
+      input.publication, input.selection, verification.requestIdentity)
+    val calls = memory.calls
+    take(describeConsumerVerificationRecoveryC(definition, recovery, memory)).status shouldBe "eligible"
+    take(adoptConsumerVerificationRecoveryC(definition, recovery, memory)).status shouldBe "adopted"
+    take(adoptConsumerVerificationRecoveryC(definition, recovery, memory)).status shouldBe "adopted"
+    run("status", memory, input).status shouldBe "selected-unverified"
+    run("compile", memory, input).status shouldBe "verified"
+    memory.calls shouldBe calls
+    memory.rows.contains(ManagedDevelopment.key(definition, edge, "compile-intent", input.requestIdentity)) shouldBe false
+  }
+
   private[admission] def rejectManagedConsumerVerificationRecoveryCrossings(): Vector[Consequence[Result]] = {
     val memory = new Memory {
       override def consumerCompileRootC(edge: Edge, input: Input, selection: Selection): Consequence[String] =
@@ -2032,7 +2063,7 @@ allowedKinds = ["text"]
     }
 
     def exercise(root: Path, mode: String = "Connected", managedInventory: Option[Boolean] = None,
-      consumerRecovery: Option[Boolean] = None, completionReply: Boolean = false): Unit = {
+      consumerRecovery: Option[Boolean] = None, completionReply: Boolean = false, localReceiptRecovery: Boolean = false): Unit = {
       val machine = mode == "RouteMachineLocal"
       val offerededge = if (machine) _machine_edge(root) else connectedEdge
       offerededge.machineLocalJar.foreach(jar => Files.createDirectories(Path.of(jar.consumerJar).getParent))
@@ -2082,7 +2113,7 @@ allowedKinds = ["text"]
         "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++
         completionParameters ++ publicationparameters
       _with_runtime_(root, mode, Some(settings), hostparameters,
-        componentInstance = if (machine || managedInventory.nonEmpty || consumerRecovery.nonEmpty) "default" else "repository-spec") { (owner, component, actor, prepare) =>
+        componentInstance = if (machine || managedInventory.nonEmpty || consumerRecovery.nonEmpty || localReceiptRecovery) "default" else "repository-spec") { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("b"), mode).size, Some(root.resolve("b")), mode)).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("other"), mode).size, Some(root.resolve("other")), mode)).flatMap(_ =>
@@ -2109,6 +2140,7 @@ allowedKinds = ["text"]
             NonEmptyVector.of("src/main/scala", "src/test/scala"), NonEmptyVector.of("compile", "test-only"), NonEmptyVector.of("behavior"),
             NonEmptyVector.of(source.get), false, "code", "off", 10, "direct-instruction", Vector.empty,
             c.copy(componentIdentity = connectedEdge.provider.identity, role = role, exclusions = Vector("remote-push"),
+              destinationIdentity = if (localReceiptRecovery) DependencyDevelopmentDelivery.subtreeDestination(connectedEdge) else c.destinationIdentity,
               permittedOperations = if (mode == "Assigned" || mode.startsWith("AssignedPhase")) NonEmptyVector.fromVectorUnsafe(c.permittedOperations.toVector ++
                 Vector("queue-hold", "queue-cancel", "queue-resume")) else if (mode == "Connected")
                 NonEmptyVector.fromVectorUnsafe(c.permittedOperations.toVector :+ "repository-sync") else c.permittedOperations,
@@ -2831,6 +2863,38 @@ allowedKinds = ["text"]
             val operationInput = Input(connectedEdge.identity, "connected-delivery", "connected-delivery", "connected-delivery")
             invoke("ManagedDevelopmentService", "selectDevelopmentArtifact", List(Property("input", GoalPhaseNativeMetadata.record(operationInput.asJson), None))).isSuccess shouldBe false
             advance(requester.sessionId).kind shouldBe "Wait"
+          } else if (localReceiptRecovery) {
+            delivered.kind shouldBe "Return"
+            val snapshot = delivered.retainedMaterials.find(_.fieldName == "state").get.reference
+            val legacy = V.DelegateTaskObservationInput(requester.sessionId, "result-received",
+              V.WorkflowArtifactReference(root.resolve("legacy-return.json").toUri.toString, "1"),
+              Some(destination.sessionId), Some(GoalPhaseNativeMetadata.record(bState.asJson)), None,
+              "SPECIFICATION-OWNED receipt of the exact completed provider", None)
+            val binding = legacy.copy(event = "bind-local-result",
+              sourceReference = V.WorkflowArtifactReference(snapshot.identity, snapshot.revision), result = None)
+            val operationInput = Input(connectedEdge.identity, "connected-delivery", "connected-delivery", "connected-delivery")
+            val verification = operationInput.copy(requestIdentity = "connected-delivery-compile")
+            def artifactCall(operation: String, selected: Input): V.ManagedDevelopmentResult =
+              read_control_value[V.ManagedDevelopmentResult](take(invoke("ManagedDevelopmentService", operation,
+                List(Property("input", GoalPhaseNativeMetadata.record(selected.asJson), None)))))
+            artifactCall("selectDevelopmentArtifact", operationInput).status shouldBe "selected-unverified"
+            artifactCall("compileDevelopmentConsumer", verification).status shouldBe "verified"
+            val recovery = ConsumerVerificationRecoveryInput(operationInput.edgeIdentity, operationInput.requestIdentity,
+              operationInput.publication, operationInput.selection, verification.requestIdentity)
+            val artifact = Record.data("sourceCommit" -> bState.commit.get.identity,
+              "coordinates" -> bState.input.delegation.get.artifactCoordinates,
+              "selectionReference" -> Record.data(
+                "identity" -> ManagedDevelopment.key(connectedDefinition, connectedEdge, "selection", operationInput.selection),
+                "revision" -> "1"),
+              "consumerCheckReferences" -> Vector.empty[Record])
+            val adoption = legacy.copy(event = "adopt", sourceReference = V.WorkflowArtifactReference("local-adoption", "1"),
+              result = None, artifactSelection = Some(artifact))
+            val locator = Json.obj("root" -> root.toString.asJson, "requesterSessionId" -> requester.sessionId.asJson,
+              "parentSessionId" -> a.sessionId.asJson, "originalWorkContext" -> DevelopmentOperationalView.json(original.issuedWorkContext.get.toRecord()),
+              "legacy" -> DevelopmentOperationalView.json(legacy.toRecord()), "binding" -> DevelopmentOperationalView.json(binding.toRecord()),
+              "adoption" -> DevelopmentOperationalView.json(adoption.toRecord()), "recoveryInput" -> recovery.asJson,
+              "originalInput" -> operationInput.asJson, "verificationInput" -> verification.asJson)
+            Files.writeString(root.resolve("managed-local-receipt-recovery-fixture.json"), locator.spaces2)
           } else {
             delivered.kind shouldBe "Return"
             val publication = bState.delivery.flatMap(_.managedPublication).get

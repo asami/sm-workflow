@@ -7,13 +7,17 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Connected specification for recovering a managed consumer Compile admission rejection.
   * @since   Nov. 24, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class ManagedConsumerVerificationRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Managed consumer verification recovery" should {
+    "adopt a separate verified Compile when the original request only published and selected the artifact" in {
+      (new Phase7ManagedDevelopmentSpec).recoverManagedConsumerVerificationWithoutAttempt()
+    }
+
     "continue the exact original A WorkOrder from a separately verified Compile after prelaunch rejection" in {
       Given("an isolated connected provider and requester fixture")
       val fixture = new Phase7ManagedDevelopmentSpec
@@ -39,6 +43,18 @@ final class ManagedConsumerVerificationRecoverySpec extends AnyWordSpec with Mat
       val rejected = fixture.rejectManagedConsumerVerificationRecoveryCrossings()
       Then("each attempted recovery is refused")
       rejected.foreach(_.isSuccess shouldBe false)
+    }
+  }
+}
+
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class ManagedLocalReceiptRecoveryFixtureSpec extends AnyWordSpec with Matchers {
+  "Managed local receipt recovery" should {
+    "prepare an isolated requester with a completed provider and a separately verified consumer Compile" in {
+      val root = (new Phase7ManagedDevelopmentSpec).prepareManagedLocalReceiptRecovery()
+      Files.isRegularFile(root.resolve("managed-local-receipt-recovery-fixture.json")) shouldBe true
     }
   }
 }

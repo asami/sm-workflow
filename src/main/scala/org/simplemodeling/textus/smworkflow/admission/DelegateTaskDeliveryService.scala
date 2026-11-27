@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -193,6 +193,12 @@ private[smworkflow] object DelegateTaskDeliveryService {
             controlled <- if (queueControl) AssignedDevelopmentChatQueue.controlC(h, definition, storage, current, payload.state, observation, selected).map(Some(_))
               else Consequence.success(Option.empty[AssignedDevelopmentChatQueue.State])
             next <- if (queueControl) Consequence.success(payload.state)
+              else if (observation.event == ManagedDevelopmentBoundedWork.bindLocalResult)
+                ManagedDevelopmentBoundedWork.bindLocalResultC(h, storage, definition, payload.state, observation, selected)
+              else if (observation.event == "result-received" &&
+                ManagedDevelopmentBoundedWork.scopedLocalRequester(h, payload.state) &&
+                !payload.state.delivery.exists(_.observations.exists(_.event == "result-received")))
+                N.invalid("Collect a managed local destination through ordinary Advance; bind-local-result is for an already retained receipt")
               else DelegateTask.observeC(payload.state, observation, hydrate, chatCompletion)
             _ <- if (observation.event != "adopt" || next == payload.state) Consequence.unit else for {
               target <- targetC(selected, h, current, payload.state, hydrate)

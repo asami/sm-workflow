@@ -18,13 +18,14 @@ import StandaloneFixExecution as S
 /** Composition over existing native WorkOrders, bounded checkpoints and local
   * artifact operations. This owns no queue, semantic executor or repair loop.
   * @since   Nov. 12, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentBoundedWork {
   import ManagedDevelopment.*
   import GoalPhaseDependencyValidation.ManagedCapture
   import DependencyDevelopmentDelivery as D
+  val bindLocalResult = "bind-local-result"
 
   final case class Captured(capture: ManagedCapture, route: Option[D.Route])
 
@@ -437,30 +438,81 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
         } yield next
       }
     } yield result
-  /** Authenticate the already received immutable native result before a
-    * requester operation can activate its artifact. Public JSON is no witness. */
+  private[admission] def scopedLocalRequester(h: Host, state: S.State): Boolean =
+    h.managedDevelopment.exists(p => p.definition.edges.exists(edge =>
+      p.dependencyWorkEdge.contains(edge.identity) && edge.localJar && edge.machineLocalJar.isEmpty &&
+        state.input.delegation.exists(c => c.role == "requester" && c.providerPhase.isEmpty &&
+          c.destinationIdentity == D.subtreeDestination(edge))))
+
+  private[admission] def bindLocalResultC(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding,
+    state: S.State, observation: DelegateTask.Observation, core: ActionCall.Core): Consequence[S.State] = for {
+    delivery <- state.delivery.map(Consequence.success).getOrElse(invalid("No requester delivery is retained"))
+    previous = delivery.observations.find(_.event == bindLocalResult)
+    _ <- if (scopedLocalRequester(h, state) && delivery.phaseDelivery.isEmpty &&
+      delivery.destinationSessionId.nonEmpty && observation.destinationSessionId == delivery.destinationSessionId &&
+      observation.result.isEmpty && observation.artifactSelection.isEmpty && observation.commandIdentity.isEmpty &&
+      Option(observation.rationale).exists(text => text.trim.nonEmpty && !text.exists(_.isControl)) &&
+      !delivery.observations.exists(_.event == "defer") &&
+      (previous.contains(observation) || (previous.isEmpty && state.stage == "ResultReceived"))) Consequence.unit
+      else invalid("Local result binding crosses its scope, observed destination or receipt frontier")
+    next = state.copy(delivery = Some(delivery.copy(observations = if (previous.nonEmpty)
+      delivery.observations else delivery.observations :+ observation)))
+    native <- receivedC(storage, definition, next, core)
+    edge <- h.managedDevelopment.map(edgeC).getOrElse(invalid("No managed dependency scope is configured"))
+    capture <- native.managedDependency.filter(_.edge == edge).map(Consequence.success)
+      .getOrElse(invalid("Local destination crosses its retained A/B edge"))
+    _ <- requesterC(h, capture, core)
+  } yield next
+
+  /** Authenticate the exact retained destination checkpoint before adoption. */
   private[admission] def receivedC(storage: WorkflowComponentStorage, definition: DefinitionBinding,
-    state: S.State, core: ActionCall.Core):
-    Consequence[BoundedWorkRuntime.Payload] = for {
+    state: S.State, core: ActionCall.Core): Consequence[BoundedWorkRuntime.Payload] = for {
     delivery <- state.delivery.map(Consequence.success).getOrElse(invalid("No requester delivery is retained"))
     session <- delivery.destinationSessionId.map(Consequence.success).getOrElse(invalid("No destination Session is retained"))
     receipt <- delivery.observations.find(_.event == "result-received").map(Consequence.success)
       .getOrElse(invalid("No actual result receipt is retained"))
+    binding = delivery.observations.find(_.event == bindLocalResult)
+    reference = binding.map(_.sourceReference).getOrElse(receipt.sourceReference)
     prefix = session + ":standalone-state:"
-    revision <- Option.when(receipt.sourceReference.identity.startsWith(prefix) && receipt.sourceReference.revision == "1")(
-      receipt.sourceReference.identity.stripPrefix(prefix)).flatMap(_.toLongOption).filter(_ > 0)
+    revision <- Option.when(reference.identity.startsWith(prefix) && reference.revision == "1")(
+      reference.identity.stripPrefix(prefix)).flatMap(_.toLongOption).filter(n => n > 0 && reference.identity == prefix + n)
       .map(Consequence.success).getOrElse(invalid("Result receipt is not an exact native destination checkpoint"))
     instances <- storage.bindInstancesC()(using core.executionContext)
     current <- instances.loadC(InstanceIdentity(session))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(invalid("Destination Session is unavailable")))
     _ <- if (current.definition == definition && current.revision.value >= revision) Consequence.unit
       else invalid("Result receipt crosses its native destination history")
-    payload <- DelegateTaskNativeRun.loadPayloadC(storage, session, revision, core)
+    expected <- GoalPhaseNativeHistory.prefixC(current, InstanceRevision(revision))
+    owner <- storage.bindMechanicalC(DelegateTaskNativeRun.advanceOperation, DelegateTaskNativeRun.stateCodec)
+    checkpoint <- owner.loadRetainedC(WorkflowMechanicalTransition.Reference(reference.identity, reference.revision))(using core.executionContext)
+      .flatMap(_.map(Consequence.success).getOrElse(invalid("Selected native destination checkpoint is unavailable")))
+    _ <- if (checkpoint.receipt.next == expected && expected.suspension.isEmpty)
+      Consequence.unit else invalid("Selected native destination checkpoint crosses its actual history")
+    retained = checkpoint.receipt.payload.value
+    hydrated <- DelegateTaskNativeRun.hydrateStateC(retained.state, session, core, Some(retained))
+    payload = retained.copy(state = hydrated)
     _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
     _ <- if (delivery.returned.nonEmpty && receipt.result.nonEmpty &&
       receipt.destinationSessionId.contains(session)) Consequence.unit
       else invalid("Result receipt has no producer result or crosses its destination Session")
     _ <- DelegateTask.returnedC(state.input, payload.state.asJson, _ => Consequence.success(payload.state))
+    _ <- binding.fold(Consequence.unit) { evidence => for {
+      _ <- if (evidence.destinationSessionId.contains(session) && receipt.sourceReference.identity.startsWith("file:") &&
+        receipt.sourceReference.revision == "1" &&
+        payload.state.participant == state.participant && payload.state.delivery.flatMap(_.destinationSessionId).contains(session) &&
+        payload.state.delivery.exists(_.managedPublication.nonEmpty)) Consequence.unit
+        else invalid("Local binding crosses the original received result, participant or publication")
+      returned <- delivery.returned.filter(receipt.result.contains).map(Consequence.success)
+        .getOrElse(invalid("Original local result receipt differs from the retained delivery"))
+      // The receipt carries the public Record. Compare to the same projection
+      // used by readWorkflowRetainedSnapshot, including nested native evidence.
+      published <- DelegateTaskNativeRun.recordC(retained.state.asJson)
+      recorded <- GoalPhaseNativeMetadata.normalizePublicJson(returned).fold(invalid, Consequence.success)
+      projected <- GoalPhaseNativeMetadata.normalizePublicJson(DevelopmentOperationalView.json(published))
+        .fold(invalid, Consequence.success)
+      _ <- if (recorded == projected) Consequence.unit
+        else invalid("Original received result differs from the exact native destination checkpoint")
+    } yield () }
   } yield payload
 
   /** Adoption attaches results only. Advance reads scoped selection/verification

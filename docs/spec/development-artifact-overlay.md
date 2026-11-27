@@ -469,11 +469,12 @@ unverified, unknown and not-found. Reusing an execution request identity with di
 or participant rejects; redelivering the same completed input reuses its result.
 An intent without an observed result remains unknown and is never rerun implicitly.
 
-### Reuse a retained consumer Compile after prelaunch rejection
+### Reuse a retained consumer Compile under its original request
 
-An existing managed dependency requester can continue when its original scoped
-Compile was rejected by typed SBT admission and an independently identified
-verification has already succeeded for the same selection. Call
+An existing managed dependency requester can continue when a separately
+identified scoped Compile already verified the same selection. The original
+request must have a confirmed prelaunch rejection or the matching completed
+scoped publication with both its Compile intent and result absent. Call
 `describeDevelopmentConsumerVerificationRecovery` on `ManagedDevelopmentService`
 with `edgeIdentity`, the original `requestIdentity`, `publication`, `selection`
 and the successful `verificationRequestIdentity`. Include `publicationEdge`

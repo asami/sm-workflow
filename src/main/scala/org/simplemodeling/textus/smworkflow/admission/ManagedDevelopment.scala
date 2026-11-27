@@ -10,7 +10,7 @@ import scala.util.Try
 /** A dependency edge selects source, JAR and project independently. Publications
   * and selections are immutable Component records, never a work.d JSON ledger.
   * @since   Nov. 12, 2026
-  * @version Nov. 24, 2026
+  * @version Nov. 27, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopment {
@@ -466,23 +466,28 @@ private[smworkflow] object ManagedDevelopment {
         _ <- selectProtectionC(d, e, input, pub, p)
       } yield Result("selected-unverified", s.asJson) }
       case "compile" | "verify" => for {
-        selection <- selectionC(d, e, input, p)
-        result <- attemptC(d, e, input, "compile", p) {
-          protectUseC(d, e, input, selection.publication, "compile", p).flatMap { _ =>
-          p.consumerSourceC(e).flatMap { before => p.executeC(e, input, Some(selection.publication)).flatMap { actual =>
-            releaseUseC(d, e, input, "compile", actual, p).flatMap { _ =>
-            if (actual.status != "succeeded") Consequence.success(Result(actual.status, actual.detail))
-            else p.consumerSourceC(e).flatMap { after =>
-              if (before != after) Consequence.success(Result("unverified", Json.obj(
-                "execution" -> actual.detail, "reason" -> "consumer source changed during compilation".asJson)))
-              else p.consumerReportC(e, input, selection.publication).transform(
-              report => Consequence.success(Result("verified",
-                Json.obj("selection" -> selection.asJson, "execution" -> actual.detail, "resolution" -> report,
-                  "consumerSource" -> after))),
-              error => Consequence.success(Result("unverified", Json.obj("execution" -> actual.detail, "reason" -> error.show.asJson))))
-            }
-          }}}}
-        }
+        recovery <- p.loadC(key(d, e, "compile-recovery", input.requestIdentity))
+        result <- if (recovery.nonEmpty) consumerVerificationC(d, input, p) else for {
+          selection <- selectionC(d, e, input, p)
+          _ <- _reserve_compile_owner_c(d, e, input, p, None)
+          attempted <- attemptC(d, e, input, "compile", p) {
+            for {
+              _ <- protectUseC(d, e, input, selection.publication, "compile", p)
+              before <- p.consumerSourceC(e)
+              actual <- p.executeC(e, input, Some(selection.publication))
+              _ <- releaseUseC(d, e, input, "compile", actual, p)
+              checked <- if (actual.status != "succeeded") Consequence.success(Result(actual.status, actual.detail))
+                else p.consumerSourceC(e).flatMap { after =>
+                  if (before != after) Consequence.success(Result("unverified", Json.obj(
+                    "execution" -> actual.detail, "reason" -> "consumer source changed during compilation".asJson)))
+                  else p.consumerReportC(e, input, selection.publication).transform(
+                    report => Consequence.success(Result("verified", Json.obj("selection" -> selection.asJson,
+                      "execution" -> actual.detail, "resolution" -> report, "consumerSource" -> after))),
+                    error => Consequence.success(Result("unverified", Json.obj("execution" -> actual.detail, "reason" -> error.show.asJson))))
+                }
+            } yield checked
+          }
+        } yield attempted
       } yield result
       case "detach" => for {
         selection <- selectionC(d, e, input, p)
@@ -539,6 +544,8 @@ private[smworkflow] object ManagedDevelopment {
   def adoptConsumerVerificationRecoveryC(definition: Definition, input: ConsumerVerificationRecoveryInput,
     port: Port): Consequence[Result] = _consumer_verification_recovery_c(definition, input, port, adopt = true)
 
+  private final case class QualifiedVerification(receipt: Json, result: Result, originalUnstarted: Boolean)
+
   def consumerVerificationC(definition: Definition, input: Input, port: Port): Consequence[Result] = {
     import scala.language.strictEquality
     for {
@@ -553,9 +560,9 @@ private[smworkflow] object ManagedDevelopment {
           _ <- if (input.equals(recovery.original)) Consequence.unit
             else invalid("consumer verification recovery crosses the original immutable input")
           qualified <- _qualify_consumer_verification_c(definition, edge, recovery, port)
-          _ <- if (receipt.equals(qualified._1)) Consequence.unit
+          _ <- if (receipt.equals(qualified.receipt)) Consequence.unit
             else invalid("consumer verification recovery is stale or crosses its retained binding")
-        } yield qualified._2.copy(detail = qualified._2.detail.mapObject(_.add("verificationRecovery", receipt)))
+        } yield qualified.result.copy(detail = qualified.result.detail.mapObject(_.add("verificationRecovery", receipt)))
       }
     } yield result
   }
@@ -568,34 +575,29 @@ private[smworkflow] object ManagedDevelopment {
         .getOrElse(invalid("consumer verification recovery input is absent"))
       edge <- edgeC(d, original)
       qualified <- _qualify_consumer_verification_c(d, edge, input, p)
-      receipt = qualified._1
+      receipt = qualified.receipt
       recordkey = key(d, edge, "compile-recovery", original.requestIdentity)
       stored <- p.loadC(recordkey)
       _ <- if (stored.forall(_.equals(receipt))) Consequence.unit
         else invalid("original consumer request already has a different verification recovery")
       _ <- if (adopt && stored.isEmpty) {
-        val created = immutableC(p, recordkey, receipt)
-        created match {
-          case Consequence.Success(_) => created
-          case _ => p.loadC(recordkey).flatMap { observed =>
-            if (observed.exists(_.equals(receipt))) Consequence.unit else created
-          }
-        }
+        val reserved = if (qualified.originalUnstarted)
+          _reserve_compile_owner_c(d, edge, original, p, Some(receipt)) else Consequence.unit
+        reserved.flatMap(_ => _concurrent_immutable_c(p, recordkey, receipt))
       } else Consequence.unit
     } yield Result(if (adopt || stored.nonEmpty) "adopted" else "eligible", receipt)
   }
 
   private def _qualify_consumer_verification_c(d: Definition, e: Edge, input: ConsumerVerificationRecoveryInput,
-    p: Port): Consequence[(Json, Result)] = {
+    p: Port): Consequence[QualifiedVerification] = {
     import scala.language.strictEquality
     for {
       _ <- if (id(input.verificationRequestIdentity) && input.verificationRequestIdentity != input.requestIdentity)
         Consequence.unit else invalid("consumer verification recovery requires a distinct retained verification request")
       original = input.original
       verification = input.verification
-      rejected <- _retained_compile_c(d, e, original, p)
-      _ <- if (rejected.status == "admission-rejected" && rejected.detail.asString.exists(_.trim.nonEmpty))
-        Consequence.unit else invalid("original consumer Compile has no confirmed prelaunch admission rejection")
+      intent <- p.loadC(key(d, e, "compile-intent", original.requestIdentity))
+      prior <- p.loadC(key(d, e, "compile-result", original.requestIdentity))
       verified <- _retained_compile_c(d, e, verification, p)
       _ <- if (verified.status == "verified") Consequence.unit
         else invalid("successor consumer Compile has no retained verification")
@@ -605,6 +607,23 @@ private[smworkflow] object ManagedDevelopment {
       publication <- stored.map(decodeC[Publication]).getOrElse(invalid("retained consumer publication is absent"))
       _ <- if (publication.edge.equals(sourceedge) && publication.equals(selected.publication))
         Consequence.unit else invalid("consumer verification recovery crosses the immutable publication")
+      oldroot <- (intent, prior) match {
+        case (None, None) => for {
+          publishedIntent <- p.loadC(key(d, e, "publish-intent", original.requestIdentity))
+          publishedRaw <- p.loadC(key(d, e, "publish-result", original.requestIdentity))
+          published <- publishedRaw.map(decodeC[Result]).getOrElse(invalid("original scoped publication result is absent"))
+          _ <- if (publishedIntent.exists(_.equals(intentJson(original, p))) && published.status == "published" &&
+            published.detail.hcursor.get[Publication]("publication").toOption.exists(_.equals(publication))) Consequence.unit
+            else invalid("original request has no matching scoped publication and participant")
+        } yield Option.empty[String]
+        case (Some(value), Some(raw)) if value.equals(intentJson(original, p)) => for {
+          rejected <- decodeC[Result](raw)
+          _ <- if (rejected.status == "admission-rejected" && rejected.detail.asString.exists(_.trim.nonEmpty))
+            Consequence.unit else invalid("original consumer Compile has effects or no confirmed prelaunch rejection")
+          root <- p.consumerCompileRootC(e, original, selected)
+        } yield Some(root)
+        case _ => invalid("original consumer Compile has an unresolved or conflicting record")
+      }
       protection <- protectionC(d, p)
       ref = identity(selected.publication)
       _ <- availableC(protection, ref)
@@ -619,9 +638,8 @@ private[smworkflow] object ManagedDevelopment {
         execution.get[String]("termination").contains("Exited(0)") &&
         execution.get[String]("program").exists(_.trim.nonEmpty)) Consequence.unit
         else invalid("retained consumer verification lacks the exact selection and successful scoped Compile evidence")
-      originalroot <- p.consumerCompileRootC(e, original, selected)
       verifiedroot <- p.consumerCompileRootC(e, verification, selected)
-      _ <- if (originalroot.nonEmpty && originalroot == verifiedroot) Consequence.unit
+      _ <- if (verifiedroot.nonEmpty && oldroot.forall(_ == verifiedroot)) Consequence.unit
         else invalid("consumer Compile requests cross their retained workspace binding")
       current <- p.consumerSourceC(e)
       _ <- if (!current.isNull && detail.get[Json]("consumerSource").toOption.exists(_.equals(current))) Consequence.unit
@@ -629,8 +647,32 @@ private[smworkflow] object ManagedDevelopment {
       receipt = Json.obj("schema" -> "sm-workflow.managed-consumer-verification-recovery.v1".asJson,
         "original" -> original.asJson, "verificationRequestIdentity" -> verification.requestIdentity.asJson,
         "participant" -> p.participant.asJson, "consumerWorkspace" -> e.consumer.workspace.asJson,
-        "consumerRoot" -> originalroot.asJson)
-    } yield receipt -> verified
+        "consumerRoot" -> verifiedroot.asJson)
+      _ <- if (oldroot.nonEmpty) Consequence.unit else for {
+        reserved <- p.loadC(key(d, e, "compile-owner", original.requestIdentity))
+        _ <- if (reserved.forall(_.equals(_compile_owner(original, p, Some(receipt))))) Consequence.unit
+          else invalid("original request already reserved a different consumer Compile or association")
+      } yield ()
+    } yield QualifiedVerification(receipt, verified, oldroot.isEmpty)
+  }
+
+  // Shared immutable choice for first-time Compile and recovery without an
+  // original attempt. Either path must claim it before recording an effect.
+  private def _compile_owner(input: Input, p: Port, recovery: Option[Json]): Json =
+    Json.obj("intent" -> intentJson(input, p), "recovery" -> recovery.asJson)
+
+  private def _reserve_compile_owner_c(d: Definition, e: Edge, input: Input,
+    p: Port, recovery: Option[Json]): Consequence[Unit] =
+    _concurrent_immutable_c(p, key(d, e, "compile-owner", input.requestIdentity), _compile_owner(input, p, recovery))
+
+  private def _concurrent_immutable_c(p: Port, name: String, value: Json): Consequence[Unit] = {
+    val created = immutableC(p, name, value)
+    created match {
+      case Consequence.Success(_) => created
+      case _ => p.loadC(name).flatMap { actual =>
+        if (actual.exists(_.equals(value))) Consequence.unit else created
+      }
+    }
   }
 
   private def _retained_compile_c(d: Definition, e: Edge, input: Input, p: Port): Consequence[Result] = {

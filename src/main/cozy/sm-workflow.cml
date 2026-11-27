@@ -12995,7 +12995,7 @@ ManagedDevelopmentResult
 
 ##### DESCRIPTION
 
-Read eligibility to associate a distinct retained successful scoped Compile with the original prelaunch-rejected request on the declared dependency-work edge. The exact participant, workspace, active selection, available publication and current consumer source must still agree. Return eligible or already adopted with the exact request binding. Description creates no receipt and runs no Compile or publication.
+Read eligibility to associate a distinct retained successful scoped Compile with the original request on the declared dependency-work edge. The original must have a confirmed prelaunch rejection or its matching scoped publication with no Compile intent or result. The exact participant, workspace, active selection, available publication and current consumer source must still agree. Return eligible or already adopted with the exact request binding. Description creates no receipt and runs no Compile or publication.
 
 ##### TYPE
 
@@ -16973,7 +16973,7 @@ DelegateTaskAdoptionContext
 
 ##### DESCRIPTION
 
-Record the assigned chat's successful completion reply with completion-received so the requester can use ordinary Advance. Supply the actual reply reference. The operation also records dispatch, result receipt, return and explicit artifact delivery adoption. Supply exactly one of input or inputResource; the latter is an absolute local file URI containing the same complete observation DTO, read through normal finite authorized Resource access. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
+Record the assigned chat's successful completion reply with completion-received so the requester can use ordinary Advance. Supply the actual reply reference. The operation also records dispatch, cross-host result receipt, return and explicit artifact delivery adoption. Use ordinary Advance to collect a scoped local worktree result in the same store. If an old result was already received under a file reference, bind-local-result supplies only its exact native destination checkpoint as sourceReference and the observed destinationSessionId. The runtime verifies the original result against that checkpoint and appends the binding before ordinary artifact adoption. Supply exactly one of input or inputResource; the latter is an absolute local file URI containing the same complete observation DTO, read through normal finite authorized Resource access. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
 
 ##### TYPE
 

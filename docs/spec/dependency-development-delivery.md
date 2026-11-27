@@ -151,6 +151,16 @@ checkpoint is admitted through the existing `DelegateTask.returnedC` and
 stops automatic collection; ordinary explicit delivery/adoption direction stays
 with its existing owner. Native force closure remains the stop boundary.
 
+A scoped local worktree requester collects new results through this Advance.
+To continue an older `ResultReceived` that retained a file URI as its receipt,
+call `observeDelegateTaskDelivery` with event `bind-local-result`, the same
+requester Session, the observed destination Session, and the destination
+snapshot's exact checkpoint identity and revision as `sourceReference`. Include
+a rationale. The runtime opens that retained checkpoint in the same store and
+compares its business result with the saved receipt. It appends the binding
+while keeping the old observation, then ordinary description, adoption and
+Advance can use the original destination evidence.
+
 Managed adoption retains the existing independently admitted host evidence
 requirement and remains `result-and-selection-attachment-only`. It performs no
 consumer selection, compilation or A completion. The caller explicitly invokes
