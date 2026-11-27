@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
-Scheduled: after [Phase 25.3](phase-25.3.md), followed by [Phase 25.5](phase-25.5.md)
+Scheduled: immediately after [Phase 25.3](phase-25.3.md), followed by [Phase 7.2](phase-7.2.md).
 Depends on: existing Phase 9 routing, [Phase 25.2](phase-25.2.md) metrics and Phase 25.3 dual allowance
 Checklist: [Phase 25.4 acceptance](phase-25.4-checklist.md)
 
@@ -230,6 +230,21 @@ profiles. The profile is independent of model reasoning level and grants no
 permission to spend. Use [Phase 25.2](phase-25.2.md) metrics for ordinary-run
 comparison; [Phase 25.5](phase-25.5.md) consumes the profile for optional
 template and cache behavior.
+
+## Operational validation of Phase 25.3
+
+Use the installed Phase 25.3 route for eligible actual work during Phase 25.4
+development. Extend the two live release cases from Phase 25.3 by observing
+ordinary reviews and bounded compiler repairs as they arise, with the existing
+evidence, allowance, cost and Admission policies.
+Record actual provider and model, allowance group, reported tokens and
+verified billing separately. Preserve reasons for deterministic resolution,
+ineligibility, fallback, or uncertainty. Use the observed classification and
+context cases in P254-01, P254-02 and P254-04. Report cases with no live
+opportunity or incomplete evidence explicitly.
+
+Use these observations, including recurring work suitable for reuse and
+directive design costs, to decide when to start [Phase 25.5](phase-25.5.md).
 
 ## Ownership and boundaries
 

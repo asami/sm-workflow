@@ -809,6 +809,8 @@ def phase_completion_markdown(response, context):
     else:
         completion = field(field(response, "controlSummary"), "completion")
     metrics = field(completion, "metrics")
+    if isinstance(completion, dict) and metrics is None:
+        return "**Completion metrics**\nNo completion metrics were retained for this Phase."
     if not isinstance(metrics, dict) or field(metrics, "phaseSession") != context.get("outerSessionId"):
         return ""
 
@@ -863,11 +865,17 @@ def phase_completion_markdown(response, context):
         sections.append(table("Call coverage", ["Unknown executions", "Not run"],
                               [[field(calls, "unknownExecutions"), field(calls, "notRun")]]))
     else:
-        sections.append(table("Call coverage", ["Unknown executions", "Not run"], [[None, None]]))
+        sections.append(table("Call coverage", ["Unknown executions", "Not run", "Evidence"],
+                              [[None, None, "No attributable call observations. Provider selection and call counts are unknown."]]))
+    sections.append(table("AI usage by destination",
+                          ["Destination", "Input tokens", "Output tokens", "Total tokens", "Coverage", "Reason"],
+                          [[field(u, name) for name in ("destination", "inputTokens", "outputTokens",
+                                                        "totalTokens", "coverage", "reason")]
+                           for u in rows(field(metrics, "usage")) if isinstance(u, dict)]))
     repairs = field(metrics, "deterministicRepairs")
     if isinstance(repairs, dict):
-        sections.append(table("Retained edits", ["Tool", "Count", "Coverage"],
-            [[field(t, "tool"), field(t, "count"), field(t, "coverage")]
+        sections.append(table("Retained edits", ["Tool", "Count", "Coverage", "Reason"],
+            [[field(t, name) for name in ("tool", "count", "coverage", "reason")]
              for t in rows(field(repairs, "tools")) if isinstance(t, dict)]))
     operations = field(metrics, "operations")
     if isinstance(operations, dict):
@@ -1680,6 +1688,18 @@ def main(argv=None):
     if arguments and arguments[0] == "ai-activity":
         return ai_activity_main(arguments[1:])
     try:
+        if arguments and arguments[0] == "phase-completion":
+            require(len(arguments) == 5 and arguments[1] == "--response"
+                    and arguments[3] == "--session-id" and nonblank(arguments[4]),
+                    "phase-completion requires --response and --session-id")
+            _, response = read_object(explicit_path(arguments[2]))
+            session_id = arguments[4]
+            context = {"operation": FQN + "advanceGoalPhase",
+                       "outerSessionId": session_id, "targetSessionId": session_id}
+            markdown = phase_completion_markdown(response, context)
+            require(nonblank(markdown), "response is not a completed GoalPhase for the selected Session")
+            print(markdown)
+            return 0
         execute(parse_options(arguments))
         return 0
     except CallerError as error:

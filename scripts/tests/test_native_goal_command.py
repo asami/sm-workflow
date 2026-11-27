@@ -49,14 +49,18 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                           "input": {"value": 0, "observed": 1, "executions": 1},
                           "output": {"value": None, "observed": 0, "executions": 1}}],
                           "unknown_executions": 0, "not_run": 0},
-                      "deterministic_repairs": {"tools": [{"tool": "metals", "count": 0, "coverage": "partial"}]},
+                      "deterministic_repairs": {"tools": [
+                          {"tool": "metals", "count": 0, "coverage": "complete", "reason": "Observed zero"},
+                          {"tool": "scalafix", "coverage": "unavailable", "reason": "No retained application evidence"},
+                      ]},
                       "operations": {"resolved_without_ai": 0, "rework": [{"stage": "test", "cycles": 0}]},
                       "operational_time": {"elapsed_millis": 0, "totals": [{"category": "ai", "millis": None}]}}}}
         markdown = CALLER.phase_completion_markdown(response, context)
         self.assertIn("codex\\|x", markdown)
         self.assertIn("0 (1/1)", markdown)
         self.assertIn("unknown (0/1)", markdown)
-        self.assertIn("metals", markdown)
+        self.assertIn("| metals | 0 | complete | Observed zero |", markdown)
+        self.assertIn("| scalafix | unknown | unavailable | No retained application evidence |", markdown)
         self.assertIn("elapsed", markdown)
         for mode in ("summary", "detail"):
             with patch.object(CALLER, "display_observation") as display:
@@ -88,7 +92,34 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         metrics["operations"]["coverage"] = "partial"
         self.assertIn("| 0 | 0 | 0 | 0 | partial |", CALLER.phase_completion_markdown(response, context))
         del metrics["calls"]
-        self.assertIn("| unknown | unknown |", CALLER.phase_completion_markdown(response, context))
+        metrics["usage"] = [
+            {"destination": "codex", "total_tokens": 0, "coverage": "complete", "reason": "Observed zero"},
+            {"destination": "local", "coverage": "unavailable", "reason": "No retained usage"},
+        ]
+        markdown = CALLER.phase_completion_markdown(response, context)
+        self.assertIn("No attributable call observations", markdown)
+        self.assertIn("| codex | unknown | unknown | 0 | complete | Observed zero |", markdown)
+        self.assertIn("| local | unknown | unknown | unknown | unavailable | No retained usage |", markdown)
+
+    def test_direct_phase_completion_renders_only_the_matching_retained_response(self):
+        path = self.root / "phase-terminal.json"
+        response = {"kind": "Terminal", "outcome": "completed", "session_id": "s",
+                    "control_summary": {"completion": {"metrics": {"phase_session": "s"}}}}
+        path.write_text(json.dumps(response), encoding="utf-8")
+        arguments = ["phase-completion", "--response", str(path), "--session-id", "s"]
+        output, error = io.StringIO(), io.StringIO()
+        with patch.object(CALLER, "native_call") as native:
+            with redirect_stdout(output), redirect_stderr(error):
+                self.assertEqual(0, CALLER.main(arguments))
+                self.assertEqual(2, CALLER.main(arguments[:-1] + ["other"]))
+            native.assert_not_called()
+        self.assertIn("No attributable call observations", output.getvalue())
+        self.assertIn("selected Session", error.getvalue())
+        del response["control_summary"]["completion"]["metrics"]
+        path.write_text(json.dumps(response), encoding="utf-8")
+        with redirect_stdout(output):
+            self.assertEqual(0, CALLER.main(arguments))
+        self.assertIn("No completion metrics were retained", output.getvalue())
 
     def test_large_completion_omits_only_complete_rows_and_keeps_later_tables(self):
         context = {"operation": "org.example.GoalPhaseService.advanceGoalPhase",

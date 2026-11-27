@@ -662,7 +662,11 @@ host; Human uses its independent actual human channel and genuine evidence;
 Wait follows its actual condition without spin/polling; Terminal ends. Display
 GoalPhase `Terminal/outcome=completed` as **Phase completed**, followed separately
 by `completion.synchronization.state`, its actual `reason`, and any
-`childSessionId`/`advanceOperation`. A deferred, failed, Human, running or unknown
+`childSessionId`/`advanceOperation`. Forward the bounded Markdown metrics from
+the ordinary caller. For a direct Advance, run the same caller's read-only
+`phase-completion --response <absolute retained response> --session-id <Session>`
+and forward its output. Preserve observed zero, partial coverage and unknown
+values. A deferred, failed, Human, running or unknown
 sync does not reopen the Phase or require another Phase review. Never claim
 repository convergence unless the result contains actual succeeded synchronization.
 Reopen only to read the normal retained completion projection; never poll it or

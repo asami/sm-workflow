@@ -2,7 +2,7 @@
 
 Status: planned; execution not started
 Planned: 2026-11-25 (Asia/Tokyo)
-Scheduled: after [Phase 25.4](phase-25.4.md), before [Phase 23](phase-23.md)
+Scheduled: decide the delivery slot after observing [Phase 25.4 development](phase-25.4.md#operational-validation-of-phase-253).
 Depends on: Phase 25.4 strategic judgement and typed Task Specification
 Checklist: [Phase 25.5 acceptance](phase-25.5-checklist.md)
 
