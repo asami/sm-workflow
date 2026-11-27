@@ -2,13 +2,14 @@ package org.simplemodeling.textus.smworkflow.admission {
 
 import scala.language.strictEquality
 import scala.compiletime.testing.typeCheckErrors
+import cats.Eq
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /** Executable comparison contracts compiled under the full strict profile.
   * @since   Nov. 20, 2026
-  * @version Nov. 20, 2026
+  * @version Nov. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowStrictComparisonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -34,6 +35,34 @@ final class WorkflowStrictComparisonSpec extends AnyWordSpec with Matchers with 
         val _ = session shouldBe expected
         val _ = revision shouldBe expected
       }
+    }
+
+    "distinguish explicit value equality from source identity" in {
+      Given("snapshots of one source at different payloads")
+      given Eq[SourceSnapshot] = Eq.fromUniversalEquals[SourceSnapshot]
+      val first = SourceSnapshot(SourceId("one"), "before")
+      val changed = SourceSnapshot(SourceId("one"), "after")
+      val same = SourceSnapshot(SourceId("one"), "before")
+      val other = SourceSnapshot(SourceId("two"), "before")
+
+      Then("full values and the declared source ID answer separate questions")
+      val _ = sameValue(first, same) shouldBe true
+      val _ = sameValue(first, changed) shouldBe false
+      val _ = sameSource(first, changed) shouldBe true
+      sameSource(first, other) shouldBe false
+    }
+
+    "distinguish byte contents from array reference identity" in {
+      Given("two byte arrays with equal contents and a different byte array")
+      val first = Array[Byte](1, 2)
+      val copy = Array[Byte](1, 2)
+      val different = Array[Byte](1, 3)
+
+      Then("element comparison and reference comparison keep their distinct meanings")
+      val _ = sameBytes(first, copy) shouldBe true
+      val _ = sameBytes(first, different) shouldBe false
+      val _ = sameArray(first, copy) shouldBe false
+      sameArray(first, first) shouldBe true
     }
 
     "keep intended comparisons available inside collection predicates" in {

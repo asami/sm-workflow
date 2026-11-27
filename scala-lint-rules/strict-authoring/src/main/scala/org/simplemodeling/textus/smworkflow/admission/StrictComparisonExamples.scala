@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission {
 
 import scala.language.strictEquality
+import cats.Eq
 
 /** Comparison model for the bounded strict Scala 3 authoring target.
   * These record-shaped fixtures do not migrate the workflow's existing ID model.
@@ -11,6 +12,17 @@ import scala.language.strictEquality
 private[smworkflow] object StrictComparisonExamples {
   final case class SourceId(value: String) derives CanEqual
   final case class SessionId(value: String) derives CanEqual
+
+  final case class SourceSnapshot(id: SourceId, payload: String) derives CanEqual
+
+  def sameValue(left: SourceSnapshot, right: SourceSnapshot)(using equality: Eq[SourceSnapshot]): Boolean =
+    equality.eqv(left, right)
+
+  def sameSource(left: SourceSnapshot, right: SourceSnapshot): Boolean = left.id == right.id
+
+  def sameBytes(left: Array[Byte], right: Array[Byte]): Boolean = java.util.Arrays.equals(left, right)
+
+  def sameArray(left: Array[Byte], right: Array[Byte]): Boolean = left.eq(right)
 
   final case class Revision[Value](value: Value)
   object Revision {
