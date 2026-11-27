@@ -475,6 +475,19 @@ README, LICENSE, CHANGELOG and development notes/journals are standard document
 scopes; explicit project consumption overrides these defaults. Other paths remain
 unknown and require FULL coverage when integrated in a merge.
 
+Set the Boolean host property `sm-workflow.repository-sync.fix-check` to
+`false` to omit FixCheck from a new ordinary RepositorySync Session. The
+default is `true`, which keeps the existing project and explicit selection
+rules. The Start retains this setting for all repository children and both
+integration hops. When disabled, ordinary merge, Purpose, and supplemental
+lint selection omit FixCheck and its binding requirement. Other checks and
+input coverage still follow the selected policy. Explicit program policies
+must meet the same configuration requirements before this projection. If all
+FULL checks were FixCheck, covered focused inputs keep their checks and an
+actual FULL requirement reports a setup wait. The setting does not record
+a check result. Existing Sessions keep their original selection, with
+historical omission retaining the enabled behavior.
+
 Explicit `document-inputs` and `program-inputs` each take precedence independently.
 An unknown project or unavailable declaration does not create authority, a PASS,
 or an initialization refusal for a light sync. Actual fetched parent/index deltas

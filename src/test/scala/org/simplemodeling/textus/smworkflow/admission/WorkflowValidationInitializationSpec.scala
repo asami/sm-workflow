@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.nio.file.Path
 import org.goldenport.cncf.config.ComponentInitializationParameters
 import org.scalatest.GivenWhenThen
@@ -10,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared defaults never create grants, precise coverage or successful results.
   * @since   Nov.  9, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -60,6 +61,64 @@ final class WorkflowValidationInitializationSpec extends AnyWordSpec with Matche
       // Selection/description neither mutates the supplied plan nor claims a
       // runtime execution, installation or consumer adoption.
       normal.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.forall(p => !p.hcursor.downField("lintInput").succeeded) shouldBe true
+    }
+    "omit only FixCheck when the host disables it" in {
+      Given("a Scala project that declares FixCheck and an existing explicit program policy")
+      val declared = take(WorkflowProjectDeclaration.fromC(Some("existing fixed check-only build"),
+        Some("validation:\n  fixCheck: true\n")))
+      val original = take(I.assembleC(root, normal, declared, None, None)).program.get
+      val explicit = original.copy(coverage = original.coverage.filter(_.check.kind == WorkflowSbtValidation.Kind.FixCheck))
+      val host = plan(Vector(1 -> "compile", 3 -> "test"))
+      When("the retained start setting disables FixCheck")
+      val selected = Vector(
+        take(I.assembleC(root, host, declared, None, None, fixCheckEnabled = false)),
+        take(I.assembleC(root, host, declared, Some(explicit), None, fixCheckEnabled = false)))
+      Then("both policies still select actual Compile and Test even without a fixed FixCheck binding")
+      selected.foreach { initialized =>
+        initialized.projectProvidesFixCheck shouldBe false
+        val validation = StandardWorkflowRuntime.normalRepositoryValidation(initialized.program,
+          projectProvidesFixCheck = initialized.projectProvidesFixCheck)
+        validation.assessment.get.requiresLint(Vector("src/main/scala/Example.scala")) shouldBe false
+        RepositorySyncProgramImpact.select(initialized.program.get, assessment("src/main/scala/Example.scala")).checks
+          .map(c => c.identity -> c.ordinal) shouldBe Vector("compile" -> 1, "test" -> 3)
+      }
+      explicit.fullChecks.map(_.identity) should contain("fix-check")
+    }
+    "retain focused coverage when disabled FixCheck was the only FULL check" in {
+      import RepositorySyncProgramImpact as P
+      import RepositorySyncNativeMergeValidation.Check
+      import WorkflowSbtValidation.Kind
+      Given("explicit Compile and Test coverage for sources and a FixCheck-only FULL declaration")
+      val focused = Vector(Check("compile", 1, Kind.Compile), Check("test", 3))
+      val lint = Check("fix-check", 2, Kind.FixCheck)
+      val explicit = P.Policy(focused.map(P.Coverage(_, Vector("src"), Vector("src", "build.sbt"), "Declared source coverage")),
+        Vector(lint), Vector("build.sbt"), "Declared FULL coverage", Vector.empty)
+      When("a disabled Session projects the admitted policy and reads it back")
+      val projected = take(I.assembleC(root, normal, project, Some(explicit), None, fixCheckEnabled = false)).program.get
+      val retained = take(P.decodeC(projected.asJson))
+      Then("focused source changes select the original Compile and Test")
+      val selected = P.select(retained, assessment("src/main/scala/Product.scala"))
+      selected.depth shouldBe "FOCUSED"
+      selected.checks shouldBe focused
+      selected.setupReason shouldBe None
+      And("an actual FULL requirement waits without promoting focused coverage")
+      val broad = P.select(retained, assessment("build.sbt"))
+      broad.checks shouldBe empty
+      broad.setupReason.get should include("requires FULL coverage")
+      RepositorySyncNativeMergeValidation.setupReason(StandardWorkflowRuntime.normalRepositoryValidation(Some(retained)),
+        assessment("build.sbt")) shouldBe broad.setupReason
+    }
+    "reject a configured raw FULL policy without coverage with the default or explicit setting" in {
+      Given("an explicit Test declaration without focused coverage or ordinary discovery")
+      val explicit = take(I.assembleC(root, normal, project, None, None)).program.get.copy(coverage = Vector.empty)
+      When("the declaration is decoded and initialized")
+      val decoded = RepositorySyncProgramImpact.decodeC(explicit.asJson)
+      val default = I.assembleC(root, normal, project, Some(explicit), None)
+      val disabled = I.assembleC(root, normal, project, Some(explicit), None, fixCheckEnabled = false)
+      Then("empty configured coverage is refused before any runtime projection")
+      decoded.isSuccess shouldBe false
+      default.isSuccess shouldBe false
+      disabled.isSuccess shouldBe false
     }
     "derive runnable FULL checks and declared input scopes without per-run JSON" in {
       Given("an ordinary SBT/CML project and its existing managed execution declarations")

@@ -18,7 +18,7 @@ import WorkflowManagedProcessExecution as E
 /** Purpose proposals consume genuine work records and native content facts.
   * Neither grouping nor an old record establishes candidate acceptance.
   * @since   Oct. 28, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncPurpose {
@@ -232,6 +232,11 @@ private[smworkflow] object RepositorySyncPurpose {
       case _ => Consequence.configurationInvalid("Dirty purpose configuration requires an object")
     })
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
+  private[admission] def withoutFixCheck(policy: Policy): Policy = policy.copy(slots = policy.slots.map { slot =>
+    val checks = slot.checks.filterNot(_.kind == WorkflowSbtValidation.Kind.FixCheck)
+    slot.copy(checks = checks, actionPolicy = slot.actionPolicy.copy(scalaLint = "off"),
+      checkWorkspaces = slot.checkWorkspaces.filter((identity, _) => checks.exists(_.identity == identity)))
+  })
   def slots(policy: Option[Policy], repository: String): Vector[Slot] =
     policy.toVector.flatMap(_.slots).filter(_.repositoryIdentity.forall(_ == repository))
   def slot(policy: Option[Policy], repository: String, progress: Progress): Option[Slot] =

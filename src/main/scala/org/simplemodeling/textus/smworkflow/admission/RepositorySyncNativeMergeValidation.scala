@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -361,7 +361,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                 if (retained.exists(_.reused == selected.reused)) Consequence.success((Some(selected), receipts))
                 else N.invalid("Retained prior reuse no longer matches its actual evidence references")
               }
-          case (Some(selection), Some(value)) if retained.isEmpty && !supplement && policy.dependencyInputs.isEmpty &&
+          case (Some(selection), Some(value)) if selection.checks.nonEmpty && retained.isEmpty && !supplement && policy.dependencyInputs.isEmpty &&
               policy.setupRequired.isEmpty && !selection.checks.exists(_.setupRequired.nonEmpty) =>
             RepositorySyncProgramImpact.reuseForTreeC(store, pending.payload.indexTree.get, value, selection)
               .map((selected, receipts) => (Some(selected), receipts))
@@ -375,10 +375,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     else policy.setupRequired.orElse(policy.impact match {
       case None => Some("ValidationSetupRequired: required ordinary project impact/FULL coverage is unavailable; " +
         "consumed=" + inputs.consumedPaths.mkString(",") + "; unknown=" + inputs.unknownPaths.mkString(","))
-      case Some(impact) =>
-        val selected = RepositorySyncProgramImpact.select(impact, inputs)
-        val missing = selected.checks.flatMap(_.setupRequired)
-        if (missing.nonEmpty) Some(missing.mkString("; ")) else None
+      case Some(impact) => RepositorySyncProgramImpact.select(impact, inputs).setupReason
     })
 
   private[admission] def scopedValidationSetup(checks: Vector[Check]): Option[String] = {
@@ -403,8 +400,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     inputs: RepositorySyncDocumentInputs.Assessment, namespace: String,
     selection: Option[RepositorySyncProgramImpact.Selection]): Consequence[Option[String]] = {
     val setup = if (inputs.documentOnly) None else policy.setupRequired.orElse(selection match {
-      case Some(value) => Option.when(value.checks.exists(_.setupRequired.nonEmpty))(
-        value.checks.flatMap(_.setupRequired).mkString("; "))
+      case Some(value) => value.setupReason
       case None => setupReason(policy, inputs)
     }).orElse(_scoped_validation_setup(store.core, selection.toVector.flatMap(_.checks)))
     if (setup.nonEmpty || !policy.assessment.exists(_.requiresLint(inputs.changedPaths)) ||
@@ -445,7 +441,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     selection <- inputs.filterNot(_.documentOnly) match {
       case None => Consequence.success(Option.empty[RepositorySyncProgramImpact.Selection])
       case Some(actual) => policy.impact.map(impact => RepositorySyncProgramImpact.validateC(impact)
-        .map(_ => Some(RepositorySyncProgramImpact.select(impact, actual))))
+        .flatMap { _ =>
+          val selected = RepositorySyncProgramImpact.select(impact, actual)
+          selected.fullCoverageSetupReason.fold(Consequence.success(Option(selected)))(
+            N.invalid[Option[RepositorySyncProgramImpact.Selection]])
+        })
         .getOrElse(N.invalid("ValidationSetupRequired: changed integrated consumed inputs require the ordinary program-impact policy"))
     }
     // Related clean integration uses the same metadata selector as a merge,

@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 28, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -18,6 +18,15 @@ import SplitPhaseExplicitPartitionFixture.take
 final class RepositorySyncPoliciesSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncPolicies as P
   "Ordinary synchronization policies" should {
+    "retain the FixCheck preference and read historical omission as enabled" in {
+      val defaults = take(P.selectC(Record.empty, None, None))
+      defaults.fixCheckEnabled shouldBe true
+      defaults.asJson.hcursor.downField("fixCheck").succeeded shouldBe false
+      for (enabled <- Vector(true, false)) {
+        val selected = defaults.copy(fixCheck = Some(enabled))
+        selected.asJson.as[P.Selection].map(_.fixCheckEnabled) shouldBe Right(enabled)
+      }
+    }
     "resolve defaults, normal configured values and per-call overrides without changing another target" in {
       Given("the already resolved Component properties and optional ordinary call selections")
       take(P.selectC(Record.empty, None, None)) shouldBe P.Selection("local-first", "auto-commit")

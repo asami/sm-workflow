@@ -32,7 +32,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Only small business relations are retained here; sources and execution
   * captures remain with their existing owners.
   * @since   Nov.  5, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 28, 2026
   */
 private[smworkflow] object RepositorySyncDirectoryList {
   val syncOperation = "syncRepositoryDirectories"
@@ -738,7 +738,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
       context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(member.sessionId))
       request = RepositorySyncConsumedInputs.inherit(core, Request.of(
         component = SmWorkflowComponent.name, service = "RepositorySyncService", operation = operation,
-        properties = properties ++ member.localMain.toVector.map(RepositorySyncLocalMain.planProperty) :+
+        properties = properties ++ member.localMain.toVector.map(RepositorySyncLocalMain.planProperty) ++
+          member.policies.toVector.map(RepositorySyncPolicies.batchProperty) :+
           Property(_workspace_key, Workspace(member.workspace), None)))
       selectedcore = core.copy(action = ScopeAction(request), executionContext = context)
       service <- repository(request, selectedcore, member.target)

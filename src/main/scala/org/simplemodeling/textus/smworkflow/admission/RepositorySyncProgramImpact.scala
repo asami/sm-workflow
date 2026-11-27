@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as V
   * References locate native records; they never supply successful receipts or
   * review acceptance. Exact consumed Git blobs, modes and paths decide reuse.
   * @since   Oct. 28, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 28, 2026
   */
 private[smworkflow] object RepositorySyncProgramImpact {
   final case class BuildRecord(workspace: String, binding: Option[SD.Binding], process: ProcessExecutionResult) {
@@ -210,11 +210,23 @@ private[smworkflow] object RepositorySyncProgramImpact {
   final case class Policy(coverage: Vector[Coverage], fullChecks: Vector[V.Check], fullPaths: Vector[String],
     reason: String, priorEvidence: Vector[Prior],
     postReviewValidation: Option[RepositorySyncPostReviewValidation.Binding] = None,
-    ordinaryMergeSources: Boolean = false) {
+    ordinaryMergeSources: Boolean = false, fixCheckOmitted: Option[Boolean] = None) {
     def checks: Vector[V.Check] = (coverage.map(_.check) ++ fullChecks).distinct
   }
+  private[admission] def withoutFixCheck(policy: Policy): Option[Policy] = {
+    val coverage = policy.coverage.filterNot(_.check.kind == WorkflowSbtValidation.Kind.FixCheck)
+    val full = policy.fullChecks.filterNot(_.kind == WorkflowSbtValidation.Kind.FixCheck)
+    if (coverage == policy.coverage && full == policy.fullChecks && policy.postReviewValidation.isEmpty) Some(policy)
+    else Option.when(coverage.nonEmpty || full.nonEmpty)(policy.copy(
+      coverage = coverage, fullChecks = full, postReviewValidation = None, fixCheckOmitted = Some(true)))
+  }
   final case class Reuse(check: String, validation: String, closure: String, review: Option[String])
-  final case class Selection(depth: String, reason: String, checks: Vector[V.Check], reused: Vector[Reuse])
+  final case class Selection(depth: String, reason: String, checks: Vector[V.Check], reused: Vector[Reuse]) {
+    def fullCoverageSetupReason: Option[String] = Option.when(depth == "FULL" && checks.isEmpty)(
+      "ValidationSetupRequired: this candidate requires FULL coverage but no checks remain for FULL")
+    def setupReason: Option[String] = fullCoverageSetupReason.orElse(
+      Option.when(checks.exists(_.setupRequired.nonEmpty))(checks.flatMap(_.setupRequired).mkString("; ")))
+  }
   final case class Evidence(tree: String, validation: String, closure: String,
     checks: Vector[V.Check], receipts: Vector[V.Receipt], review: Option[String])
   trait EvidencePort { def loadC(source: Prior, store: N.Store): Consequence[Evidence] }
@@ -223,7 +235,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
   given Encoder[Prior] = deriveEncoder
   given Decoder[Prior] = deriveDecoder
   given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
-    case ("postReviewValidation", value) => !value.isNull
+    case ("postReviewValidation" | "fixCheckOmitted", value) => !value.isNull
     case ("ordinaryMergeSources", value) => value.asBoolean.contains(true)
     case _ => true
   }))
@@ -246,7 +258,8 @@ private[smworkflow] object RepositorySyncProgramImpact {
       case _ => N.invalid("program impact configuration requires an object")
     })
   private def _configured_policy_c(value: Json): Consequence[Policy] = decodeC(value).flatMap(policy =>
-    if (!policy.ordinaryMergeSources) Consequence.success(policy)
+    if (policy.fixCheckOmitted.nonEmpty) N.invalid("fixCheckOmitted is a retained runtime projection, not a declared program-input override")
+    else if (!policy.ordinaryMergeSources) Consequence.success(policy)
     else N.invalid("ordinaryMergeSources is retained runtime inference, not a declared program-input override"))
 
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
@@ -401,16 +414,21 @@ private[smworkflow] object RepositorySyncProgramImpact {
     value.distinct == value && value.forall(RepositorySyncNativeConflictInput.relative)
   private def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.exists(_.isControl)
   def covers(paths: Vector[String], path: String): Boolean = paths.exists(p => path == p || path.startsWith(p + "/"))
-  def validateC(p: Policy): Consequence[Unit] = if (p != null && p.coverage != null && p.fullChecks != null && (p.coverage.nonEmpty || p.fullChecks.exists(check => check.ordinaryDiscovery || check.metadata.exists(_.query.standardFramework))) &&
+  def validateC(p: Policy): Consequence[Unit] = if (p != null && p.coverage != null && p.fullChecks != null &&
+      p.fixCheckOmitted != null && p.fixCheckOmitted.forall(identity) &&
       p.coverage.size <= 16 && p.coverage.forall(c => c != null && paths(c.affectedPaths) && paths(c.inputPaths) &&
         text(c.reason) && c.affectedPaths.forall(covers(c.inputPaths, _)) && p.fullPaths != null &&
         (p.fullPaths.forall(covers(c.inputPaths, _)) || (p.postReviewValidation != null && p.postReviewValidation.exists(binding =>
-          RepositorySyncPostReviewValidation.Plan(binding, c.check).valid)))) && p.fullChecks != null && p.fullChecks.nonEmpty &&
+          RepositorySyncPostReviewValidation.Plan(binding, c.check).valid)))) &&
       p.fullPaths != null && (p.fullPaths.isEmpty || paths(p.fullPaths)) && text(p.reason) && p.priorEvidence != null && p.priorEvidence.size <= 16 &&
       p.priorEvidence.distinct == p.priorEvidence && p.priorEvidence.forall(s => s != null && text(s.session) &&
         text(s.validation) && text(s.closure) && s.validation.startsWith(s.session + ":ordered-validation:") && s.validation.endsWith(":validation") &&
         s.closure.startsWith(s.session + ":ordered-step-closure:")) && p.postReviewValidation != null &&
-      p.postReviewValidation.forall(binding => binding != null && binding.valid))
+      p.postReviewValidation.forall(binding => binding != null && binding.valid) &&
+      (if (p.fixCheckOmitted.contains(true))
+        p.postReviewValidation.isEmpty && p.checks.forall(c => c != null && c.kind != WorkflowSbtValidation.Kind.FixCheck)
+      else p.fullChecks.nonEmpty && (p.coverage.nonEmpty ||
+        p.fullChecks.exists(check => check != null && (check.ordinaryDiscovery || check.metadata.exists(_.query.standardFramework))))))
     V.Policy("program-inputs", 1, "required", p.reason, p.checks).validateC
     else N.invalid("program impact requires bounded meaningful consumption/coverage, FULL rationale and native evidence locators")
   def decodeC(value: Json): Consequence[Policy] = value.as[Policy].fold(e => N.invalid(e.message), p => validateC(p).map(_ => p))
@@ -674,6 +692,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
   def reuseForTreeC(store: N.Store, candidateTree: String, p: Policy,
     selection: Selection, retained: Vector[Reuse] = Vector.empty): Consequence[(Selection, Map[String, V.Receipt])] = for {
     _ <- validateC(p)
+    _ <- selection.fullCoverageSetupReason.fold(Consequence.unit)(N.invalid[Unit])
     prior <- p.priorEvidence.foldLeft(Consequence.success(Vector.empty[Evidence])) { (before, source) => for {
       values <- before
       port <- store.declaration.programEvidence.map(Consequence.success).getOrElse(N.invalid("native prior evidence reader is absent"))

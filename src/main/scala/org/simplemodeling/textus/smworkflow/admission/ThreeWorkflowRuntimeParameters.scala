@@ -21,8 +21,7 @@ import GoalPhaseDependencyValidation.given
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 29, 2026
-  *  version Nov. 18, 2026
-  * @version Nov. 25, 2026
+  * @version Nov. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -132,7 +131,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, RepositorySyncDirectoryList.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, plannedStepCommits, phaseFixCheck, validationRepairCallerSource, developmentObservation, GoalPhaseQualification.declaration, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
-      ManagedDevelopmentRepositorySync.mainIntegration, RepositorySyncPolicies.uncommittedPolicy, RepositorySyncLocalMain.mappings,
+      ManagedDevelopmentRepositorySync.mainIntegration, RepositorySyncPolicies.uncommittedPolicy, RepositorySyncPolicies.fixCheck, RepositorySyncLocalMain.mappings,
       CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)

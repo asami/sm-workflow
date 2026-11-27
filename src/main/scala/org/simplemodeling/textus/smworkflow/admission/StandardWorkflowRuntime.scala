@@ -25,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 26, 2026
+  * @version Nov. 28, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -255,7 +255,8 @@ private[smworkflow] object StandardWorkflowRuntime {
         StandardRepositorySyncIntent.owns(selected))) }.getOrElse(invalid("Session has no native RepositorySync Start context"))
     policies <- if (request.operation == "startRepositorySync") for {
       record <- NativeWorkflowOperationInput.recordC(request, "input")
-      selected <- RepositorySyncPolicies.resolveC(parameters, record)
+      selected <- RepositorySyncPolicies.batchSelection(core).fold(RepositorySyncPolicies.resolveC(parameters, record))(
+        Consequence.success)
     } yield Some(selected) else Consequence.success(retained.flatMap(_.policies))
     participantSelection <- if (request.operation == "startRepositorySync" && policies.exists(selected =>
         RepositorySyncPolicies.route(selected, sourceTarget.localBranch, sourceTarget.remoteBranch) != "direct")) for {
@@ -305,13 +306,15 @@ private[smworkflow] object StandardWorkflowRuntime {
         else Consequence.unit
     } yield () else Consequence.unit
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
+    fixCheckEnabled = policies.forall(_.fixCheckEnabled)
     initialized <- if (passive) Consequence.success(WorkflowValidationInitialization.Repository(None, None))
-      else shared.validation.repositoryC(target.root, call)
+      else shared.validation.repositoryC(target.root, call, fixCheckEnabled)
     documentInputs = initialized.documents
     programInputs = initialized.program
     explicitProgramInputs <- if (passive) Consequence.success(Option.empty[RepositorySyncProgramImpact.Policy])
       else RepositorySyncProgramImpact.resolveC(parameters)
-    purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
+    configuredPurpose <- RepositorySyncPurpose.resolveC(parameters)
+    purposePolicy = if (fixCheckEnabled) configuredPurpose else configuredPurpose.map(RepositorySyncPurpose.withoutFixCheck)
     publication = shared.publication
     ordinaryValidation = if (passive) documentValidation else if (selectedInput._2) normalRepositoryValidation(programInputs, initialized.declarationReadFailure,
       initialized.projectProvidesFixCheck, ordinaryMergeSources = explicitProgramInputs.isEmpty)

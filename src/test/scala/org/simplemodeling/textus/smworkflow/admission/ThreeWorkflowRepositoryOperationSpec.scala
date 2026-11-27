@@ -43,8 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  *  version Nov. 21, 2026
-  * @version Nov. 25, 2026
+  * @version Nov. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -419,7 +418,9 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     val raw = if (standard_runtime) configured - ThreeWorkflowRuntimeParameters.definition.name else configured
     val directory = Files.createDirectories(root.resolve(".textus"))
     val stepauthority = ThreeWorkflowRuntimeParameters.plannedStepCommits.name
-    val config = Json.obj((raw - stepauthority).toVector.map((key, value) => key -> Json.fromString(value))*)
+    val syncfixcheck = RepositorySyncPolicies.fixCheck.name
+    val config = Json.obj((raw - stepauthority).toVector.map((key, value) =>
+      key -> (if (key == syncfixcheck) Json.fromBoolean(value.toBoolean) else Json.fromString(value)))*)
     val configuredauthority = raw.get(stepauthority).map(value => Json.fromBoolean(value.toBoolean))
       .orElse(Option.when(requires_separate_step_authority)(Json.False))
     Files.writeString(directory.resolve("config.json"),
