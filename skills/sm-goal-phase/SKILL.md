@@ -516,11 +516,27 @@ When supplying or reviewing a new execution plan, follow the
 [standard-annotation cadence](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations):
 ADMISSION for ordinary Step acceptance, FULL for integrated Phase validation,
 and explicitly selected Slow-tag tests for separately scheduled overnight execution.
-Select only affected FOCUSED operations when daytime integration evidence is
-needed; naming an unrestricted suite can select more than the changed case.
-Use existing metadata and actual acceptance coverage. The runtime owns the
-captured checks; this guidance changes no active Session or required check and
-creates no schedule or additional execution authority.
+Use the runtime's issued typed scope and preserve historical checks. A normal
+Step can select `test-admission` with Compile and independently selected
+TestOnly. Show the runtime's **ADMISSION対象0件** when complete empty discovery
+and successful Compile qualify it. Distinguish unavailable discovery. Keep
+the selected Phase FULL and focused obligations. Naming an unrestricted suite
+can select more than the changed case.
+
+When the user selects whole-Phase FixCheck behavior, use the Boolean
+`sm-workflow.goal-phase.fix-check` in the selected Phase host's
+`.textus/config.json` (default `true`). Before issuing validation for a new
+whole-Phase candidate, ordinary Advance records `false` as a deferral of
+FixCheck and runs the other selected checks. Preserve that candidate's saved
+selection. A new Release repair candidate uses the current host value, so
+retain the requested setting through closure. Step checks, RepositorySync
+checks and the project lint profile have their own policies.
+
+For a saved Plan with no fixed FixCheck binding, use the existing
+`describeGoalPhaseValidationRecovery` route if it exposes
+`DeferPhaseFixCheck` for the unissued candidate. Adopt the exact target only
+with applicable Human direction through `recoverGoalPhaseValidation`. Record
+deferral in review and completion. A prior FixCheck result remains historical.
 
 ## Product SBT ownership
 

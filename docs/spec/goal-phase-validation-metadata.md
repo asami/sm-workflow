@@ -15,9 +15,13 @@ resumes. Phase closure does not substitute Admission for Full. Focused
 Admission receipts retain the producer's exact selected suite and case rows,
 scope, process capture and outcome. Reuse compares the requested and actual
 scope and reassesses the retained capture against the producer's Admission
-report; Full and Admission receipts cannot satisfy one another. Missing,
-empty or unavailable selection cannot be accepted as success. Existing Full
-receipts keep their historical wire form. Process elapsed time is retained;
+report; Full and Admission receipts cannot satisfy one another. Complete
+discovery with explicit empty evidence and a successful prior Compile for the
+same candidate and validation subject is retained as `admission-empty`
+(**ADMISSION対象0件**). It records zero executed tests. Separately selected FULL
+and TestOnly checks remain required. Missing, incomplete or unavailable
+discovery stays a separate outcome. Existing Full receipts keep their
+historical wire form. Process elapsed time is retained;
 separate setup and test-body times are not inferred when unavailable.
 Goal Phase consumes the shared selection before preparing its workspace.
 See [LTEST delivery and acceptance](../notes/label-driven-test-migration-plan.md)
