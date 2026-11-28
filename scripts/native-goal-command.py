@@ -522,7 +522,7 @@ def submission_pairs(options, session_id, split=False, resource_result=False, is
     required = {"resultReference"} if resource_result else {"result"} if split else {"result", "resultReference"}
     transports = {"result", "resultResource"} if resource_result else set()
     require(required <= submission.keys()
-            and submission.keys() <= required | transports | {"completionFacts", "executionEvidence"},
+            and submission.keys() <= required | transports | {"completionFacts", "executionEvidence", "callerRouteObservation"},
             "invalid submission call metadata")
     if resource_result:
         require(("result" in submission) != ("resultResource" in submission),
@@ -536,6 +536,11 @@ def submission_pairs(options, session_id, split=False, resource_result=False, is
             "completionFacts must be an array")
     require("executionEvidence" not in submission or isinstance(submission["executionEvidence"], dict),
             "executionEvidence must be an object")
+    if "callerRouteObservation" in submission:
+        require(not split and isinstance(issued_request, dict) and
+                issued_request.get("resultType", issued_request.get("result_type")) == "GoalPhaseWorkResult" and
+                isinstance(submission["callerRouteObservation"], dict),
+                "callerRouteObservation requires a Phase work submission and an object")
     if issued_request is not None and "result" in submission:
         adapter_path = Path(__file__).resolve().with_name("goal-phase-dispatch.py")
         spec = importlib.util.spec_from_file_location("sm_workflow_dispatch_projection", adapter_path)
@@ -546,7 +551,7 @@ def submission_pairs(options, session_id, split=False, resource_result=False, is
         except ValueError as error:
             raise CallerError(str(error)) from error
     pairs = ["--sessionId", session_id]
-    for name in ("result", "resultResource", "resultReference", "completionFacts", "executionEvidence"):
+    for name in ("result", "resultResource", "resultReference", "completionFacts", "executionEvidence", "callerRouteObservation"):
         if name in submission:
             value = submission[name] if name == "resultResource" else json.dumps(submission[name], ensure_ascii=False, allow_nan=False)
             pairs.extend(["--" + name, value])
@@ -809,20 +814,22 @@ def phase_completion_markdown(response, context):
     else:
         completion = field(field(response, "controlSummary"), "completion")
     metrics = field(completion, "metrics")
+    if isinstance(completion, dict) and metrics is None:
+        return "**Completion metrics**\nNo completion metrics were retained for this Phase."
     if not isinstance(metrics, dict) or field(metrics, "phaseSession") != context.get("outerSessionId"):
         return ""
 
     def rows(value):
         return value[:33] if isinstance(value, list) else []
 
-    def cell(value):
+    def cell(value, full=False):
         if value is None:
             return "unknown"
         if isinstance(value, bool):
             return str(value).lower()
         if not isinstance(value, (str, int, float)):
             return "unknown"
-        value = str(value)[:160]
+        value = str(value) if full else str(value)[:160]
         return (" ".join(value.split()).replace("&", "&amp;").replace("<", "&lt;")
                 .replace(">", "&gt;").replace("\\", "\\\\").replace("|", "\\|")
                 .replace("`", "\\`").replace("*", "\\*").replace("_", "\\_")
@@ -833,9 +840,10 @@ def phase_completion_markdown(response, context):
             return None
         heading = ("**" + title + "**\n| " + " | ".join(headers) + " |\n| " +
                    " | ".join(["---"] * len(headers)) + " |")
-        rendered = ["| " + " | ".join(cell(v) for v in row) + " |" for row in rows[:32]]
+        limit = len(rows) if title == "Selection and outcomes" else 32
+        rendered = ["| " + " | ".join(cell(v, title == "Selection and outcomes") for v in row) + " |" for row in rows[:limit]]
         return {"title": title, "heading": heading, "rows": rendered,
-                "more": len(rows) > 32, "shown": 0}
+                "more": len(rows) > limit, "shown": 0}
 
     def token(group, name):
         value = field(group, name)
@@ -863,12 +871,25 @@ def phase_completion_markdown(response, context):
         sections.append(table("Call coverage", ["Unknown executions", "Not run"],
                               [[field(calls, "unknownExecutions"), field(calls, "notRun")]]))
     else:
-        sections.append(table("Call coverage", ["Unknown executions", "Not run"], [[None, None]]))
+        sections.append(table("Call coverage", ["Unknown executions", "Not run", "Evidence"],
+                              [[None, None, "No attributable call observations. Provider selection and call counts are unknown."]]))
+    sections.append(table("AI usage by destination",
+                          ["Destination", "Input tokens", "Output tokens", "Total tokens", "Coverage", "Reason"],
+                          [[field(u, name) for name in ("destination", "inputTokens", "outputTokens",
+                                                        "totalTokens", "coverage", "reason")]
+                           for u in rows(field(metrics, "usage")) if isinstance(u, dict)]))
     repairs = field(metrics, "deterministicRepairs")
     if isinstance(repairs, dict):
-        sections.append(table("Retained edits", ["Tool", "Count", "Coverage"],
-            [[field(t, "tool"), field(t, "count"), field(t, "coverage")]
+        sections.append(table("Retained edits", ["Tool", "Count", "Coverage", "Reason"],
+            [[field(t, name) for name in ("tool", "count", "coverage", "reason")]
              for t in rows(field(repairs, "tools")) if isinstance(t, dict)]))
+    counts = field(metrics, "selectionCounts")
+    if isinstance(counts, list):
+        sections.append(table("Selection and outcomes", ["Scope", "Unit", "Total", "Selected", "Excluded",
+                            "Started", "Completed", "Failed", "Skipped", "Unknown", "Coverage", "Reason"],
+            [[field(row, name) for name in ("identity", "unit", "total", "selected", "excluded", "started",
+                                             "completed", "failed", "skipped", "unknown", "coverage", "reason")]
+             for row in counts if isinstance(row, dict)]))
     operations = field(metrics, "operations")
     if isinstance(operations, dict):
         coverage = field(operations, "coverage")
@@ -902,8 +923,8 @@ def phase_completion_markdown(response, context):
     # Reserve complete rows for the small totals and coverage tables before
     # filling the remaining budget with variable-length detail tables.
     for section in sections:
-        section["shown"] = 1
-        if len(render()) > 16000:
+        section["shown"] = len(section["rows"]) if section["title"] == "Selection and outcomes" else 1
+        if section["title"] != "Selection and outcomes" and len(render()) > 16000:
             section["shown"] = 0
     detail_order = sorted(sections, key=lambda section: section["title"] ==
                           "AI calls and tokens (observed/executions)")
@@ -1680,6 +1701,18 @@ def main(argv=None):
     if arguments and arguments[0] == "ai-activity":
         return ai_activity_main(arguments[1:])
     try:
+        if arguments and arguments[0] == "phase-completion":
+            require(len(arguments) == 5 and arguments[1] == "--response"
+                    and arguments[3] == "--session-id" and nonblank(arguments[4]),
+                    "phase-completion requires --response and --session-id")
+            _, response = read_object(explicit_path(arguments[2]))
+            session_id = arguments[4]
+            context = {"operation": FQN + "advanceGoalPhase",
+                       "outerSessionId": session_id, "targetSessionId": session_id}
+            markdown = phase_completion_markdown(response, context)
+            require(nonblank(markdown), "response is not a completed GoalPhase for the selected Session")
+            print(markdown)
+            return 0
         execute(parse_options(arguments))
         return 0
     except CallerError as error:
