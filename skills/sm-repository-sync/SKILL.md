@@ -110,7 +110,22 @@ Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md
 ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
 Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
 captured checks/results and use the runtime's supported selection route.
-Use the retained [FixCheck attribution and exceptions](../../docs/spec/native-host-execution.md#fixcheck-attribution-and-exceptions) for a selected Scala lint check.
+Both merge stages use structural checks for declared non-consumed documents,
+ADMISSION for proven source carry-through or ordinary Scala comment changes,
+and declared FULL checks for combined logic, broader consumed inputs or
+uncertain coverage. Keep the typed scope of retained receipts and the actual
+focused repair checks.
+
+For a new sync that the user wants to run without FixCheck, set the Boolean
+`sm-workflow.repository-sync.fix-check` to `false` in the selected host's
+`.textus/config.json`. The default is `true`. Start retains this choice for
+all children and both integration stages. With `false`, the runtime keeps
+applicable Compile and Test coverage. If a candidate requires FULL and the
+FULL selection is empty, surface the runtime's setup wait. Continue existing
+Sessions with their retained choice. See the
+[runtime orchestration contract](../../docs/spec/repository-sync-runtime-orchestration.md#s3-program-impact-connection)
+and [FixCheck attribution](../../docs/spec/native-host-execution.md#fixcheck-attribution-and-exceptions)
+for a selected lint check.
 
 ## Waiting for another chat
 
@@ -564,9 +579,9 @@ admitted UoW. Consume its actual observations; do not create, launch, wait for
 or complete a per-check AI command runner or use the retired registered SBT
 caller bridge. Explicit V4-to-V3 host migration removes `registeredSbtHost`;
 there is no automatic fallback or stored Session edit. Historical records and
-accepted evidence retain their meaning. Independent top-level development
-tests/publication still use `cncf_command_runner` and native sbt locks; product
-SBT within the installed CLI's UoW is platform-owned. See the
+accepted evidence retain their meaning. Independently scoped non-publication
+SBT uses `cncf_command_runner` and native sbt locks. Workflow SBT and
+`publishLocal` use the installed CLI's typed UoW. See the
 [product SBT lifecycle](../../docs/spec/native-host-execution.md#product-sbt-lifecycle).
 
 The parent directly invokes the escalated ordinary installed CLI and waits for
