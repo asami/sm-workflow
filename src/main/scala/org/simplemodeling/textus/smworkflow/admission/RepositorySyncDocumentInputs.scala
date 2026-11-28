@@ -67,6 +67,17 @@ private[smworkflow] object RepositorySyncDocumentInputs {
   private def contains(paths: Vector[String], path: String): Boolean =
     paths.exists(prefix => path == prefix || path.startsWith(prefix + "/"))
 
+  /** Review proposals may describe only the unresolved inputs. Fill omissions
+    * from the original classification before re-observing the actual candidate.
+    * Explicit contradictions remain visible to the continuation's validator.
+    */
+  private[admission] def withRetainedClassification(original: Assessment, proposal: Policy): Policy = {
+    val omitted = original.changedPaths.filterNot(path => original.unknownPaths.contains(path) ||
+      contains(proposal.documentPaths, path) || contains(proposal.consumedPaths, path))
+    val (consumed, documents) = omitted.partition(original.consumedPaths.contains)
+    proposal.copy(documentPaths = proposal.documentPaths ++ documents, consumedPaths = proposal.consumedPaths ++ consumed)
+  }
+
   private val _file_modes = Set("000000", "100644", "100755")
   private val _gitlink_mode = "160000"
   private val _gitmodules = ".gitmodules"

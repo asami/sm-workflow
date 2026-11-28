@@ -521,6 +521,15 @@ end in `.md`. Previously known documents retain their classification even under
 broader unchanged program coverage. There is no generic filename-based
 classification rule.
 
+An independent review may classify just the unresolved paths. The runtime
+supplies omitted known classifications from the original assessment when
+reobserving the candidate and preserves the submitted proposal in history.
+Explicit contradictions remain visible. If the accepted technical proposal is
+inapplicable, describe can offer a corrected host mapping for the same retained
+review. The owner adopts that proposal through the same public operation before
+ordinary Advance issues fresh independent review. A complete classification
+does not establish that earlier checks covered newly classified program inputs.
+
 The same proposal may re-observe a changed submodule reference that an older
 assessment recorded as unknown. The current typed parent/index diff must show
 a Git-link addition, update or removal. The new assessment records the path as

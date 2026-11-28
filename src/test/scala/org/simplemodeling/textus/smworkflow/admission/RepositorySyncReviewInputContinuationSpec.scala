@@ -72,6 +72,39 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncReviewInputContinuationFixture.*
 
+  "Retained input classification" should {
+    "extend known documents and consumed paths with a partial review proposal" in {
+      Given("a retained review classification of known inputs")
+      val partial = D.Policy(Vector("README.md"), Vector("scripts", "skills"), "Classify the unknown inputs")
+      When("the admitted review submits classifications only for the previously unknown inputs")
+      val effective = D.withRetainedClassification(original, partial)
+      Then("the effective mapping retains the original known inputs and the direction keeps the submitted policy")
+      effective.documentPaths shouldBe Vector("README.md", "docs/guide.md")
+      effective.consumedPaths shouldBe Vector("scripts", "skills", "src/Input.scala", "value.txt")
+      val direction = take(R.semanticDirectionC(target.copy(proposedPolicy = Some(partial)),
+        M.Result("decision-needed", "The exact submitted partial proposal", Vector.empty, Some(partial)), target.review.result))
+      direction.target.proposedPolicy shouldBe Some(partial)
+      direction.assessmentPolicy(None) shouldBe Some(effective)
+    }
+
+    "retain explicit conflicts and distinguish missing coverage from missing classification" in {
+      Given("an explicit demotion and a newly consumed path outside the admitted validation scope")
+      val partial = D.Policy(Vector("README.md", "value.txt"), Vector("scripts", "skills"), "A conflicting proposal")
+      val effective = D.withRetainedClassification(original, partial)
+      effective.documentPaths should contain("value.txt")
+      effective.consumedPaths should not contain "value.txt"
+      val uncovered = impact.copy(coverage = impact.coverage.map(c =>
+        c.copy(affectedPaths = Vector("src", "value.txt", "skills"), inputPaths = Vector("src", "value.txt", "skills"))))
+      When("the continuation checks the complete effective classification")
+      val conflicts = R.eligibilityIssues(original, proposed.copy(consumedPaths = proposed.consumedPaths.filterNot(_ == "value.txt")),
+        validation.copy(impact = Some(uncovered)), checks)
+      Then("demotion and coverage are reported separately without inventing unknown paths")
+      conflicts should contain("Previously consumed input was demoted: value.txt")
+      conflicts should contain("New consumed input has no actual selected program input coverage: scripts/probe.py")
+      conflicts.exists(_.startsWith("Unknown or unavailable inputs remain:")) shouldBe false
+    }
+  }
+
   "Retained candidate Test scope" should {
     "refuse Admission reuse after a document becomes a consumed program input" in {
       Given("an issued source Admission check and a newly classified build-consumed document")

@@ -82,7 +82,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
   final case class Direction(target: Target, choice: String, rationale: String, participant: String,
     reference: ContextReference, priorExecutionEnded: Boolean, acceptOriginalUncertainty: Boolean) {
     def assessmentPolicy(hostPolicy: Option[D.Policy]): Option[D.Policy] =
-      if (reference == target.review.result) target.proposedPolicy else hostPolicy
+      (if (reference == target.review.result) target.proposedPolicy else hostPolicy)
+        .map(D.withRetainedClassification(target.originalInputs, _))
   }
   object Direction {
     given Encoder[Direction] = deriveEncoder
@@ -377,8 +378,27 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       Consequence.unit else N.invalid("review-input validation is not adjacent to its final actual check result")
   } yield ()
 
+  private def _proposal_c(store: N.Store, pending: N.Stage, original: D.Assessment, submitted: Option[D.Policy],
+    validation: C.Policy, selected: Vector[C.Check], allowcorrection: Boolean): Consequence[(Option[D.Policy], D.Assessment)] = {
+    val host = store.declaration.documentInputs
+    val configured = _configured_obligation(original, validation)
+    val primary = if (configured) host else submitted.orElse(host)
+    def _capture_(mapping: Option[D.Policy]): Consequence[D.Assessment] =
+      D.captureC(store, pending, mapping.map(D.withRetainedClassification(original, _)))
+    _capture_(primary).flatMap { assessed =>
+      if (allowcorrection && !configured && host.nonEmpty && host != primary &&
+          eligibilityIssues(original, assessed, validation, selected).nonEmpty)
+        _capture_(host).map { corrected =>
+          if (corrected.unknownPaths.size < original.unknownPaths.size) (host, corrected)
+          else (primary, assessed)
+        }
+      else Consequence.success((primary, assessed))
+    }
+  }
+
   def sourceC(identity: String, declaration: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
-    validation: C.Policy, acknowledge: String => Consequence[Unit], review: R.Port): Consequence[Source] = for {
+    validation: C.Policy, acknowledge: String => Consequence[Unit], review: R.Port,
+    allowcorrection: Boolean = true): Consequence[Source] = for {
     session <- F.sessionC(identity, declaration, definition, core)
     current = session.started.current
     _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty &&
@@ -402,10 +422,9 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     _ <- validation.impact.fold(Consequence.unit)(RepositorySyncProgramImpact.validateC)
     state = validated.payload.validation.get
     original <- state.inputs.map(Consequence.success).getOrElse(N.invalid("review-input original input assessment is absent"))
-    configured = _configured_obligation(original, validation)
-    proposedpolicy = if (configured) declaration.documentInputs
-      else saved.result.result.value.inputClassification.orElse(declaration.documentInputs)
-    proposed <- D.captureC(store, candidate.pending, proposedpolicy)
+    proposal <- _proposal_c(store, candidate.pending, original, saved.result.result.value.inputClassification,
+      validation, state.selected, allowcorrection)
+    (proposedpolicy, proposed) = proposal
     supplemental = _plan(original, proposed, validation, state.selected)
     present <- supplemental.fold(Consequence.success(true))(plan => _candidate_inputs_c(store, candidate.pending, plan))
     definedscope = supplemental.forall(plan => P.qualifyLintWorkspaceC(store, plan).isSuccess)
@@ -456,7 +475,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     result <- saved match {
       case Some(prior) if prior.result.result.value.inputClassification.nonEmpty &&
           !prior.validated.payload.reviewInputs.exists(_.target.supplemental.nonEmpty) => for {
-        source <- sourceC(identity, declaration, definition, core, validation, acknowledge, review)
+        source <- sourceC(identity, declaration, definition, core, validation, acknowledge, review,
+          allowcorrection = false)
         output <- if (_configured_obligation(source.target.originalInputs, validation)) Consequence.success(None)
           else for {
             host <- D.captureC(source.store, source.candidate.pending)
@@ -751,8 +771,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     original <- _load_c(store, N.candidateKey(direction.target.namespace, "merge-validated"))
     host <- D.captureC(store, candidate.pending)
     technical = direction.reference == direction.target.review.result
-    proposed <- if (technical) D.captureC(store, candidate.pending, direction.target.proposedPolicy)
-      else Consequence.success(host)
+    proposed <- D.captureC(store, candidate.pending, direction.assessmentPolicy(store.declaration.documentInputs))
     native <- G.inspectC(store.core)
     tree <- G.indexTreeC(store.core)
     mappingCurrent = if (technical) host.applicableTo(direction.target.originalInputs)
