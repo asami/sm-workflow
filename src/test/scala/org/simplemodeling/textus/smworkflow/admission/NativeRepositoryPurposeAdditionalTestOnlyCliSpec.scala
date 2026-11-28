@@ -21,10 +21,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * @since   Nov. 21, 2026
   * @version Nov. 21, 2026
   */
-@DoNotDiscover
-@org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
+private[admission] abstract class NativeRepositoryPurposeFullReportCases(multireport: Boolean)
+    extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeRepositorySelectionCorrectionFixture {
   private val _route = "purpose-additional-test-only"
   private val _kind = "purposeAdditionalTestOnly"
@@ -105,8 +103,13 @@ final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends AnyWordSpec
       reference, false, false, execution)
   }
 
-  private def _capture(): (F.Scenario, String, F.Result) = {
-    val scenario = fresh(_route, checked = true)
+  private def _call_car(scenario: F.Scenario, car: Path, operation: String, arguments: Vector[String]): F.Result = {
+    val launcher = Path.of(sys.env("SM_WORKFLOW_SPEC_PURPOSE_CNCF"))
+    scenario.callInstalledCar(launcher, car, "0.5.6-SNAPSHOT", "RepositorySyncService", operation, arguments)
+  }
+
+  private def _capture(car: Option[Path] = None): (F.Scenario, String, F.Result) = {
+    val scenario = fresh(if (multireport) "purpose-multiple-full-reports" else _route, checked = true)
     val descriptor = scenario.root.resolve(".textus/assembly.yaml")
     Files.writeString(descriptor, Files.readString(descriptor).replace("      id: participant\n", "      id: sm-workflow-local\n"))
     val repository = Path.of(scenario.host.target.root)
@@ -114,42 +117,88 @@ final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends AnyWordSpec
     val overrideLine = "Test / test := (Test / runMain).toTask(\" ProductCheck\").value\n"
     val original = Files.readString(build)
     original should include(overrideLine)
-    Files.writeString(build, original.replace(overrideLine, "") +
-      "\nlibraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.19\" % Test\n")
+    val scalatest = "libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.19\" % Test"
+    val aggregate = if (multireport) s"""
+      |lazy val root = project.in(file(".")).aggregate(other)
+      |lazy val other = project.in(file("other")).settings(scalaVersion := "2.12.18", $scalatest)
+      |Test / test / aggregate := false
+      |Test / test := Def.sequential(other / Test / test, (Test / testOnly).toTask("")).value
+      |""".stripMargin else ""
+    Files.writeString(build, original.replace(overrideLine, "") + "\n" + scalatest + "\n" + aggregate)
     val tests = repository.resolve("src/test/scala/fixture")
     Files.createDirectories(tests)
-    Files.writeString(tests.resolve("SelectedInputSpec.scala"), """package fixture
+    val selected = """package fixture
       |class SelectedInputSpec extends org.scalatest.funsuite.AnyFunSuite {
       |  test("the actual selected candidate has the expected input") {
       |    assert(java.nio.file.Files.readString(java.nio.file.Path.of("value.txt")) == "expected\n")
       |  }
       |}
+      |""".stripMargin
+    val optional = """
       |class OptionalSpec extends org.scalatest.funsuite.AnyFunSuite {
       |  test("an optional integration environment is absent") { cancel("fixture optional environment") }
       |}
-      |""".stripMargin)
-    git(scenario.root, "-C", repository.toString, "add", "--", "build.sbt", "src/test/scala/fixture/SelectedInputSpec.scala")
-    git(scenario.root, "-C", repository.toString, "commit", "-m", "Add actual selected and canceled fixture tests")
+      |""".stripMargin
+    Files.writeString(tests.resolve("SelectedInputSpec.scala"), selected + (if (multireport) "" else optional))
+    val extra = if (multireport) {
+      val other = Files.createDirectories(repository.resolve("other/src/test/scala/fixture"))
+      Files.writeString(other.resolve("AdditionalProjectSpec.scala"), """package fixture
+        |class AdditionalProjectSpec extends org.scalatest.funsuite.AnyFunSuite {
+        |  test("the aggregated suite loads its own project class") {
+        |    assert(getClass.getPackage.getName == "fixture")
+        |  }
+        |  test("the second project shares the selected Scala binary version") {
+        |    assert(scala.util.Properties.versionNumberString.startsWith("2.12."))
+        |  }
+        |}
+        |""".stripMargin)
+      Vector("other")
+    } else Vector.empty
+    git(scenario.root, (Vector("-C", repository.toString, "add", "--", "build.sbt",
+      "src/test/scala/fixture/SelectedInputSpec.scala") ++ extra)*)
+    git(scenario.root, "-C", repository.toString, "commit", "-m", "Add the actual Purpose validation fixture")
     git(scenario.root, "-C", repository.toString, "push", scenario.host.target.endpoint, "HEAD:refs/heads/main")
     _configure(scenario, append = false)
+    if (multireport) {
+      val file = scenario.root.resolve(".textus/config.json")
+      val config = parse(Files.readString(file)).toOption.get
+      Files.writeString(file, config.mapObject(_.add("sm-workflow.repository-sync.fix-check", Json.False)).noSpaces)
+    }
     Files.writeString(repository.resolve("value.txt"), "expected\n")
-    val session = start(scenario)
-    successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult].submitOperation shouldBe Some("submitRepositoryPurposeResult")
+    val session = car.fold(start(scenario))(path => _call_car(scenario, path, "startRepositorySync",
+      Vector("--input", "{\"repositoryIdentity\":\"continuation-fixture\",\"syncMode\":\"FULL_STATE\"}"))
+      .business[V.RepositorySyncStartResult].sessionId)
+    def _advance_(): F.Result = car.fold(advance(scenario, session))(path =>
+      _call_car(scenario, path, "advanceRepositorySync", Vector("--sessionId", session)))
+    _advance_().business[V.RepositorySyncAdvanceResult].submitOperation shouldBe Some("submitRepositoryPurposeResult")
     val request = purpose_inputs(scenario).head
     val result = P.Result("resolved", "One actual code Purpose", Vector(P.Group("selected-input", "Correct the product input",
       "fix: correct selected input", Vector.empty, Vector(P.Content("value.txt", Some("expected\n"))), Vector.empty,
       "The selected test reads the corrected product input")), request.files.map(_.path).filterNot(_ == "value.txt"))
-    successful(submit_purpose(scenario, session, result)).business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
-    val stopped = advance(scenario, session)
+    val submitted = car.fold(submit_purpose(scenario, session, result)) { path =>
+      import io.circe.generic.auto.*
+      val reference = V.WorkflowArtifactReference("fixture-purpose-result", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-purpose-author"), None, None)
+      _call_car(scenario, path, "submitRepositoryPurposeResult", Vector("--sessionId", session,
+        "--result", result.asJson.noSpaces, "--resultReference", json(reference), "--executionEvidence", json(execution)))
+    }
+    submitted.business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
+    val stopped = _advance_()
     stopped.exitCode should not be 0
     stopped.invocation.logs should include("Purpose code assessment requires compilation")
     val originalchecks = formalReceipts(scenario, session)
     originalchecks.map(_._2.identity) shouldBe originalChecks.map(_.identity)
     val full = originalchecks.last._2.processObservation.get
-    val report = SbtTestReassessment.assess(Vector.empty, full).observation
     originalchecks.last._2.exitCode shouldBe Some(0)
-    report.succeeded shouldBe Some(1L)
-    report.canceled shouldBe Some(1L)
+    if (multireport) {
+      val report = SbtTestReassessment.assessFull(full).fold(reason => fail(reason.toString), identity)
+      report.reportCount shouldBe 2
+      report.testsRun shouldBe 3L
+    } else {
+      val report = SbtTestReassessment.assess(Vector.empty, full).observation
+      report.succeeded shouldBe Some(1L)
+      report.canceled shouldBe Some(1L)
+    }
     (scenario, session, stopped)
   }
 
@@ -173,7 +222,33 @@ final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends AnyWordSpec
       .business[V.RepositorySyncNativeMergeReviewSubmissionResult].accepted shouldBe true
   }
 
-  "Additional Purpose TestOnly on the installed CLI" should {
+  if (multireport) "Retained Purpose FULL reports on the installed CLI" should {
+    "continue the same old Purpose after two complete successful project reports" in {
+      Given("a prior CAR with the isolated Purpose stopped after real Compile and aggregated Test")
+      installed()
+      val oldcar = Path.of(sys.env("SM_WORKFLOW_SPEC_PURPOSE_OLD_CAR"))
+      val newcar = Path.of(sys.env("SM_WORKFLOW_SPEC_PURPOSE_NEW_CAR"))
+      val (scenario, session, _) = _capture(Some(oldcar))
+      val original = current(scenario, session)
+      val checks = formalReceipts(scenario, session)
+      val candidate = receipts(scenario, session).flatMap(_.payload.value.purposes.flatMap(_.candidate)).last
+      When("ordinary Advance loads the exact same Session and applies the new FULL reader")
+      val output = _call_car(scenario, newcar, "advanceRepositorySync", Vector("--sessionId", session))
+      val continued = output.business[V.RepositorySyncAdvanceResult]
+      Then("the original candidate and successful receipts support ordinary Purpose acceptance without replay")
+      continued.sessionId shouldBe session
+      current(scenario, session).history.take(original.history.size) shouldBe original.history
+      formalReceipts(scenario, session) shouldBe checks
+      val assessment = receipts(scenario, session).flatMap(_.payload.value.purposes.flatMap(_.assessment)).head
+      assessment.candidate.tree shouldBe candidate.tree
+      assessment.checks shouldBe originalChecks.map(_.identity)
+      if (assessment.branch == "detailed-review")
+        continued.submitOperation shouldBe Some("submitNativeMergeReview")
+      else assessment.branch shouldBe "admit"
+    }
+  }
+
+  if (!multireport) "Additional Purpose TestOnly on the installed CLI" should {
     if (_mode == "before") {
       "capture the old materialized frontier after real Compile and Test with cancellation" in {
         Given("the old installed CLI and an isolated candidate with a real optional test")
@@ -251,3 +326,13 @@ final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends AnyWordSpec
     }
   }
 }
+
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeRepositoryPurposeAdditionalTestOnlyCliSpec extends NativeRepositoryPurposeFullReportCases(false)
+
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeRepositoryPurposeFullReportCliSpec extends NativeRepositoryPurposeFullReportCases(true)

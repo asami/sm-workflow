@@ -44,13 +44,7 @@ private[smworkflow] object WorkflowRepairAssessment {
   }
 
   private def _nonempty_full_test(receipt: V.Receipt): Boolean =
-    receipt.processObservation.exists { process =>
-      val report = SbtTestReassessment.assess(Vector.empty, process).observation
-      report.captureComplete && report.completedSuites.exists(_ > 0) &&
-        report.testsRun.exists(total => total > 0 && report.succeeded.contains(total)) &&
-        report.abortedSuites.contains(0L) && report.failed.contains(0L) &&
-        report.canceled.contains(0L) && report.failureDetails.isEmpty
-    }
+    receipt.processObservation.exists(process => SbtTestReassessment.assessFull(process).isRight)
 
   def standaloneSelectionC(input: StandaloneFixExecution.Input,
     selected: Vector[GoalPhaseNativeValidation.Check]): Consequence[Unit] =

@@ -95,6 +95,52 @@ final class GoalPhasePurposeBatchAssessmentSpec extends AnyWordSpec with Matcher
       unsupported.foreach(stdout => _assess_(_test_receipt_(process(stdout)), true).isSuccess shouldBe false)
     }
 
+    "reuse complete passing reports from multiple projects without broadening focused acceptance" in {
+      Given("a materialized Purpose with successful Compile and one retained FULL process")
+      val target = SbtTarget(take(WorkspaceId.parseC(workspace)))
+      val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, S.Kind.Compile),
+        GoalPhaseNativeValidation.Check("test", 2, S.Kind.Test))
+      val compile = take(V.sbtReceiptC("compile", S.Kind.Compile,
+        SbtExecutionResult(target, SbtOperation.Compile, process(""))))
+      def _report_(suite: String, count: Int): String =
+        s"""[info] $suite:
+           |[info] Run completed in 1 second.
+           |[info] Total number of tests run: $count
+           |[info] Suites: completed 1, aborted 0
+           |[info] Tests: succeeded $count, failed 0, canceled 0, ignored 0, pending 0
+           |[info] All tests passed.
+           |""".stripMargin
+      val first = _report_("FirstProjectSpec", 1)
+      val second = _report_("SecondProjectSpec", 2)
+      def _receipt_(actual: ProcessExecutionResult): V.Receipt =
+        take(V.sbtReceiptC("test", S.Kind.Test, SbtExecutionResult(target, SbtOperation.Test, actual)))
+      def _assess_(actual: ProcessExecutionResult, ordinary: Boolean = true) =
+        GoalPhaseStepAssessment.assessPurposeC(policy, snapshot, "ordinary-full", structural,
+          checks, Vector(compile, _receipt_(actual)), ordinaryFull = ordinary)
+      When("the ordinary Purpose assessment reads the complete retained reports")
+      val complete = process(first + second)
+      Then("both reports satisfy FULL while the focused gate still requires TestOnly")
+      _assess_(complete).isSuccess shouldBe true
+      _assess_(complete, ordinary = false).isSuccess shouldBe false
+      WorkflowRepairAssessment.checksC("code", "off", checks, Vector(compile, _receipt_(complete))).isSuccess shouldBe false
+
+      When("the second report or process fails to supply independent complete success")
+      val invalid = Vector(
+        process(first + first),
+        process(first + second.replace("All tests passed.\n", "")),
+        process(first + second.replace("canceled 0", "canceled 1")),
+        process(first + second.replace("aborted 0", "aborted 1")),
+        process(first + second.replace("failed 0", "failed 1")),
+        process(first + _report_("EmptyProjectSpec", 0)),
+        process(first + second, ProcessExecutionTermination.Exited(1)),
+        complete.copy(termination = ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout),
+          stdout = complete.stdout.copy(truncated = true)),
+        complete.copy(termination = ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stderr),
+          stderr = complete.stderr.copy(truncated = true)))
+      Then("a passing prefix cannot make the batch eligible")
+      invalid.foreach(actual => _assess_(actual).isSuccess shouldBe false)
+    }
+
     "offer a fixed TestOnly only after a complete original batch with actual cancellations" in {
       Given("typed Compile and full Test receipts at the assessment boundary")
       val target = SbtTarget(take(WorkspaceId.parseC(workspace)))
