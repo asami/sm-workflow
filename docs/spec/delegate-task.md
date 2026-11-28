@@ -307,6 +307,8 @@ post-delivery judgment after actual checks, required independent review, commit
 and selected publication. It is separate from independent Review and owns no
 delivery effects.
 
+### Supplemental delivery evidence
+
 A materialized `DeliveryAcceptance` decision-needed result supports supplemental
 qualification on the same destination Session. The existing
 `describeDelegateTaskSemanticContinuation` returns a compact target for the
@@ -326,6 +328,8 @@ Reusing a judgment or upstream evidence reference cannot create another
 admission. Commit, publication, validation, review and repair control remain
 attached throughout. An actually accepted new judgment reaches ReturnReady
 through normal Submit and Advance.
+
+### Retained work and route
 
 Pending work keeps its stored route after configuration changes. Actual Submit
 checks the original public issued context, captured candidate chain, native

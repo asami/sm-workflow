@@ -60,7 +60,7 @@ with the managed runtime route; this skill handles the selected chat method.
 Recommend project-private JAR use and offer machine-common JAR use as a
 separate explicit selection. For an existing managed assignment, use the shared
 [continuation contract](../../docs/spec/native-host-execution.md#continuing-a-managed-dependency-assignment)
-for supplemental inventory or eligible retained consumer verification.
+for supplemental inventory, a retained local delivery, or eligible consumer verification.
 
 For the explicitly human-selected special sm-workflow maintenance route where
 the destination executes with cncf-* skills, use
@@ -216,6 +216,9 @@ public description/correction route and actual Human selection.
 Read-only DeliveryAcceptance evaluates retained delivery evidence; it executes
 no checks, commit or publication and cannot request repair. See the
 [condition timing contract](../../docs/spec/delegate-task.md#initial-condition-timing-and-pending-legacy-scope-correction).
+When an issued DeliveryAcceptance judgment needs new evidence, use the
+[supplemental delivery evidence route](../../docs/spec/delegate-task.md#supplemental-delivery-evidence)
+for an offered `ReevaluateDelivery` on that destination Session.
 
 Runtime owns validation selection/execution, diagnostic recovery, counters,
 integrated acceptance, local commit and required `publishLocal`. Do not call a

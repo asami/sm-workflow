@@ -607,8 +607,18 @@ ordinary `advanceDelegateTask` in that Session. The original exclusions,
 explicit exact-path restrictions and registered ownership still apply. Keep
 the original parent order and approval, issued work, results and repair counts.
 
-When the original scoped consumer Compile was rejected before launch and
-another verification already succeeded for the same binding, use
+A requester using the selected local worktree collects its managed delivery
+with ordinary Advance. For an older `ResultReceived` saved with a file URI
+in the same store, use `DelegateTaskDeliveryService.observeDelegateTaskDelivery`
+with `bind-local-result`, the existing requester and observed destination
+Session IDs, the destination snapshot's exact checkpoint as `sourceReference`
+(identity and revision), and a rationale. The runtime verifies the saved
+result and retains the binding for ordinary adoption and Advance.
+
+When a separate scoped consumer Compile already succeeded for the same binding,
+use the recovery route if the original Compile was rejected before launch,
+or if the original request has the matching completed scoped publication but
+no Compile intent or result. Use
 `ManagedDevelopmentService.describeDevelopmentConsumerVerificationRecovery`
 with `edgeIdentity`, original `requestIdentity`, `publication`, `selection`
 and the successful `verificationRequestIdentity`. Include `publicationEdge`
@@ -617,8 +627,8 @@ when the original request names a separate one. Use the same input with
 matches both attempts to the same participant, workspace, publication,
 selection and current consumer source. Ordinary requester
 `advanceDelegateTask` returns the original parent WorkOrder using the adopted
-result. The rejection stays in history. No Compile or publication is repeated.
-An unknown or launched original attempt does not qualify.
+result. Any original rejection stays in history. No Compile or publication is
+repeated. An unknown or launched original attempt does not qualify.
 
 ## Codex Goal registration
 
