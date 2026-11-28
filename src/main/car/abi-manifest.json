@@ -7849,6 +7849,12 @@
               "type": "WorkflowArtifactReference",
               "multiplicity": "+",
               "required": true
+            },
+            {
+              "name": "observerIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

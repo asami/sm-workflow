@@ -87,7 +87,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -699,6 +699,18 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else invalid("Capture capacity requires the unique actual ordinal and selected-kind fixed program")
   } yield result
 
+  private def _focused_test_program_c(core: ActionCall.Core, root: String,
+    check: GoalPhaseNativeValidation.Check): Consequence[Unit] =
+    DelegateTask.focusedTestSuite(check.identity).fold(Consequence.unit) { _ =>
+      val key = org.goldenport.cncf.config.CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY
+      core.executionContext.resolvedParameters.get(key).map(_.value) match {
+        case Some(org.goldenport.configuration.ConfigurationValue.StringValue(value)) =>
+          io.circe.parser.parse(value).fold(error => invalid(error.message),
+            plan => DelegateTask.focusedTestProgramC(plan, root, check))
+        case _ => invalid("Approved focused test requires the destination execution plan")
+      }
+    }
+
   /** A declared upper bound only. CNCF admission can narrow it further. Missing
     * fixed bounds retain the selected ceiling; malformed bounds cannot undercount.
     */
@@ -956,6 +968,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           else invalid("Recovery source, availability or selected policy changed; obtain a current description")
         _ <- freshC(payload, core)
         check = s.selected(s.receipts.size)
+        _ <- _focused_test_program_c(core, payload.root, check)
         estimate <- _recovery_estimate_c(original, check, core)
         association = WorkflowSbtCapture.Association(target.componentInstance, record.identity.value, record.revision.next.value,
           s.participant, check.identity, check.ordinal, payload.root, payload.branch, payload.baseHead, s.candidate.get.tree)
@@ -1020,6 +1033,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case "Validate" => for {
         _ <- freshC(payload, core)
         check = s.selected(s.receipts.size)
+        _ <- _focused_test_program_c(core, payload.root, check)
         // Prove artifact workspace and finite envelope capacity before starting
         // even a preparation effect. The actual estimate is added below before TestOnly.
         planned <- if (delegation && check.kind == WorkflowSbtValidation.Kind.TestOnly)

@@ -629,7 +629,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       m.remote, m.remoteBranch, m.endpoint))).getOrElse(targetC(creation))
     lintRequired = destination && retained.map(_.state.input.scalaLint == "required")
       .getOrElse(input.hcursor.get[String]("scalaLint").contains("required"))
-    checks <- boundedChecksC(checkIds, lintRequired, plan, target.root.toString)
+    checks <- if (delegation && !destination) standardChecksC(checkIds, scopedTestOnly = true)
+      else boundedChecksC(checkIds, lintRequired, plan, target.root.toString, scopedTestOnly = destination)
     _ <- managed.fold(Consequence.unit)(m => ManagedDevelopmentBoundedWork.validationBindingsC(plan, m, checks))
     _ <- if (retained.forall(p => p.root == target.root.toString && p.branch == target.localBranch)) Consequence.unit
       else invalid("Bounded host differs from the original native Session source")
@@ -721,8 +722,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     * actual host ordinal and never widens the original input/check inventory.
     */
   private[admission] def boundedChecksC(ids: Vector[String], lintRequired: Boolean, plan: Json,
-    root: String): Consequence[Vector[GoalPhaseNativeValidation.Check]] = for {
-    explicit <- standardChecksC(ids)
+    root: String, scopedTestOnly: Boolean = false): Consequence[Vector[GoalPhaseNativeValidation.Check]] = for {
+    explicit <- standardChecksC(ids, scopedTestOnly)
     // An explicit FixCheck still selects the Session's admitted workspace when
     // lint is not automatically required. Its list position is not a binding.
     checks <- if (!lintRequired && !explicit.exists(check =>
@@ -751,7 +752,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       else explicit :+ lint
   } yield checks
 
-  private[admission] def standardChecksC(ids: Vector[String]): Consequence[Vector[GoalPhaseNativeValidation.Check]] =
+  private[admission] def standardChecksC(ids: Vector[String],
+    scopedTestOnly: Boolean = false): Consequence[Vector[GoalPhaseNativeValidation.Check]] =
     ids.distinct.zipWithIndex.foldLeft(Consequence.success(Vector.empty[GoalPhaseNativeValidation.Check])) {
       case (prior, (id, index)) => for {
         accumulated <- prior
@@ -759,6 +761,8 @@ private[smworkflow] object StandardWorkflowRuntime {
           case "test" => Consequence.success(WorkflowSbtValidation.Kind.Test)
           case "test-admission" => Consequence.success(WorkflowSbtValidation.Kind.Test)
           case "test-only" => Consequence.success(WorkflowSbtValidation.Kind.TestOnly)
+          case value if scopedTestOnly && DelegateTask.focusedTestSuite(value).nonEmpty =>
+            Consequence.success(WorkflowSbtValidation.Kind.TestOnly)
           case "compile" => Consequence.success(WorkflowSbtValidation.Kind.Compile)
           case "fix-check" => Consequence.success(WorkflowSbtValidation.Kind.FixCheck)
           case _ => invalid("Check " + id + " needs an explicit runtime check binding")

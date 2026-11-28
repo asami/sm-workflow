@@ -42,15 +42,18 @@ bounded owner remains responsible for Session history, storage and Advance.
 reads the active original requester at `DispatchReady`. Its opaque target carries
 only the component instance, Session, source revision, original participant,
 request identity and typed checks/Scala lint policy. The result explains any
-ineligibility and offers `AdoptDerivedValidationPolicy` or `Defer`; a description
-supplies no effect or Human authority.
+ineligibility and lists the available choices. A description does not authorize
+an effect.
 
 `DelegateTaskService.reconstructDelegateTaskRequest` accepts exactly one typed
 `input` or UTF-8 `inputResource`. The input contains the described target,
 corrected checks and `scalaLint` (`off` or `required`), choice, rationale,
-original participant, actual Human reference and attributable intake observation.
+original participant, evidence reference and attributable intake observation.
+Use the actual Human reference for `AdoptDerivedValidationPolicy` or `Defer`.
+Use the actual intake observation reference for `ClarifyApprovedFocusedTest`.
 The observation names the destination, notification status, intake status,
 handler status, optional destination Session and actual source references.
+For a focused clarification it also names the actual observer.
 
 An eligible delivered notification has an actual `rejected-before-start`
 intake and an `ended` handler. An eligible `not-delivered` notification has
@@ -64,7 +67,7 @@ Use the existing `NativeWorkflowPreparationService.prepareEvidence` with
 `family=DelegateTask` and `kind=request-reconstruction` to derive an importer
 from the actual description and complete correction input. The independently
 provisioning native evidence owner authenticates purpose
-`delegate-task-request-reconstruction`, target, direction, Human reference and
+`delegate-task-request-reconstruction`, target, direction, reference and
 participant. Passive preparation grants no authority.
 
 An adopted direction appends one optional typed `requestReconstruction`
@@ -85,6 +88,28 @@ strict, and returned producer results must match the current corrected
 request, including checks and lint. Recollecting the identical admitted
 direction uses its original target after revision advances and appends nothing;
 conflicting directions refuse. `Defer` leaves the state unchanged.
+
+An active code requester with an authorized full `test`, `compile` and one
+unambiguous conventional Scala executable spec in its original owned paths may
+select `ClarifyApprovedFocusedTest` when the description reports
+`clarification-available`. It inserts the scoped check identity
+`test-only.<fully-qualified-suite>` immediately before `test`, preserves the
+original checks and lint policy, and derives the suite from the exact
+conventional spec path. Independent host evidence records the delivered
+notification, rejected-before-Start intake and ended handler as observations.
+The existing request supplies authority for the suite. The evidence retains
+the original requester participant, issuing host, actual observer and
+observation reference. Other policy corrections still use `AdoptDerivedValidationPolicy`.
+
+The same requester checkpoint and ordinary Advance return the clarified
+destination input. Register that complete input through normal destination Start
+admission using the original authorization for the same request. The host binds
+the corrected input to the existing authority and records its normal selection.
+Before selected validation the destination requires its
+admitted fixed TestOnly program to select exactly that suite in the target
+checkout. Compile, FULL, lint and review remain selected as before. Repeated
+submission recollects the saved correction and the destination keeps its usual
+native Start identity.
 
 Executable evidence: `WorkflowManagementReconstructionSpec`,
 `DelegateTaskRequestReconstructionSpec`, `DelegateTaskDeferredLintSpec` and

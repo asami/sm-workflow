@@ -22,7 +22,7 @@ import RepositorySyncPurposeTestInterruption as T
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
   *  version Nov. 20, 2026
-  * @version Nov. 21, 2026
+  * @version Nov. 27, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -354,7 +354,7 @@ private[smworkflow] object NativeExternalEvidence {
       if (answer.get[String]("participant").contains(value.participant) &&
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
-      else Consequence.securityPermissionDenied("Requester reconstruction crosses its actual Human participant or reference")
+      else Consequence.securityPermissionDenied("Requester reconstruction crosses its admitted participant or reference")
     } else if (purpose == Purpose.DelegateTaskReviewContinuation) {
       val answer = selected.hcursor.downField("delegateTaskReviewContinuation").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&

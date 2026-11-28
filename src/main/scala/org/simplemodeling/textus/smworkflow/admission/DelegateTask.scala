@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 23, 2026
+ * @version Nov. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -96,6 +96,49 @@ private[smworkflow] object DelegateTask {
 
   private def exact(s: String): Boolean = s != null && s.trim.nonEmpty && s.trim == s && !s.exists(_.isControl)
   private def reference(r: ContextReference): Boolean = r != null && exact(r.identity) && exact(r.revision)
+  private val _focused_test_prefix = "test-only."
+  private val _scala_test_root = "src/test/scala/"
+  private val _suite_name = "[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*"
+
+  def focusedTestSuite(identity: String): Option[String] =
+    Option(identity).filter(id => id.startsWith(_focused_test_prefix) && id.length <= 128)
+      .map(_.stripPrefix(_focused_test_prefix)).filter(_.matches(_suite_name))
+
+  /** An existing full test and one explicitly owned conventional spec give the
+    * canonical focused selection. The caller does not choose an extra suite. */
+  def approvedFocusedChecks(input: S.Input): Option[Vector[String]] = {
+    val checks = input.checks
+    val paths = input.ownedPaths.filter(path => path.startsWith(_scala_test_root) && path.endsWith("Spec.scala"))
+    if (input.kind == "code" && checks.contains("compile") && checks.contains("test") &&
+      !checks.exists(id => id == "test-only" || id.startsWith(_focused_test_prefix))) paths match {
+      case Vector(path) =>
+        val identity = _focused_test_prefix + path.stripPrefix(_scala_test_root).stripSuffix(".scala").replace('/', '.')
+        focusedTestSuite(identity).filter(suite => path == _scala_test_root + suite.replace('.', '/') + ".scala")
+          .map(_ => checks.patch(checks.indexOf("test"), Vector(identity), 0))
+      case _ => None
+    } else None
+  }
+
+  /** Require the declared selection at the ordinal and root the runner will
+    * consume. The CNCF program still owns admission and test execution. */
+  def focusedTestProgramC(plan: Json, root: String,
+    check: GoalPhaseNativeValidation.Check): Consequence[Unit] = focusedTestSuite(check.identity) match {
+    case None => Consequence.unit
+    case Some(suite) =>
+      val workspace = "sm-workflow-repository-validation-" + check.ordinal
+      val roots = plan.hcursor.get[Vector[Json]]("workspaces").getOrElse(Vector.empty)
+        .filter(_.hcursor.get[String]("identity").contains(workspace))
+      val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").getOrElse(Vector.empty).filter(program =>
+        program.hcursor.get[String]("target").contains(workspace) &&
+          program.hcursor.get[String]("operation").contains("test-only"))
+      if (check.kind == WorkflowSbtValidation.Kind.TestOnly &&
+        roots.size == 1 && roots.head.hcursor.get[String]("root").contains(root) &&
+        programs.size == 1 && programs.head.hcursor.get[Vector[String]]("testClasses").contains(Vector(suite)) &&
+        !programs.head.hcursor.get[Boolean]("discoveredTests").contains(true))
+        Consequence.unit
+      else invalid("approved focused test requires its exact fixed TestOnly binding in the destination checkout: " + suite)
+  }
+
   def valid(c: Contract): Boolean = c != null && Vector(c.requesterIdentity, c.destinationIdentity, c.returnDestination,
     c.componentIdentity, c.consumerInstructions).forall(exact) && c.requesterIdentity != c.destinationIdentity &&
     Set("requester", "destination")(c.role) && Set("localized", "broad", "documentation")(c.validationScope) &&
@@ -128,6 +171,9 @@ private[smworkflow] object DelegateTask {
       v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract),
       submissionConditions = Some(v.submissionConditions.toVector), workClassification = classification)
     _ <- S.inputC(value)
+    _ <- if (!value.checks.exists(_.startsWith(_focused_test_prefix)) ||
+        approvedFocusedChecks(value.copy(checks = value.checks.filterNot(_.startsWith(_focused_test_prefix)))).contains(value.checks))
+      Consequence.unit else invalid("scoped TestOnly differs from the approved owned spec and original full test")
   } yield value
 
   def requester(input: S.Input): Boolean = input != null && input.delegation != null &&

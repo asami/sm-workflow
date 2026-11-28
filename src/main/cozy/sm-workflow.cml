@@ -15846,6 +15846,7 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | handlerStatus | string | 1 |
 | destinationSessionId | string | ? |
 | sourceReferences | WorkflowArtifactReference | + |
+| observerIdentity | string | ? |
 
 ## DelegateTaskRequestReconstructionInput
 
@@ -16174,7 +16175,7 @@ DelegateTaskRequestReconstructionDescriptionResult
 
 ##### DESCRIPTION
 
-Adopt an independently admitted genuine Human correction of derived checks and Scala lint policy for the current unstarted requester. Supply exactly one input or inputResource. Preserve all other request data, native history, results and repair counters. Observation references and the ended pre-Start recipient handler must be covered by actual Human evidence. Defer writes nothing. Ordinary Advance returns the corrected destination input and owns later dispatch.
+Correct the current unstarted requester's derived validation policy. Supply exactly one input or inputResource. ClarifyApprovedFocusedTest uses independent rejected-before-Start intake evidence and the existing request's authority for the approved Scala suite. Other policy corrections require actual Human admission. Preserve all other request data, native history, results and repair counters. Defer writes nothing. Ordinary Advance returns the corrected destination input and owns later dispatch.
 
 ##### TYPE
 

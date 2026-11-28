@@ -21,7 +21,7 @@ import S.given
   * owned. CLI intake, checks, commit and publication are actual runtime effects.
   * This does not represent a Codex UI chat delivery or consumer authorization.
   * @since   Nov. 19, 2026
-  * @version Nov. 23, 2026
+  * @version Nov. 27, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -228,7 +228,7 @@ final class NativeDelegateTaskRequestReconstructionCliSpec extends AnyWordSpec w
       _reference(Path.of(cursor.get[String]("refusalStdout").toOption.get)),
       _reference(Path.of(cursor.get[String]("refusalStderr").toOption.get)))
     val observation = V.DelegateTaskIntakeObservation(request.delegation.destinationIdentity, "delivered",
-      "rejected-before-start", "ended", None, sources)
+      "rejected-before-start", "ended", None, sources, None)
     val direction = V.DelegateTaskRequestReconstructionInput(session, description.target,
       NonEmptyVector.of("compile", "test-only"), "off", "AdoptDerivedValidationPolicy",
       "SPECIFICATION-OWNED actual Human chooses the tiny fixture Compile and fixed TestOnly policy, with lint off; " +
