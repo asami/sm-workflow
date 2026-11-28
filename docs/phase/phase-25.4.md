@@ -77,6 +77,75 @@ unknown classifications, bounded context requests, failure-specific routing,
 resume and ordinary review/repair/judgment paths using fixtures and scoped
 qualification. Record independent review before closure.
 
+#### Work counts in the command result
+
+Include a structured summary in the normal `sm-workflow` command result.
+Select the work opportunities that the invocation issues, selects, attempts,
+or resolves, using its actual Session and work references. Report their
+counts by work purpose, execution route, and owning project. For example, an
+Advance that runs validation and issues a review reports the completed
+validation and the pending review. A Submit reports the disposition of the
+work it receives. Apply this contract to every caller.
+
+At GoalPhase completion, return the Phase total and relevant summary in
+`completion.metrics`. Keep the complete Phase breakdown available through
+the public retained completion. The same structured rows drive human-readable
+output. Preserve confirmed zero, partial coverage, and unknown values for
+the selected scope.
+
+Count every work opportunity issued for the Phase or its linked workflows.
+Use the declared work purpose and the retained reason when a shared
+operation serves more than one purpose. The inventory includes the following
+work where the selected workflows issue it.
+
+- Requirements and context gathering, analysis, estimation, Phase or Step
+  partitioning, strategy formulation, design, instruction preparation, and
+  plan revision.
+- Diagnosis and triage, implementation, error repair, FixCheck repair,
+  review repair, and recovery or reconstruction after interruption.
+- Validation, including Compile, ADMISSION, TestOnly, FULL, FixCheck,
+  integration and installed-runtime qualification. Count test cases
+  separately from validation work.
+- Review, independent review, and re-review. Retain the actual review
+  scope, including Step, Phase, merge, and delivery acceptance.
+- Documentation and evidence recording, dependency development and
+  delegation, result receipt and adoption, artifact publication and
+  activation, repository integration and synchronization, local commit,
+  and release closure.
+- Human decisions, including scope approval, plan adoption, continuation,
+  or deferral.
+
+Verify coverage against the work and effect declarations of GoalPhase and
+linked SplitPhase, GoalTask, DelegateTask, StandaloneFix, RepositorySync,
+publication and evidence operations. Retain the original work kind and
+an explicit unclassified row for an observed item with no purpose mapping.
+
+Record an applicable built-in rule or template, attempted routes, and the
+route that completed each item. Report completion by the command itself,
+by external tool with the tool name, by AI with Codex, OpenAI daily
+allowance, OpenAI monthly credit, or an unknown AI route, and by a human
+when the operation requires a human decision. Attribute allowance use
+from retained evidence.
+
+Retain the Phase total and the same breakdown by the project that owns
+each work item. Use the registered repository or Component identity for
+each dependency project. Preserve the dependency edge and the local
+worktree or assigned chat as attribution details. Join the parent request
+and destination result through their retained identities. Receipt and
+adoption are requester operations, and the dependency implementation,
+validation, review, and publication belong to the dependency project.
+Count a delivered result once at its actual work owner even if multiple
+requests reference it. Report missing project attribution explicitly.
+
+For each purpose, reconcile the total with completed work by route, unfinished
+work, skipped work, and work with unknown disposition. Count selections,
+attempts, retries, and outcomes separately from work completed. For example, a
+repair completed by Codex after a Scalafix attempt is one completed repair
+with one attempt on each route. A matched template followed by AI execution
+retains the template match and credits completion to the AI route. Preserve
+known subtotals, confirmed zero, and unknown coverage across resumed work
+without duplicating a work item or an attempt.
+
 ### P254-06 — Strategic judgement and task design
 
 Separate Strategic Judgement (strategy and risk), Task Assessment
